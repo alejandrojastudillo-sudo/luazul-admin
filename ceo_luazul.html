@@ -440,27 +440,57 @@ function dbs(k,v){try{localStorage.setItem(k,JSON.stringify(v));return true;}cat
 })();
 
 // ── AUTH ──────────────────────────────────────────────
-function cLogin(){
-  var u=document.getElementById('cUser').value.trim().toLowerCase();
-  var p=document.getElementById('cPass').value.trim();
-  var users=getCeoUsers();
-  var match=users.find(function(x){return x.usuario.toLowerCase()===u && x.password===p;});
-  if(match){
-    // Guardar sesión de forma segura (con fallback si sessionStorage no está disponible)
-    try { sessionStorage.setItem('luazul_ceo','1'); sessionStorage.setItem('luazul_ceo_nombre', match.nombre); } catch(e){}
-    try { localStorage.setItem('luazul_ceo_ok','1'); } catch(e){}
-    // Mostrar app directamente (sin depender de LZ_AUTH.guard)
-    var lw=document.getElementById('loginWrap');
-    var ap=document.getElementById('app');
-    if(lw) lw.style.display='none';
-    if(ap) ap.style.display='block';
+// [SUPABASE PHASE 2] — Emails autorizados para el panel CEO
+var CEO_ALLOWED_EMAILS = [
+  'luazul.turismobr@gmail.com',
+  'luazulsmarttravel@gmail.com'
+];
+
+async function cLogin(){
+  var u = document.getElementById('cUser').value.trim().toLowerCase();
+  var p = document.getElementById('cPass').value.trim();
+  var errEl = document.getElementById('cErr');
+  errEl.style.display = 'none';
+
+  if (!sbClient) {
+    errEl.style.display = 'block';
+    errEl.textContent = 'Error: no se pudo conectar con Supabase.';
+    return;
+  }
+
+  var btn = document.querySelector('.lbtn');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Verificando...'; }
+
+  try {
+    var result = await sbClient.auth.signInWithPassword({ email: u, password: p });
+    if (result.error) throw result.error;
+
+    var email = result.data.user.email.toLowerCase();
+    if (!CEO_ALLOWED_EMAILS.includes(email)) {
+      await sbClient.auth.signOut();
+      throw new Error('Este usuario no tiene acceso al panel CEO.');
+    }
+
+    var meta = result.data.user.user_metadata || {};
+    var nombre = meta.nombre || meta.full_name || email.split('@')[0];
+    try { sessionStorage.setItem('luazul_ceo','1'); sessionStorage.setItem('luazul_ceo_nombre', nombre); } catch(e){}
+
+    var lw = document.getElementById('loginWrap');
+    var ap = document.getElementById('app');
+    if (lw) lw.style.display = 'none';
+    if (ap) ap.style.display = 'block';
     initApp();
-  } else {
-    var e=document.getElementById('cErr');e.style.display='block';
-    e.textContent='Usuario o contraseña incorrectos.';
+  } catch(err) {
+    errEl.style.display = 'block';
+    errEl.textContent = (err.message === 'Invalid login credentials')
+      ? 'Usuario o contraseña incorrectos.'
+      : (err.message || 'Error al iniciar sesión.');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '👑 Ingresar'; }
   }
 }
-function cLogout(){
+async function cLogout(){
+  if (sbClient) { try { await sbClient.auth.signOut(); } catch(e){} }
   try { sessionStorage.removeItem('luazul_ceo'); sessionStorage.removeItem('luazul_ceo_nombre'); } catch(e){}
   try { localStorage.removeItem('luazul_ceo_ok'); } catch(e){}
   var lw=document.getElementById('loginWrap');
@@ -470,19 +500,49 @@ function cLogout(){
   var u=document.getElementById('cUser'); if(u) u.value='';
   var p=document.getElementById('cPass'); if(p) p.value='';
 }
-document.addEventListener('DOMContentLoaded',function(){
-  document.getElementById('cPass').addEventListener('keypress',function(e){if(e.key==='Enter')cLogin();});
-  // Verificar sesión (portal o propia) y mostrar app si corresponde
-  // Verificar sesión guardada (con fallback para entornos sin sessionStorage)
-  var sesionActiva = false;
-  try { sesionActiva = sessionStorage.getItem('luazul_ceo') === '1'; } catch(e){}
-  if(!sesionActiva){ try { sesionActiva = localStorage.getItem('luazul_ceo_ok') === '1'; } catch(e){} }
-  if(sesionActiva){
-    var lw=document.getElementById('loginWrap');
-    var ap=document.getElementById('app');
-    if(lw) lw.style.display='none';
-    if(ap) ap.style.display='block';
-    initApp();
+document.addEventListener('DOMContentLoaded', function(){
+  document.getElementById('cPass').addEventListener('keypress', function(e){ if(e.key==='Enter') cLogin(); });
+
+  // [SUPABASE PHASE 2] — Verificar sesión activa en Supabase al cargar
+  if (sbClient) {
+    sbClient.auth.getSession().then(function(result) {
+      var session = result.data && result.data.session;
+      if (session && session.user) {
+        var email = session.user.email.toLowerCase();
+        if (CEO_ALLOWED_EMAILS.includes(email)) {
+          var meta = session.user.user_metadata || {};
+          var nombre = meta.nombre || meta.full_name || email.split('@')[0];
+          try { sessionStorage.setItem('luazul_ceo','1'); sessionStorage.setItem('luazul_ceo_nombre', nombre); } catch(e){}
+          var lw = document.getElementById('loginWrap');
+          var ap = document.getElementById('app');
+          if (lw) lw.style.display = 'none';
+          if (ap) ap.style.display = 'block';
+          initApp();
+          return;
+        }
+      }
+      // Fallback: verificar sesión local (compatibilidad hacia atrás)
+      var sesionActiva = false;
+      try { sesionActiva = sessionStorage.getItem('luazul_ceo') === '1'; } catch(e){}
+      if (sesionActiva) {
+        var lw = document.getElementById('loginWrap');
+        var ap = document.getElementById('app');
+        if (lw) lw.style.display = 'none';
+        if (ap) ap.style.display = 'block';
+        initApp();
+      }
+    });
+  } else {
+    // Sin Supabase — mantener compatibilidad
+    var sesionActiva = false;
+    try { sesionActiva = sessionStorage.getItem('luazul_ceo') === '1'; } catch(e){}
+    if (sesionActiva) {
+      var lw = document.getElementById('loginWrap');
+      var ap = document.getElementById('app');
+      if (lw) lw.style.display = 'none';
+      if (ap) ap.style.display = 'block';
+      initApp();
+    }
   }
 });
 
