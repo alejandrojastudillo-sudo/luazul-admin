@@ -421,7 +421,10 @@ function getCeoUsers(){
 
 
 // ── STORAGE KEYS ──────────────────────────────────────
-var RK='luazul_ceo_regiones', GK='luazul_ceo_gerentes', VK='luazul_ceo_vendedores', CK='luazul_ceo_clientes', NK='luazul_notifs';
+var VK='luazul_ceo_vendedores', CK='luazul_ceo_clientes', NK='luazul_notifs';
+// ── IN-MEMORY STATE (Supabase — regiones y gerentes) ──
+var _regiones = [];
+var _gerentes = [];
 var DATA_VERSION = 'v3_prod_clean';
 
 function dbg(k){try{var r=localStorage.getItem(k);return r?JSON.parse(r):null;}catch(e){return null;}}
@@ -432,7 +435,7 @@ function dbs(k,v){try{localStorage.setItem(k,JSON.stringify(v));return true;}cat
 // y deja la base vacía lista para uso real.
 (function(){
   if(localStorage.getItem('luazul_data_version') !== DATA_VERSION){
-    [RK, GK, VK, CK, NK].forEach(function(k){ localStorage.removeItem(k); });
+    [VK, CK, NK].forEach(function(k){ localStorage.removeItem(k); });
     localStorage.setItem('luazul_data_version', DATA_VERSION);
     // Conservar usuarios CEO si ya fueron personalizados en versión anterior
     // (se re-inicializan abajo si no existen)
@@ -546,8 +549,22 @@ document.addEventListener('DOMContentLoaded', function(){
   }
 });
 
-// ── INIT ──────────────────────────────────────────────
-function initApp(){
+// ── CARGA INICIAL DESDE SUPABASE ──────────────────────
+async function loadSupabaseData(){
+  if (!sbClient) { showToast('⚠️ Sin conexión a Supabase'); return; }
+  try {
+    var rRes = await sbClient.from('regiones').select('*').order('nombre');
+    var gRes = await sbClient.from('gerentes').select('*').order('nombre');
+    if (rRes.data) _regiones = rRes.data;
+    if (gRes.data) _gerentes = gRes.data;
+  } catch(e) {
+    showToast('⚠️ Error al cargar datos de Supabase');
+    console.error('loadSupabaseData error:', e);
+  }
+}
+
+async function initApp(){
+  await loadSupabaseData();
   renderAll();
   populateAllFilters();
 }
@@ -560,8 +577,8 @@ function renderAll(){
 }
 
 // ── HELPERS ───────────────────────────────────────────
-function reg(){return dbg(RK)||[];}
-function ger(){return dbg(GK)||[];}
+function reg(){ return _regiones; }
+function ger(){ return _gerentes; }
 function vend(){return dbg(VK)||[];}
 function cli(){return (dbg(CK)||[]).map(enrich);}
 
@@ -1540,7 +1557,7 @@ function openAddGerente(){
   document.getElementById('modal').classList.add('open');
 }
 
-function saveNewGerente(){
+async function saveNewGerente(){
   var nombre = (document.getElementById('gNombre').value||'').trim();
   var email  = (document.getElementById('gEmail').value||'').trim();
   var pass   = (document.getElementById('gPass').value||'').trim();
@@ -1559,9 +1576,9 @@ function saveNewGerente(){
     cbu:       (document.getElementById('gCBU').value||'').trim(),
     comprobantes: []
   };
-  var gs = ger();
-  gs.push(nuevo);
-  dbs(GK, gs);
+  var res = await sbClient.from('gerentes').insert(nuevo).select().single();
+  if (res.error) { showToast('⚠️ Error al guardar: ' + res.error.message); return; }
+  _gerentes.push(res.data || nuevo);
   closeModal();
   renderRegiones();
   renderPasswords();
@@ -1627,9 +1644,8 @@ function adjuntarComprobante(gid){
   if(!fileInp.files.length){ showToast('⚠️ Seleccioná un archivo'); return; }
   var file = fileInp.files[0];
   var reader = new FileReader();
-  reader.onload = function(e){
-    var gs = ger();
-    var g = gs.find(function(x){ return x.id === gid; });
+  reader.onload = async function(e){
+    var g = _gerentes.find(function(x){ return x.id === gid; });
     if(!g) return;
     if(!g.comprobantes) g.comprobantes = [];
     g.comprobantes.push({
@@ -1639,7 +1655,8 @@ function adjuntarComprobante(gid){
       data:   e.target.result,
       tipo:   file.type
     });
-    dbs(GK, gs);
+    var res = await sbClient.from('gerentes').update({ comprobantes: g.comprobantes }).eq('id', gid);
+    if (res.error) { showToast('⚠️ Error al guardar comprobante: ' + res.error.message); return; }
     showToast('✅ Comprobante adjuntado');
     openGerDetail(gid);
   };
@@ -1658,13 +1675,13 @@ function verComprobante(gid, idx){
   }
 }
 
-function borrarComprobante(gid, idx){
+async function borrarComprobante(gid, idx){
   if(!confirm('¿Eliminar este comprobante?')) return;
-  var gs = ger();
-  var g = gs.find(function(x){ return x.id === gid; });
+  var g = _gerentes.find(function(x){ return x.id === gid; });
   if(!g) return;
   g.comprobantes.splice(idx, 1);
-  dbs(GK, gs);
+  var res = await sbClient.from('gerentes').update({ comprobantes: g.comprobantes }).eq('id', gid);
+  if (res.error) { showToast('⚠️ Error al eliminar comprobante: ' + res.error.message); return; }
   openGerDetail(gid);
 }
 
@@ -1695,7 +1712,7 @@ function openEditGerente(gid){
   document.getElementById('modal').classList.add('open');
 }
 
-function saveEditGerente(gid){
+async function saveEditGerente(gid){
   var gs = ger();
   var g = gs.find(function(x){ return x.id === gid; });
   if(!g){ showToast('⚠️ Gerente no encontrado'); return; }
@@ -1707,19 +1724,28 @@ function saveEditGerente(gid){
   g.telefono2 = (document.getElementById('egTel2').value||'').trim();
   g.domicilio = (document.getElementById('egDomicilio').value||'').trim();
   g.cbu       = (document.getElementById('egCBU').value||'').trim();
-  dbs(GK, gs);
+  var res = await sbClient.from('gerentes').update({
+    nombre: g.nombre, email: g.email, ciudad: g.ciudad, rid: g.rid,
+    telefono1: g.telefono1, telefono2: g.telefono2, domicilio: g.domicilio, cbu: g.cbu
+  }).eq('id', gid);
+  if (res.error) { showToast('⚠️ Error al guardar: ' + res.error.message); return; }
   showToast('✅ Datos actualizados');
   openGerDetail(gid);
   renderRegiones();
   renderPasswords();
 }
 
-function saveGerPass(gid, idx){
+async function saveGerPass(gid, idx){
   var email=(document.getElementById('gpe-'+idx)||{}).value||'';
   var pass=(document.getElementById('gpp-'+idx)||{}).value||'';
   if(!pass){showToast('⚠️ La contraseña no puede estar vacía');return;}
-  var gs=ger().map(function(g){if(g.id===gid){g.email=email||g.email;g.password=pass;}return g;});
-  dbs(GK,gs); showToast('✅ Contraseña de gerente actualizada');
+  _gerentes = _gerentes.map(function(g){if(g.id===gid){g.email=email||g.email;g.password=pass;}return g;});
+  var res = await sbClient.from('gerentes').update({
+    email: email || _gerentes.find(function(g){return g.id===gid;}).email,
+    password: pass
+  }).eq('id', gid);
+  if (res.error) { showToast('⚠️ Error al guardar: ' + res.error.message); return; }
+  showToast('✅ Contraseña de gerente actualizada');
 }
 function saveVendPass(vid){
   var pass=(document.getElementById('vpw-'+vid)||{}).value||'';
@@ -2284,20 +2310,20 @@ function renderPagoComisiones(){
   el.innerHTML = html;
 }
 
-function guardarBonusGerente(gid){
+async function guardarBonusGerente(gid){
   var inp = document.getElementById('bonus_'+gid);
   if(!inp) return;
   var val = Math.min(100, Math.max(0, parseFloat(inp.value)||0));
-  var gs = ger();
-  var g = gs.find(function(x){ return x.id===gid; });
+  var g = _gerentes.find(function(x){ return x.id===gid; });
   if(!g) return;
   g.pct_bonus = val;
-  dbs(GK, gs);
+  var res = await sbClient.from('gerentes').update({ pct_bonus: val }).eq('id', gid);
+  if (res.error) { showToast('⚠️ Error al guardar bonus: ' + res.error.message); return; }
   showToast('✅ Bonus ' + val + '% guardado para ' + g.nombre);
   renderPagoComisiones();
 }
 
-function adjuntarCompCentral(tipo, pid){
+async function adjuntarCompCentral(tipo, pid){
   var nombre  = (document.getElementById('cn_'+pid).value||'').trim();
   var monto   = (document.getElementById('cm_'+pid).value||'').trim();
   var fileInp = document.getElementById('cf_'+pid);
@@ -2305,18 +2331,22 @@ function adjuntarCompCentral(tipo, pid){
   if(!fileInp || !fileInp.files.length){ showToast('⚠️ Seleccioná un archivo'); return; }
   var file = fileInp.files[0];
   var reader = new FileReader();
-  reader.onload = function(e){
-    var key = tipo === 'gerente' ? GK : VK;
-    var lista = dbg(key) || [];
-    var persona = lista.find(function(x){ return x.id === pid; });
-    if(!persona){ showToast('⚠️ No encontrado'); return; }
-    if(!persona.comprobantes) persona.comprobantes = [];
-    persona.comprobantes.push({
-      nombre: nombre, monto: monto,
-      fecha: new Date().toLocaleDateString('es-AR'),
-      data: e.target.result, tipo: file.type
-    });
-    dbs(key, lista);
+  reader.onload = async function(e){
+    if(tipo === 'gerente'){
+      var persona = _gerentes.find(function(x){ return x.id === pid; });
+      if(!persona){ showToast('⚠️ No encontrado'); return; }
+      if(!persona.comprobantes) persona.comprobantes = [];
+      persona.comprobantes.push({ nombre: nombre, monto: monto, fecha: new Date().toLocaleDateString('es-AR'), data: e.target.result, tipo: file.type });
+      var res = await sbClient.from('gerentes').update({ comprobantes: persona.comprobantes }).eq('id', pid);
+      if (res.error) { showToast('⚠️ Error: ' + res.error.message); return; }
+    } else {
+      var lista = dbg(VK) || [];
+      var persona = lista.find(function(x){ return x.id === pid; });
+      if(!persona){ showToast('⚠️ No encontrado'); return; }
+      if(!persona.comprobantes) persona.comprobantes = [];
+      persona.comprobantes.push({ nombre: nombre, monto: monto, fecha: new Date().toLocaleDateString('es-AR'), data: e.target.result, tipo: file.type });
+      dbs(VK, lista);
+    }
     showToast('✅ Comprobante adjuntado a ' + persona.nombre);
     renderPagoComisiones();
   };
@@ -2324,8 +2354,7 @@ function adjuntarCompCentral(tipo, pid){
 }
 
 function verCompCentral(tipo, pid, idx){
-  var key = tipo === 'gerente' ? GK : VK;
-  var lista = dbg(key) || [];
+  var lista = tipo === 'gerente' ? _gerentes : (dbg(VK) || []);
   var persona = lista.find(function(x){ return x.id === pid; });
   if(!persona || !persona.comprobantes || !persona.comprobantes[idx]) return;
   var comp = persona.comprobantes[idx];
@@ -2337,14 +2366,21 @@ function verCompCentral(tipo, pid, idx){
   }
 }
 
-function borrarCompCentral(tipo, pid, idx){
+async function borrarCompCentral(tipo, pid, idx){
   if(!confirm('¿Eliminar este comprobante?')) return;
-  var key = tipo === 'gerente' ? GK : VK;
-  var lista = dbg(key) || [];
-  var persona = lista.find(function(x){ return x.id === pid; });
-  if(!persona) return;
-  persona.comprobantes.splice(idx, 1);
-  dbs(key, lista);
+  if(tipo === 'gerente'){
+    var persona = _gerentes.find(function(x){ return x.id === pid; });
+    if(!persona) return;
+    persona.comprobantes.splice(idx, 1);
+    var res = await sbClient.from('gerentes').update({ comprobantes: persona.comprobantes }).eq('id', pid);
+    if (res.error) { showToast('⚠️ Error: ' + res.error.message); return; }
+  } else {
+    var lista = dbg(VK) || [];
+    var persona = lista.find(function(x){ return x.id === pid; });
+    if(!persona) return;
+    persona.comprobantes.splice(idx, 1);
+    dbs(VK, lista);
+  }
   renderPagoComisiones();
 }
 

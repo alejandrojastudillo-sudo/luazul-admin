@@ -169,12 +169,13 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;back
 .chart-bar-wrap{display:flex;align-items:flex-end;gap:6px;height:120px;padding:0 4px;}
 .chart-bar{flex:1;border-radius:4px 4px 0 0;min-width:20px;transition:height .5s;cursor:pointer;position:relative;}
 .chart-bar:hover::after{content:attr(data-val);position:absolute;top:-22px;left:50%;transform:translateX(-50%);font-size:.62rem;font-weight:700;color:var(--text);white-space:nowrap;background:rgba(0,0,0,.7);padding:2px 6px;border-radius:4px;}
+@keyframes lzSpin{to{transform:rotate(360deg);}}
 </style>
 
   <!-- ── SUPABASE SDK ──────────────────────────────────── -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script>
-    var SUPABASE_URL = 'https://yunvqgaljopirzyjrntc.supabase.co';
+    var SUPABASE_URL = 'https://yunvqgaljopirzvjrntc.supabase.co';
     var SUPABASE_KEY = 'sb_publishable_MqB2thv0uzVUAY2v2jh-uQ_ul6a2LzB';
     var sbClient = (typeof supabase !== 'undefined')
       ? supabase.createClient(SUPABASE_URL, SUPABASE_KEY)
@@ -413,6 +414,15 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;back
 <script>
 var DB_KEY='luazul_db', VK='luazul_vendors', NK='luazul_notifs';
 
+// ── SUPABASE TABLE MAP ────────────────────────────────
+var SB_TABLE = {};
+SB_TABLE[VK]     = 'vendedores';
+SB_TABLE[DB_KEY] = 'clientes';
+SB_TABLE[NK]     = 'notificaciones';
+
+// ── IN-MEMORY CACHE (replaces localStorage as primary source) ──
+var _memCache = {};
+
 // ── LIMPIEZA DE DATOS DEMO ────────────────────────────
 var DATA_VERSION = 'v3_prod_clean';
 (function(){
@@ -426,8 +436,63 @@ var DATA_VERSION = 'v3_prod_clean';
 
 var GU='gerente', GP='gerente123';
 
-function dbg(k){try{var r=localStorage.getItem(k);return r?JSON.parse(r):null;}catch(e){return null;}}
-function dbs(k,v){try{localStorage.setItem(k,JSON.stringify(v));return true;}catch(e){return false;}}
+function dbg(k){
+  if(_memCache[k] !== undefined) return _memCache[k];
+  try{var r=localStorage.getItem(k);return r?JSON.parse(r):null;}catch(e){return null;}
+}
+function dbs(k,v){
+  _memCache[k]=v;
+  try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}
+  _sbSave(k,v);
+  return true;
+}
+
+// ── ASYNC SUPABASE SAVE ───────────────────────────────
+async function _sbSave(k, v){
+  if(!sbClient || !SB_TABLE[k] || !Array.isArray(v)) return;
+  try{
+    if(v.length === 0) return;
+    var { error } = await sbClient.from(SB_TABLE[k]).upsert(v, {onConflict:'id'});
+    if(error) console.warn('Supabase save ['+k+']:', error.message);
+  }catch(e){ console.warn('Supabase save error:', e); }
+}
+
+// ── ASYNC SUPABASE LOAD ───────────────────────────────
+async function _sbLoad(){
+  var keys = [
+    {k: VK,     t: 'vendedores'},
+    {k: DB_KEY, t: 'clientes'},
+    {k: NK,     t: 'notificaciones'}
+  ];
+  for(var i = 0; i < keys.length; i++){
+    var entry = keys[i];
+    try{
+      var res = await sbClient.from(entry.t).select('*');
+      if(!res.error && res.data && res.data.length > 0){
+        _memCache[entry.k] = res.data;
+        // Also update localStorage backup
+        try{ localStorage.setItem(entry.k, JSON.stringify(res.data)); }catch(ex){}
+      } else {
+        // Fallback: try localStorage
+        try{
+          var ls = localStorage.getItem(entry.k);
+          _memCache[entry.k] = ls ? JSON.parse(ls) : [];
+        }catch(ex){ _memCache[entry.k] = []; }
+
+        // If we have localStorage data but Supabase is empty → migrate up
+        if(_memCache[entry.k] && _memCache[entry.k].length > 0){
+          _sbSave(entry.k, _memCache[entry.k]);
+        }
+      }
+    }catch(e){
+      console.warn('Supabase load ['+entry.t+']:', e);
+      try{
+        var ls2 = localStorage.getItem(entry.k);
+        _memCache[entry.k] = ls2 ? JSON.parse(ls2) : [];
+      }catch(ex2){ _memCache[entry.k] = []; }
+    }
+  }
+}
 
 
 
@@ -727,9 +792,34 @@ document.addEventListener('DOMContentLoaded',function(){
     onSuccess:   initApp
   });
   window.addEventListener('storage',function(e){if(e.key===NK||e.key===DB_KEY){renderAll();refreshBadge();}});
+
+  // Supabase realtime — actualiza automáticamente cuando el panel Admin carga datos
+  if(sbClient){
+    sbClient.channel('gerente-realtime')
+      .on('postgres_changes', {event:'*', schema:'public', table:'clientes'},    function(){ _sbLoad().then(function(){ renderAll(); refreshBadge(); showToast('🔄 Datos actualizados'); }); })
+      .on('postgres_changes', {event:'*', schema:'public', table:'vendedores'},   function(){ _sbLoad().then(function(){ renderAll(); }); })
+      .on('postgres_changes', {event:'*', schema:'public', table:'notificaciones'},function(){ _sbLoad().then(function(){ renderAll(); refreshBadge(); }); })
+      .subscribe();
+  }
 });
 
-function initApp(){
+async function initApp(){
+  // Show loading overlay
+  var app = document.getElementById('app');
+  var overlay = document.createElement('div');
+  overlay.id = 'sbLoadingOverlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(4,8,15,.97);z-index:98;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:20px;';
+  overlay.innerHTML = '<div style="font-family:\'Syne\',sans-serif;font-size:1.1rem;font-weight:800;color:#f59e0b;letter-spacing:1px;">Cargando datos...</div>'
+    + '<div style="width:44px;height:44px;border:3px solid rgba(245,158,11,.15);border-top-color:#f59e0b;border-radius:50%;animation:lzSpin .7s linear infinite;"></div>'
+    + '<div style="font-size:.72rem;color:rgba(180,200,240,.4);">Conectando con Supabase</div>';
+  app.appendChild(overlay);
+
+  await _sbLoad();
+
+  // Remove loading overlay
+  var lo = document.getElementById('sbLoadingOverlay');
+  if(lo) lo.remove();
+
   renderAll(); refreshBadge(); populateVFilt(); populateVendDashSel(); populatePagoFiltros(); renderEquipoDash(); renderPasswords();
 }
 
@@ -1022,8 +1112,7 @@ function openAddVendor(){
 function saveVendor(){
   var n=document.getElementById('vN').value.trim(),e=document.getElementById('vE').value.trim(),p=document.getElementById('vP').value.trim();
   if(!n||!e||!p){showToast('❌ Nombre, email y contraseña son obligatorios');return;}
-  var vs=dbg(VK)||[];
-  vs.push({
+  var newVendor = {
     id:'v'+Date.now(), nombre:n, email:e, password:p, activo:true,
     fechaAlta:new Date().toISOString().slice(0,10),
     telefono1:(document.getElementById('vT').value||'').trim(),
@@ -1031,7 +1120,9 @@ function saveVendor(){
     domicilio:(document.getElementById('vDom').value||'').trim(),
     cbu:      (document.getElementById('vCBU').value||'').trim(),
     comprobantes: []
-  });
+  };
+  var vs=dbg(VK)||[];
+  vs.push(newVendor);
   dbs(VK,vs); closeModal(); renderAll(); populateVFilt();
   showToast('✅ Vendedor '+n+' creado · Comisión: 50% (sube a 80% con 3+ ventas/mes)');
 }
@@ -1102,6 +1193,8 @@ function saveEditV(vid){
 function delVendor(vid){
   if(!confirm('¿Eliminar vendedor? Sus clientes quedarán sin asignar.'))return;
   dbs(VK,(dbg(VK)||[]).filter(function(v){return v.id!==vid;}));
+  // Also delete from Supabase
+  if(sbClient){ sbClient.from('vendedores').delete().eq('id', vid).then(function(r){ if(r.error) console.warn('Supabase delete vendedor:', r.error.message); }); }
   closeModal();renderAll();showToast('🗑️ Vendedor eliminado');
 }
 

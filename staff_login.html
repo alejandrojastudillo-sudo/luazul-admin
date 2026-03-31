@@ -499,7 +499,7 @@
     try {
       if (sbClient) {
         var result = await sbClient.auth.resetPasswordForEmail(email, {
-          redirectTo: 'https://luazul-admin.netlify.app/reset_password.html'
+          redirectTo: 'https://luazul-admin.vercel.app/reset_password.html'
         });
         if (result.error) {
           showErr('No se pudo enviar: ' + result.error.message);
