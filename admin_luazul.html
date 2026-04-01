@@ -699,8 +699,17 @@ function dbLoad() {
 function dbSave(clients) {
   try {
     localStorage.setItem(DB_KEY, JSON.stringify(clients));
-    return true;
-  } catch(e) { return false; }
+  } catch(e) {}
+  // [SUPABASE] Sync changes to Supabase (fire-and-forget)
+  if (sbClient && clients && clients.length) {
+    clients.forEach(function(c) {
+      if (!c.id) return;
+      sbClient.from('clientes').upsert([c], {onConflict: 'id'}).then(function(r) {
+        if (r.error) console.warn('[SB] dbSave upsert:', r.error.message);
+      });
+    });
+  }
+  return true;
 }
 
 function dbClear() {
@@ -708,8 +717,9 @@ function dbClear() {
 }
 
 
-var ADMIN_USER = 'asesor';
-var ADMIN_PASS = 'asesor123';
+// [SUPABASE] Credenciales hardcodeadas eliminadas — login via Supabase Auth
+var ADMIN_USER = ''; // ya no se usa
+var ADMIN_PASS = ''; // ya no se usa
 
 // ── LIMPIEZA DE DATOS DEMO ────────────────────────────
 var DATA_VERSION = 'v3_prod_clean';
@@ -853,21 +863,51 @@ function adminMarkRead(nid) {
 setInterval(refreshAdminNotifBadge, 5000);
 
 
-function adminLogin() {
-  var u = document.getElementById('adUser').value.trim();
+// [SUPABASE] Login del asesor via Supabase Auth
+async function adminLogin() {
+  var u = document.getElementById('adUser').value.trim().toLowerCase();
   var p = document.getElementById('adPass').value.trim();
-  if (u === ADMIN_USER && p === ADMIN_PASS) {
+  var errEl = document.getElementById('adErr');
+  errEl.style.display = 'none';
+  if (!sbClient) { errEl.style.display = 'block'; errEl.textContent = '❌ Sin conexión a Supabase.'; return; }
+  var btn = document.querySelector('.lc-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Verificando...'; }
+  try {
+    var result = await sbClient.auth.signInWithPassword({ email: u, password: p });
+    if (result.error) throw result.error;
+    var meta = result.data.user.user_metadata || {};
+    var nombre = meta.nombre || meta.full_name || u.split('@')[0];
     LZ_AUTH.setPanelSession('luazul_admin');
+    try { sessionStorage.setItem('luazul_asesor_user', nombre); } catch(e){}
     LZ_AUTH._showApp('loginWrap','app');
-    loadClients();
+    await loadClients();
     refreshAdminNotifBadge();
-  } else {
-    document.getElementById('adErr').style.display = 'block';
+  } catch(err) {
+    errEl.style.display = 'block';
+    errEl.textContent = (err.message === 'Invalid login credentials')
+      ? '❌ Usuario o contraseña incorrectos.'
+      : ('❌ ' + (err.message || 'Error al iniciar sesión.'));
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Ingresar'; }
   }
 }
 document.getElementById('adPass').addEventListener('keypress', function(e){ if(e.key==='Enter') adminLogin(); });
-// Acceso directo desde portal staff_login
-document.addEventListener('DOMContentLoaded', function() {
+// Acceso directo desde portal staff_login o sesión activa en Supabase
+document.addEventListener('DOMContentLoaded', async function() {
+  if (sbClient) {
+    var result = await sbClient.auth.getSession();
+    var session = result.data && result.data.session;
+    if (session && session.user) {
+      var meta = session.user.user_metadata || {};
+      var nombre = meta.nombre || meta.full_name || session.user.email.split('@')[0];
+      try { sessionStorage.setItem('luazul_asesor_user', nombre); } catch(e){}
+      LZ_AUTH.setPanelSession('luazul_admin');
+      LZ_AUTH._showApp('loginWrap','app');
+      await loadClients();
+      refreshAdminNotifBadge();
+      return;
+    }
+  }
   LZ_AUTH.guard({
     panelKey:    'luazul_admin',
     portalRoles: ['owner','super_admin'],
@@ -878,7 +918,9 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 window.addEventListener('storage', function(e){ if(e.key==='luazul_notifs'||e.key==='luazul_db'){ refreshAdminNotifBadge(); if(e.key==='luazul_db'){ allClients=(dbLoad()||[]).map(enrich); renderAll(); } } });
 
-function adminLogout() {
+async function adminLogout() {
+  if (sbClient) { try { await sbClient.auth.signOut(); } catch(e){} }
+  try { sessionStorage.removeItem('luazul_asesor_user'); } catch(e){}
   LZ_AUTH.logout({
     panelKey:    'luazul_admin',
     loginWrapId: 'loginWrap',
@@ -890,23 +932,44 @@ function adminLogout() {
 // ══════════════════════════════════════════════════════
 //  DATA
 // ══════════════════════════════════════════════════════
-function loadClients() {
-  // Try localStorage first
+// [SUPABASE] loadClients — carga desde Supabase, respaldo en localStorage
+async function loadClients() {
+  if (sbClient) {
+    try {
+      showToast('⏳ Cargando clientes...');
+      // Obtener el email del usuario actual para filtrar solo sus clientes
+      var sessionResult = await sbClient.auth.getSession();
+      var session = sessionResult.data && sessionResult.data.session;
+      var userEmail = session ? session.user.email : null;
+      var query = sbClient.from('clientes').select('*').order('nombre');
+      // Si no es owner/super_admin, filtrar por asesor
+      var role = null;
+      try { role = sessionStorage.getItem('lz_role'); } catch(e){}
+      if (userEmail && role !== 'owner' && role !== 'super_admin') {
+        query = query.eq('asesor_email', userEmail);
+      }
+      var r = await query;
+      if (r.error) throw r.error;
+      allClients = (r.data || []).map(enrich);
+      dbSave(allClients); // cache local
+      renderAll();
+      showToast('✅ ' + allClients.length + ' clientes cargados desde Supabase');
+      return;
+    } catch(e) {
+      console.warn('[SB] loadClients error:', e.message);
+      showToast('⚠️ Error Supabase — usando datos locales');
+    }
+  }
+  // Respaldo: localStorage
   var saved = dbLoad();
   if (saved && saved.length > 0) {
     allClients = saved.map(enrich);
     renderAll();
-    showToast('✅ ' + allClients.length + ' clientes cargados desde base de datos local');
+    showToast('✅ ' + allClients.length + ' clientes (local)');
     return;
   }
-  // No data saved yet — seed with demo
-  if (!API_URL) {
-    allClients = [];
-    renderAll();
-    
-    return;
-  }
-  fetchAllClients();
+  allClients = [];
+  renderAll();
 }
 
 function fetchAllClients() {
@@ -1822,8 +1885,14 @@ function addClient() {
     contrato_url:'', voucher_url:''
   };
   procesarReferidoNuevoCliente(newClient);
+  // [SUPABASE] Guardar en Supabase + localStorage
+  if (sbClient) {
+    sbClient.from('clientes').insert([newClient]).then(function(r) {
+      if (r.error) { console.warn('[SB] addClient:', r.error.message); }
+    });
+  }
   allClients.push(enrich(newClient));
-  dbSave(allClients); // 💾 persist
+  dbSave(allClients);
   closeModal();
   renderAll();
   showToast('✅ Cliente ' + nombre + ' agregado — puede ingresar con: ' + email);
