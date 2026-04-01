@@ -192,7 +192,7 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
       <div class="tab"        onclick="showTab('mensual')"   id="tab-mensual"   style="color:var(--cyan,#06b6d4);">📆 Recaudación Mensual</div>
       <div class="tab"        onclick="showTab('passwords')" id="tab-passwords" style="color:var(--purple);">🔑 Contraseñas</div>
       <div class="tab" onclick="showTab('pagos_aprobacion')" id="tab-pagos_aprobacion" style="color:#fb923c;">💳 Aprobar Pagos</div>
-      <div class="tab" onclick="window.open('tours_manager.html','_blank')" id="tab-tours" style="color:#34d399;">🏖️ Tours &amp; Destinos</div>
+      <div class="tab" onclick="window.open('https://luazul-smarttravel.vercel.app','_blank')" id="tab-tours" style="color:#34d399;">🌐 Web Luazul</div>
       <div class="tab" onclick="showTab('pagocomisiones')" id="tab-pagocomisiones" style="color:#4ade80;">💰 Pago de Comisiones</div>
       <div class="tab" onclick="showTab('backup')" id="tab-backup" style="color:#22d3ee;">📥 Backup Excel</div>
     </div>
@@ -500,6 +500,51 @@ async function cLogout(){
   var u=document.getElementById('cUser'); if(u) u.value='';
   var p=document.getElementById('cPass'); if(p) p.value='';
 }
+/* ── PWA: comportamiento botón Atrás ────────────────────────────────────────
+ *  - Un solo "atrás" mientras la app está visible → vuelve al login (no cierra)
+ *  - Doble "atrás" en login (dentro de 2 s) → cierra la app
+ *  - Inyectamos un estado extra en history para interceptar el evento
+ * ───────────────────────────────────────────────────────────────────────── */
+(function setupPwaBack() {
+  var lastBackTime = 0;
+
+  /* Empujamos un estado "en-app" al cargar, así siempre hay un entry
+     hacia adelante que podemos volver a poner cuando sea necesario */
+  history.pushState({ pwa: 'app' }, '');
+
+  window.addEventListener('popstate', function (e) {
+    var appEl   = document.getElementById('app');
+    var loginEl = document.getElementById('loginWrap');
+    var appVisible = appEl && appEl.style.display !== 'none';
+
+    if (appVisible) {
+      /* Estaba en la app → mostramos login en vez de cerrar */
+      cLogout();
+      /* Volvemos a empujar el estado para que el siguiente "atrás"
+         llegue de nuevo a este handler (desde la pantalla de login) */
+      history.pushState({ pwa: 'app' }, '');
+    } else {
+      /* Ya estamos en login → doble back en ≤2 s cierra la app */
+      var now = Date.now();
+      if (now - lastBackTime < 2000) {
+        /* Dejamos que el navegador/SO cierre o salga normalmente */
+        history.go(-1);
+      } else {
+        lastBackTime = now;
+        /* Avisamos al usuario que tiene que volver a presionar */
+        var t = document.getElementById('toast');
+        if (t) {
+          t.textContent = 'Presioná Atrás de nuevo para salir';
+          t.classList.add('show');
+          setTimeout(function () { t.classList.remove('show'); }, 2000);
+        }
+        /* Re-empujamos el estado para quedar en el mismo sitio */
+        history.pushState({ pwa: 'app' }, '');
+      }
+    }
+  });
+})();
+
 document.addEventListener('DOMContentLoaded', function(){
   document.getElementById('cPass').addEventListener('keypress', function(e){ if(e.key==='Enter') cLogin(); });
 
