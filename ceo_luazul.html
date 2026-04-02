@@ -404,7 +404,7 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
 var ROLE_SELLER  = 2;
 var ROLE_MANAGER = 3;
 var RK = 'luazul_ceo_regiones';
-var _cacheGerentes=null, _cacheVendedores=null, _cacheClientes=null, _cachePagos=null;
+var _cacheGerentes=null, _cacheVendedores=null, _cacheClientes=null, _cachePagos=null, _cacheRegiones=null;
 
 function dbg(k){try{var r=localStorage.getItem(k);return r?JSON.parse(r):null;}catch(e){return null;}}
 function dbs(k,v){try{localStorage.setItem(k,JSON.stringify(v));return true;}catch(e){return false;}}
@@ -413,20 +413,39 @@ function _parseJSON(s,d){if(!s)return d;try{return JSON.parse(s);}catch(e){retur
 async function cargarDatosSupabase(){
   showToast('⏳ Cargando datos...');
   try{
+    // Regiones desde Supabase
+    var rRes=await sbClient.from('regiones').select('id,nombre,bandera,pais,color,activo').eq('activo',true).order('pais').order('nombre');
+    _cacheRegiones=(rRes.data||[]).map(function(r){
+      return{id:r.id,nombre:r.nombre,bandera:r.bandera||'🌎',pais:r.pais||'',color:r.color||'#a78bfa',activo:r.activo};
+    });
+    // Guardar también en localStorage como respaldo offline
+    dbs(RK, _cacheRegiones);
+
+    // Gerentes: staff_profiles con role_id = 3
     var gRes=await sbClient.from('staff_profiles')
       .select('id,user_id,nombre,apellido,activo,badge,color,role_id,ciudad,telefono1,telefono2,domicilio,cbu,region_id,com_pct,comprobantes_json')
       .eq('role_id',ROLE_MANAGER);
     _cacheGerentes=(gRes.data||[]).map(mapGerente);
 
+    // Cargar regiones de cada gerente (multi-región)
+    var grRes=await sbClient.from('gerente_regiones').select('gerente_id,region_id');
+    var grData=grRes.data||[];
+    _cacheGerentes.forEach(function(g){
+      g.region_ids=(grData.filter(function(x){return x.gerente_id===g.id;}).map(function(x){return x.region_id;}));
+    });
+
+    // Asesores: staff_profiles con role_id = 2
     var vRes=await sbClient.from('staff_profiles')
       .select('id,user_id,nombre,apellido,activo,badge,color,role_id,ciudad,telefono1,telefono2,domicilio,cbu,region_id,fecha_alta,comprobantes_json')
       .eq('role_id',ROLE_SELLER);
     _cacheVendedores=(vRes.data||[]).map(mapVendedor);
 
+    // Clientes
     var cRes=await sbClient.from('clientes')
       .select('id,user_id,seller_id,nombre,email,telefono,documento,estado,destino,paquete,fecha_viaje,monto_cuota,cuotas_total,cuotas_pagadas,total_usd,fecha_alta,notas,region_id');
     _cacheClientes=(cRes.data||[]).map(mapCliente);
 
+    // Pagos
     var pRes=await sbClient.from('pagos')
       .select('id,reserva_id,numero_cuota,monto_usd,estado,fecha_pago,comprobante_url,cliente_id,aprobado_por,vendedor_nombre,cliente_nombre,created_at')
       .order('created_at',{ascending:false}).limit(500);
@@ -435,7 +454,8 @@ async function cargarDatosSupabase(){
     showToast('✅ Datos cargados desde Supabase');
   }catch(e){
     console.error('Error cargando Supabase:',e);
-    showToast('⚠️ Error al cargar datos');
+    showToast('⚠️ Error al cargar datos — usando caché local');
+    _cacheRegiones=_cacheRegiones||dbg(RK)||[];
     _cacheGerentes=_cacheGerentes||[];
     _cacheVendedores=_cacheVendedores||[];
     _cacheClientes=_cacheClientes||[];
@@ -637,10 +657,37 @@ function renderAll(){
 }
 
 // ── HELPERS — leen del caché Supabase ─────────────────
-function reg(){return dbg(RK)||[];}
+function reg(){return _cacheRegiones||dbg(RK)||[];}
 function ger(){return _cacheGerentes||[];}
 function vend(){return _cacheVendedores||[];}
 function cli(){return (_cacheClientes||[]).map(enrich);}
+
+// ── SELECTOR DE REGIONES con checkboxes por país ───────
+function buildRegionCheckboxes(selectedIds){
+  selectedIds=selectedIds||[];
+  var rs=reg();
+  var porPais={};
+  var flags={AR:'🇦🇷',CL:'🇨🇱',UY:'🇺🇾',PY:'🇵🇾',BO:'🇧🇴',PE:'🇵🇪',CO:'🇨🇴'};
+  var nomPais={AR:'Argentina',CL:'Chile',UY:'Uruguay',PY:'Paraguay',BO:'Bolivia',PE:'Perú',CO:'Colombia'};
+  rs.forEach(function(r){ var p=r.pais||'AR'; if(!porPais[p])porPais[p]=[]; porPais[p].push(r); });
+  var html='<div style="max-height:220px;overflow-y:auto;border:1px solid var(--border2);border-radius:10px;padding:10px;">';
+  Object.keys(porPais).forEach(function(pais){
+    html+='<div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--gold);margin:8px 0 4px;">'+(flags[pais]||'🌎')+' '+(nomPais[pais]||pais)+'</div>';
+    porPais[pais].forEach(function(r){
+      var chk=selectedIds.indexOf(r.id)>=0?'checked':'';
+      html+='<label style="display:flex;align-items:center;gap:8px;padding:4px 6px;border-radius:6px;cursor:pointer;font-size:.82rem;" onmouseover="this.style.background=\'rgba(255,255,255,.05)\'" onmouseout="this.style.background=\'none\'">'
+        +'<input type="checkbox" value="'+r.id+'" '+chk+' style="accent-color:var(--purple);width:14px;height:14px;" />'
+        +'<span style="color:'+r.color+';">■</span>'+r.nombre+'</label>';
+    });
+  });
+  html+='</div>';
+  return html;
+}
+function getSelectedRegionIds(){
+  var ids=[];
+  document.querySelectorAll('#modal input[type="checkbox"]').forEach(function(c){ if(c.checked) ids.push(c.value); });
+  return ids;
+}
 
 function enrich(c){
   var t=parseInt(c.cuotas_total)||10, p=parseInt(c.cuotas_pagadas)||0;
@@ -1410,9 +1457,17 @@ function renderPwVendors(){
 
 function openAddVendorCeo(){
   var rs = reg();
-  var regOpts = rs.map(function(r){
-    return '<option value="'+r.id+'">'+r.bandera+' '+r.nombre+'</option>';
-  }).join('');
+  // Agrupar por país para el select
+  var flags={AR:'🇦🇷',CL:'🇨🇱',UY:'🇺🇾',PY:'🇵🇾',BO:'🇧🇴',PE:'🇵🇪',CO:'🇨🇴'};
+  var nomPais={AR:'Argentina',CL:'Chile',UY:'Uruguay',PY:'Paraguay',BO:'Bolivia',PE:'Perú',CO:'Colombia'};
+  var porPais={};
+  rs.forEach(function(r){ var p=r.pais||'AR'; if(!porPais[p])porPais[p]=[]; porPais[p].push(r); });
+  var regOpts='<option value="">— Seleccionar ciudad/región —</option>';
+  Object.keys(porPais).forEach(function(pais){
+    regOpts+='<optgroup label="'+(flags[pais]||'')+' '+(nomPais[pais]||pais)+'">';
+    porPais[pais].forEach(function(r){ regOpts+='<option value="'+r.id+'">'+r.nombre+'</option>'; });
+    regOpts+='</optgroup>';
+  });
   document.getElementById('mbox').innerHTML =
     '<div class="mhead"><div><h2>➕ Nuevo Asesor</h2><p>Completá los datos del nuevo asesor</p></div>'+
     '<button class="mclose" onclick="closeModal()">✕</button></div>'+
@@ -1421,13 +1476,13 @@ function openAddVendorCeo(){
     '<div class="mitem"><div class="ml">Nombre completo</div><input class="medit" id="caVN" placeholder="Ej: Laura Mendoza" /></div>'+
     '<div class="mitem"><div class="ml">Email</div><input class="medit" id="caVE" placeholder="laura@luazul.com" /></div>'+
     '<div class="mitem"><div class="ml">Contraseña</div><input class="medit" id="caVP" placeholder="Contraseña de acceso" /></div>'+
-    '<div class="mitem"><div class="ml">Región</div><select class="medit" id="caVR">'+regOpts+'</select></div>'+
+    '<div class="mitem"><div class="ml">Ciudad / Región</div><select class="medit" id="caVR">'+regOpts+'</select></div>'+
     '<div class="mitem"><div class="ml">Teléfono principal</div><input class="medit" id="caVT1" placeholder="+54 9 11 1234-5678" /></div>'+
     '<div class="mitem"><div class="ml">Teléfono de referencia</div><input class="medit" id="caVT2" placeholder="+54 9 351 9876-5432" /></div>'+
-    '<div class="mitem" style="grid-column:span 2;"><div class="ml">Domicilio</div><input class="medit" id="caVDom" placeholder="Ej: Av. Corrientes 1234, Buenos Aires" /></div>'+
+    '<div class="mitem" style="grid-column:span 2;"><div class="ml">Domicilio</div><input class="medit" id="caVDom" placeholder="Av. Corrientes 1234, Buenos Aires" /></div>'+
     '<div class="mitem" style="grid-column:span 2;">'+
-      '<div class="ml">💰 CBU / Alias bancario <span style="font-weight:400;color:var(--muted);font-size:.75rem;">(para cobro de comisiones)</span></div>'+
-      '<input class="medit" id="caVCBU" placeholder="CBU: 0000000000000000000000 · o Alias: nombre.apellido.banco" style="font-family:monospace;" />'+
+      '<div class="ml">💰 CBU / Alias bancario</div>'+
+      '<input class="medit" id="caVCBU" placeholder="CBU o Alias" style="font-family:monospace;" />'+
     '</div>'+
     '</div>'+
     '</div>'+
@@ -1475,10 +1530,11 @@ async function saveNewVendorCeo(){
     _cacheVendedores = _cacheVendedores||[];
     _cacheVendedores.push(mapVendedor(ins.data));
     closeModal(); populateAllFilters();
-    showToast('✅ Asesor ' + nombre + ' creado en Supabase');
+    var rNombre = rid ? (reg().find(function(x){return x.id===rid;})||{}).nombre||'' : '';
+    showToast('✅ Asesor '+nombre+' creado'+(rNombre?' · '+rNombre:''));
   }catch(e){
     console.error('saveNewVendorCeo:', e);
-    showToast('❌ Error al crear asesor: ' + (e.message||'Verificá los datos'));
+    showToast('❌ Error: '+(e.message||'Verificá los datos'));
   }finally{
     if(btn){btn.disabled=false; btn.textContent='✅ Crear Asesor';}
   }
@@ -1638,10 +1694,6 @@ async function saveEditVendCeo(vid){
 // ── GESTIÓN DE GERENTES ───────────────────────────────
 
 function openAddGerente(){
-  var rs = reg();
-  var regOpts = rs.map(function(r){
-    return '<option value="'+r.id+'">'+r.bandera+' '+r.nombre+'</option>';
-  }).join('');
   document.getElementById('mbox').innerHTML =
     '<div class="mhead"><div><h2>👔 Nuevo Gerente Regional</h2><p>Completá los datos del nuevo gerente</p></div>'+
     '<button class="mclose" onclick="closeModal()">✕</button></div>'+
@@ -1651,14 +1703,16 @@ function openAddGerente(){
     '<div class="mitem"><div class="ml">Email</div><input class="medit" id="gEmail" placeholder="gerente@email.com" /></div>'+
     '<div class="mitem"><div class="ml">Contraseña</div><input class="medit" id="gPass" placeholder="Contraseña de acceso" /></div>'+
     '<div class="mitem"><div class="ml">Ciudad</div><input class="medit" id="gCiudad" placeholder="Ej: Córdoba" /></div>'+
-    '<div class="mitem"><div class="ml">Teléfono principal</div><input class="medit" id="gTel1" placeholder="Ej: +54 9 11 1234-5678" /></div>'+
-    '<div class="mitem"><div class="ml">Teléfono de referencia</div><input class="medit" id="gTel2" placeholder="Ej: +54 9 351 9876-5432" /></div>'+
-    '<div class="mitem" style="grid-column:span 2;"><div class="ml">Domicilio</div><input class="medit" id="gDomicilio" placeholder="Ej: Av. Colón 1234, Córdoba" /></div>'+
+    '<div class="mitem"><div class="ml">Teléfono principal</div><input class="medit" id="gTel1" placeholder="+54 9 11 1234-5678" /></div>'+
+    '<div class="mitem"><div class="ml">Teléfono de referencia</div><input class="medit" id="gTel2" placeholder="+54 9 351 9876-5432" /></div>'+
+    '<div class="mitem" style="grid-column:span 2;"><div class="ml">Domicilio</div><input class="medit" id="gDomicilio" placeholder="Av. Colón 1234, Córdoba" /></div>'+
     '<div class="mitem" style="grid-column:span 2;">'+
-      '<div class="ml">💰 CBU / Alias bancario <span style="font-weight:400;color:var(--muted);font-size:.75rem;">(para cobro de comisiones)</span></div>'+
-      '<input class="medit" id="gCBU" placeholder="CBU: 0000000000000000000000 · o Alias: nombre.apellido.banco" style="font-family:monospace;" /></div>'+
-    '<div class="mitem"><div class="ml">Región asignada</div>'+
-      '<select class="medit" id="gRid">'+regOpts+'</select></div>'+
+      '<div class="ml">💰 CBU / Alias bancario</div>'+
+      '<input class="medit" id="gCBU" placeholder="CBU o Alias" style="font-family:monospace;" /></div>'+
+    '<div class="mitem" style="grid-column:span 2;">'+
+      '<div class="ml" style="margin-bottom:8px;">🌎 Regiones a cargo <span style="color:var(--muted);font-weight:400;">(puede seleccionar varias)</span></div>'+
+      buildRegionCheckboxes([])+
+    '</div>'+
     '</div>'+
     '</div>'+
     '<div class="mact">'+
@@ -1671,55 +1725,53 @@ async function saveNewGerente(){
   var nombre = (document.getElementById('gNombre').value||'').trim();
   var email  = (document.getElementById('gEmail').value||'').trim().toLowerCase();
   var pass   = (document.getElementById('gPass').value||'').trim();
-  var rid    = document.getElementById('gRid').value;
+  var regionIds = getSelectedRegionIds();
   if(!nombre||!email||!pass){ showToast('⚠️ Nombre, email y contraseña son obligatorios'); return; }
 
   var btn = document.querySelector('#modal .mbtn.purple');
   if(btn){btn.disabled=true; btn.textContent='⏳ Creando...';}
 
   try{
-    // 1. Crear usuario en Supabase Auth
     var signUp = await sbClient.auth.signUp({ email: email, password: pass,
       options:{ data:{ nombre: nombre, role: 'manager' } }
     });
     if(signUp.error) throw signUp.error;
     var uid = signUp.data.user ? signUp.data.user.id : null;
 
-    // 2. Crear perfil en staff_profiles
     var nombres = nombre.split(' ');
-    var primerNombre = nombres[0];
-    var apellido = nombres.slice(1).join(' ') || '';
     var profileData = {
       role_id:    ROLE_MANAGER,
-      nombre:     primerNombre,
-      apellido:   apellido,
-      badge:      email,
-      activo:     true,
-      region_id:  rid || null,
+      nombre:     nombres[0],
+      apellido:   nombres.slice(1).join(' ')||'',
+      badge:      email, activo: true,
       ciudad:     (document.getElementById('gCiudad').value||'').trim()||null,
       telefono1:  (document.getElementById('gTel1').value||'').trim()||null,
       telefono2:  (document.getElementById('gTel2').value||'').trim()||null,
       domicilio:  (document.getElementById('gDomicilio').value||'').trim()||null,
       cbu:        (document.getElementById('gCBU').value||'').trim()||null,
-      com_pct: 0,
-      comprobantes_json: '[]'
+      com_pct: 0, comprobantes_json: '[]'
     };
     if(uid) profileData.user_id = uid;
 
     var ins = await sbClient.from('staff_profiles').insert(profileData).select().single();
     if(ins.error) throw ins.error;
+    var newGer = mapGerente(ins.data);
+    newGer.region_ids = regionIds;
 
-    // 3. Actualizar caché local
-    _cacheGerentes = _cacheGerentes || [];
-    _cacheGerentes.push(mapGerente(ins.data));
+    // Guardar relaciones multi-región
+    if(regionIds.length > 0){
+      var rels = regionIds.map(function(rid){ return{gerente_id:ins.data.id, region_id:rid}; });
+      await sbClient.from('gerente_regiones').insert(rels);
+    }
 
-    closeModal();
-    renderRegiones();
-    renderPasswords();
-    showToast('✅ Gerente ' + nombre + ' creado en Supabase');
+    _cacheGerentes = _cacheGerentes||[];
+    _cacheGerentes.push(newGer);
+    closeModal(); renderRegiones(); renderPasswords();
+    var rNombres = regionIds.map(function(rid){ var r=reg().find(function(x){return x.id===rid;}); return r?r.nombre:''; }).filter(Boolean).join(', ');
+    showToast('✅ Gerente '+nombre+' creado'+(rNombres?' · '+rNombres:''));
   }catch(e){
     console.error('saveNewGerente:', e);
-    showToast('❌ Error al crear gerente: ' + (e.message||'Verificá los datos'));
+    showToast('❌ Error: '+(e.message||'Verificá los datos'));
   }finally{
     if(btn){btn.disabled=false; btn.textContent='✅ Crear Gerente';}
   }
@@ -1826,10 +1878,6 @@ async function borrarComprobante(gid, idx){
 function openEditGerente(gid){
   var g = ger().find(function(x){ return x.id === gid; });
   if(!g){ showToast('⚠️ Gerente no encontrado'); return; }
-  var rs = reg();
-  var regOpts = rs.map(function(r){
-    return '<option value="'+r.id+'"'+(r.id===g.rid?' selected':'')+'>'+r.bandera+' '+r.nombre+'</option>';
-  }).join('');
   document.getElementById('mbox').innerHTML =
     '<div class="mhead"><div><h2>✏️ Editar Gerente</h2><p>'+g.nombre+'</p></div>'+
     '<button class="mclose" onclick="closeModal()">✕</button></div>'+
@@ -1838,11 +1886,14 @@ function openEditGerente(gid){
     '<div class="mitem"><div class="ml">Nombre completo</div><input class="medit" id="egNombre" value="'+g.nombre+'" /></div>'+
     '<div class="mitem"><div class="ml">Email</div><input class="medit" id="egEmail" value="'+(g.email||'')+'" /></div>'+
     '<div class="mitem"><div class="ml">Ciudad</div><input class="medit" id="egCiudad" value="'+(g.ciudad||'')+'" /></div>'+
-    '<div class="mitem"><div class="ml">Región</div><select class="medit" id="egRid">'+regOpts+'</select></div>'+
     '<div class="mitem"><div class="ml">Teléfono principal</div><input class="medit" id="egTel1" value="'+(g.telefono1||'')+'" /></div>'+
     '<div class="mitem"><div class="ml">Teléfono de referencia</div><input class="medit" id="egTel2" value="'+(g.telefono2||'')+'" /></div>'+
     '<div class="mitem" style="grid-column:span 2;"><div class="ml">Domicilio</div><input class="medit" id="egDomicilio" value="'+(g.domicilio||'')+'" /></div>'+
     '<div class="mitem" style="grid-column:span 2;"><div class="ml">💰 CBU / Alias bancario</div><input class="medit" id="egCBU" value="'+(g.cbu||'')+'" style="font-family:monospace;" /></div>'+
+    '<div class="mitem" style="grid-column:span 2;">'+
+      '<div class="ml" style="margin-bottom:8px;">🌎 Regiones a cargo <span style="color:var(--muted);font-weight:400;">(puede seleccionar varias)</span></div>'+
+      buildRegionCheckboxes(g.region_ids||[])+
+    '</div>'+
     '</div></div>'+
     '<div class="mact">'+
     '<button class="mbtn purple" onclick="saveEditGerente(\''+gid+'\')">💾 Guardar cambios</button>'+
@@ -1854,12 +1905,12 @@ async function saveEditGerente(gid){
   var g = (_cacheGerentes||[]).find(function(x){ return x.id===gid; });
   if(!g){ showToast('⚠️ Gerente no encontrado'); return; }
   var nombres = ((document.getElementById('egNombre').value||'').trim()||g.nombre).split(' ');
+  var newRegionIds = getSelectedRegionIds();
   var upd = {
     nombre:    nombres[0],
     apellido:  nombres.slice(1).join(' ')||'',
     badge:     (document.getElementById('egEmail').value||'').trim()||g.email,
     ciudad:    (document.getElementById('egCiudad').value||'').trim()||null,
-    region_id: document.getElementById('egRid').value||null,
     telefono1: (document.getElementById('egTel1').value||'').trim()||null,
     telefono2: (document.getElementById('egTel2').value||'').trim()||null,
     domicilio: (document.getElementById('egDomicilio').value||'').trim()||null,
@@ -1868,11 +1919,20 @@ async function saveEditGerente(gid){
   try{
     var res = await sbClient.from('staff_profiles').update(upd).eq('id', gid).select().single();
     if(res.error) throw res.error;
+    // Actualizar multi-regiones: borrar las viejas e insertar las nuevas
+    await sbClient.from('gerente_regiones').delete().eq('gerente_id', gid);
+    if(newRegionIds.length > 0){
+      var rels = newRegionIds.map(function(rid){ return{gerente_id:gid, region_id:rid}; });
+      await sbClient.from('gerente_regiones').insert(rels);
+    }
     var idx = (_cacheGerentes||[]).findIndex(function(x){ return x.id===gid; });
-    if(idx>=0) _cacheGerentes[idx] = mapGerente(res.data);
+    if(idx>=0){
+      _cacheGerentes[idx] = mapGerente(res.data);
+      _cacheGerentes[idx].region_ids = newRegionIds;
+    }
     showToast('✅ Datos actualizados');
     openGerDetail(gid); renderRegiones(); renderPasswords();
-  }catch(e){ showToast('❌ Error al actualizar: '+(e.message||'')); }
+  }catch(e){ showToast('❌ Error: '+(e.message||'')); }
 }
 
 async function saveGerPass(gid, idx){
