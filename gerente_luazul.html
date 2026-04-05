@@ -190,7 +190,7 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;back
     <h1 style="margin-bottom:4px;">LUAZUL</h1>
     <div class="lsub" style="font-size:.72rem;letter-spacing:2px;margin-bottom:4px;color:rgba(255,255,255,.45);">SMART TRAVEL</div>
     <div style="font-size:.65rem;font-weight:700;letter-spacing:2.5px;text-transform:uppercase;color:#f59e0b;margin-bottom:18px;">👔 Panel de Gerencia</div>
-    <div class="lf"><label>Usuario</label><input type="text" id="gUser" placeholder="gerente" autocomplete="username"/></div>
+    <div class="lf"><label>Email</label><input type="text" id="gUser" placeholder="gerente@luazul.com" autocomplete="username"/></div>
     <div class="lf"><label>Contraseña</label><div class="lz-pass-wrap"><input type="password" id="gPass" placeholder="••••••••" autocomplete="current-password"/><button type="button" class="lz-eye-btn" onclick="lzToggle('gPass', this)" title="Mostrar/ocultar contraseña" tabindex="-1"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lz-eye-gPass"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg></button></div></div>
     <button class="lbtn" onclick="gLogin()">Ingresar</button>
     <div class="lerr" id="gErr">❌ Credenciales incorrectas</div>
@@ -414,83 +414,202 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;back
 <script>
 var DB_KEY='luazul_db', VK='luazul_vendors', NK='luazul_notifs';
 
-// ── SUPABASE TABLE MAP ────────────────────────────────
-var SB_TABLE = {};
-SB_TABLE[VK]     = 'vendedores';
-SB_TABLE[DB_KEY] = 'clientes';
-SB_TABLE[NK]     = 'notificaciones';
+// ── SUPABASE TABLE MAP (tablas reales del proyecto) ────
+// staff_profiles → vendedores/asesores (role_id=2) y gerentes (role_id=3)
+// clientes       → clientes
+// pagos          → pagos (reemplaza notificaciones de pago)
+// regiones       → regiones
+// gerente_regiones → relación gerente ↔ regiones
 
-// ── IN-MEMORY CACHE (replaces localStorage as primary source) ──
+// ── GERENTE PROFILE ────────────────────────────────────
+window._gerenteProfile   = null;  // perfil del gerente autenticado
+window._gerenteRegionIds = [];    // IDs de regiones asignadas
+
+// ── MAPEO: staff_profiles → formato interno ──────────
+function mapVendorFromSB(v) {
+  var comps = [];
+  if(v.comprobantes_json){ try{ comps = JSON.parse(v.comprobantes_json); }catch(e){} }
+  return {
+    id:          v.id,
+    nombre:      (v.nombre||'') + (v.apellido ? ' '+v.apellido : ''),
+    email:       v.badge || '',   // badge almacena el email
+    password:    '',              // nunca exponer contraseñas en frontend
+    activo:      v.activo !== false,
+    fechaAlta:   v.fecha_alta || '',
+    telefono1:   v.telefono1  || '',
+    telefono2:   v.telefono2  || '',
+    domicilio:   v.domicilio  || '',
+    cbu:         v.cbu        || '',
+    region_id:   v.region_id  || '',
+    com_pct:     v.com_pct    || 0,
+    comprobantes: comps,
+    _sbId:       v.id
+  };
+}
+
+// ── MAPEO: clientes → formato interno ────────────────
+function mapClientFromSB(c) {
+  return {
+    id:            c.id,
+    vid:           c.seller_id  || '',
+    nombre:        c.nombre     || '',
+    email:         c.email      || '',
+    telefono:      c.telefono   || '',
+    documento:     c.documento  || '',
+    estado:        c.estado     || 'activo',
+    destino:       c.destino    || '',
+    paquete:       c.paquete    || '',
+    fecha_viaje:   c.fecha_viaje|| '',
+    monto_cuota:   c.monto_cuota|| 0,
+    cuotas_total:  c.cuotas_total || 10,
+    cuotas_pagadas:c.cuotas_pagadas || 0,
+    total_usd:     c.total_usd  || 0,
+    fechaAlta:     c.fecha_alta || '',
+    fecha_alta:    c.fecha_alta || '',
+    notas:         c.notas      || '',
+    region_id:     c.region_id  || '',
+    mora:          (function(){ try{ return c.mora_json ? JSON.parse(c.mora_json) : []; }catch(e){ return []; } })(),
+    comprobantes:  {}
+  };
+}
+
+// ── MAPEO: pagos → formato interno (notificaciones) ──
+function mapPagoToNotif(p) {
+  return {
+    id:          p.id,
+    tipo:        'payment',
+    ts:          p.created_at ? new Date(p.created_at).getTime() : Date.now(),
+    leida:       p.estado !== 'pendiente',
+    aprobada:    p.estado === 'aprobado',
+    cliente:     p.cliente_nombre || '',
+    cid:         p.cliente_id     || '',
+    cuota:       p.numero_cuota   || 1,
+    monto:       p.monto_usd      || 0,
+    vendedor:    p.vendedor_nombre|| '',
+    comp:        p.comprobante_url|| null,
+    aprobadoPor: p.aprobado_por   || '',
+    vid:         ''
+  };
+}
+
+// ── IN-MEMORY CACHE (fuente de verdad: Supabase) ─────
 var _memCache = {};
-
-// ── LIMPIEZA DE DATOS DEMO ────────────────────────────
-var DATA_VERSION = 'v3_prod_clean';
-(function(){
-  if(localStorage.getItem('luazul_gerente_version') !== DATA_VERSION){
-    [DB_KEY, VK, NK].forEach(function(k){ localStorage.removeItem(k); });
-    localStorage.removeItem('luazul_vendors_d2');
-    localStorage.removeItem('luazul_db_d2');
-    localStorage.setItem('luazul_gerente_version', DATA_VERSION);
-  }
-})();
-
-var GU='gerente', GP='gerente123';
 
 function dbg(k){
   if(_memCache[k] !== undefined) return _memCache[k];
-  try{var r=localStorage.getItem(k);return r?JSON.parse(r):null;}catch(e){return null;}
+  return [];
 }
 function dbs(k,v){
   _memCache[k]=v;
-  try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}
-  _sbSave(k,v);
   return true;
 }
 
-// ── ASYNC SUPABASE SAVE ───────────────────────────────
-async function _sbSave(k, v){
-  if(!sbClient || !SB_TABLE[k] || !Array.isArray(v)) return;
+// ── SUPABASE DIRECTO: guardar cliente ────────────────
+async function _sbUpdateClient(id, fields){
+  if(!sbClient) return;
   try{
-    if(v.length === 0) return;
-    var { error } = await sbClient.from(SB_TABLE[k]).upsert(v, {onConflict:'id'});
-    if(error) console.warn('Supabase save ['+k+']:', error.message);
-  }catch(e){ console.warn('Supabase save error:', e); }
+    var { error } = await sbClient.from('clientes').update(fields).eq('id', id);
+    if(error) console.warn('Supabase update clientes:', error.message);
+  }catch(e){ console.warn('_sbUpdateClient error:', e); }
 }
 
-// ── ASYNC SUPABASE LOAD ───────────────────────────────
-async function _sbLoad(){
-  var keys = [
-    {k: VK,     t: 'vendedores'},
-    {k: DB_KEY, t: 'clientes'},
-    {k: NK,     t: 'notificaciones'}
-  ];
-  for(var i = 0; i < keys.length; i++){
-    var entry = keys[i];
-    try{
-      var res = await sbClient.from(entry.t).select('*');
-      if(!res.error && res.data && res.data.length > 0){
-        _memCache[entry.k] = res.data;
-        // Also update localStorage backup
-        try{ localStorage.setItem(entry.k, JSON.stringify(res.data)); }catch(ex){}
-      } else {
-        // Fallback: try localStorage
-        try{
-          var ls = localStorage.getItem(entry.k);
-          _memCache[entry.k] = ls ? JSON.parse(ls) : [];
-        }catch(ex){ _memCache[entry.k] = []; }
+// ── SUPABASE DIRECTO: guardar vendor ─────────────────
+async function _sbUpdateVendor(id, fields){
+  if(!sbClient) return;
+  try{
+    var { error } = await sbClient.from('staff_profiles').update(fields).eq('id', id);
+    if(error) console.warn('Supabase update staff_profiles:', error.message);
+  }catch(e){ console.warn('_sbUpdateVendor error:', e); }
+}
 
-        // If we have localStorage data but Supabase is empty → migrate up
-        if(_memCache[entry.k] && _memCache[entry.k].length > 0){
-          _sbSave(entry.k, _memCache[entry.k]);
-        }
+// ── SUPABASE DIRECTO: aprobar pago ───────────────────
+async function _sbApprovePayment(id){
+  if(!sbClient) return false;
+  try{
+    var { error } = await sbClient.from('pagos')
+      .update({ estado:'aprobado', aprobado_por:'Gerencia', fecha_pago: new Date().toISOString() })
+      .eq('id', id);
+    if(error){ console.warn('Supabase approve pago:', error.message); return false; }
+    return true;
+  }catch(e){ console.warn('_sbApprovePayment error:', e); return false; }
+}
+
+// ── CARGA INICIAL DESDE SUPABASE ─────────────────────
+async function _sbLoad(){
+  try{
+    // 1. Obtener perfil del gerente autenticado
+    if(sbClient && !window._gerenteProfile){
+      var { data: { user } } = await sbClient.auth.getUser();
+      if(user){
+        var { data: profile } = await sbClient.from('staff_profiles')
+          .select('*').eq('user_id', user.id).single();
+        if(profile) window._gerenteProfile = profile;
       }
-    }catch(e){
-      console.warn('Supabase load ['+entry.t+']:', e);
-      try{
-        var ls2 = localStorage.getItem(entry.k);
-        _memCache[entry.k] = ls2 ? JSON.parse(ls2) : [];
-      }catch(ex2){ _memCache[entry.k] = []; }
     }
+
+    // 2. Regiones del gerente
+    var gerenteId = window._gerenteProfile ? window._gerenteProfile.id : null;
+    var regionIds = [];
+    if(gerenteId && sbClient){
+      var { data: grData } = await sbClient.from('gerente_regiones')
+        .select('region_id').eq('gerente_id', gerenteId);
+      if(grData) regionIds = grData.map(function(r){ return r.region_id; });
+      window._gerenteRegionIds = regionIds;
+    }
+
+    // 3. Cargar regiones
+    if(sbClient){
+      var { data: regData } = await sbClient.from('regiones').select('*').eq('activo', true);
+      if(regData) _memCache['luazul_regiones'] = regData;
+    }
+
+    // 4. Cargar asesores (role_id=2) de las regiones del gerente
+    if(sbClient){
+      var vendQ = sbClient.from('staff_profiles').select('*').eq('role_id', 2);
+      if(regionIds.length > 0) vendQ = vendQ.in('region_id', regionIds);
+      var { data: vendData, error: vErr } = await vendQ;
+      if(!vErr && vendData){
+        _memCache[VK] = vendData.map(mapVendorFromSB);
+      }
+    }
+
+    // 5. Cargar clientes de las regiones del gerente
+    if(sbClient){
+      var cliQ = sbClient.from('clientes').select('*');
+      if(regionIds.length > 0) cliQ = cliQ.in('region_id', regionIds);
+      var { data: cliData, error: cErr } = await cliQ.order('created_at', {ascending:false}).limit(1000);
+      if(!cErr && cliData){
+        _memCache[DB_KEY] = cliData.map(mapClientFromSB);
+      }
+    }
+
+    // 6. Cargar pagos de los clientes cargados
+    if(sbClient){
+      var clientIds = (_memCache[DB_KEY]||[]).map(function(c){ return c.id; });
+      if(clientIds.length > 0){
+        var { data: pagosData, error: pErr } = await sbClient.from('pagos')
+          .select('*')
+          .in('cliente_id', clientIds)
+          .order('created_at', {ascending:false})
+          .limit(500);
+        if(!pErr && pagosData){
+          _memCache[NK] = pagosData.map(mapPagoToNotif);
+        }
+      } else {
+        _memCache[NK] = [];
+      }
+    }
+
+    // Inicializar arrays vacíos si no se cargó nada
+    if(!_memCache[VK])    _memCache[VK]    = [];
+    if(!_memCache[DB_KEY]) _memCache[DB_KEY] = [];
+    if(!_memCache[NK])    _memCache[NK]    = [];
+
+  }catch(e){
+    console.warn('_sbLoad error:', e);
+    if(!_memCache[VK])    _memCache[VK]    = [];
+    if(!_memCache[DB_KEY]) _memCache[DB_KEY] = [];
+    if(!_memCache[NK])    _memCache[NK]    = [];
   }
 }
 
@@ -619,18 +738,54 @@ function enrich(c){
   return c;
 }
 function sc(s){return{r:'#ef4444',n:'#f97316',a:'#eab308',v:'#22c55e',b:'#6b7280'}[s]||'#6b7280';}
-function vby(id){return(dbg(VK)||[]).find(function(v){return v.id===id;})||{nombre:'Sin asignar',id:'',password:''};}
+function vby(id){return((_memCache[VK]||[])||[]).find(function(v){return v.id===id;})||{nombre:'Sin asignar',id:'',password:''};}
 function fmtTs(ts){var d=Math.round((Date.now()-ts)/60000);return d<60?'Hace '+d+' min':d<1440?'Hace '+Math.round(d/60)+' h':'Hace '+Math.round(d/1440)+' días';}
 
-function gLogin(){
-  var u=document.getElementById('gUser').value.trim(),p=document.getElementById('gPass').value.trim();
-  if(u===GU&&p===GP){
+async function gLogin(){
+  var emailOrUser = document.getElementById('gUser').value.trim();
+  var pass = document.getElementById('gPass').value.trim();
+  var errEl = document.getElementById('gErr');
+  errEl.style.display = 'none';
+
+  if(!emailOrUser || !pass){
+    errEl.style.display='block';
+    errEl.textContent='❌ Ingresá email y contraseña.';
+    return;
+  }
+
+  // Si no tiene "@" asumimos que es el alias heredado "gerente" → buscar en staff_profiles
+  // Si tiene "@" es email directo de Supabase Auth
+  if(!sbClient){
+    errEl.style.display='block';
+    errEl.textContent='❌ Sin conexión con Supabase.';
+    return;
+  }
+
+  try{
+    // Intentar login con Supabase Auth (email + password)
+    var emailToUse = emailOrUser.indexOf('@') >= 0 ? emailOrUser : emailOrUser + '@luazul.com';
+    var { data, error } = await sbClient.auth.signInWithPassword({
+      email: emailToUse,
+      password: pass
+    });
+
+    if(error || !data || !data.user) throw new Error(error ? error.message : 'Sin respuesta del servidor');
+
+    // Verificar rol en staff_profiles
+    var { data: profile, error: pErr } = await sbClient.from('staff_profiles')
+      .select('*').eq('user_id', data.user.id).single();
+
+    if(pErr || !profile) throw new Error('Perfil de gerente no encontrado. Contactá al administrador.');
+    if(profile.role_id !== 3) throw new Error('Este acceso es exclusivo para gerentes (role_id=3).');
+
+    window._gerenteProfile = profile;
     LZ_AUTH.setPanelSession(LZ_AUTH.PANEL_KEYS.gerente);
     LZ_AUTH._showApp('loginWrap','app');
     initApp();
-  } else {
-    var e=document.getElementById('gErr');e.style.display='block';
-    e.textContent='❌ Usuario o contraseña incorrectos.';
+
+  }catch(e){
+    errEl.style.display='block';
+    errEl.textContent='❌ ' + (e.message || 'Credenciales incorrectas');
   }
 }
 
@@ -640,13 +795,12 @@ function renderMisComisionesGerente(){
   var el = document.getElementById('misComisionesGerente');
   if(!el) return;
 
-  // Matchear gerente por contraseña en datos CEO
-  var gerentes = JSON.parse(localStorage.getItem('luazul_ceo_gerentes') || '[]');
-  var yo = gerentes.find(function(g){ return g.password === GP; });
+  // Usar perfil del gerente autenticado
+  var yo = window._gerenteProfile || null;
 
-  // Calcular comisión usando los datos locales del panel gerente
-  var vendedores = dbg(VK) || [];
-  var clientes   = dbg(DB_KEY) || [];
+  // Calcular comisión con datos del caché
+  var vendedores = _memCache[VK] || [];
+  var clientes   = _memCache[DB_KEY] || [];
 
   function fmtM(v){ return 'USD ' + Number(v||0).toLocaleString('es-AR',{minimumFractionDigits:0,maximumFractionDigits:0}); }
   function getMonth(c){
@@ -657,7 +811,7 @@ function renderMisComisionesGerente(){
 
   // Calcular base 20% sobre primera cuota de cada venta
   var pctBase  = 0.20;
-  var pctBonus = yo ? parseFloat(yo.pct_bonus || 0) / 100 : 0;
+  var pctBonus = yo ? parseFloat(yo.com_pct || 0) / 100 : 0;
   var mn = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
   var byMonth = {};
   clientes.forEach(function(c){
@@ -692,9 +846,14 @@ function renderMisComisionesGerente(){
   });
 
   var totalNeta   = Math.round((totalBase + totalBonus)*100)/100;
-  var comps       = yo ? (yo.comprobantes || []) : [];
+  var comps = [];
+  if(yo && yo.comprobantes_json){ try{ comps = JSON.parse(yo.comprobantes_json); }catch(e){} }
+  else if(yo && Array.isArray(yo.comprobantes)){ comps = yo.comprobantes; }
   var totalPagado = comps.reduce(function(s,x){ return s+(parseFloat(x.monto)||0); }, 0);
   var pendiente   = Math.max(0, totalNeta - totalPagado);
+
+  // CBU desde staff_profiles
+  var cbuVal = yo ? (yo.cbu || '') : '';
 
   // ── KPI summary
   var kpis = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px;margin-bottom:20px;">'
@@ -702,7 +861,7 @@ function renderMisComisionesGerente(){
       + '<div style="font-size:.6rem;color:var(--muted);margin-bottom:3px;">BASE 20%</div>'
       + '<div style="font-family:\'Syne\',sans-serif;font-size:1.1rem;font-weight:800;color:#f59e0b;">'+fmtM(totalBase)+'</div></div>'
     + '<div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:12px;padding:12px;text-align:center;">'
-      + '<div style="font-size:.6rem;color:var(--muted);margin-bottom:3px;">BONUS '+(yo&&yo.pct_bonus>0?yo.pct_bonus+'%':'—')+'</div>'
+      + '<div style="font-size:.6rem;color:var(--muted);margin-bottom:3px;">BONUS '+(yo&&yo.com_pct>0?yo.com_pct+'%':'—')+'</div>'
       + '<div style="font-family:\'Syne\',sans-serif;font-size:1.1rem;font-weight:800;color:#a78bfa;">'+fmtM(totalBonus)+'</div></div>'
     + '<div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:12px;padding:12px;text-align:center;">'
       + '<div style="font-size:.6rem;color:var(--muted);margin-bottom:3px;">TOTAL GENERADO</div>'
@@ -716,11 +875,11 @@ function renderMisComisionesGerente(){
     + '</div>';
 
   // ── CBU
-  var cbuBlock = yo && yo.cbu
+  var cbuBlock = cbuVal
     ? '<div style="background:rgba(74,222,128,.07);border:1px solid rgba(74,222,128,.2);border-radius:12px;padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;gap:12px;">'
       + '<span style="font-size:1.4rem;">🏦</span>'
       + '<div><div style="font-size:.6rem;color:rgba(74,222,128,.7);font-weight:700;text-transform:uppercase;letter-spacing:.1em;margin-bottom:3px;">Tu CBU / Alias</div>'
-      + '<div style="font-family:monospace;font-size:.9rem;font-weight:700;color:#4ade80;">'+yo.cbu+'</div></div></div>'
+      + '<div style="font-family:monospace;font-size:.9rem;font-weight:700;color:#4ade80;">'+cbuVal+'</div></div></div>'
     : '<div style="background:rgba(255,255,255,.03);border:1px dashed rgba(255,255,255,.1);border-radius:12px;padding:12px 16px;margin-bottom:16px;font-size:.78rem;color:var(--muted);">Sin CBU registrado — pedile al CEO que lo complete en tu perfil.</div>';
 
   // ── Detalle por mes
@@ -762,10 +921,12 @@ function renderMisComisionesGerente(){
 }
 
 function verCompGerente(idx){
-  var gerentes = JSON.parse(localStorage.getItem('luazul_ceo_gerentes') || '[]');
-  var yo = gerentes.find(function(g){ return g.password === GP; });
-  if(!yo || !yo.comprobantes || !yo.comprobantes[idx]) return;
-  var comp = yo.comprobantes[idx];
+  var yo = window._gerenteProfile;
+  if(!yo) return;
+  var comps = [];
+  if(yo.comprobantes_json){ try{ comps = JSON.parse(yo.comprobantes_json); }catch(e){} }
+  var comp = comps[idx];
+  if(!comp) return;
   var w = window.open('','_blank');
   if(comp.tipo && comp.tipo.indexOf('image') === 0){
     w.document.write('<img src="' + comp.data + '" style="max-width:100%;" />');
@@ -775,6 +936,10 @@ function verCompGerente(idx){
 }
 
 function gLogout(){
+  // Cerrar sesión en Supabase Auth
+  if(sbClient){ sbClient.auth.signOut().catch(function(e){ console.warn('signOut:', e); }); }
+  window._gerenteProfile   = null;
+  window._gerenteRegionIds = [];
   LZ_AUTH.logout({
     panelKey:    LZ_AUTH.PANEL_KEYS.gerente,
     loginWrapId: 'loginWrap',
@@ -791,19 +956,31 @@ document.addEventListener('DOMContentLoaded',function(){
     appId:       'app',
     onSuccess:   initApp
   });
-  window.addEventListener('storage',function(e){if(e.key===NK||e.key===DB_KEY){renderAll();refreshBadge();}});
-
-  // Supabase realtime — actualiza automáticamente cuando el panel Admin carga datos
+  // Supabase Realtime — actualiza cuando CEO o Admin hacen cambios
   if(sbClient){
     sbClient.channel('gerente-realtime')
-      .on('postgres_changes', {event:'*', schema:'public', table:'clientes'},    function(){ _sbLoad().then(function(){ renderAll(); refreshBadge(); showToast('🔄 Datos actualizados'); }); })
-      .on('postgres_changes', {event:'*', schema:'public', table:'vendedores'},   function(){ _sbLoad().then(function(){ renderAll(); }); })
-      .on('postgres_changes', {event:'*', schema:'public', table:'notificaciones'},function(){ _sbLoad().then(function(){ renderAll(); refreshBadge(); }); })
+      .on('postgres_changes', {event:'*', schema:'public', table:'clientes'},       function(){ _sbLoad().then(function(){ renderAll(); refreshBadge(); showToast('🔄 Datos actualizados'); }); })
+      .on('postgres_changes', {event:'*', schema:'public', table:'staff_profiles'},  function(){ _sbLoad().then(function(){ renderAll(); }); })
+      .on('postgres_changes', {event:'*', schema:'public', table:'pagos'},           function(){ _sbLoad().then(function(){ renderAll(); refreshBadge(); }); })
       .subscribe();
   }
 });
 
 async function initApp(){
+  // Intentar restaurar sesión de Supabase si existe
+  if(sbClient && !window._gerenteProfile){
+    try{
+      var { data: { session } } = await sbClient.auth.getSession();
+      if(session && session.user){
+        var { data: profile } = await sbClient.from('staff_profiles')
+          .select('*').eq('user_id', session.user.id).single();
+        if(profile && profile.role_id === 3){
+          window._gerenteProfile = profile;
+        }
+      }
+    }catch(e){ console.warn('Restaurar sesión:', e); }
+  }
+
   // Show loading overlay
   var app = document.getElementById('app');
   var overlay = document.createElement('div');
@@ -836,7 +1013,7 @@ function renderAll(){renderOverview();renderVendors();renderClients();renderNoti
 
 // ── OVERVIEW ──────────────────────────────────────────
 function renderOverview(){
-  var cs=(dbg(DB_KEY)||[]).map(enrich),vs=dbg(VK)||[],ns=dbg(NK)||[];
+  var cs=((_memCache[DB_KEY]||[])||[]).map(enrich),vs=(_memCache[VK]||[])||[],ns=(_memCache[NK]||[])||[];
   var unread=ns.filter(function(n){return!n.leida;}).length;
   var pending=ns.filter(function(n){return n.tipo==='payment'&&!n.aprobada;}).length;
   var rec=cs.reduce(function(s,c){return s+(parseInt(c.cuotas_pagadas)||0)*(parseFloat(c.monto_cuota)||0);},0);
@@ -911,7 +1088,7 @@ function renderOverview(){
 
 // ── VENDORS ───────────────────────────────────────────
 function renderVendors(){
-  var vs=dbg(VK)||[],cs=(dbg(DB_KEY)||[]).map(enrich),ns=dbg(NK)||[];
+  var vs=(_memCache[VK]||[])||[],cs=((_memCache[DB_KEY]||[])||[]).map(enrich),ns=(_memCache[NK]||[])||[];
   document.getElementById('vGrid').innerHTML=vs.map(function(v){
     var vc=cs.filter(function(c){return c.vid===v.id;});
     var rec=vc.reduce(function(s,c){return s+(parseInt(c.cuotas_pagadas)||0)*(parseFloat(c.monto_cuota)||0);},0);
@@ -1024,7 +1201,7 @@ function renderVendors(){
 }
 
 function openVendorDetail(vid){
-  var v=vby(vid),cs=(dbg(DB_KEY)||[]).map(enrich).filter(function(c){return c.vid===vid;}).sort(function(a,b){return a._p-b._p;});
+  var v=vby(vid),cs=((_memCache[DB_KEY]||[])||[]).map(enrich).filter(function(c){return c.vid===vid;}).sort(function(a,b){return a._p-b._p;});
   var rec=cs.reduce(function(s,c){return s+(parseInt(c.cuotas_pagadas)||0)*(parseFloat(c.monto_cuota)||0);},0);
   var rows=cs.map(function(c){
     return '<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);cursor:pointer;" onclick="openClientDetail('+c.id+')">'
@@ -1109,9 +1286,19 @@ function openAddVendor(){
 }
 
 
-function saveVendor(){
+async function saveVendor(){
   var n=document.getElementById('vN').value.trim(),e=document.getElementById('vE').value.trim(),p=document.getElementById('vP').value.trim();
   if(!n||!e||!p){showToast('❌ Nombre, email y contraseña son obligatorios');return;}
+
+  // Nota: INSERT en staff_profiles requiere role_id >= 4 (Admin) por RLS.
+  // Esta operación la debe hacer el CEO/Admin. El gerente solo puede ver asesores.
+  if(sbClient){
+    // Intentar crear el usuario en Supabase Auth primero (solo funciona con Service Role Key)
+    showToast('⚠️ La creación de asesores requiere acceso de Admin. Usá el panel CEO para eso.');
+    return;
+  }
+
+  // Fallback local (sin persistencia en Supabase)
   var newVendor = {
     id:'v'+Date.now(), nombre:n, email:e, password:p, activo:true,
     fechaAlta:new Date().toISOString().slice(0,10),
@@ -1121,10 +1308,10 @@ function saveVendor(){
     cbu:      (document.getElementById('vCBU').value||'').trim(),
     comprobantes: []
   };
-  var vs=dbg(VK)||[];
+  var vs=(_memCache[VK]||[])||[];
   vs.push(newVendor);
-  dbs(VK,vs); closeModal(); renderAll(); populateVFilt();
-  showToast('✅ Vendedor '+n+' creado · Comisión: 50% (sube a 80% con 3+ ventas/mes)');
+  _memCache[VK]=vs; closeModal(); renderAll(); populateVFilt();
+  showToast('✅ Vendedor '+n+' creado (local) · Sincronizá con el CEO para persistir');
 }
 
 function editVendor(vid){
@@ -1165,41 +1352,63 @@ function editVendor(vid){
   document.getElementById('modal').classList.add('open');
 }
 
-function saveEditV(vid){
+async function saveEditV(vid){
   var nombre = (document.getElementById('evN')||{}).value||'';
   var email  = (document.getElementById('evE')||{}).value||'';
-  var pass   = (document.getElementById('evP')||{}).value||'';
   if(!nombre||!email){showToast('⚠️ Nombre y email son requeridos');return;}
-  var vs = dbg(VK)||[];
-  vs = vs.map(function(v){
+
+  var t1  = (document.getElementById('evT1').value||'').trim();
+  var t2  = (document.getElementById('evT2').value||'').trim();
+  var dom = (document.getElementById('evDom').value||'').trim();
+  var cbu = (document.getElementById('evCBU').value||'').trim();
+
+  // Separar nombre y apellido
+  var partes = nombre.trim().split(' ');
+  var nombreSB = partes[0];
+  var apellidoSB = partes.slice(1).join(' ');
+
+  // Actualizar en Supabase staff_profiles
+  await _sbUpdateVendor(vid, {
+    nombre:    nombreSB,
+    apellido:  apellidoSB,
+    badge:     email,       // badge = email
+    telefono1: t1,
+    telefono2: t2,
+    domicilio: dom,
+    cbu:       cbu
+  });
+
+  // Actualizar caché local
+  var vs = (_memCache[VK]||[]).map(function(v){
     if(v.id===vid){
       v.nombre    = nombre;
       v.email     = email;
-      if(pass) v.password = pass;
-      v.telefono1 = (document.getElementById('evT1').value||'').trim();
-      v.telefono2 = (document.getElementById('evT2').value||'').trim();
-      v.domicilio = (document.getElementById('evDom').value||'').trim();
-      v.cbu       = (document.getElementById('evCBU').value||'').trim();
+      v.telefono1 = t1;
+      v.telefono2 = t2;
+      v.domicilio = dom;
+      v.cbu       = cbu;
     }
     return v;
   });
-  dbs(VK, vs);
+  _memCache[VK] = vs;
   closeModal();
   renderAll();
-  showToast('✅ Vendedor actualizado correctamente');
+  showToast('✅ Asesor actualizado en Supabase');
 }
 
 
-function delVendor(vid){
-  if(!confirm('¿Eliminar vendedor? Sus clientes quedarán sin asignar.'))return;
-  dbs(VK,(dbg(VK)||[]).filter(function(v){return v.id!==vid;}));
-  // Also delete from Supabase
-  if(sbClient){ sbClient.from('vendedores').delete().eq('id', vid).then(function(r){ if(r.error) console.warn('Supabase delete vendedor:', r.error.message); }); }
-  closeModal();renderAll();showToast('🗑️ Vendedor eliminado');
+async function delVendor(vid){
+  if(!confirm('¿Eliminar asesor? Sus clientes quedarán sin asignar.'))return;
+  if(sbClient){
+    var { error } = await sbClient.from('staff_profiles').delete().eq('id', vid);
+    if(error){ showToast('❌ Error al eliminar: '+error.message); return; }
+  }
+  _memCache[VK] = (_memCache[VK]||[]).filter(function(v){return v.id!==vid;});
+  closeModal(); renderAll(); showToast('🗑️ Asesor eliminado');
 }
 
 function verCompVend(vid, idx){
-  var vs = dbg(VK)||[];
+  var vs = (_memCache[VK]||[])||[];
   var v = vs.find(function(x){ return x.id===vid; });
   if(!v||!v.comprobantes||!v.comprobantes[idx]) return;
   var c = v.comprobantes[idx];
@@ -1211,21 +1420,26 @@ function verCompVend(vid, idx){
   }
 }
 
-function toggleVendor(vid){
-  var vs=(dbg(VK)||[]).map(function(v){if(v.id===vid)v.activo=!v.activo;return v;});
-  dbs(VK,vs);renderAll();showToast('Estado de vendedor actualizado');
+async function toggleVendor(vid){
+  var vs = _memCache[VK]||[];
+  var v = vs.find(function(x){ return x.id===vid; });
+  if(!v) return;
+  var nuevoActivo = !v.activo;
+  await _sbUpdateVendor(vid, { activo: nuevoActivo });
+  _memCache[VK] = vs.map(function(x){ if(x.id===vid) x.activo=nuevoActivo; return x; });
+  renderAll(); showToast('Estado de asesor actualizado en Supabase');
 }
 
 // ── CLIENTS ───────────────────────────────────────────
 function populateVFilt(){
-  var sel=document.getElementById('vFilt'),vs=dbg(VK)||[],cur=sel.value;
+  var sel=document.getElementById('vFilt'),vs=(_memCache[VK]||[])||[],cur=sel.value;
   sel.innerHTML='<option value="">Todos los vendedores</option>'+vs.map(function(v){return'<option value="'+v.id+'"'+(cur===v.id?' selected':'')+'>'+v.nombre+'</option>';}).join('');
 }
 
 function renderClients(){
   var srch=(document.getElementById('csrch').value||'').toLowerCase();
   var vf=document.getElementById('vFilt').value,sf=document.getElementById('sFilt').value;
-  var cs=(dbg(DB_KEY)||[]).map(enrich).filter(function(c){
+  var cs=((_memCache[DB_KEY]||[])||[]).map(enrich).filter(function(c){
     if(vf&&c.vid!==vf)return false;
     if(sf&&c.estado!==sf)return false;
     if(srch&&!(c.nombre+c.email+c.destino).toLowerCase().includes(srch))return false;
@@ -1253,9 +1467,9 @@ function renderClients(){
 }
 
 function openClientDetail(id){
-  var cs=dbg(DB_KEY)||[],c=cs.find(function(x){return x.id==id;});
+  var cs=(_memCache[DB_KEY]||[])||[],c=cs.find(function(x){return x.id==id;});
   if(!c)return; c=enrich(c);
-  var v=vby(c.vid),vs=dbg(VK)||[];
+  var v=vby(c.vid),vs=(_memCache[VK]||[])||[];
   var pag=parseInt(c.cuotas_pagadas)||0,tot=parseInt(c.cuotas_total)||10,mnt=parseFloat(c.monto_cuota)||0;
   var tl='';for(var i=1;i<=tot;i++){var cls=i<=pag?'pagada':i===pag+1?'proxima':'futura';var comp=c.comprobantes&&c.comprobantes[i];var bg=cls==='pagada'?'rgba(34,197,94,.15)':cls==='proxima'?'rgba(234,179,8,.15)':'rgba(255,255,255,.04)';var brd=cls==='pagada'?'rgba(34,197,94,.4)':cls==='proxima'?'rgba(234,179,8,.4)':'var(--border)';var col=cls==='pagada'?'#22c55e':cls==='proxima'?'#eab308':'var(--muted)';tl+='<div style="width:32px;height:32px;border-radius:7px;background:'+bg+';border:1px solid '+brd+';display:flex;align-items:center;justify-content:center;font-size:.76rem;font-weight:700;color:'+col+';position:relative;" title="Cuota '+i+(comp?' · Con comprobante':'')+'">'+(comp?'<span style="position:absolute;top:-3px;right:-3px;width:9px;height:9px;background:var(--green);border-radius:50%;"></span>':'')+i+'</div>';}
   document.getElementById('mbox').innerHTML='<div class="mhead"><div><h2>'+c.nombre+'</h2><p style="font-size:.76rem;color:var(--muted);">'+c.email+' · <span class="bdg '+c.estado+'">'+c.estado+'</span></p></div><button class="mclose" onclick="closeModal()">✕</button></div>'
@@ -1290,22 +1504,31 @@ function openClientDetail(id){
   document.getElementById('modal').classList.add('open');
 }
 
-function gerenteUpdate(id){
-  var cs=(dbg(DB_KEY)||[]).map(function(c){
-    if(c.id==id){c.cuotas_pagadas=parseInt(document.getElementById('gc').value)||0;c.estado=document.getElementById('ge').value;c.vid=document.getElementById('gv').value;}
+async function gerenteUpdate(id){
+  var nuevasCuotas = parseInt(document.getElementById('gc').value)||0;
+  var nuevoEstado  = document.getElementById('ge').value;
+  var nuevoVid     = document.getElementById('gv').value;
+
+  // Escribir en Supabase
+  await _sbUpdateClient(id, {
+    cuotas_pagadas: nuevasCuotas,
+    estado:         nuevoEstado,
+    seller_id:      nuevoVid
+  });
+
+  // Actualizar caché en memoria
+  var cs = (_memCache[DB_KEY]||[]).map(function(c){
+    if(c.id==id){ c.cuotas_pagadas=nuevasCuotas; c.estado=nuevoEstado; c.vid=nuevoVid; }
     return c;
   });
-  dbs(DB_KEY,cs);closeModal();renderAll();showToast('💾 Cambios guardados — visibles en todos los paneles');
+  _memCache[DB_KEY] = cs;
+  closeModal(); renderAll();
+  showToast('💾 Cambios guardados en Supabase');
 }
 
 // ── NOTIFICATIONS ──────────────────────────────────────
 function renderNotifs(){
-  var ns=(dbg(NK)||[]).sort(function(a,b){return b.ts-a.ts;});
-  var gestiones=(dbg('luazul_notifs_gerente')||[]).map(function(x){
-    return {id:x.id,tipo:'gestion_mora',ts:x.id,leida:x.leida||false,
-      cliente:x.cliente_nombre,asesor:x.asesor,motivo:x.detalle,fecha:x.fecha,hora:x.hora};
-  });
-  var allN=ns.concat(gestiones).sort(function(a,b){return (b.ts||0)-(a.ts||0);});
+  var allN=(_memCache[NK]||[]).sort(function(a,b){return (b.ts||0)-(a.ts||0);});
   refreshBadge();
   if(!allN.length){document.getElementById('nList').innerHTML='<div class="empty"><div class="ei">\uD83D\uDD14</div><p>Sin notificaciones</p></div>';return;}
   document.getElementById('nList').innerHTML='<div class="nlist">'+allN.map(function(n){
@@ -1338,36 +1561,60 @@ function renderNotifs(){
 }
 
 function mkReadG(id){
-  var gs=dbg('luazul_notifs_gerente')||[];
-  gs=gs.map(function(g){if(g.id==id)g.leida=true;return g;});
-  localStorage.setItem('luazul_notifs_gerente',JSON.stringify(gs));
+  // gestiones de mora locales — marcar leída en caché
+  var ns = (_memCache[NK]||[]).map(function(n){if(n.id==id)n.leida=true;return n;});
+  _memCache[NK] = ns;
   renderNotifs();
 }
 
 function refreshBadge(){
-  var n=(dbg(NK)||[]).filter(function(x){return!x.leida;}).length;
+  var n=(_memCache[NK]||[]).filter(function(x){return!x.leida;}).length;
   var b=document.getElementById('notifCount');
   var tb=document.getElementById('tabNBadge');
   if(n>0){b.style.display='flex';b.textContent=n;tb.style.display='inline';tb.textContent=n;}
   else{b.style.display='none';tb.style.display='none';}
 }
 
-function approvePayment(nid){
-  var ns=(dbg(NK)||[]).map(function(n){if(n.id===nid){n.aprobada=true;n.leida=true;}return n;});
-  dbs(NK,ns);
-  var notif=(dbg(NK)||[]).find(function(n){return n.id===nid;});
-  if(notif&&notif.tipo==='payment'){
-    var cs=(dbg(DB_KEY)||[]).map(function(c){if(c.id==notif.cid&&notif.cuota>(parseInt(c.cuotas_pagadas)||0))c.cuotas_pagadas=notif.cuota;return c;});
-    dbs(DB_KEY,cs);
+async function approvePayment(nid){
+  var ok = await _sbApprovePayment(nid);
+  if(!ok){ showToast('❌ Error al aprobar el pago'); return; }
+
+  // Actualizar caché local
+  var ns = (_memCache[NK]||[]).map(function(n){
+    if(n.id===nid){ n.aprobada=true; n.leida=true; n.aprobadoPor='Gerencia'; }
+    return n;
+  });
+  _memCache[NK] = ns;
+
+  // Actualizar cuotas_pagadas del cliente
+  var notif = ns.find(function(n){ return n.id===nid; });
+  if(notif && notif.cid){
+    var cs = (_memCache[DB_KEY]||[]).map(function(c){
+      if(c.id==notif.cid && notif.cuota>(parseInt(c.cuotas_pagadas)||0)){
+        c.cuotas_pagadas = notif.cuota;
+        _sbUpdateClient(notif.cid, { cuotas_pagadas: notif.cuota });
+      }
+      return c;
+    });
+    _memCache[DB_KEY] = cs;
   }
-  renderAll();showToast('✅ Pago aprobado — cuotas actualizadas en panel del cliente');
+  renderAll(); showToast('✅ Pago aprobado en Supabase');
 }
 
-function mkRead(nid){var ns=(dbg(NK)||[]).map(function(n){if(n.id===nid)n.leida=true;return n;});dbs(NK,ns);renderAll();}
-function markAllRead(){var ns=(dbg(NK)||[]).map(function(n){n.leida=true;return n;});dbs(NK,ns);renderAll();showToast('✅ Todas leídas');}
+async function mkRead(nid){
+  if(sbClient){
+    // Marcar como leído: en pagos no hay campo "leida", simplemente actualizamos la caché
+  }
+  var ns=(_memCache[NK]||[]).map(function(n){if(n.id===nid)n.leida=true;return n;});
+  _memCache[NK]=ns; renderAll();
+}
+async function markAllRead(){
+  var ns=(_memCache[NK]||[]).map(function(n){n.leida=true;return n;});
+  _memCache[NK]=ns; renderAll(); showToast('✅ Todas leídas');
+}
 
 function viewComp(nid){
-  var n=(dbg(NK)||[]).find(function(x){return x.id===nid;});
+  var n=((_memCache[NK]||[])||[]).find(function(x){return x.id===nid;});
   if(!n||!n.comp){showToast('Sin comprobante adjunto');return;}
   var w=window.open('','_blank','width=520,height=420');
   w.document.write('<html><body style="margin:0;background:#111;display:flex;align-items:center;justify-content:center;min-height:100vh;"><img src="'+n.comp+'" style="max-width:100%;max-height:90vh;border-radius:12px;"/><\/body><\/html>');
@@ -1379,7 +1626,7 @@ function viewComp(nid){
 //  MORA MANAGEMENT — Gerente
 // ══════════════════════════════════════════════════════
 function openGerenteMora(id) {
-  var clients = dbg(DB_KEY) || [];
+  var clients = (_memCache[DB_KEY]||[]) || [];
   var c = clients.find(function(x){ return x.id == id; });
   if (!c) return;
   var mora = c.mora || [];
@@ -1424,47 +1671,13 @@ function openGerenteMora(id) {
   document.getElementById('modal').classList.add('open');
 }
 
-function gerenteSaveMora(id) {
-  var motivo = document.getElementById('gmorMotivo').value.trim();
-  var comp   = document.getElementById('gmorComp').value.trim();
-  var cont   = document.getElementById('gmorContacto').value;
-  var estado = document.getElementById('gmorEstado').value;
-  if (!motivo || !comp) { showToast('Completá motivo y compromiso'); return; }
-  var now = new Date();
-  var fecha = now.getDate()+'/'+(now.getMonth()+1)+'/'+now.getFullYear()+' '+now.getHours().toString().padStart(2,'0')+':'+now.getMinutes().toString().padStart(2,'0');
-  var clients = dbg(DB_KEY) || [];
-  clients = clients.map(function(c) {
-    if (c.id == id) {
-      if (!c.mora) c.mora = [];
-      c.mora.push({ fecha:fecha, motivo:motivo, compromiso:comp, contacto:cont, resuelta:false, autor:'Gerente' });
-      if (estado) c.estado = estado;
-    }
-    return c;
-  });
-  dbs(DB_KEY, clients);
-  renderAll();
-  closeModal();
-  showToast('📋 Gestión de mora registrada');
-}
 
-function gerenteResolverMora(id, idx) {
-  var clients = dbg(DB_KEY) || [];
-  clients = clients.map(function(c) {
-    if (c.id == id && c.mora && c.mora[idx]) c.mora[idx].resuelta = true;
-    return c;
-  });
-  dbs(DB_KEY, clients);
-  renderAll();
-  closeModal();
-  openGerenteMora(id);
-  showToast('✅ Mora resuelta');
-}
 
 // ── TABS ───────────────────────────────────────────────
 
 // ── MORA MANAGEMENT (gerente) ──────────────────────────────────────────────
 function gerenteMora(id) {
-  var cs = dbg(DB_KEY) || [];
+  var cs = (_memCache[DB_KEY]||[]) || [];
   var c = cs.find(function(x){ return x.id == id; });
   if (!c) return;
   var mora = c.mora || [];
@@ -1510,7 +1723,7 @@ function gerenteMora(id) {
   document.getElementById('modal').classList.add('open');
 }
 
-function gerenteSaveMora(id) {
+async function gerenteSaveMora(id) {
   var motivo = (document.getElementById('gmorMotivo').value || '').trim();
   var compromiso = (document.getElementById('gmorCompromiso').value || '').trim();
   var contacto = document.getElementById('gmorContacto').value;
@@ -1518,30 +1731,39 @@ function gerenteSaveMora(id) {
   if (!motivo || !compromiso) { showToast('❌ Completá motivo y compromiso'); return; }
   var now = new Date();
   var fecha = now.getDate()+'/'+(now.getMonth()+1)+'/'+now.getFullYear()+' '+now.getHours()+':'+String(now.getMinutes()).padStart(2,'0');
-  var cs = dbg(DB_KEY) || [];
+  var cs = _memCache[DB_KEY] || [];
   cs = cs.map(function(c) {
     if (c.id == id) {
       if (!c.mora) c.mora = [];
       c.mora.push({ fecha: fecha, motivo: motivo, compromiso: compromiso, contacto: contacto, resuelta: false, vendedorNombre: 'Gerencia' });
       if (estado) c.estado = estado;
+      // Persistir notas en Supabase
+      var updateFields = {};
+      if(estado) updateFields.estado = estado;
+      // Guardamos gestiones en el campo notas como JSON
+      updateFields.mora_json = JSON.stringify(c.mora);
+      _sbUpdateClient(c.id, updateFields);
     }
     return c;
   });
-  dbs(DB_KEY, cs);
+  _memCache[DB_KEY] = cs;
   closeModal(); renderAll();
-  showToast('📋 Gestión de mora registrada');
+  showToast('📋 Gestión de mora registrada en Supabase');
 }
 
 function gerenteResolverMora(id, idx) {
-  var cs = dbg(DB_KEY) || [];
+  var cs = _memCache[DB_KEY] || [];
   cs = cs.map(function(c) {
-    if (c.id == id && c.mora && c.mora[idx]) c.mora[idx].resuelta = true;
+    if (c.id == id && c.mora && c.mora[idx]) {
+      c.mora[idx].resuelta = true;
+      _sbUpdateClient(c.id, { mora_json: JSON.stringify(c.mora) });
+    }
     return c;
   });
-  dbs(DB_KEY, cs);
-  gerenteMora(id); // re-open modal
+  _memCache[DB_KEY] = cs;
+  gerenteMora(id);
   renderAll();
-  showToast('✅ Mora marcada como resuelta');
+  showToast('✅ Mora marcada como resuelta en Supabase');
 }
 
 
@@ -1549,7 +1771,7 @@ function gerenteResolverMora(id, idx) {
 // DASHBOARD VENDEDOR — Tab 3
 // ══════════════════════════════════════════════════════
 function populateVendDashSel(){
-  var vs=dbg(VK)||[];
+  var vs=(_memCache[VK]||[])||[];
   var sel=document.getElementById('vendDashSel');
   if(!sel)return;
   var cur=sel.value;
@@ -1567,9 +1789,9 @@ function renderVendDash(){
   var el=document.getElementById('vendDashContent');
   if(!vid){el.innerHTML='<div style="text-align:center;padding:60px;color:var(--muted);">Seleccioná un asesor para ver su dashboard completo</div>';return;}
   var v=vby(vid);
-  var allCs=(dbg(DB_KEY)||[]).map(enrich);
+  var allCs=((_memCache[DB_KEY]||[])||[]).map(enrich);
   var cs=allCs.filter(function(c){return c.vid===vid;});
-  var ns=(dbg(NK)||[]).filter(function(n){return n.vid===vid;});
+  var ns=((_memCache[NK]||[])||[]).filter(function(n){return n.vid===vid;});
   var cm=calcComision(v,cs);
   var ini=v.nombre.split(' ').map(function(w){return w[0];}).join('').slice(0,2).toUpperCase();
 
@@ -1801,7 +2023,7 @@ function updateObjBar(vid,actual,objetivo){
 // PAGOS — Tab 4
 // ══════════════════════════════════════════════════════
 function populatePagoFiltros(){
-  var vs=dbg(VK)||[];
+  var vs=(_memCache[VK]||[])||[];
   var sel=document.getElementById('pagoVFilt');
   if(!sel)return;
   var cur=sel.value;
@@ -1815,7 +2037,7 @@ function populatePagoFiltros(){
 }
 
 function renderPagos(){
-  var ns=dbg(NK)||[];
+  var ns=(_memCache[NK]||[])||[];
   var vf=document.getElementById('pagoVFilt')?document.getElementById('pagoVFilt').value:'';
   var ef=document.getElementById('pagoEstFilt')?document.getElementById('pagoEstFilt').value:'';
 
@@ -1867,7 +2089,7 @@ function renderPagos(){
 }
 
 function viewPagoComp(nid){
-  var ns=dbg(NK)||[];
+  var ns=(_memCache[NK]||[])||[];
   var n=ns.find(function(x){return x.id===nid;});
   if(!n||!n.comp)return;
   document.getElementById('mbox').innerHTML=
@@ -1884,35 +2106,41 @@ function viewPagoComp(nid){
   document.getElementById('modal').classList.add('open');
 }
 
-function aprobarPago(nid){
-  var ns=dbg(NK)||[];
-  ns=ns.map(function(n){
+async function aprobarPago(nid){
+  var ok = await _sbApprovePayment(nid);
+  if(!ok){ showToast('❌ Error al aprobar el pago'); return; }
+  var ns=(_memCache[NK]||[]).map(function(n){
     if(n.id===nid){n.aprobada=true;n.aprobadoPor='Gerencia';n.tsAprobado=Date.now();}
     return n;
   });
-  dbs(NK,ns);
-  renderAll();
-  renderPagos();
-  showToast('✅ Pago aprobado');
+  _memCache[NK]=ns;
+  renderAll(); renderPagos();
+  showToast('✅ Pago aprobado en Supabase');
 }
 
-function aprobarTodos(){
-  var ns=dbg(NK)||[];
+async function aprobarTodos(){
+  var ns=_memCache[NK]||[];
+  var pendientes = ns.filter(function(n){return n.tipo==='payment'&&!n.aprobada;});
   var count=0;
-  ns=ns.map(function(n){
-    if(n.tipo==='payment'&&!n.aprobada){n.aprobada=true;n.aprobadoPor='Gerencia';n.tsAprobado=Date.now();count++;}
+  for(var i=0;i<pendientes.length;i++){
+    var ok = await _sbApprovePayment(pendientes[i].id);
+    if(ok) count++;
+  }
+  // Actualizar caché
+  ns = ns.map(function(n){
+    if(n.tipo==='payment'&&!n.aprobada){n.aprobada=true;n.aprobadoPor='Gerencia';n.tsAprobado=Date.now();}
     return n;
   });
-  dbs(NK,ns);
+  _memCache[NK]=ns;
   renderAll(); renderPagos();
-  showToast('✅ '+count+' pagos aprobados');
+  showToast('✅ '+count+' pagos aprobados en Supabase');
 }
 
 // ══════════════════════════════════════════════════════
 // GESTIÓN DE MORA — Tab 5
 // ══════════════════════════════════════════════════════
 function renderMoraTab(){
-  var cs=(dbg(DB_KEY)||[]).map(enrich);
+  var cs=((_memCache[DB_KEY]||[])||[]).map(enrich);
   var atrasados=cs.filter(function(c){return c.estado==='atraso'||c.estado==='atraso_gestion';});
 
   // Mora temprana: en atraso con <= 3 cuotas pagadas
@@ -1989,15 +2217,39 @@ function renderMoraTab(){
   }
 }
 
-function notificarAsesorMora(clientId){
-  var cs=dbg(DB_KEY)||[];
-  var c=cs.find(function(x){return x.id==clientId;});
-  if(!c)return;
-  var v=vby(c.vid);
-  // Write notification to asesor via luazul_notifs key
-  var ns=dbg(NK)||[];
+async function notificarAsesorMora(clientId){
+  var cs = _memCache[DB_KEY]||[];
+  var c = cs.find(function(x){ return x.id==clientId; });
+  if(!c) return;
+  var v = vby(c.vid);
+
+  // Insertar alerta en tabla pagos (estado='pendiente', tipo mora)
+  // Se registra en mora_json del cliente (columna específica para historial de mora)
+  if(sbClient){
+    // Guardamos la alerta actualizando notas del cliente con flag de mora notificada
+    var clienteActual = _memCache[DB_KEY]||[];
+    var ci = clienteActual.find(function(x){ return x.id==clientId; });
+    if(ci){
+      var notasActuales = [];
+      try{ notasActuales = ci.mora_json ? JSON.parse(ci.mora_json) : (ci.mora||[]); }catch(e){ notasActuales = []; }
+      var now = new Date();
+      var notaAlerta = {
+        fecha: now.getDate()+'/'+(now.getMonth()+1)+'/'+now.getFullYear(),
+        motivo: 'Gerencia notificó al asesor sobre mora',
+        compromiso: 'Asesor debe contactar al cliente',
+        contacto: 'Sistema',
+        resuelta: false,
+        vendedorNombre: 'Gerencia (Alerta automática)'
+      };
+      notasActuales.push(notaAlerta);
+      await _sbUpdateClient(clientId, { mora_json: JSON.stringify(notasActuales) });
+    }
+  }
+
+  // También actualizar caché local de notificaciones
+  var ns = _memCache[NK]||[];
   ns.unshift({id:'gmora'+Date.now(),tipo:'atraso',cid:clientId,cliente:c.nombre,vid:c.vid,vendedor:v.nombre,ts:Date.now(),leida:false,aprobada:false,comp:null,msg:'Gerencia solicita gestión de mora'});
-  dbs(NK,ns);
+  _memCache[NK] = ns;
   showToast('📨 Notificación enviada a '+v.nombre);
 }
 
@@ -2005,9 +2257,9 @@ function notificarAsesorMora(clientId){
 // EQUIPO & OBJETIVOS — Tab 6
 // ══════════════════════════════════════════════════════
 function renderEquipoDash(){
-  var cs=(dbg(DB_KEY)||[]).map(enrich);
-  var vs=dbg(VK)||[];
-  var ns=dbg(NK)||[];
+  var cs=((_memCache[DB_KEY]||[])||[]).map(enrich);
+  var vs=(_memCache[VK]||[])||[];
+  var ns=(_memCache[NK]||[])||[];
   var now=new Date();
   var curM=now.getFullYear()+'-'+now.getMonth();
   var mn=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
@@ -2061,7 +2313,7 @@ function renderEquipoDash(){
 
   // ── Objectives ──
   var objKey='luazul_objetivos';
-  var obj=dbg(objKey)||{mensual:10,anual:100,recaudacion:50000,moraMax:15,ticketObj:1200,recMesObj:10000};
+  var obj=(_memCache[objKey]||null)||{mensual:10,anual:100,recaudacion:50000,moraMax:15,ticketObj:1200,recMesObj:10000};
   if(!obj.moraMax)obj.moraMax=15;
   if(!obj.ticketObj)obj.ticketObj=1200;
   if(!obj.recMesObj)obj.recMesObj=10000;
@@ -2292,7 +2544,7 @@ function renderEquipoDash(){
 }
 
 function updateEquipoProgressBars(){
-  var cs=(dbg(DB_KEY)||[]).map(enrich);
+  var cs=((_memCache[DB_KEY]||[])||[]).map(enrich);
   var byMonth={};
   cs.forEach(function(c){var k=getClientMonth(c);if(!byMonth[k])byMonth[k]={ventas:0,rec:0};byMonth[k].ventas++;byMonth[k].rec+=(parseInt(c.cuotas_pagadas)||0)*(parseFloat(c.monto_cuota)||0);});
   var curM=new Date().getFullYear()+'-'+new Date().getMonth();
@@ -2335,7 +2587,8 @@ function saveObjetivos(){
     ticketObj:   parseInt((document.getElementById('objTicket')||{}).value||1200),
     recMesObj:   parseInt((document.getElementById('objRecMes')||{}).value||10000)
   };
-  dbs('luazul_objetivos', obj);
+  _memCache['luazul_objetivos'] = obj;
+  try{ /* objectives saved in memory */ }catch(e){}
   showToast('✅ Objetivos guardados');
 }
 
@@ -2343,65 +2596,74 @@ function saveObjetivos(){
 // CONTRASEÑAS — Tab 7
 // ══════════════════════════════════════════════════════
 function renderPasswords(){
-  // Vendor passwords
-  var vs=dbg(VK)||[];
-  var elV=document.getElementById('pwVendors');
+  var vs = _memCache[VK] || [];
+  var elV = document.getElementById('pwVendors');
   if(elV){
-    elV.innerHTML=vs.map(function(v,i){
-      return '<div style="border-bottom:1px solid var(--border);padding-bottom:12px;margin-bottom:12px;">'
-        +'<div style="font-size:.72rem;color:var(--gold);font-weight:700;margin-bottom:6px;">'+v.nombre+'</div>'
-        +'<div class="mitem"><div class="ml">Usuario (email)</div><input class="medit" id="vpu-'+i+'" value="'+v.email+'" /></div>'
-        +'<div class="mitem" style="margin-top:6px;"><div class="ml">Contraseña</div>'
-        +'<div style="display:flex;gap:6px;">'
-        +'<input class="medit" id="vpp-'+i+'" type="text" value="'+v.password+'" style="flex:1;" />'
-        +'<button onclick="saveVendorPass(\''+v.id+'\','+i+')" style="padding:7px 12px;background:linear-gradient(135deg,#d97706,#f59e0b);border:none;color:white;border-radius:8px;font-size:.75rem;font-weight:700;cursor:pointer;">💾</button>'
-        +'</div></div>'
-        +'</div>';
-    }).join('');
+    if(!vs.length){
+      elV.innerHTML = '<div style="text-align:center;padding:20px;color:var(--muted);font-size:.8rem;">Sin asesores en tu región</div>';
+    } else {
+      var html = '';
+      vs.forEach(function(v, i){
+        html += '<div style="border-bottom:1px solid var(--border);padding-bottom:12px;margin-bottom:12px;">';
+        html += '<div style="font-size:.72rem;color:var(--gold);font-weight:700;margin-bottom:6px;">' + v.nombre + '</div>';
+        html += '<div class="mitem"><div class="ml">Email / Badge</div>';
+        html += '<div style="display:flex;gap:6px;">';
+        html += '<input class="medit" id="vpu-' + i + '" data-vid="' + v.id + '" value="' + v.email + '" style="flex:1;" />';
+        html += '<button data-vid="' + v.id + '" data-idx="' + i + '" class="pw-save-btn" style="padding:7px 12px;background:linear-gradient(135deg,#d97706,#f59e0b);border:none;color:white;border-radius:8px;font-size:.75rem;font-weight:700;cursor:pointer;">💾</button>';
+        html += '</div></div>';
+        html += '<div style="font-size:.67rem;color:var(--muted);margin-top:6px;">⚠️ Contraseña: el asesor usa Forgot Password o el CEO desde panel Admin</div>';
+        html += '</div>';
+      });
+      elV.innerHTML = html;
+      // Attach click handlers (avoids inline onclick quote issues)
+      elV.querySelectorAll('.pw-save-btn').forEach(function(btn){
+        btn.addEventListener('click', function(){
+          saveVendorPass(this.dataset.vid, parseInt(this.dataset.idx));
+        });
+      });
+    }
   }
   renderPwClients();
 }
-
 function renderPwClients(){
-  var cs=dbg(DB_KEY)||[];
+  var cs=_memCache[DB_KEY]||[];
   var srch=(document.getElementById('pwClientSearch')||{}).value||'';
-  if(srch)cs=cs.filter(function(c){return (c.nombre||'').toLowerCase().includes(srch.toLowerCase())||(c.email||'').toLowerCase().includes(srch.toLowerCase());});
+  if(srch) cs=cs.filter(function(c){return (c.nombre||'').toLowerCase().includes(srch.toLowerCase())||(c.email||'').toLowerCase().includes(srch.toLowerCase());});
   var el=document.getElementById('pwClients');
   if(!el)return;
-  el.innerHTML=cs.slice(0,30).map(function(c,i){
+  if(!cs.length){
+    el.innerHTML='<div style="padding:12px;color:var(--muted);font-size:.78rem;">Sin clientes en tu región</div>';
+    return;
+  }
+  el.innerHTML=cs.slice(0,30).map(function(c){
     return '<div style="border-bottom:1px solid var(--border);padding:8px 0;">'
       +'<div style="font-size:.72rem;font-weight:700;color:#93c5fd;">'+c.nombre+'</div>'
-      +'<div style="font-size:.65rem;color:var(--muted);margin-bottom:5px;">'+c.email+'</div>'
-      +'<div style="display:flex;gap:5px;">'
-      +'<input type="text" value="'+(c.password||'')+'" id="cpw-'+c.id+'" class="medit" style="flex:1;font-size:.78rem;padding:5px 8px;" placeholder="Nueva contraseña"/>'
-      +'<button onclick="saveClientPass('+c.id+')" style="padding:5px 9px;background:linear-gradient(135deg,#1d4ed8,#3b82f6);border:none;color:white;border-radius:6px;font-size:.72rem;font-weight:700;cursor:pointer;">💾</button>'
-      +'</div></div>';
+      +'<div style="font-size:.65rem;color:var(--muted);margin-bottom:3px;">'+c.email+'</div>'
+      +'<div style="font-size:.67rem;color:rgba(180,200,240,.4);">⚠️ Contraseña: el cliente usa Forgot Password o el CEO desde panel Admin</div>'
+      +'</div>';
   }).join('');
 }
 
 function saveGerPass(){
-  // Gerente password is currently hardcoded in JS — we just show a toast for now
-  showToast('✅ Para cambiar la contraseña de gerencia, editar el valor GP en el archivo HTML');
+  showToast('⚠️ Para cambiar la contraseña de gerencia usá "Forgot Password" o el panel Admin.');
 }
 
-function saveVendorPass(vid,idx){
+async function saveVendorPass(vid,idx){
   var email=(document.getElementById('vpu-'+idx)||{}).value||'';
-  var pass=(document.getElementById('vpp-'+idx)||{}).value||'';
-  if(!pass){showToast('⚠️ La contraseña no puede estar vacía');return;}
-  var vs=dbg(VK)||[];
-  vs=vs.map(function(v){if(v.id===vid){v.email=email||v.email;v.password=pass;}return v;});
-  dbs(VK,vs);
+  // Nota: contraseñas de Supabase Auth NO se pueden cambiar desde frontend con anon key
+  // Solo se puede actualizar el badge (email de display) en staff_profiles
+  if(!email){showToast('⚠️ El email no puede estar vacío');return;}
+  await _sbUpdateVendor(vid, { badge: email });
+  var vs = (_memCache[VK]||[]).map(function(v){ if(v.id===vid){ v.email=email; } return v; });
+  _memCache[VK] = vs;
   renderAll();
-  showToast('✅ Contraseña de asesor actualizada');
+  showToast('✅ Email del asesor actualizado en Supabase. Para cambiar contraseña, usar "Forgot Password" o el panel Admin.');
 }
 
 function saveClientPass(cid){
-  var newPass=(document.getElementById('cpw-'+cid)||{}).value||'';
-  if(!newPass){showToast('⚠️ La contraseña no puede estar vacía');return;}
-  var cs=dbg(DB_KEY)||[];
-  cs=cs.map(function(c){if(c.id==cid)c.password=newPass;return c;});
-  dbs(DB_KEY,cs);
-  showToast('✅ Contraseña de cliente actualizada');
+  // Las contraseñas de Supabase Auth no se pueden cambiar desde el frontend con anon key.
+  // Mostrar instrucción al usuario.
+  showToast('⚠️ Para cambiar contraseña de cliente, el cliente debe usar "Forgot Password" o el CEO desde el panel Admin.');
 }
 
 function showTab(id){
@@ -2422,7 +2684,7 @@ function showTab(id){
 // ── RECAUDACIÓN MENSUAL ─────────────────────────────────────
 function renderMensual(){
   var nMeses=parseInt((document.getElementById('recMesesSel')||{}).value||12);
-  var cs=dbg(DB_KEY)||[];
+  var cs=(_memCache[DB_KEY]||[])||[];
   var mn=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
   var now=new Date();
 
@@ -2472,7 +2734,7 @@ function renderMensual(){
   var trend=prev3>0?Math.round((last3-prev3)/prev3*100):0;
   var trendC=trend>=0?'var(--green)':'var(--red)';
 
-  var vs=dbg(VK)||[];
+  var vs=(_memCache[VK]||[])||[];
   function vName(vid){var v=vs.find(function(x){return x.id===vid;});return v?v.nombre:'Desconocido';}
   var VCOL=['#3b82f6','#a78bfa','#22c55e','#f59e0b','#ef4444','#06b6d4','#ec4899','#f97316'];
 
