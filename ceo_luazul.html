@@ -224,8 +224,15 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
     <div class="tabpg" id="tabpg-regiones">
       <div class="sec-head">
         <h2>🌎 Gerentes Regionales</h2>
-        <button class="addbtn" onclick="openAddGerente()">➕ Nuevo Gerente</button>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <div style="display:flex;gap:3px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:3px;">
+            <button id="regFiltActivo" onclick="setRegFiltMode('activo')" style="padding:6px 14px;border-radius:7px;font-size:.78rem;font-weight:700;font-family:Mulish,sans-serif;cursor:pointer;border:none;background:var(--gold);color:#000;transition:all .15s;">🟢 Con actividad</button>
+            <button id="regFiltTodas" onclick="setRegFiltMode('todas')" style="padding:6px 14px;border-radius:7px;font-size:.78rem;font-weight:700;font-family:Mulish,sans-serif;cursor:pointer;border:none;background:transparent;color:var(--muted);transition:all .15s;">🌎 Todas (26)</button>
+          </div>
+          <button class="addbtn" onclick="openAddGerente()">➕ Nuevo Gerente</button>
+        </div>
       </div>
+      <div id="regFiltInfo" style="margin-bottom:10px;font-size:.74rem;color:var(--muted);padding:0 2px;"></div>
       <div class="rgrid" id="rGrid"></div>
       <div id="rDetail"></div>
     </div>
@@ -406,6 +413,7 @@ var ROLE_SELLER  = 2;
 var ROLE_MANAGER = 3;
 var RK = 'luazul_ceo_regiones';
 var _cacheGerentes=null, _cacheVendedores=null, _cacheClientes=null, _cachePagos=null, _cacheRegiones=null;
+var _regFiltMode = 'activo'; // 'activo' = solo con datos | 'todas' = las 26
 
 function dbg(k){try{var r=localStorage.getItem(k);return r?JSON.parse(r):null;}catch(e){return null;}}
 function dbs(k,v){try{localStorage.setItem(k,JSON.stringify(v));return true;}catch(e){return false;}}
@@ -830,7 +838,8 @@ function showTab(id){
 
 // ── POPULATE FILTERS ─────────────────────────────────
 function populateAllFilters(){
-  var rs=reg();
+  var rs = getRegionesConActividad();
+  var allRs = reg();
   ['vdRegFilt','pagoRegFilt','moraRegFilt','cliRegFilt','recRegFilt'].forEach(function(fid){
     var el=document.getElementById(fid); if(!el)return;
     var cur=el.value;
@@ -841,6 +850,19 @@ function populateAllFilters(){
       if(r.id===cur)o.selected=true;
       el.appendChild(o);
     });
+    // Regiones sin actividad al final (atenuadas)
+    var vacias = allRs.filter(function(r){ return !rs.find(function(a){ return a.id===r.id; }); });
+    if(vacias.length){
+      var sep=document.createElement('option'); sep.disabled=true; sep.textContent='── Sin actividad ──';
+      el.appendChild(sep);
+      vacias.forEach(function(r){
+        var o=document.createElement('option'); o.value=r.id;
+        o.textContent=r.bandera+' '+r.nombre+' (vacía)';
+        o.style.color='#64748b';
+        if(r.id===cur)o.selected=true;
+        el.appendChild(o);
+      });
+    }
   });
   populateVendDashSel();
   populatePagoFiltros();
@@ -994,16 +1016,56 @@ function goVendDash(vid){
 }
 
 // ── REGIONES ──────────────────────────────────────────
+// ── REGION FILTER HELPERS ────────────────────────────
+function setRegFiltMode(mode){
+  _regFiltMode = mode;
+  var btnA=document.getElementById('regFiltActivo'), btnT=document.getElementById('regFiltTodas');
+  if(btnA&&btnT){
+    if(mode==='activo'){
+      btnA.style.background='var(--gold)'; btnA.style.color='#000';
+      btnT.style.background='transparent'; btnT.style.color='var(--muted)';
+    } else {
+      btnT.style.background='var(--gold)'; btnT.style.color='#000';
+      btnA.style.background='transparent'; btnA.style.color='var(--muted)';
+    }
+  }
+  renderRegiones();
+}
+
+function getRegionesConActividad(){
+  var gs=ger(), vs=vend(), cs=cli();
+  var ids=new Set();
+  gs.forEach(function(g){
+    if(g.rid) ids.add(g.rid);
+    if(g.region_ids) g.region_ids.forEach(function(id){ ids.add(id); });
+  });
+  vs.forEach(function(v){ if(v.rid) ids.add(v.rid); });
+  cs.forEach(function(c){ if(c.rid) ids.add(c.rid); });
+  return reg().filter(function(r){ return ids.has(r.id); });
+}
+
 function renderRegiones(){
-  var rs=reg(), gs=ger(), vs=vend(), cs=cli();
-  document.getElementById('rGrid').innerHTML=rs.map(function(r){
+  var allRs=reg(), gs=ger(), vs=vend(), cs=cli();
+  var rs=(_regFiltMode==='activo') ? getRegionesConActividad() : allRs;
+  var infoEl=document.getElementById('regFiltInfo');
+  if(infoEl){
+    var ac=getRegionesConActividad().length;
+    infoEl.textContent=(_regFiltMode==='activo')
+      ? 'Mostrando '+ac+' región'+(ac!==1?'es':'')+' con actividad · '+(allRs.length-ac)+' vacías ocultas'
+      : 'Mostrando todas las '+allRs.length+' regiones disponibles';
+  }
+  if(!rs.length){
+    document.getElementById('rGrid').innerHTML='<div style="text-align:center;padding:50px;color:var(--muted);"><div style="font-size:2.5rem;margin-bottom:12px;">🌎</div><p>Sin regiones con actividad todavía.<br><small>Asigná un gerente o cargá un cliente para que aparezca aquí.</small></p></div>';
+    return;
+  }
+  var html=rs.map(function(r){
     var g=gs.find(function(x){return x.rid===r.id;})||{};
     var rv=vs.filter(function(v){return v.rid===r.id;});
     var rc=cs.filter(function(c){return c.rid===r.id;});
     var rec=rc.reduce(function(s,c){return s+(parseInt(c.cuotas_pagadas)||0)*(parseFloat(c.monto_cuota)||0);},0);
     var at=rc.filter(function(c){return c.estado==='atraso';}).length;
     var compl=rc.filter(function(c){return c.estado==='completo';}).length;
-    return '<div class="rcard" onclick="openRegionDetail(\''+r.id+'\')" style="border-color:'+r.color+'33;">'
+    return '<div class="rcard" data-rid="'+r.id+'" style="border-color:'+r.color+'33;">'
       +'<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">'
       +'<span style="font-size:2rem;">'+r.bandera+'</span>'
       +'<div style="flex:1;">'
@@ -1030,6 +1092,11 @@ function renderRegiones(){
       +'<span style="color:var(--blue);">🏁 '+compl+' completos</span>'
       +'</div></div>';
   }).join('');
+  document.getElementById('rGrid').innerHTML=html;
+  document.getElementById('rGrid').querySelectorAll('.rcard').forEach(function(el){
+    el.style.cursor='pointer';
+    el.addEventListener('click',function(){ openRegionDetail(this.dataset.rid); });
+  });
 }
 
 function openRegionDetail(rid){
