@@ -296,7 +296,8 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
     <div class="tabpg" id="tabpg-clientes">
       <div class="sec-head">
         <h2>👥 Base de Clientes Global</h2>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+          <button class="addbtn" onclick="openAddClienteCeo()">➕ Nuevo Cliente</button>
           <div class="sbox"><span>🔍</span><input type="text" id="cliSearch" placeholder="Buscar cliente..." oninput="renderClientes()" /></div>
           <select class="msel" id="cliRegFilt" onchange="renderClientes()"><option value="">Todas las regiones</option></select>
           <select class="msel" id="cliEstFilt" onchange="renderClientes()">
@@ -1345,6 +1346,97 @@ function saveObjCEO(){
   };
   dbs('luazul_ceo_obj',obj);
   showToast('✅ Objetivos CEO guardados');
+}
+
+// ── CREAR CLIENTE DESDE CEO ───────────────────────────
+function openAddClienteCeo(){
+  var vs = vend();
+  var flags={AR:'🇦🇷',CL:'🇨🇱',UY:'🇺🇾',PY:'🇵🇾',BO:'🇧🇴',PE:'🇵🇪',CO:'🇨🇴'};
+  var nomPais={AR:'Argentina',CL:'Chile',UY:'Uruguay',PY:'Paraguay',BO:'Bolivia',PE:'Perú',CO:'Colombia'};
+  var rs = reg();
+  var porPais = {};
+  rs.forEach(function(r){ var p=r.pais||'AR'; if(!porPais[p])porPais[p]=[]; porPais[p].push(r); });
+  var regOpts = '<option value="">— Sin región —</option>';
+  Object.keys(porPais).forEach(function(pais){
+    regOpts += '<optgroup label="'+(flags[pais]||'')+' '+(nomPais[pais]||pais)+'">';
+    porPais[pais].forEach(function(r){ regOpts += '<option value="'+r.id+'">'+r.nombre+'</option>'; });
+    regOpts += '</optgroup>';
+  });
+  var vendOpts = '<option value="">— Seleccionar asesor —</option>';
+  vs.forEach(function(v){
+    var r = rby(v.rid);
+    vendOpts += '<option value="'+v.id+'">'+(r.bandera||'')+' '+v.nombre+'</option>';
+  });
+  document.getElementById('mbox').innerHTML =
+    '<div class="mhead"><div><h2>➕ Nuevo Cliente</h2><p>Crear cliente y asignarlo a un asesor</p></div>'+
+    '<button class="mclose" onclick="closeModal()">✕</button></div>'+
+    '<div class="mbody"><div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'+
+    '<div class="mitem"><div class="ml">Nombre completo</div><input class="medit" id="ccNombre" placeholder="Ej: Ana García" /></div>'+
+    '<div class="mitem"><div class="ml">Email</div><input class="medit" id="ccEmail" placeholder="ana@email.com" /></div>'+
+    '<div class="mitem"><div class="ml">Teléfono</div><input class="medit" id="ccTel" placeholder="+54 9 11 1234-5678" /></div>'+
+    '<div class="mitem"><div class="ml">DNI / Documento</div><input class="medit" id="ccDoc" placeholder="12345678" /></div>'+
+    '<div class="mitem"><div class="ml">Destino</div><select class="medit" id="ccDest"><option value="">— Seleccionar —</option><option>Cabo Frío</option><option>Búzios</option><option>Arraial do Cabo</option><option>Copacabana</option><option>Río de Janeiro</option></select></div>'+
+    '<div class="mitem"><div class="ml">Paquete</div><input class="medit" id="ccPkg" placeholder="Ej: 2 pax · 10 cuotas" /></div>'+
+    '<div class="mitem"><div class="ml">Total USD</div><input class="medit" id="ccTotal" type="number" min="0" placeholder="1500" /></div>'+
+    '<div class="mitem"><div class="ml">Cuotas</div><select class="medit" id="ccCuotas"><option value="6">6 cuotas</option><option value="10" selected>10 cuotas</option><option value="12">12 cuotas</option><option value="18">18 cuotas</option></select></div>'+
+    '<div class="mitem"><div class="ml">Fecha de viaje</div><input class="medit" id="ccFecha" type="date" /></div>'+
+    '<div class="mitem"><div class="ml">Ciudad / Región</div><select class="medit" id="ccRegion">'+regOpts+'</select></div>'+
+    '<div class="mitem" style="grid-column:span 2;"><div class="ml">Asesor asignado</div><select class="medit" id="ccVendedor">'+vendOpts+'</select></div>'+
+    '</div></div>'+
+    '<div class="mact">'+
+    '<button class="mbtn purple" onclick="saveNewClienteCeo()">✅ Crear Cliente</button>'+
+    '<button class="mbtn ghost" onclick="closeModal()">Cancelar</button></div>';
+  document.getElementById('modal').classList.add('open');
+}
+
+async function saveNewClienteCeo(){
+  var nombre  = (document.getElementById('ccNombre').value||'').trim();
+  var email   = (document.getElementById('ccEmail').value||'').trim().toLowerCase();
+  var total   = parseFloat(document.getElementById('ccTotal').value)||0;
+  var cuotas  = parseInt(document.getElementById('ccCuotas').value)||10;
+  var vendId  = document.getElementById('ccVendedor').value||null;
+  var regionId= document.getElementById('ccRegion').value||null;
+  if(!nombre||!email){ showToast('⚠️ Nombre y email son obligatorios'); return; }
+
+  var btn = document.querySelector('#modal .mbtn.purple');
+  if(btn){ btn.disabled=true; btn.textContent='⏳ Creando...'; }
+
+  var newClient = {
+    nombre:         nombre,
+    email:          email,
+    telefono:       (document.getElementById('ccTel').value||'').trim()||null,
+    documento:      (document.getElementById('ccDoc').value||'').trim()||null,
+    destino:        document.getElementById('ccDest').value||null,
+    paquete:        (document.getElementById('ccPkg').value||'').trim()||null,
+    fecha_viaje:    document.getElementById('ccFecha').value||null,
+    total_usd:      total,
+    cuotas_total:   cuotas,
+    cuotas_pagadas: 0,
+    monto_cuota:    total>0 ? parseFloat((total/cuotas).toFixed(2)) : 0,
+    estado:         'activo',
+    seller_id:      vendId,
+    region_id:      regionId,
+    fecha_alta:     new Date().toISOString().slice(0,10),
+    mora_json:      '[]',
+    notas:          ''
+  };
+
+  try{
+    var r = await sbClient.from('clientes').insert([newClient]).select().single();
+    if(r.error) throw r.error;
+    // Actualizar caché
+    _cacheClientes = _cacheClientes || [];
+    _cacheClientes.push(r.data);
+    closeModal();
+    renderClientes();
+    renderOverview();
+    showToast('✅ Cliente '+nombre+' creado en Supabase');
+  }catch(e){
+    console.error('[CEO] saveNewClienteCeo:', e);
+    showToast('❌ Error: '+(e.message||'No se pudo crear el cliente'));
+  }finally{
+    if(btn){ btn.disabled=false; btn.textContent='✅ Crear Cliente'; }
+  }
 }
 
 // ── CLIENTES ─────────────────────────────────────────

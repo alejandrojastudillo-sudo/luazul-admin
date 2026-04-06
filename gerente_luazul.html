@@ -1287,31 +1287,61 @@ function openAddVendor(){
 
 
 async function saveVendor(){
-  var n=document.getElementById('vN').value.trim(),e=document.getElementById('vE').value.trim(),p=document.getElementById('vP').value.trim();
-  if(!n||!e||!p){showToast('❌ Nombre, email y contraseña son obligatorios');return;}
+  var n  = (document.getElementById('vN').value||'').trim();
+  var e  = (document.getElementById('vE').value||'').trim().toLowerCase();
+  var p  = (document.getElementById('vP').value||'').trim();
+  if(!n||!e||!p){ showToast('❌ Nombre, email y contraseña son obligatorios'); return; }
+  if(!sbClient){ showToast('❌ Sin conexión a Supabase'); return; }
 
-  // Nota: INSERT en staff_profiles requiere role_id >= 4 (Admin) por RLS.
-  // Esta operación la debe hacer el CEO/Admin. El gerente solo puede ver asesores.
-  if(sbClient){
-    // Intentar crear el usuario en Supabase Auth primero (solo funciona con Service Role Key)
-    showToast('⚠️ La creación de asesores requiere acceso de Admin. Usá el panel CEO para eso.');
-    return;
+  var btn = document.querySelector('#modal .mbtn.gold');
+  if(btn){ btn.disabled=true; btn.textContent='⏳ Creando...'; }
+
+  try{
+    // 1. Registrar en Supabase Auth
+    var signUp = await sbClient.auth.signUp({
+      email: e, password: p,
+      options:{ data:{ nombre: n, role: 'seller' } }
+    });
+    if(signUp.error) throw signUp.error;
+    var uid = signUp.data && signUp.data.user ? signUp.data.user.id : null;
+
+    // 2. Obtener la primera región del gerente para asignarla al asesor
+    var regionId = null;
+    if(window._gerenteRegionIds && window._gerenteRegionIds.length > 0){
+      regionId = window._gerenteRegionIds[0];
+    }
+
+    // 3. Insertar en staff_profiles
+    var nombres = n.split(' ');
+    var ins = await sbClient.from('staff_profiles').insert({
+      role_id:    2,
+      nombre:     nombres[0],
+      apellido:   nombres.slice(1).join(' ') || '',
+      badge:      e,
+      activo:     true,
+      region_id:  regionId,
+      telefono1:  (document.getElementById('vT').value||'').trim() || null,
+      telefono2:  (document.getElementById('vT2').value||'').trim() || null,
+      domicilio:  (document.getElementById('vDom').value||'').trim() || null,
+      cbu:        (document.getElementById('vCBU').value||'').trim() || null,
+      fecha_alta: new Date().toISOString().slice(0,10),
+      comprobantes_json: '[]',
+      user_id:    uid || undefined
+    }).select().single();
+    if(ins.error) throw ins.error;
+
+    // 4. Agregar al cache local y re-renderizar
+    var newV = mapVendorFromSB(ins.data);
+    if(!_memCache[VK]) _memCache[VK] = [];
+    _memCache[VK].push(newV);
+    closeModal(); renderAll(); populateVFilt();
+    showToast('✅ Asesor ' + n + ' creado en Supabase');
+  } catch(err){
+    console.error('[SB] saveVendor:', err);
+    showToast('❌ Error al crear asesor: ' + (err.message || 'Verificá los datos'));
+  } finally{
+    if(btn){ btn.disabled=false; btn.textContent='✅ Crear Vendedor'; }
   }
-
-  // Fallback local (sin persistencia en Supabase)
-  var newVendor = {
-    id:'v'+Date.now(), nombre:n, email:e, password:p, activo:true,
-    fechaAlta:new Date().toISOString().slice(0,10),
-    telefono1:(document.getElementById('vT').value||'').trim(),
-    telefono2:(document.getElementById('vT2').value||'').trim(),
-    domicilio:(document.getElementById('vDom').value||'').trim(),
-    cbu:      (document.getElementById('vCBU').value||'').trim(),
-    comprobantes: []
-  };
-  var vs=(_memCache[VK]||[])||[];
-  vs.push(newVendor);
-  _memCache[VK]=vs; closeModal(); renderAll(); populateVFilt();
-  showToast('✅ Vendedor '+n+' creado (local) · Sincronizá con el CEO para persistir');
 }
 
 function editVendor(vid){
