@@ -433,7 +433,7 @@ body::after {
   <!-- ── SUPABASE SDK ──────────────────────────────────── -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script>
-    var SUPABASE_URL = 'https://yunvqgaljopirzyjrntc.supabase.co';
+    var SUPABASE_URL = 'https://yunvqgaljopirzvjrntc.supabase.co';
     var SUPABASE_KEY = 'sb_publishable_MqB2thv0uzVUAY2v2jh-uQ_ul6a2LzB';
     var sbClient = (typeof supabase !== 'undefined')
       ? supabase.createClient(SUPABASE_URL, SUPABASE_KEY)
@@ -567,9 +567,9 @@ body::after {
     <div id="refSection" style="display:none;margin-top:8px;">
       <div class="glass" style="padding:24px;margin-bottom:18px;">
         <div style="font-size:.7rem;font-weight:800;text-transform:uppercase;letter-spacing:1.2px;color:#fbbf24;margin-bottom:16px;">🎁 Cargar cliente referido</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:12px;align-items:end;flex-wrap:wrap;">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr auto;gap:12px;align-items:end;flex-wrap:wrap;">
           <div>
-            <label style="font-size:.72rem;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.8px;display:block;margin-bottom:6px;">Nombre del referido</label>
+            <label style="font-size:.72rem;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.8px;display:block;margin-bottom:6px;">Nombre del referido *</label>
             <input id="refNombre" type="text" placeholder="Ej: María García" style="width:100%;padding:10px 14px;background:rgba(5,20,60,.8);border:1px solid var(--border);border-radius:10px;color:white;font-family:inherit;font-size:.88rem;box-sizing:border-box;">
           </div>
           <div>
@@ -577,22 +577,17 @@ body::after {
             <input id="refEmail" type="email" placeholder="email@ejemplo.com" style="width:100%;padding:10px 14px;background:rgba(5,20,60,.8);border:1px solid var(--border);border-radius:10px;color:white;font-family:inherit;font-size:.88rem;box-sizing:border-box;">
           </div>
           <div>
-            <label style="font-size:.72rem;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.8px;display:block;margin-bottom:6px;">Referido por (email cliente)</label>
-            <input id="refPor" type="email" placeholder="cliente@ejemplo.com" style="width:100%;padding:10px 14px;background:rgba(5,20,60,.8);border:1px solid var(--border);border-radius:10px;color:white;font-family:inherit;font-size:.88rem;box-sizing:border-box;">
+            <label style="font-size:.72rem;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.8px;display:block;margin-bottom:6px;">Teléfono del referido</label>
+            <input id="refTel" type="text" placeholder="+54 9 297 555-1234" style="width:100%;padding:10px 14px;background:rgba(5,20,60,.8);border:1px solid var(--border);border-radius:10px;color:white;font-family:inherit;font-size:.88rem;box-sizing:border-box;">
           </div>
           <div>
-            <label style="font-size:.72rem;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.8px;display:block;margin-bottom:6px;">Paquete</label>
-            <select id="refPaquete" style="width:100%;padding:10px 14px;background:rgba(5,20,60,.8);border:1px solid var(--border);border-radius:10px;color:white;font-family:inherit;font-size:.88rem;">
-              <option value="Escapada en Pareja">Escapada en Pareja</option>
-              <option value="Paquete 4 Amigos">Paquete 4 Amigos</option>
-              <option value="Paquete 6 Amigos">Paquete 6 Amigos</option>
-              <option value="Paquete 8 Personas">Paquete 8 Personas</option>
-            </select>
+            <label style="font-size:.72rem;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.8px;display:block;margin-bottom:6px;">Referido por (email cliente) *</label>
+            <input id="refPor" type="email" placeholder="cliente@ejemplo.com" style="width:100%;padding:10px 14px;background:rgba(5,20,60,.8);border:1px solid var(--border);border-radius:10px;color:white;font-family:inherit;font-size:.88rem;box-sizing:border-box;">
           </div>
         </div>
         <div style="margin-top:14px;display:flex;gap:10px;">
           <button onclick="guardarReferido()" style="padding:10px 24px;border-radius:10px;background:linear-gradient(135deg,#f59e0b,#d97706);color:#000;font-weight:700;font-size:.85rem;cursor:pointer;border:none;">✅ Guardar referido</button>
-          <button onclick="document.getElementById('refNombre').value='';document.getElementById('refEmail').value='';document.getElementById('refPor').value='';" style="padding:10px 20px;border-radius:10px;background:rgba(255,255,255,.06);color:var(--muted);font-weight:600;font-size:.85rem;cursor:pointer;border:1px solid var(--border);">🗑 Limpiar</button>
+          <button onclick="document.getElementById('refNombre').value='';document.getElementById('refEmail').value='';document.getElementById('refTel').value='';document.getElementById('refPor').value='';" style="padding:10px 20px;border-radius:10px;background:rgba(255,255,255,.06);color:var(--muted);font-weight:600;font-size:.85rem;cursor:pointer;border:1px solid var(--border);">🗑 Limpiar</button>
         </div>
       </div>
 
@@ -649,33 +644,6 @@ body::after {
 <div id="toast"></div>
 
 <!-- ═══════════════ SETUP GUIDE ═══════════════ -->
-<div id="setupWrap" style="position:fixed;inset:0;z-index:300;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.7);padding:24px;overflow-y:auto;">
-  <div style="max-width:680px;width:100%;background:var(--surface);border:1px solid var(--border2);border-radius:20px;padding:36px;margin:auto;">
-    <h2 style="font-family:'Syne',sans-serif;font-size:1.4rem;margin-bottom:6px;">⚙️ Conectar Google Sheets</h2>
-    <p style="color:var(--muted);font-size:.88rem;margin-bottom:24px;">Solo necesitás hacer esto una vez. Seguí los pasos:</p>
-
-    <div style="display:flex;flex-direction:column;gap:14px;">
-      <div style="background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:12px;padding:18px;">
-        <p style="font-weight:700;margin-bottom:6px;">1. Creá el Sheet</p>
-        <p style="color:var(--muted);font-size:.83rem;line-height:1.7;">Creá una hoja llamada <code style="background:rgba(59,130,246,.15);padding:1px 6px;border-radius:4px;color:var(--accent2);">Luazul Clientes</code> con una pestaña <code style="background:rgba(59,130,246,.15);padding:1px 6px;border-radius:4px;color:var(--accent2);">Clientes</code>.<br>
-        Columnas: <code style="background:rgba(59,130,246,.15);padding:1px 6px;border-radius:4px;color:var(--accent2);font-size:.78rem;">email | password | nombre | documento | domicilio | destino | paquete | personas | noches | fecha_viaje | total_usd | cuotas_total | cuotas_pagadas | monto_cuota | estado | contrato_url | voucher_url</code></p>
-      </div>
-      <div style="background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:12px;padding:18px;">
-        <p style="font-weight:700;margin-bottom:6px;">2. Apps Script (mismo código que el panel de cliente)</p>
-        <p style="color:var(--muted);font-size:.83rem;">Si ya lo tenés configurado del panel de cliente, usá la misma URL.</p>
-      </div>
-      <div style="background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:12px;padding:18px;">
-        <p style="font-weight:700;margin-bottom:10px;">3. Pegá la URL del Apps Script</p>
-        <div style="display:flex;gap:10px;flex-wrap:wrap;">
-          <input type="text" id="adminApiInput" placeholder="https://script.google.com/macros/s/..." style="flex:1;min-width:200px;padding:11px 14px;background:rgba(255,255,255,.06);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-family:'Mulish',sans-serif;font-size:.85rem;" />
-          <button onclick="saveAdminApi()" style="padding:11px 20px;background:var(--accent);color:white;border:none;border-radius:8px;font-family:'Mulish',sans-serif;font-weight:700;cursor:pointer;">Guardar</button>
-        </div>
-      </div>
-    </div>
-    <div style="display:flex;gap:10px;margin-top:20px;flex-wrap:wrap;">
-      <button onclick="closeSetup()" style="padding:10px 20px;background:var(--accent);color:white;border:none;border-radius:8px;font-family:'Mulish',sans-serif;font-weight:700;cursor:pointer;">✅ Cerrar</button>    </div>
-  </div>
-</div>
 
 <script>
 // ══════════════════════════════════════════════════════
@@ -683,56 +651,27 @@ body::after {
 // ══════════════════════════════════════════════════════
 
 // ══════════════════════════════════════════════════════
-//  SHARED STORAGE — connects admin ↔ client panel
-//  Uses localStorage key: 'luazul_db'
+//  PERFIL DEL ASESOR AUTENTICADO
+//  Se carga desde staff_profiles al iniciar sesión
 // ══════════════════════════════════════════════════════
-var DB_KEY = 'luazul_db';
+var _currentProfile = null;
 
-function dbLoad() {
+async function loadCurrentProfile() {
+  if (!sbClient) return;
   try {
-    var raw = localStorage.getItem(DB_KEY);
-    if (raw) return JSON.parse(raw);
-  } catch(e) {}
-  return null;
-}
-
-function dbSave(clients) {
-  try {
-    localStorage.setItem(DB_KEY, JSON.stringify(clients));
-  } catch(e) {}
-  // [SUPABASE] Sync changes to Supabase (fire-and-forget)
-  if (sbClient && clients && clients.length) {
-    clients.forEach(function(c) {
-      if (!c.id) return;
-      sbClient.from('clientes').upsert([c], {onConflict: 'id'}).then(function(r) {
-        if (r.error) console.warn('[SB] dbSave upsert:', r.error.message);
-      });
-    });
+    var result = await sbClient.auth.getSession();
+    var session = result.data && result.data.session;
+    if (!session) return;
+    var r = await sbClient
+      .from('staff_profiles')
+      .select('*')
+      .eq('user_id', session.user.id)
+      .single();
+    if (r.data) _currentProfile = r.data;
+  } catch(e) {
+    console.warn('[SB] loadCurrentProfile error:', e.message);
   }
-  return true;
 }
-
-function dbClear() {
-  localStorage.removeItem(DB_KEY);
-}
-
-
-// [SUPABASE] Credenciales hardcodeadas eliminadas — login via Supabase Auth
-var ADMIN_USER = ''; // ya no se usa
-var ADMIN_PASS = ''; // ya no se usa
-
-// ── LIMPIEZA DE DATOS DEMO ────────────────────────────
-var DATA_VERSION = 'v3_prod_clean';
-(function(){
-  if(localStorage.getItem('luazul_admin_version') !== DATA_VERSION){
-    ['luazul_db','luazul_vendors','luazul_notifs'].forEach(function(k){
-      localStorage.removeItem(k);
-    });
-    localStorage.setItem('luazul_admin_version', DATA_VERSION);
-  }
-})();
-
-var API_URL    = localStorage.getItem('luazul_admin_api') || '';
 
 // ══════════════════════════════════════════════════════
 //  DEMO DATA — 12 clientes variados
@@ -756,111 +695,128 @@ function showToast(msg, duration) {
 
 
 // ══════════════════════════════════════════════════════
-//  ADMIN NOTIFICATIONS (payments from clients)
+//  NOTIFICACIONES — Supabase tabla: notificaciones
 // ══════════════════════════════════════════════════════
-var NOTIFS_KEY = 'luazul_notifs';
-var VENDORS_KEY = 'luazul_vendors';
 
-function getAdminVendorId() {
-  // Try to find which vendor matches current admin session
-  // For demo, show all unread notifs
-  return null; // null = show all (gerente mode in admin demo)
-}
-
-function getMyNotifs() {
+async function refreshAdminNotifBadge() {
+  if (!sbClient || !_currentProfile) return;
   try {
-    var ns = JSON.parse(localStorage.getItem(NOTIFS_KEY) || '[]');
-    return ns.filter(function(n) { return !n.leida; });
-  } catch(e) { return []; }
-}
-
-function refreshAdminNotifBadge() {
-  var ns = getMyNotifs();
-  var dot = document.getElementById('adminNotifDot');
-  var lbl = document.getElementById('adminNotifLabel');
-  if (ns.length > 0) {
-    dot.style.display = 'flex';
-    dot.textContent = ns.length;
-    lbl.textContent = 'Alertas (' + ns.length + ')';
-  } else {
-    dot.style.display = 'none';
-    lbl.textContent = 'Alertas';
-  }
-}
-
-function openAdminNotifs() {
-  var ns;
-  try { ns = JSON.parse(localStorage.getItem(NOTIFS_KEY) || '[]'); } catch(e) { ns = []; }
-  ns = ns.sort(function(a,b){ return b.ts - a.ts; });
-
-  function fmtTs(ts) {
-    var d = Math.round((Date.now() - ts) / 60000);
-    return d < 60 ? 'Hace ' + d + ' min' : d < 1440 ? 'Hace ' + Math.round(d/60) + ' h' : 'Hace ' + Math.round(d/1440) + ' dias';
-  }
-
-  var rows = ns.map(function(n) {
-    var isPay = n.tipo === 'payment';
-    var comp = n.comp ? '<img src="' + n.comp + '" style="width:70px;height:52px;border-radius:7px;object-fit:cover;border:1px solid rgba(255,255,255,.12);cursor:pointer;margin-top:8px;" onclick="window.open(this.src)" />' : '';
-    var nid = String(n.id).replace(/'/g, '');
-    var approveBtn = '';  // Aprobación de pago eliminada
-    var readBtn = '<button onclick="adminMarkRead(' + JSON.stringify(n.id) + ')" style="padding:7px 12px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:rgba(180,200,240,.6);border-radius:8px;font-size:.76rem;cursor:pointer;">Marcar leida</button>';
-
-    return '<div style="padding:14px;background:rgba(255,255,255,.03);border:1px solid ' + (n.leida ? 'rgba(255,255,255,.07)' : (isPay ? 'rgba(34,197,94,.25)' : 'rgba(239,68,68,.25)')) + ';border-left:3px solid ' + (isPay ? '#22c55e' : '#ef4444') + ';border-radius:12px;margin-bottom:10px;">'
-      + '<div style="font-weight:700;font-size:.9rem;margin-bottom:3px;">' + (isPay ? 'Comprobante de pago' : 'Alerta de atraso') + ' - ' + n.cliente + '</div>'
-      + '<div style="font-size:.78rem;color:rgba(180,200,240,.6);margin-bottom:6px;">'
-      + (isPay ? 'Cuota ' + n.cuota + ' USD ' + n.monto : 'Cliente con cuotas vencidas') + ' ' + fmtTs(n.ts||Date.now())
-      + (n.leida ? '' : ' <span style="color:#f59e0b;font-weight:700;">sin leer</span>')
-      + '</div>'
-      + comp
-      + '<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">' + approveBtn + readBtn + '</div>'
-      + '</div>';
-  }).join('') || '<p style="text-align:center;color:rgba(180,200,240,.5);padding:30px;">Sin notificaciones</p>';
-
-  document.getElementById('modalBox').innerHTML = '<div class="modal-head">'
-    + '<div><h2>Notificaciones</h2><p style="font-size:.8rem;color:rgba(180,200,240,.6);">' + ns.filter(function(n){return!n.leida;}).length + ' sin leer</p></div>'
-    + '<button class="modal-close" onclick="closeModal()">x</button>'
-    + '</div>'
-    + '<div class="modal-body" style="max-height:70vh;overflow-y:auto;">' + rows + '</div>';
-  document.getElementById('modal').classList.add('open');
-}
-
-function adminApprovePayment(nid) {
-  try {
-    var ns = JSON.parse(localStorage.getItem(NOTIFS_KEY) || '[]');
-    var notif = ns.find(function(n) { return n.id === nid; });
-    if (notif) {
-      notif.aprobada = true;
-      notif.leida = true;
-      // Update client cuotas_pagadas
-      var clients = JSON.parse(localStorage.getItem('luazul_db') || '[]');
-      clients = clients.map(function(c) {
-        if (c.id == notif.cid && notif.cuota > (parseInt(c.cuotas_pagadas)||0)) {
-          c.cuotas_pagadas = notif.cuota;
-        }
-        return c;
-      });
-      localStorage.setItem('luazul_db', JSON.stringify(clients));
-      localStorage.setItem(NOTIFS_KEY, JSON.stringify(ns));
-      allClients = (dbLoad() || []).map(enrich);
-      renderAll();
-      closeModal();
-      showToast('✅ Pago aprobado — cuotas del cliente actualizadas');
+    // Notificaciones propias (destinatario_id = auth.uid) O grupales para vendedores
+    var r = await sbClient
+      .from('notificaciones')
+      .select('id', { count: 'exact' })
+      .eq('leida', false)
+      .or('destinatario_id.eq.' + _currentProfile.user_id + ',destinatario_rol.eq.seller');
+    var count = r.count || 0;
+    var dot = document.getElementById('adminNotifDot');
+    var lbl = document.getElementById('adminNotifLabel');
+    if (count > 0) {
+      dot.style.display = 'flex';
+      dot.textContent = count;
+      lbl.textContent = 'Alertas (' + count + ')';
+    } else {
+      dot.style.display = 'none';
+      lbl.textContent = 'Alertas';
     }
-  } catch(e) { showToast('Error al aprobar'); }
+  } catch(e) { console.warn('[SB] refreshAdminNotifBadge:', e.message); }
 }
 
-function adminMarkRead(nid) {
+async function openAdminNotifs() {
+  if (!sbClient || !_currentProfile) return;
+  document.getElementById('modal').classList.add('open');
+  document.getElementById('modalBox').innerHTML =
+    '<div class="modal-head"><div><h2>🔔 Notificaciones</h2></div>'
+    + '<button class="modal-close" onclick="closeModal()">✕</button></div>'
+    + '<div class="modal-body" style="max-height:70vh;overflow-y:auto;">'
+    + '<p style="text-align:center;color:rgba(180,200,240,.5);padding:30px;">⏳ Cargando...</p></div>';
+
   try {
-    var ns = JSON.parse(localStorage.getItem(NOTIFS_KEY) || '[]');
-    ns = ns.map(function(n) { if(n.id===nid) n.leida=true; return n; });
-    localStorage.setItem(NOTIFS_KEY, JSON.stringify(ns));
-    refreshAdminNotifBadge();
-    openAdminNotifs(); // re-render
-  } catch(e) {}
+    // Trae notifs propias (auth.uid) + grupales para vendedores
+    var r = await sbClient
+      .from('notificaciones')
+      .select('*')
+      .or('destinatario_id.eq.' + _currentProfile.user_id + ',destinatario_rol.eq.seller')
+      .order('created_at', { ascending: false })
+      .limit(50);
+    var ns = r.data || [];
+
+    function fmtTs(ts) {
+      var d = Math.round((Date.now() - new Date(ts)) / 60000);
+      return d < 60 ? 'Hace ' + d + ' min' : d < 1440 ? 'Hace ' + Math.round(d/60) + ' h' : 'Hace ' + Math.round(d/1440) + ' días';
+    }
+
+    var TIPO_LABEL = {
+      pago_pendiente:  '💰 Comprobante de pago',
+      gestion_mora:    '⚠️ Gestión de mora',
+      comunicado:      '📢 Comunicado del equipo',
+      actualizacion:   '🔄 Actualización',
+      alerta:          '🚨 Alerta'
+    };
+    var TIPO_COLOR = {
+      pago_pendiente: '#22c55e',
+      gestion_mora:   '#f97316',
+      comunicado:     '#60a5fa',
+      actualizacion:  '#a78bfa',
+      alerta:         '#ef4444'
+    };
+
+    var rows = ns.map(function(n) {
+      var col    = TIPO_COLOR[n.tipo] || '#60a5fa';
+      var label  = TIPO_LABEL[n.tipo] || ('📌 ' + (n.tipo || 'Notificación'));
+      var border = n.leida ? 'rgba(255,255,255,.07)' : ('rgba(' + hexToRgb(col) + ',.25)');
+      var readBtn = '<button onclick="adminMarkRead(\'' + n.id + '\')" style="padding:6px 12px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:rgba(180,200,240,.6);border-radius:8px;font-size:.74rem;cursor:pointer;">Marcar leída</button>';
+      return '<div style="padding:14px;background:rgba(255,255,255,.03);border:1px solid ' + border + ';border-left:3px solid ' + col + ';border-radius:12px;margin-bottom:10px;">'
+        + '<div style="font-weight:700;font-size:.88rem;color:' + col + ';margin-bottom:4px;">' + label + '</div>'
+        + '<div style="font-size:.82rem;color:rgba(220,230,255,.85);margin-bottom:6px;">' + (n.mensaje || '') + '</div>'
+        + '<div style="font-size:.72rem;color:rgba(180,200,240,.5);">' + fmtTs(n.created_at)
+        + (n.leida ? '' : ' · <span style="color:#f59e0b;font-weight:700;">sin leer</span>') + '</div>'
+        + '<div style="margin-top:10px;">' + (n.leida ? '' : readBtn) + '</div>'
+        + '</div>';
+    }).join('') || '<p style="text-align:center;color:rgba(180,200,240,.5);padding:30px;">Sin notificaciones</p>';
+
+    function hexToRgb(hex) {
+      var r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
+      return r + ',' + g + ',' + b;
+    }
+
+    var sinLeer = ns.filter(function(n){ return !n.leida; }).length;
+    document.getElementById('modalBox').innerHTML =
+      '<div class="modal-head"><div><h2>🔔 Notificaciones</h2>'
+      + '<p style="font-size:.8rem;color:rgba(180,200,240,.6);">' + sinLeer + ' sin leer · ' + ns.length + ' total</p></div>'
+      + '<button class="modal-close" onclick="closeModal()">✕</button></div>'
+      + '<div class="modal-body" style="max-height:70vh;overflow-y:auto;">' + rows + '</div>';
+  } catch(e) {
+    console.warn('[SB] openAdminNotifs:', e.message);
+    showToast('⚠️ Error al cargar notificaciones');
+  }
 }
 
-// Poll for new notifications every 5 seconds
-setInterval(refreshAdminNotifBadge, 5000);
+async function adminMarkRead(nid) {
+  if (!sbClient) return;
+  try {
+    await sbClient.from('notificaciones').update({ leida: true }).eq('id', nid);
+    refreshAdminNotifBadge();
+    openAdminNotifs();
+  } catch(e) { console.warn('[SB] adminMarkRead:', e.message); }
+}
+
+async function notificarGerenteGestion(cliente, detalle) {
+  if (!sbClient || !_currentProfile) return;
+  try {
+    var asesorNombre = (_currentProfile.nombre + ' ' + (_currentProfile.apellido || '')).trim();
+    await sbClient.from('notificaciones').insert([{
+      tipo:             'gestion_mora',
+      mensaje:          'Asesor: ' + asesorNombre + ' — Cliente: ' + cliente.nombre + ' | ' + detalle,
+      destinatario_rol: 'manager',
+      remitente_id:     _currentProfile.user_id,
+      cliente_id:       cliente.id || null,
+      leida:            false
+    }]);
+  } catch(e) { console.warn('[SB] notificarGerenteGestion:', e.message); }
+}
+
+// Actualizar badge cada 30 segundos
+setInterval(refreshAdminNotifBadge, 30000);
 
 
 // [SUPABASE] Login del asesor via Supabase Auth
@@ -880,6 +836,7 @@ async function adminLogin() {
     LZ_AUTH.setPanelSession('luazul_admin');
     try { sessionStorage.setItem('luazul_asesor_user', nombre); } catch(e){}
     LZ_AUTH._showApp('loginWrap','app');
+    await loadCurrentProfile();
     await loadClients();
     refreshAdminNotifBadge();
   } catch(err) {
@@ -903,6 +860,7 @@ document.addEventListener('DOMContentLoaded', async function() {
       try { sessionStorage.setItem('luazul_asesor_user', nombre); } catch(e){}
       LZ_AUTH.setPanelSession('luazul_admin');
       LZ_AUTH._showApp('loginWrap','app');
+      await loadCurrentProfile();
       await loadClients();
       refreshAdminNotifBadge();
       return;
@@ -913,10 +871,9 @@ document.addEventListener('DOMContentLoaded', async function() {
     portalRoles: ['owner','super_admin'],
     loginWrapId: 'loginWrap',
     appId:       'app',
-    onSuccess:   function(){ loadClients(); refreshAdminNotifBadge(); }
+    onSuccess:   async function(){ await loadCurrentProfile(); loadClients(); refreshAdminNotifBadge(); }
   });
 });
-window.addEventListener('storage', function(e){ if(e.key==='luazul_notifs'||e.key==='luazul_db'){ refreshAdminNotifBadge(); if(e.key==='luazul_db'){ allClients=(dbLoad()||[]).map(enrich); renderAll(); } } });
 
 async function adminLogout() {
   if (sbClient) { try { await sbClient.auth.signOut(); } catch(e){} }
@@ -930,73 +887,28 @@ async function adminLogout() {
 }
 
 // ══════════════════════════════════════════════════════
-//  DATA
+//  DATA — carga desde Supabase (única fuente de verdad)
 // ══════════════════════════════════════════════════════
-// [SUPABASE] loadClients — carga desde Supabase, respaldo en localStorage
 async function loadClients() {
-  if (sbClient) {
-    try {
-      showToast('⏳ Cargando clientes...');
-      // Obtener el email del usuario actual para filtrar solo sus clientes
-      var sessionResult = await sbClient.auth.getSession();
-      var session = sessionResult.data && sessionResult.data.session;
-      var userEmail = session ? session.user.email : null;
-      var query = sbClient.from('clientes').select('*').order('nombre');
-      // Si no es owner/super_admin, filtrar por asesor
-      var role = null;
-      try { role = sessionStorage.getItem('lz_role'); } catch(e){}
-      if (userEmail && role !== 'owner' && role !== 'super_admin') {
-        query = query.eq('asesor_email', userEmail);
-      }
-      var r = await query;
-      if (r.error) throw r.error;
-      allClients = (r.data || []).map(enrich);
-      dbSave(allClients); // cache local
-      renderAll();
-      showToast('✅ ' + allClients.length + ' clientes cargados desde Supabase');
-      return;
-    } catch(e) {
-      console.warn('[SB] loadClients error:', e.message);
-      showToast('⚠️ Error Supabase — usando datos locales');
+  if (!sbClient) { showToast('❌ Sin conexión a Supabase'); return; }
+  try {
+    showToast('⏳ Cargando clientes...');
+    var query = sbClient.from('clientes').select('*').order('nombre');
+    // El asesor solo ve sus propios clientes (RLS + filtro explícito)
+    if (_currentProfile && _currentProfile.id) {
+      query = query.eq('seller_id', _currentProfile.id);
     }
-  }
-  // Respaldo: localStorage
-  var saved = dbLoad();
-  if (saved && saved.length > 0) {
-    allClients = saved.map(enrich);
+    var r = await query;
+    if (r.error) throw r.error;
+    allClients = (r.data || []).map(enrich);
     renderAll();
-    showToast('✅ ' + allClients.length + ' clientes (local)');
-    return;
+    showToast('✅ ' + allClients.length + ' clientes cargados');
+  } catch(e) {
+    console.warn('[SB] loadClients error:', e.message);
+    showToast('⚠️ Error al cargar clientes: ' + e.message);
+    allClients = [];
+    renderAll();
   }
-  allClients = [];
-  renderAll();
-}
-
-function fetchAllClients() {
-  fetch(API_URL + '?action=getAll')
-    .then(function(r){ return r.json(); })
-    .then(function(d){
-      if (d.ok && d.clients) {
-        allClients = d.clients.map(function(c,i){ c.id = c.id || (i+1); return enrich(c); });
-        renderAll();
-      } else {
-        allClients = [];
-        renderAll();
-      }
-    })
-    .catch(function(){
-      allClients = [];
-      renderAll();
-    });
-}
-
-function syncData() {
-  var btn = document.querySelector('.tb-btn');
-  btn.textContent = '⟳ Sincronizando...';
-  setTimeout(function(){
-    btn.textContent = '⟳ Sincronizar';
-    if (API_URL) fetchAllClients(); else renderAll();
-  }, 1000);
 }
 
 // Enrich with computed fields
@@ -1314,7 +1226,7 @@ function renderPriorityBanner() {
       + '<h3>⚠️ En atraso — Primeros 3 meses · Contactar urgente</h3>'
       + '<div class="priority-list">'
       + moraTemp.map(function(c){
-          return '<div class="pri-chip rojo" onclick="openModal(' + JSON.stringify(c.id) + ')">'
+          return '<div class="pri-chip rojo" onclick="openModal(\'' + c.id + '\')">'
             + c.nombre + ' · ' + c._pendientes + ' cuotas pendientes</div>';
         }).join('')
       + '</div></div>';
@@ -1324,7 +1236,7 @@ function renderPriorityBanner() {
       + '<h3>🆕 Nuevos sin abonar primera cuota</h3>'
       + '<div class="priority-list">'
       + sinPagar.map(function(c){
-          return '<div class="pri-chip naranja" onclick="openModal(' + JSON.stringify(c.id) + ')">'
+          return '<div class="pri-chip naranja" onclick="openModal(\'' + c.id + '\')">'
             + c.nombre + ' — Sin primer pago</div>';
         }).join('')
       + '</div></div>';
@@ -1397,7 +1309,7 @@ function renderTable() {
       else if (c._dias < 30) fechaStr = '<span style="color:var(--orange);font-weight:700;">⚡ ' + fechaStr + '</span>';
     }
 
-    return '<div class="tbl-row pr-' + c._semaforo + '" onclick="openModal(' + JSON.stringify(c.id) + ')">'
+    return '<div class="tbl-row pr-' + c._semaforo + '" onclick="openModal(\'' + c.id + '\')">'
       // Semáforo
       + '<div class="tbl-cell" style="display:flex;align-items:center;"><div class="sem ' + c._semaforo + '"></div></div>'
       // Nombre
@@ -1428,9 +1340,9 @@ function renderTable() {
       + '<div class="tbl-cell"><span class="badge ' + c.estado + '">' + c.estado.toUpperCase() + '</span></div>'
       // Actions
       + '<div class="tbl-cell th-actions row-actions" onclick="event.stopPropagation()">'
-      +   '<div class="act-btn whatsapp" title="WhatsApp" onclick="waMensaje(' + JSON.stringify(c.id) + ')">💬</div>'
-      +   '<div class="act-btn mora' + (c.mora && c.mora.length ? ' has-mora' : '') + '" title="' + (c.mora && c.mora.length ? 'Ver mora (' + c.mora.length + ' registro/s)' : 'Registrar mora') + '" onclick="openMoraModal(' + c.id + ')">' + (c.mora && c.mora.length ? '⚠️' : '📋') + '</div>'
-      +   '<div class="act-btn" title="Editar" onclick="openModal(' + JSON.stringify(c.id) + ')">✏️</div>'
+      +   '<div class="act-btn whatsapp" title="WhatsApp" onclick="waMensaje(\'' + c.id + '\')">💬</div>'
+      +   '<div class="act-btn mora' + (c.mora && c.mora.length ? ' has-mora' : '') + '" title="' + (c.mora && c.mora.length ? 'Ver mora (' + c.mora.length + ' registro/s)' : 'Registrar mora') + '" onclick="openMoraModal(\'' + c.id + '\')">' + (c.mora && c.mora.length ? '⚠️' : '📋') + '</div>'
+      +   '<div class="act-btn" title="Editar" onclick="openModal(\'' + c.id + '\')">✏️</div>'
       + '</div>'
       + '</div>';
   }).join('');
@@ -1517,22 +1429,22 @@ function openModal(id) {
             <option value="completo"       ${c.estado==='completo'      ?'selected':''}>Completo</option>
             <option value="baja"           ${c.estado==='baja'          ?'selected':''}>Baja</option>
           </select>
-          <button class="m-btn primary" onclick="updateClient(${c.id})">💾 Guardar</button>
+          <button class="m-btn primary" onclick="updateClient('${c.id}')">💾 Guardar</button>
         </div>
       </div>
 
       <!-- Actions -->
       <div class="modal-actions">
-        <button class="m-btn green" onclick="waMensaje(${c.id})">💬 WhatsApp</button>
-        <button class="m-btn ghost" onclick="waRecordatorio(${c.id})">📲 Recordatorio</button>
-        <button class="m-btn ghost" onclick="abrirCargaReferido(${c.id})" style="color:#fbbf24;border-color:rgba(251,191,36,.3);">🎁 Referido</button>
+        <button class="m-btn green" onclick="waMensaje('${c.id}')">💬 WhatsApp</button>
+        <button class="m-btn ghost" onclick="waRecordatorio('${c.id}')">📲 Recordatorio</button>
+        <button class="m-btn ghost" onclick="abrirCargaReferido('${c.id}')" style="color:#fbbf24;border-color:rgba(251,191,36,.3);">🎁 Referido</button>
         <button class="m-btn ghost" onclick="closeModal()">✕ Cerrar</button>
       </div>
       <!-- NUEVAS FUNCIONES v3 -->
       <div class="modal-actions" style="margin-top:8px;border-top:1px solid rgba(100,160,255,.1);padding-top:12px;">
-        <button class="m-btn" style="background:rgba(11,61,145,.3);border-color:rgba(100,160,255,.3);color:#7eb8ff;" onclick="generarContratoPDF(${c.id})">📄 Generar Contrato PDF</button>
-        <button class="m-btn" style="background:rgba(251,146,60,.1);border-color:rgba(251,146,60,.3);color:#fb923c;" onclick="abrirRegistroPago(${c.id})">📤 Enviar Comprobante</button>
-        <button class="m-btn" style="background:rgba(251,146,60,.1);border-color:rgba(251,146,60,.3);color:#fb923c;" onclick="verComprobantes(${c.id})">📎 Comprobantes</button>
+        <button class="m-btn" style="background:rgba(11,61,145,.3);border-color:rgba(100,160,255,.3);color:#7eb8ff;" onclick="generarContratoPDF('${c.id}')">📄 Generar Contrato PDF</button>
+        <button class="m-btn" style="background:rgba(251,146,60,.1);border-color:rgba(251,146,60,.3);color:#fb923c;" onclick="abrirRegistroPago('${c.id}')">📤 Enviar Comprobante</button>
+        <button class="m-btn" style="background:rgba(251,146,60,.1);border-color:rgba(251,146,60,.3);color:#fb923c;" onclick="verComprobantes('${c.id}')">📎 Comprobantes</button>
       </div>
     </div>
   `;
@@ -1543,48 +1455,43 @@ function openModal(id) {
 function closeModal() { document.getElementById('modal').classList.remove('open'); }
 function closeModalOutside(e) { if (e.target === document.getElementById('modal')) closeModal(); }
 
-function updateClient(id) {
+async function updateClient(id) {
   var c = allClients.find(function(x){ return x.id == id; });
   if (!c) return;
   c.cuotas_pagadas = parseInt(document.getElementById('editCuotas').value) || 0;
-  c.nuevoEstado    = document.getElementById('editEstado').value;
-  var estadoAnterior = c.estado;
-  c.estado         = c.nuevoEstado;
+  c.estado         = document.getElementById('editEstado').value;
   var idx = allClients.indexOf(c);
   allClients[idx]  = enrich(c);
-  dbSave(allClients);
 
-  // 📨 Si se marca "En atraso con gestión" → notificar al gerente
+  // Guardar en Supabase
+  if (sbClient) {
+    try {
+      var r = await sbClient.from('clientes').update({
+        cuotas_pagadas: c.cuotas_pagadas,
+        estado: c.estado
+      }).eq('id', id);
+      if (r.error) throw r.error;
+    } catch(e) {
+      console.warn('[SB] updateClient:', e.message);
+      showToast('⚠️ Error al guardar cambios: ' + e.message);
+      return;
+    }
+  }
+
   if (c.estado === 'atraso_gestion') {
     var motivo = (document.getElementById('editObs') || {}).value || '—';
     notificarGerenteGestion(c, motivo);
     showToast('💾 Guardado — gestión notificada al gerente');
   } else {
-    showToast('💾 Cambios guardados — visible en panel del cliente');
+    showToast('💾 Cambios guardados');
   }
 
   closeModal();
   renderAll();
 }
 
-function notificarGerenteGestion(cliente, detalle) {
-  var NOTIF_KEY = 'luazul_notifs_gerente';
-  var notifs = [];
-  try { notifs = JSON.parse(localStorage.getItem(NOTIF_KEY) || '[]'); } catch(e){}
-  var asesor = document.getElementById('loginUser') ? document.getElementById('loginUser').textContent : (localStorage.getItem('luazul_asesor_user') || 'Asesor');
-  notifs.unshift({
-    id: Date.now(),
-    tipo: 'gestion_mora',
-    cliente_nombre: cliente.nombre,
-    cliente_email: cliente.email,
-    asesor: asesor,
-    detalle: detalle,
-    fecha: new Date().toLocaleDateString('es-AR'),
-    hora: new Date().toLocaleTimeString('es-AR', {hour:'2-digit', minute:'2-digit'}),
-    leida: false
-  });
-  localStorage.setItem(NOTIF_KEY, JSON.stringify(notifs));
-}
+
+
 
 
 // ══════════════════════════════════════════════════════
@@ -1602,7 +1509,7 @@ function openMoraModal(id) {
       + '<div class="me-motivo">📌 ' + m.motivo + '</div>'
       + '<div class="me-compromiso">📅 Compromiso: ' + m.compromiso + '</div>'
       + (m.contacto ? '<div style="font-size:.72rem;color:var(--muted);margin-top:3px;">Contacto: ' + m.contacto + '</div>' : '')
-      + (!m.resuelta ? '<button onclick="resolverMora(' + id + ',' + i + ')" style="margin-top:6px;padding:4px 10px;background:var(--green-bg);color:var(--green);border:1px solid var(--green-bd);border-radius:6px;font-size:.72rem;font-weight:700;cursor:pointer;">✅ Marcar como resuelta</button>' : '')
+      + (!m.resuelta ? '<button onclick="resolverMora(\'' + id + '\',' + i + ')" style="margin-top:6px;padding:4px 10px;background:var(--green-bg);color:var(--green);border:1px solid var(--green-bd);border-radius:6px;font-size:.72rem;font-weight:700;cursor:pointer;">✅ Marcar como resuelta</button>' : '')
       + '</div>';
   }).join('') : '<p style="color:var(--muted);font-size:.82rem;text-align:center;padding:16px;">Sin registros de mora</p>';
 
@@ -1629,13 +1536,13 @@ function openMoraModal(id) {
     + '<select id="morEstado" class="edit-input"><option value="">Sin cambio</option><option value="atraso">En atraso</option><option value="atraso_gestion">🗂 En atraso (con gestión)</option><option value="activo">Activo</option></select></div>'
     + '</div></div></div>'
     + '<div class="modal-actions">'
-    + '<button class="m-btn primary" onclick="saveMora(' + id + ')" style="background:var(--orange);">📋 Guardar gestión</button>'
+    + '<button class="m-btn primary" onclick="saveMora(\'' + id + '\')" style="background:var(--orange);">📋 Guardar gestión</button>'
     + '<button class="m-btn ghost" onclick="closeModal()">Cerrar</button>'
     + '</div></div>';
   document.getElementById('modal').classList.add('open');
 }
 
-function saveMora(id) {
+async function saveMora(id) {
   var motivo     = document.getElementById('morMotivo').value.trim();
   var compromiso = document.getElementById('morCompromiso').value.trim();
   var contacto   = document.getElementById('morContacto').value;
@@ -1649,52 +1556,57 @@ function saveMora(id) {
 
   var entry = { fecha: fecha, motivo: motivo, compromiso: compromiso, contacto: contacto, resuelta: false };
 
-  // Save to DB
-  var saved = dbLoad() || [];
-  saved = saved.map(function(c) {
-    if (c.id == id) {
-      if (!c.mora) c.mora = [];
-      c.mora.push(entry);
-      if (newEstado) c.estado = newEstado;
-    }
-    return c;
-  });
-  dbSave(saved);
-  allClients = saved.map(enrich);
+  // Actualizar cliente local
+  var c = allClients.find(function(x){ return x.id == id; });
+  if (!c) return;
+  if (!c.mora) c.mora = [];
+  c.mora.push(entry);
+  if (newEstado) c.estado = newEstado;
+  var idx = allClients.indexOf(c);
+  allClients[idx] = enrich(c);
 
-  // Fire notification to gerente (luazul_notifs + luazul_notifs_gerente)
-  try {
-    var client = saved.find(function(c){ return c.id == id; });
-    var notifs = JSON.parse(localStorage.getItem('luazul_notifs') || '[]');
-    notifs.unshift({
-      id: 'mor' + Date.now(), tipo: 'mora',
-      cid: id, cliente: client ? client.nombre : '',
-      vid: client ? (client.vid || client.vendedor_id || '') : '',
-      vendedor: 'Asesor', motivo: motivo, compromiso: compromiso,
-      ts: Date.now(), leida: false, aprobada: false, comp: null
-    });
-    localStorage.setItem('luazul_notifs', JSON.stringify(notifs));
-
-    // Also write dedicated gerente key with full detail
-    if (newEstado === 'atraso_gestion' || newEstado === 'atraso') {
-      var asesor = localStorage.getItem('luazul_asesor_user') || 'Asesor';
-      notificarGerenteGestion(client || {nombre: '—', email: '—'}, motivo + ' | Compromiso: ' + compromiso + ' | Contacto: ' + contacto + ' | Estado→ ' + (newEstado === 'atraso_gestion' ? 'Con gestión' : 'En atraso'));
+  // Guardar en Supabase: mora como JSON en notas + estado
+  if (sbClient) {
+    try {
+      var updateData = { mora_json: JSON.stringify(c.mora) };
+      if (newEstado) updateData.estado = newEstado;
+      var r = await sbClient.from('clientes').update(updateData).eq('id', id);
+      if (r.error) throw r.error;
+    } catch(e) {
+      console.warn('[SB] saveMora:', e.message);
+      showToast('⚠️ Error al guardar: ' + e.message);
+      return;
     }
-  } catch(e) {}
+  }
+
+  // Notificar al gerente via Supabase
+  if (newEstado === 'atraso_gestion' || newEstado === 'atraso') {
+    notificarGerenteGestion(c, motivo + ' | Compromiso: ' + compromiso + ' | Contacto: ' + contacto);
+  }
 
   closeModal();
   renderAll();
   showToast('📋 Gestión registrada — notificado a gerencia');
 }
 
-function resolverMora(id, idx) {
-  var saved = dbLoad() || [];
-  saved = saved.map(function(c) {
-    if (c.id == id && c.mora && c.mora[idx]) c.mora[idx].resuelta = true;
-    return c;
-  });
-  dbSave(saved);
-  allClients = saved.map(enrich);
+async function resolverMora(id, idx) {
+  var c = allClients.find(function(x){ return x.id == id; });
+  if (!c || !c.mora || !c.mora[idx]) return;
+  c.mora[idx].resuelta = true;
+  var ci = allClients.indexOf(c);
+  allClients[ci] = enrich(c);
+
+  if (sbClient) {
+    try {
+      var r = await sbClient.from('clientes').update({ mora_json: JSON.stringify(c.mora) }).eq('id', id);
+      if (r.error) throw r.error;
+    } catch(e) {
+      console.warn('[SB] resolverMora:', e.message);
+      showToast('⚠️ Error al guardar: ' + e.message);
+      return;
+    }
+  }
+
   closeModal();
   renderAll();
   openMoraModal(id);
@@ -1856,100 +1768,87 @@ function openAddModal() {
   setTimeout(calcCuota, 50);
 }
 
-function addClient() {
+async function addClient() {
   var nombre  = document.getElementById('nNombre').value.trim();
   var email   = document.getElementById('nEmail').value.trim();
   var total   = parseFloat(document.getElementById('nTotal').value) || 0;
   var cuotas  = parseInt(document.getElementById('nCuotas').value) || 10;
   if (!nombre || !email) { alert('Nombre y email son obligatorios'); return; }
+  if (!_currentProfile) { showToast('⚠️ Sesión no cargada. Recargá la página.'); return; }
 
   var newClient = {
-    id: Date.now(),
-    nombre:   nombre,
-    email:    email,
-    password: document.getElementById('nPass').value,
-    documento:document.getElementById('nDoc').value,
-    telefono1:document.getElementById('nTel1').value.trim(),
-    telefono2:document.getElementById('nTel2').value.trim(),
-    domicilio: document.getElementById('nDomicilio').value.trim(),
-    destino:  document.getElementById('nDest').value,
-    paquete:  document.getElementById('nPkg').value,
-    personas: document.getElementById('nPersonas').value || '2',
-    noches:   '7',
-    fecha_viaje: document.getElementById('nFecha').value,
-    total_usd:   total,
-    cuotas_total:cuotas,
+    nombre:        nombre,
+    email:         email,
+    documento:     document.getElementById('nDoc').value,
+    telefono:      document.getElementById('nTel1').value.trim(),
+    destino:       document.getElementById('nDest').value,
+    paquete:       document.getElementById('nPkg').value,
+    fecha_viaje:   document.getElementById('nFecha').value,
+    total_usd:     total,
+    cuotas_total:  cuotas,
     cuotas_pagadas: 0,
-    monto_cuota: total > 0 ? (total / cuotas).toFixed(0) : 0,
-    estado:   'activo',
-    contrato_url:'', voucher_url:''
+    monto_cuota:   total > 0 ? parseFloat((total / cuotas).toFixed(2)) : 0,
+    estado:        'activo',
+    seller_id:     _currentProfile.id,
+    notas:         ''
   };
-  procesarReferidoNuevoCliente(newClient);
-  // [SUPABASE] Guardar en Supabase + localStorage
-  if (sbClient) {
-    sbClient.from('clientes').insert([newClient]).then(function(r) {
-      if (r.error) { console.warn('[SB] addClient:', r.error.message); }
-    });
+
+  if (!sbClient) { showToast('❌ Sin conexión a Supabase'); return; }
+  try {
+    var r = await sbClient.from('clientes').insert([newClient]).select().single();
+    if (r.error) throw r.error;
+    var inserted = enrich(r.data);
+    allClients.push(inserted);
+    // Procesar referido si se ingresó código
+    procesarReferidoNuevoCliente(inserted);
+    closeModal();
+    renderAll();
+    showToast('✅ Cliente ' + nombre + ' agregado');
+  } catch(e) {
+    console.warn('[SB] addClient:', e.message);
+    showToast('⚠️ Error al agregar cliente: ' + e.message);
   }
-  allClients.push(enrich(newClient));
-  dbSave(allClients);
-  closeModal();
-  renderAll();
-  showToast('✅ Cliente ' + nombre + ' agregado — puede ingresar con: ' + email);
 }
 
-// ══════════════════════════════════════════════════════
-//  SETUP
-// ══════════════════════════════════════════════════════
-function saveAdminApi() {
-  var url = document.getElementById('adminApiInput').value.trim();
-  if (!url) return;
-  localStorage.setItem('luazul_admin_api', url);
-  API_URL = url;
-  alert('✅ URL guardada.');
-  closeSetup();
+function syncData() {
+  showToast('⏳ Sincronizando...');
+  loadClients();
 }
-function closeSetup() { document.getElementById('setupWrap').style.display = 'none'; }
 
 
 // ─── SECTION SWITCHER ─────────────────────────────────────────────────────
 
-// ── MIS COMISIONES (ASESOR/ADMIN) ─────────────────────
-function renderMisComisionesAdmin(){
+// ── MIS COMISIONES (ASESOR) — datos desde staff_profiles en Supabase ──
+async function renderMisComisionesAdmin(){
   var el = document.getElementById('misComisionesSection');
   if(!el) return;
 
-  // Matchear el asesor en los datos del CEO por contraseña
-  var vendedores = JSON.parse(localStorage.getItem('luazul_ceo_vendedores') || '[]');
-  var yo = vendedores.find(function(v){ return v.password === ADMIN_PASS; });
-
-  if(!yo){
-    el.innerHTML = '<div style="text-align:center;padding:50px;color:var(--muted);">'
-      + '<div style="font-size:2rem;margin-bottom:12px;">💰</div>'
-      + '<div style="font-weight:700;margin-bottom:6px;">Sin datos de comisión</div>'
-      + '<div style="font-size:.8rem;">El CEO aún no configuró tu perfil de pago. Consultale cuando quieras.</div>'
-      + '</div>';
+  if (!sbClient || !_currentProfile) {
+    el.innerHTML = '<div style="text-align:center;padding:50px;color:var(--muted);"><div style="font-size:2rem;margin-bottom:12px;">💰</div><div style="font-weight:700;margin-bottom:6px;">Sin datos de comisión</div><div style="font-size:.8rem;">No se encontró tu perfil. Intentá recargando la página.</div></div>';
     return;
   }
 
-  var comps = yo.comprobantes || [];
+  var yo = _currentProfile;
+  var comps = [];
+  try {
+    var parsed = yo.comprobantes_json ? JSON.parse(yo.comprobantes_json) : [];
+    if (Array.isArray(parsed)) comps = parsed;
+  } catch(e) {}
 
-  // ── Datos bancarios
   var cbuBlock = '<div style="background:rgba(74,222,128,.07);border:1px solid rgba(74,222,128,.2);border-radius:14px;padding:16px 20px;margin-bottom:20px;display:flex;align-items:center;gap:16px;">'
     + '<span style="font-size:1.6rem;">🏦</span>'
     + '<div style="flex:1;">'
     + '<div style="font-size:.62rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:rgba(74,222,128,.7);margin-bottom:4px;">Tu CBU / Alias registrado</div>'
     + (yo.cbu
         ? '<div style="font-family:monospace;font-size:.95rem;font-weight:700;color:#4ade80;">' + yo.cbu + '</div>'
-        : '<div style="font-size:.82rem;color:var(--muted);">No cargado aún — pedile al CEO que lo complete</div>')
+        : '<div style="font-size:.82rem;color:var(--muted);">No cargado aún — consultá al CEO para que lo complete</div>')
     + '</div>'
     + '<div style="text-align:right;">'
     + '<div style="font-size:.62rem;color:var(--muted);margin-bottom:2px;">Asesor</div>'
-    + '<div style="font-size:.85rem;font-weight:700;">' + yo.nombre + '</div>'
+    + '<div style="font-size:.85rem;font-weight:700;">' + yo.nombre + ' ' + (yo.apellido || '') + '</div>'
     + '</div>'
     + '</div>';
 
-  // ── Comprobantes
   var compsHTML;
   if(comps.length === 0){
     compsHTML = '<div style="text-align:center;padding:36px;background:rgba(255,255,255,.02);border:1px dashed rgba(255,255,255,.1);border-radius:14px;color:var(--muted);">'
@@ -1987,10 +1886,11 @@ function renderMisComisionesAdmin(){
 }
 
 function verCompAdmin(idx){
-  var vendedores = JSON.parse(localStorage.getItem('luazul_ceo_vendedores') || '[]');
-  var yo = vendedores.find(function(v){ return v.password === ADMIN_PASS; });
-  if(!yo || !yo.comprobantes || !yo.comprobantes[idx]) return;
-  var comp = yo.comprobantes[idx];
+  if(!_currentProfile) return;
+  var comps = [];
+  try { comps = JSON.parse(_currentProfile.comprobantes_json || '[]'); } catch(e) {}
+  var comp = comps[idx];
+  if(!comp) return;
   var w = window.open('','_blank');
   if(comp.tipo && comp.tipo.indexOf('image') === 0){
     w.document.write('<img src="' + comp.data + '" style="max-width:100%;" />');
@@ -2032,27 +1932,132 @@ function showSection(name) {
   }
 }
 
-// ─── REFERIDOS HELPERS ────────────────────────────────────────────────────
-function getAllReferidos() {
+// ─── REFERIDOS — Supabase tabla: referidos (schema master) ───────────────
+// cliente_id = el cliente existente que dio el referido
+// referido_nombre / referido_email / referido_tel = la persona referida
+// vendedor_id = el asesor que registra
+
+async function getAllReferidos() {
+  if (!sbClient || !_currentProfile) return [];
   try {
-    var raw = localStorage.getItem('luazul_referidos_all');
-    if (raw) return JSON.parse(raw);
-  } catch(e) {}
-  return [];
-}
-function saveAllReferidos(refs) {
-  try { localStorage.setItem('luazul_referidos_all', JSON.stringify(refs)); } catch(e) {}
+    var r = await sbClient
+      .from('referidos')
+      .select('*, cliente:clientes(nombre, email)')
+      .eq('vendedor_id', _currentProfile.id)
+      .order('created_at', { ascending: false });
+    return r.data || [];
+  } catch(e) { console.warn('[SB] getAllReferidos:', e.message); return []; }
 }
 
-// ── REFERIDOS DESDE ADMIN ────────────────────────────────────────────────────
+// Abrir modal para cargar referido desde la fila de un cliente existente
+function abrirCargaReferido(clientId) {
+  var c = allClients.find(function(x){ return x.id == clientId; });
+  if (!c) return;
+  var codigoActual = 'LUA-' + c.nombre.split(' ')[0].toUpperCase();
+
+  document.getElementById('modalBox').innerHTML =
+    '<div class="modal-head">'
+    + '<div><h2>🎁 Cargar Referido</h2><p style="font-size:.8rem;color:rgba(180,200,240,.6);">' + c.nombre + ' · ' + c.email + '</p></div>'
+    + '<button class="modal-close" onclick="closeModal()">✕</button></div>'
+    + '<div class="modal-body">'
+    + '<div style="background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.2);border-radius:12px;padding:14px;margin-bottom:16px;">'
+    + '<div style="font-size:.7rem;color:#fbbf24;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Código de referido de este cliente</div>'
+    + '<div style="font-size:1.15rem;font-weight:800;font-family:monospace;color:#fcd34d;">' + codigoActual + '</div>'
+    + '<div style="font-size:.72rem;color:rgba(200,220,255,.45);margin-top:4px;">Este código lo comparte el cliente con sus conocidos</div>'
+    + '</div>'
+    + '<div style="display:flex;flex-direction:column;gap:12px;">'
+    + '<div><label class="m-label">Nombre del referido *</label>'
+    + '<input class="edit-input" id="rNombre" placeholder="Ej: María García" /></div>'
+    + '<div><label class="m-label">Email del referido</label>'
+    + '<input class="edit-input" id="rEmail" type="email" placeholder="maria@email.com" /></div>'
+    + '<div><label class="m-label">Teléfono del referido</label>'
+    + '<input class="edit-input" id="rTel" placeholder="Ej: +54 9 297 555-1234" /></div>'
+    + '<div><label class="m-label">Notas (opcional)</label>'
+    + '<input class="edit-input" id="rNotas" placeholder="Ej: Interesado en escapada en pareja" /></div>'
+    + '</div>'
+    + '<div style="font-size:.76rem;color:rgba(200,220,255,.45);margin-top:12px;">Al guardar, el referido aparecerá en el historial y en el panel del cliente.</div>'
+    + '</div>'
+    + '<div class="modal-actions">'
+    + '<button class="m-btn primary" onclick="confirmarCargaReferido(\'' + clientId + '\')" style="background:linear-gradient(135deg,#b45309,#f59e0b);color:#000;">💾 Registrar referido</button>'
+    + '<button class="m-btn ghost" onclick="closeModal()">Cancelar</button>'
+    + '</div>';
+  document.getElementById('modal').classList.add('open');
+}
+
+async function confirmarCargaReferido(clientId) {
+  var nombre = (document.getElementById('rNombre') || {}).value.trim();
+  if (!nombre) { showToast('⚠️ El nombre del referido es obligatorio'); return; }
+  var c = allClients.find(function(x){ return x.id == clientId; });
+  if (!c || !sbClient || !_currentProfile) return;
+
+  try {
+    var r = await sbClient.from('referidos').insert([{
+      vendedor_id:     _currentProfile.id,
+      cliente_id:      c.id,
+      referido_nombre: nombre,
+      referido_email:  (document.getElementById('rEmail') || {}).value.trim() || null,
+      referido_tel:    (document.getElementById('rTel') || {}).value.trim() || null,
+      notas:           (document.getElementById('rNotas') || {}).value.trim() || null,
+      estado:          'pendiente'
+    }]);
+    if (r.error) throw r.error;
+    closeModal();
+    showToast('✅ Referido registrado — visible en el panel de ' + c.nombre);
+  } catch(e) {
+    console.warn('[SB] confirmarCargaReferido:', e.message);
+    showToast('⚠️ Error al registrar referido: ' + e.message);
+  }
+}
+
+async function guardarReferidoDesdeAdmin(clientId) {
+  var c = allClients.find(function(x){ return x.id == clientId; });
+  if (!c) return;
+  var nuevoEmail = (document.getElementById('refNuevoEmail') || {}).value.trim();
+  if (!nuevoEmail) { showToast('⚠️ Ingresá el email del nuevo cliente'); return; }
+  if (!sbClient || !_currentProfile) return;
+
+  var nuevoCliente = allClients.find(function(x){ return x.email.toLowerCase() === nuevoEmail.toLowerCase(); });
+  try {
+    var r = await sbClient.from('referidos').insert([{
+      vendedor_id:     _currentProfile.id,
+      cliente_id:      c.id,
+      referido_nombre: nuevoCliente ? nuevoCliente.nombre : nuevoEmail,
+      referido_email:  nuevoEmail,
+      estado:          'pendiente'
+    }]);
+    if (r.error) throw r.error;
+    closeModal();
+    showToast('✅ Referido registrado — visible en panel de ' + c.nombre);
+  } catch(e) {
+    console.warn('[SB] guardarReferidoDesdeAdmin:', e.message);
+    showToast('⚠️ Error al registrar referido: ' + e.message);
+  }
+}
+
+async function procesarReferidoNuevoCliente(nuevoCliente) {
+  var codigoRef = (document.getElementById('nRefCodigo') || {}).value.trim();
+  if (!codigoRef || !sbClient || !_currentProfile) return;
+  var referidor = allClients.find(function(c) {
+    var code = 'LUA-' + c.nombre.split(' ')[0].toUpperCase();
+    return code === codigoRef.toUpperCase() || (c.refCode && c.refCode.toUpperCase() === codigoRef.toUpperCase());
+  });
+  if (!referidor) return;
+  try {
+    await sbClient.from('referidos').insert([{
+      vendedor_id:     _currentProfile.id,
+      cliente_id:      referidor.id,
+      referido_nombre: nuevoCliente.nombre,
+      referido_email:  nuevoCliente.email,
+      estado:          'pendiente'
+    }]);
+  } catch(e) { console.warn('[SB] procesarReferidoNuevoCliente:', e.message); }
+}
 
 function buscarReferidor(codigo) {
   var info = document.getElementById('nRefInfo');
   if (!info) return;
   if (!codigo || codigo.length < 4) { info.textContent = ''; return; }
-  // Search in all clients for a matching referido code (LUA-NOMBRE format)
-  var db = dbLoad() || [];
-  var match = db.find(function(c) {
+  var match = allClients.find(function(c) {
     var code = 'LUA-' + c.nombre.split(' ')[0].toUpperCase();
     return code === codigo.toUpperCase() || (c.refCode && c.refCode.toUpperCase() === codigo.toUpperCase());
   });
@@ -2065,215 +2070,139 @@ function buscarReferidor(codigo) {
   }
 }
 
-function abrirCargaReferido(clientId) {
-  var c = allClients.find(function(x){ return x.id == clientId; });
-  if (!c) return;
-  var codigoActual = c.refCode || ('LUA-' + c.nombre.split(' ')[0].toUpperCase());
+// Guardar referido desde el formulario manual de la sección Referidos
+async function guardarReferido() {
+  var nombre  = (document.getElementById('refNombre').value  || '').trim();
+  var email   = (document.getElementById('refEmail').value   || '').trim().toLowerCase();
+  var por     = (document.getElementById('refPor').value     || '').trim().toLowerCase();
+  var tel     = (document.getElementById('refTel')  ? document.getElementById('refTel').value.trim() : '');
+  if (!nombre || !por) { alert('Nombre del referido y email del cliente que refirió son obligatorios.'); return; }
+  if (!sbClient || !_currentProfile) { showToast('❌ Sin sesión activa'); return; }
 
-  var modalHtml = '<div class="modal-head">'
-    + '<div><h2>\xf0\x9f\x8e\x81 Cargar Referido</h2><p>' + c.nombre + ' \xc2\xb7 ' + c.email + '</p></div>'
-    + '<button class="modal-close" onclick="closeModal()">✕</button></div>'
-    + '<div class="modal-body">'
-    + '<div style="background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.2);border-radius:12px;padding:16px;margin-bottom:16px;">'
-    + '<div style="font-size:.7rem;color:#fbbf24;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">C\xc3\xb3digo de referido de este cliente</div>'
-    + '<div style="font-size:1.2rem;font-weight:800;font-family:monospace;color:#fcd34d;">' + codigoActual + '</div>'
-    + '<div style="font-size:.74rem;color:rgba(200,220,255,.5);margin-top:4px;">Este c\xc3\xb3digo lo comparte el cliente con sus conocidos</div>'
-    + '</div>'
-    + '<div class="m-item" style="grid-column:span 2;">'
-    + '<div class="m-label">Email del nuevo cliente que ingres\xc3\xb3 por este referido</div>'
-    + '<input class="edit-input" id="refNuevoEmail" placeholder="nuevo@email.com" />'
-    + '</div>'
-    + '<div style="margin-top:12px;font-size:.78rem;color:rgba(200,220,255,.55);">Al guardar, el referido aparecer\xc3\xa1 autom\xc3\xa1ticamente en el panel del cliente referidor.</div>'
-    + '</div>'
-    + '<div class="modal-actions">'
-    + '<button class="m-btn primary" onclick="guardarReferidoDesdeAdmin(' + clientId + ')" style="background:linear-gradient(135deg,#b45309,#f59e0b);">\xf0\x9f\x92\xbe Registrar referido</button>'
-    + '<button class="m-btn ghost" onclick="closeModal()">Cancelar</button>'
+  // Buscar cliente referidor por email
+  var referidor = allClients.find(function(c){ return c.email.toLowerCase() === por; });
+  if (!referidor) { showToast('⚠️ No se encontró un cliente con ese email en tu cartera'); return; }
+
+  try {
+    var r = await sbClient.from('referidos').insert([{
+      vendedor_id:     _currentProfile.id,
+      cliente_id:      referidor.id,
+      referido_nombre: nombre,
+      referido_email:  email || null,
+      referido_tel:    tel || null,
+      estado:          'pendiente'
+    }]);
+    if (r.error) throw r.error;
+    document.getElementById('refNombre').value = '';
+    document.getElementById('refEmail').value  = '';
+    document.getElementById('refPor').value    = '';
+    if (document.getElementById('refTel')) document.getElementById('refTel').value = '';
+    showToast('✅ Referido guardado');
+    renderRefList();
+  } catch(e) {
+    console.warn('[SB] guardarReferido:', e.message);
+    showToast('⚠️ Error al guardar referido: ' + e.message);
+  }
+}
+
+async function renderRefList() {
+  var el = document.getElementById('refListAdmin');
+  if (!el) return;
+  el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted);font-size:.88rem;">⏳ Cargando...</div>';
+  var refs = await getAllReferidos();
+  if (refs.length === 0) {
+    el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted);font-size:.88rem;">No hay referidos cargados aún.</div>';
+    return;
+  }
+  var ESTADO_COLOR = { pendiente: '#f59e0b', convertido: '#22c55e', baja: '#ef4444' };
+  el.innerHTML = refs.map(function(r) {
+    var estadoCol = ESTADO_COLOR[r.estado] || '#60a5fa';
+    var referidorNombre = r.cliente ? r.cliente.nombre : '—';
+    return '<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:10px;flex-wrap:wrap;gap:8px;">'
+      + '<div>'
+        + '<div style="font-weight:600;font-size:.9rem;">' + r.referido_nombre + '</div>'
+        + '<div style="font-size:.77rem;color:var(--muted);margin-top:2px;">'
+        + (r.referido_email || '—') + (r.referido_tel ? ' · ' + r.referido_tel : '')
+        + ' · Ref. por: <strong style="color:#fbbf24;">' + referidorNombre + '</strong></div>'
+        + (r.notas ? '<div style="font-size:.72rem;color:rgba(180,200,240,.5);margin-top:2px;">📝 ' + r.notas + '</div>' : '')
+      + '</div>'
+      + '<div style="display:flex;align-items:center;gap:8px;">'
+        + '<span style="font-size:.74rem;font-weight:700;padding:3px 10px;border-radius:20px;background:rgba(0,0,0,.2);color:' + estadoCol + ';border:1px solid ' + estadoCol + '44;">' + (r.estado || 'pendiente') + '</span>'
+        + '<span style="font-size:.72rem;color:var(--muted);">' + (r.created_at ? r.created_at.slice(0,10) : '') + '</span>'
+        + '<button onclick="eliminarReferido(\'' + r.id + '\')" style="padding:3px 10px;border-radius:8px;background:rgba(239,68,68,.1);color:#fca5a5;border:1px solid rgba(239,68,68,.2);font-size:.72rem;cursor:pointer;">✕</button>'
+      + '</div>'
     + '</div>';
-  document.getElementById('modalBox').innerHTML = modalHtml;
-  document.getElementById('modal').classList.add('open');
+  }).join('');
 }
 
-function guardarReferidoDesdeAdmin(clientId) {
-  var c = allClients.find(function(x){ return x.id == clientId; });
-  if (!c) return;
-  var nuevoEmail = (document.getElementById('refNuevoEmail') || {}).value.trim();
-  if (!nuevoEmail) { showToast('⚠️ Ingresá el email del nuevo cliente'); return; }
-
-  var nuevoCliente = allClients.find(function(x){ return x.email.toLowerCase() === nuevoEmail.toLowerCase(); });
-  var refData = {
-    id: Date.now(),
-    nombre: nuevoCliente ? nuevoCliente.nombre : nuevoEmail,
-    email: nuevoEmail,
-    paquete: nuevoCliente ? nuevoCliente.paquete : '—',
-    estado: nuevoCliente ? nuevoCliente.estado : 'activo',
-    fecha: new Date().toLocaleDateString('es-AR')
-  };
-
-  // Save to client-specific referidos key
-  var KEY = 'luazul_referidos_' + c.email;
-  var refs = [];
-  try { refs = JSON.parse(localStorage.getItem(KEY) || '[]'); } catch(e){}
-  refs.push(refData);
-  localStorage.setItem(KEY, JSON.stringify(refs));
-
-  // Also save to global referidos
-  var allRefs = [];
-  try { allRefs = JSON.parse(localStorage.getItem('luazul_referidos_all') || '[]'); } catch(e){}
-  allRefs.push(Object.assign({}, refData, { referidorEmail: c.email, referidorNombre: c.nombre }));
-  localStorage.setItem('luazul_referidos_all', JSON.stringify(allRefs));
-
-  closeModal();
-  showToast('✅ Referido registrado — visible en panel de ' + c.nombre);
+async function eliminarReferido(id) {
+  if (!sbClient) return;
+  try {
+    await sbClient.from('referidos').delete().eq('id', id);
+    renderRefList();
+  } catch(e) { console.warn('[SB] eliminarReferido:', e.message); }
 }
 
-// También al crear nuevo cliente con código de referido
-function procesarReferidoNuevoCliente(nuevoCliente) {
-  var codigoRef = (document.getElementById('nRefCodigo') || {}).value.trim();
-  if (!codigoRef) return;
-  var db = dbLoad() || [];
-  var referidor = db.find(function(c) {
-    var code = 'LUA-' + c.nombre.split(' ')[0].toUpperCase();
-    return code === codigoRef.toUpperCase() || (c.refCode && c.refCode.toUpperCase() === codigoRef.toUpperCase());
-  });
-  if (!referidor) return;
-  var KEY = 'luazul_referidos_' + referidor.email;
-  var refs = [];
-  try { refs = JSON.parse(localStorage.getItem(KEY) || '[]'); } catch(e){}
-  refs.push({ id: Date.now(), nombre: nuevoCliente.nombre, email: nuevoCliente.email,
-    paquete: nuevoCliente.paquete, estado: 'activo', fecha: new Date().toLocaleDateString('es-AR') });
-  localStorage.setItem(KEY, JSON.stringify(refs));
-  var allRefs = [];
-  try { allRefs = JSON.parse(localStorage.getItem('luazul_referidos_all') || '[]'); } catch(e){}
-  allRefs.push({ id: Date.now(), nombre: nuevoCliente.nombre, email: nuevoCliente.email,
-    paquete: nuevoCliente.paquete, estado: 'activo', fecha: new Date().toLocaleDateString('es-AR'),
-    referidorEmail: referidor.email, referidorNombre: referidor.nombre });
-  localStorage.setItem('luazul_referidos_all', JSON.stringify(allRefs));
-}
+// ── CUENTAS DE PAGO — Supabase tabla: staff_profiles (campo cbu) ──────────
+// Las cuentas de cobro del asesor quedan en su propio perfil (campo cbu).
+// Esta sección muestra su CBU/alias y permite cargarlo si no está.
 
-// ── CUENTAS DE PAGO ──────────────────────────────────────────────────────────
-function getCuentasPago() {
-  try { return JSON.parse(localStorage.getItem('luazul_cuentas_pago') || '[]'); }
-  catch(e) { return []; }
-}
-
-function saveCuentasPago(arr) {
-  localStorage.setItem('luazul_cuentas_pago', JSON.stringify(arr));
-}
-
-function guardarCuenta() {
+async function guardarCuenta() {
   var alias   = (document.getElementById('ctaAlias')   || {}).value || '';
   var cbu     = (document.getElementById('ctaCbu')     || {}).value || '';
   var titular = (document.getElementById('ctaTitular') || {}).value || '';
   var banco   = (document.getElementById('ctaBanco')   || {}).value || '';
 
-  if (!alias && !cbu) {
-    alert('Completá al menos el Alias o el CBU/CVU.'); return;
+  if (!alias && !cbu) { alert('Completá al menos el Alias o el CBU/CVU.'); return; }
+  if (!sbClient || !_currentProfile) { showToast('❌ Sin sesión activa'); return; }
+
+  var cbuStr = [banco ? banco + ':' : '', titular ? titular + ' — ' : '', cbu || alias].filter(Boolean).join('').trim();
+
+  try {
+    var r = await sbClient.from('staff_profiles')
+      .update({ cbu: cbuStr })
+      .eq('id', _currentProfile.id);
+    if (r.error) throw r.error;
+    _currentProfile.cbu = cbuStr;
+    ['ctaAlias','ctaCbu','ctaTitular','ctaBanco'].forEach(function(id){
+      var el = document.getElementById(id); if(el) el.value = '';
+    });
+    renderCuentasList();
+    showToast('✅ Cuenta guardada en tu perfil');
+  } catch(e) {
+    console.warn('[SB] guardarCuenta:', e.message);
+    showToast('⚠️ Error al guardar: ' + e.message);
   }
-
-  var cuentas = getCuentasPago();
-  cuentas.push({ alias: alias.trim(), cbu: cbu.trim(), titular: titular.trim(), banco: banco.trim() });
-  saveCuentasPago(cuentas);
-
-  // Clear form
-  ['ctaAlias','ctaCbu','ctaTitular','ctaBanco'].forEach(function(id){
-    var el = document.getElementById(id); if(el) el.value = '';
-  });
-
-  renderCuentasList();
 }
 
-function eliminarCuenta(idx) {
-  var cuentas = getCuentasPago();
-  cuentas.splice(idx, 1);
-  saveCuentasPago(cuentas);
-  renderCuentasList();
+function eliminarCuenta() {
+  if (!sbClient || !_currentProfile) return;
+  if (!confirm('¿Eliminar tu CBU/alias registrado?')) return;
+  sbClient.from('staff_profiles').update({ cbu: null }).eq('id', _currentProfile.id)
+    .then(function(r) {
+      if (r.error) { showToast('⚠️ Error al eliminar'); return; }
+      _currentProfile.cbu = null;
+      renderCuentasList();
+      showToast('🗑 CBU eliminado');
+    });
 }
 
 function renderCuentasList() {
   var el = document.getElementById('cuentasList');
   if (!el) return;
-  var cuentas = getCuentasPago();
-  if (!cuentas.length) {
+  if (!_currentProfile || !_currentProfile.cbu) {
     el.innerHTML = '<div style="text-align:center;padding:30px;color:rgba(200,220,255,.4);font-size:.85rem;">No hay cuentas cargadas aún.<br>Agregá la primera usando el formulario de arriba.</div>';
     return;
   }
-  el.innerHTML = cuentas.map(function(ct, i) {
-    return '<div style="background:rgba(52,211,153,.05);border:1px solid rgba(52,211,153,.15);border-radius:12px;padding:16px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">'
-      + '<div style="flex:1;">'
-      +   '<div style="font-weight:700;color:#34d399;font-size:.9rem;margin-bottom:4px;">🏦 ' + (ct.banco || 'Cuenta ' + (i+1)) + '</div>'
-      +   (ct.titular ? '<div style="font-size:.78rem;color:#e2e8f0;margin-bottom:6px;">Titular: ' + ct.titular + '</div>' : '')
-      +   '<div style="font-size:.75rem;color:rgba(200,220,255,.6);">Alias: <strong style="color:#a5f3fc;font-family:monospace;">' + (ct.alias || '—') + '</strong></div>'
-      +   '<div style="font-size:.75rem;color:rgba(200,220,255,.6);margin-top:2px;">CBU/CVU: <strong style="color:#a5f3fc;font-family:monospace;">' + (ct.cbu || '—') + '</strong></div>'
-      + '</div>'
-      + '<button onclick="eliminarCuenta(' + i + ')" style="padding:5px 10px;background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.3);color:#fca5a5;border-radius:7px;font-size:.72rem;cursor:pointer;white-space:nowrap;">🗑 Eliminar</button>'
-      + '</div>';
-  }).join('');
-}
-
-function guardarReferido() {
-  var nombre  = (document.getElementById('refNombre').value  || '').trim();
-  var email   = (document.getElementById('refEmail').value   || '').trim().toLowerCase();
-  var por     = (document.getElementById('refPor').value     || '').trim().toLowerCase();
-  var paquete = document.getElementById('refPaquete').value;
-  if (!nombre || !email || !por) { alert('Completá todos los campos.'); return; }
-
-  var refs = getAllReferidos();
-  var nuevo = {
-    id: Date.now(),
-    nombre: nombre,
-    email: email,
-    referidoPor: por,
-    paquete: paquete,
-    estado: 'activo',
-    fecha: new Date().toISOString().slice(0,10)
-  };
-  refs.push(nuevo);
-  saveAllReferidos(refs);
-
-  // Also update the client's referidos key so panel_cliente can read it
-  var clientKey = 'luazul_referidos_' + por;
-  try {
-    var clientRefs = JSON.parse(localStorage.getItem(clientKey) || '[]');
-    clientRefs.push({ nombre: nombre, email: email, estado: 'activo', fecha: nuevo.fecha, paquete: paquete });
-    localStorage.setItem(clientKey, JSON.stringify(clientRefs));
-  } catch(e) {}
-
-  // Clear form
-  document.getElementById('refNombre').value = '';
-  document.getElementById('refEmail').value  = '';
-  document.getElementById('refPor').value    = '';
-  showToast('✅ Referido guardado');
-  renderRefList();
-}
-
-function renderRefList() {
-  var el = document.getElementById('refListAdmin');
-  if (!el) return;
-  var refs = getAllReferidos();
-  if (refs.length === 0) {
-    el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted);font-size:.88rem;">No hay referidos cargados aún.</div>';
-    return;
-  }
-  el.innerHTML = refs.slice().reverse().map(function(r) {
-    return '<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:10px;flex-wrap:wrap;gap:8px;">'
-      + '<div>'
-        + '<div style="font-weight:600;font-size:.9rem;">' + r.nombre + '</div>'
-        + '<div style="font-size:.77rem;color:var(--muted);margin-top:2px;">' + r.email + ' · ' + r.paquete + ' · Ref. por: <strong style="color:#7eb8ff;">' + r.referidoPor + '</strong></div>'
-      + '</div>'
-      + '<div style="display:flex;align-items:center;gap:8px;">'
-        + '<span style="font-size:.75rem;font-weight:700;padding:3px 10px;border-radius:20px;background:rgba(16,185,129,.1);color:#6ee7b7;">' + r.estado + '</span>'
-        + '<span style="font-size:.73rem;color:var(--muted);">' + r.fecha + '</span>'
-        + '<button onclick="eliminarReferido(' + r.id + ')" style="padding:3px 10px;border-radius:8px;background:rgba(239,68,68,.1);color:#fca5a5;border:1px solid rgba(239,68,68,.2);font-size:.73rem;cursor:pointer;">✕</button>'
-      + '</div>'
+  el.innerHTML = '<div style="background:rgba(52,211,153,.05);border:1px solid rgba(52,211,153,.15);border-radius:12px;padding:16px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">'
+    + '<div style="flex:1;">'
+    +   '<div style="font-weight:700;color:#34d399;font-size:.9rem;margin-bottom:4px;">🏦 Tu cuenta registrada</div>'
+    +   '<div style="font-size:.78rem;color:#a5f3fc;font-family:monospace;">' + _currentProfile.cbu + '</div>'
+    + '</div>'
+    + '<button onclick="eliminarCuenta()" style="padding:5px 10px;background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.3);color:#fca5a5;border-radius:7px;font-size:.72rem;cursor:pointer;white-space:nowrap;">🗑 Eliminar</button>'
     + '</div>';
-  }).join('');
 }
 
-function eliminarReferido(id) {
-  var refs = getAllReferidos().filter(function(r){ return r.id !== id; });
-  saveAllReferidos(refs);
-  renderRefList();
-}
 
 // ════════════════════════════════════════════════════════
 // FUNCIÓN 2: GENERADOR DE CONTRATOS PDF
@@ -2402,18 +2331,18 @@ function abrirRegistroPago(clientId) {
     + '</div>'
 
     + '<div style="display:flex;gap:10px;">'
-    + '<button onclick="confirmarPago(' + clientId + ')" style="flex:1;padding:13px;background:linear-gradient(135deg,#1a5bb5,#0B3D91);border:1px solid rgba(100,160,255,.3);border-radius:50px;font-family:inherit;font-size:.85rem;font-weight:700;color:white;cursor:pointer;">✅ Confirmar Pago</button>'
+    + '<button onclick="enviarComprobante(\'' + clientId + '\')" style="flex:1;padding:13px;background:linear-gradient(135deg,#1a5bb5,#0B3D91);border:1px solid rgba(100,160,255,.3);border-radius:50px;font-family:inherit;font-size:.85rem;font-weight:700;color:white;cursor:pointer;">✅ Confirmar Pago</button>'
     + '<button onclick="closePayModal()" style="padding:13px 20px;background:rgba(100,160,255,.1);border:1px solid rgba(100,160,255,.2);border-radius:50px;font-family:inherit;font-size:.85rem;font-weight:700;color:rgba(200,220,255,.7);cursor:pointer;">Cancelar</button>'
     + '</div>'
     + '</div>';
   document.body.appendChild(modal);
 }
 
-function enviarComprobante(clientId) {
-  var cuotaNum = parseInt(document.getElementById('pCuotaNum').value);
-  var monto    = parseFloat(document.getElementById('pMonto').value);
-  var fecha    = document.getElementById('pFecha').value;
-  var obs      = document.getElementById('pObs').value.trim();
+async function enviarComprobante(clientId) {
+  var cuotaNum  = parseInt(document.getElementById('pCuotaNum').value);
+  var monto     = parseFloat(document.getElementById('pMonto').value);
+  var fecha     = document.getElementById('pFecha').value;
+  var obs       = document.getElementById('pObs').value.trim();
   var fileInput = document.getElementById('pFile');
 
   if (!cuotaNum || isNaN(monto) || monto <= 0) {
@@ -2422,44 +2351,47 @@ function enviarComprobante(clientId) {
 
   var c = allClients.find(function(x){ return x.id == clientId; });
   if (!c) return;
+  if (!sbClient) { showToast('❌ Sin conexión a Supabase'); return; }
 
-  function procesarEnvio(comprobanteUrl) {
-    // Guardar comprobante como PENDIENTE DE APROBACIÓN (no actualiza cuotas)
-    if (!c.comprobantes) c.comprobantes = {};
-    c.comprobantes['c' + cuotaNum] = {
-      cuota: cuotaNum,
-      monto: monto,
-      fecha: fecha,
-      obs: obs,
-      url: comprobanteUrl || '',
-      aprobado: false,          // ← PENDIENTE, el CEO debe aprobar
-      pendiente_aprobacion: true,
-      registrado: Date.now(),
-      registrado_por: 'asesor'
-    };
-    // NO se actualizan cuotas_pagadas — eso lo hace el CEO al aprobar
+  async function procesarEnvio(comprobanteUrl) {
+    try {
+      var asesorNombre = _currentProfile
+        ? (_currentProfile.nombre + ' ' + (_currentProfile.apellido || '')).trim()
+        : 'Asesor';
 
-    dbSave(allClients);
-    document.getElementById('payModal').remove();
+      // INSERT en tabla pagos — estado pendiente
+      var r = await sbClient.from('pagos').insert([{
+        cliente_id:       c.id,
+        cliente_nombre:   c.nombre,
+        vendedor_nombre:  asesorNombre,
+        numero_cuota:     cuotaNum,
+        monto_usd:        monto,
+        estado:           'pendiente',
+        fecha_pago:       fecha || new Date().toISOString().slice(0,10),
+        comprobante_url:  comprobanteUrl || null
+      }]);
+      if (r.error) throw r.error;
 
-    // Notificación para el CEO (queda en luazul_notifs)
-    var notifs = JSON.parse(localStorage.getItem('luazul_notifs') || '[]');
-    notifs.unshift({
-      type: 'pago_pendiente_aprobacion',
-      msg: '⏳ Comprobante enviado · ' + c.nombre + ' · Cuota ' + cuotaNum + ' · USD ' + monto + ' · Esperando aprobación CEO',
-      clientId: clientId,
-      cuota: cuotaNum,
-      monto: monto,
-      ts: Date.now(),
-      read: false
-    });
-    localStorage.setItem('luazul_notifs', JSON.stringify(notifs));
+      // Notificación para el CEO/gerente
+      await sbClient.from('notificaciones').insert([{
+        tipo:             'pago_pendiente',
+        mensaje:          'Asesor: ' + asesorNombre + ' — ' + c.nombre + ' · Cuota ' + cuotaNum + ' · USD ' + monto + ' · Esperando aprobación',
+        destinatario_rol: 'manager',
+        remitente_id:     _currentProfile.user_id,
+        cliente_id:       c.id || null,
+        datos_extra:      JSON.stringify({ cuota: cuotaNum, monto: monto }),
+        leida:            false
+      }]);
 
-    renderTable();
-    showToast('✅ Pago registrado · Cuota ' + cuotaNum + ' de ' + c.nombre);
+      document.getElementById('payModal').remove();
+      renderTable();
+      showToast('✅ Comprobante enviado · Cuota ' + cuotaNum + ' de ' + c.nombre);
+    } catch(e) {
+      console.warn('[SB] enviarComprobante:', e.message);
+      showToast('⚠️ Error al enviar comprobante: ' + e.message);
+    }
   }
 
-  // Leer el archivo como base64 si fue seleccionado
   if (fileInput.files && fileInput.files[0]) {
     var reader = new FileReader();
     reader.onload = function(e) { procesarEnvio(e.target.result); };
@@ -2469,31 +2401,59 @@ function enviarComprobante(clientId) {
   }
 }
 
-// Ver comprobantes de un cliente
-function verComprobantes(clientId) {
+// Ver comprobantes de un cliente — carga desde tabla pagos
+async function verComprobantes(clientId) {
   var c = allClients.find(function(x){ return x.id == clientId; });
-  if (!c || !c.comprobantes || Object.keys(c.comprobantes).length === 0) {
-    showToast('Sin comprobantes registrados para este cliente');
-    return;
-  }
-  var items = Object.values(c.comprobantes).sort(function(a,b){ return a.cuota - b.cuota; });
-  var html = '<h3 style="margin-bottom:16px;">📎 Comprobantes · ' + c.nombre + '</h3>'
-    + '<div style="display:flex;flex-direction:column;gap:10px;max-height:400px;overflow-y:auto;">';
-  items.forEach(function(p) {
-    html += '<div style="background:rgba(11,61,145,.2);border:1px solid rgba(100,160,255,.15);border-radius:12px;padding:12px 14px;">'
-      + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">'
-      + '<span style="font-weight:700;font-size:.85rem;">Cuota ' + p.cuota + ' · USD ' + p.monto + '</span>'
-      + '<span style="font-size:.7rem;color:rgba(200,220,255,.6);">' + (p.fecha||'—') + '</span>'
-      + '</div>'
-      + (p.obs ? '<div style="font-size:.75rem;color:rgba(200,220,255,.7);margin-bottom:6px;">' + p.obs + '</div>' : '')
-      + '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;">' + (p.url ? '<a href="' + p.url + '" target="_blank" style="font-size:.72rem;color:#7eb8ff;text-decoration:none;display:inline-flex;align-items:center;gap:4px;">📎 Ver comprobante</a>' : '<span style="font-size:.7rem;color:rgba(150,190,255,.4);">Sin imagen</span>') + (p.pendiente_aprobacion && !p.aprobado ? '<span style="font-size:.65rem;font-weight:700;padding:2px 10px;border-radius:10px;background:rgba(251,146,60,.12);border:1px solid rgba(251,146,60,.3);color:#fb923c;">⏳ Pendiente CEO</span>' : p.aprobado ? '<span style="font-size:.65rem;font-weight:700;padding:2px 10px;border-radius:10px;background:rgba(52,211,153,.12);border:1px solid rgba(52,211,153,.3);color:#34d399;">✅ Aprobado</span>' : '') + '</div>'
-      + '</div>';
-  });
-  html += '</div>';
-  var mbox = document.getElementById('mbox');
-  if (mbox) {
-    mbox.innerHTML = html + '<div style="margin-top:16px;"><button class="mbtn" onclick="closeModal()">Cerrar</button></div>';
-    document.getElementById('modal').classList.add('open');
+  if (!c) return;
+
+  document.getElementById('modalBox').innerHTML =
+    '<div class="modal-head"><div><h2>📎 Comprobantes · ' + c.nombre + '</h2></div>'
+    + '<button class="modal-close" onclick="closeModal()">✕</button></div>'
+    + '<div class="modal-body"><p style="text-align:center;padding:20px;">⏳ Cargando...</p></div>';
+  document.getElementById('modal').classList.add('open');
+
+  try {
+    var r = await sbClient.from('pagos')
+      .select('*')
+      .eq('cliente_id', clientId)
+      .order('numero_cuota');
+    var items = r.data || [];
+
+    if (items.length === 0) {
+      document.getElementById('modalBox').innerHTML =
+        '<div class="modal-head"><div><h2>📎 Comprobantes · ' + c.nombre + '</h2></div>'
+        + '<button class="modal-close" onclick="closeModal()">✕</button></div>'
+        + '<div class="modal-body"><p style="text-align:center;color:var(--muted);padding:30px;">Sin comprobantes registrados</p>'
+        + '<div class="modal-actions"><button class="m-btn ghost" onclick="closeModal()">Cerrar</button></div></div>';
+      return;
+    }
+
+    var rows = items.map(function(p) {
+      var estadoBadge = p.estado === 'aprobado'
+        ? '<span style="font-size:.65rem;font-weight:700;padding:2px 10px;border-radius:10px;background:rgba(52,211,153,.12);border:1px solid rgba(52,211,153,.3);color:#34d399;">✅ Aprobado</span>'
+        : p.estado === 'rechazado'
+        ? '<span style="font-size:.65rem;font-weight:700;padding:2px 10px;border-radius:10px;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);color:#fca5a5;">❌ Rechazado</span>'
+        : '<span style="font-size:.65rem;font-weight:700;padding:2px 10px;border-radius:10px;background:rgba(251,146,60,.12);border:1px solid rgba(251,146,60,.3);color:#fb923c;">⏳ Pendiente</span>';
+      return '<div style="background:rgba(11,61,145,.2);border:1px solid rgba(100,160,255,.15);border-radius:12px;padding:12px 14px;">'
+        + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">'
+        + '<span style="font-weight:700;font-size:.85rem;">Cuota ' + p.numero_cuota + ' · USD ' + p.monto_usd + '</span>'
+        + '<span style="font-size:.7rem;color:rgba(200,220,255,.6);">' + (p.fecha_pago ? p.fecha_pago.slice(0,10) : '—') + '</span>'
+        + '</div>'
+        + '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;">'
+        + (p.comprobante_url ? '<a href="' + p.comprobante_url + '" target="_blank" style="font-size:.72rem;color:#7eb8ff;text-decoration:none;">📎 Ver comprobante</a>' : '<span style="font-size:.7rem;color:rgba(150,190,255,.4);">Sin imagen</span>')
+        + estadoBadge
+        + '</div>'
+        + '</div>';
+    }).join('');
+
+    document.getElementById('modalBox').innerHTML =
+      '<div class="modal-head"><div><h2>📎 Comprobantes · ' + c.nombre + '</h2></div>'
+      + '<button class="modal-close" onclick="closeModal()">✕</button></div>'
+      + '<div class="modal-body" style="max-height:400px;overflow-y:auto;">' + rows + '</div>'
+      + '<div class="modal-actions"><button class="m-btn ghost" onclick="closeModal()">Cerrar</button></div>';
+  } catch(e) {
+    console.warn('[SB] verComprobantes:', e.message);
+    showToast('⚠️ Error al cargar comprobantes');
   }
 }
 
@@ -2553,7 +2513,7 @@ function mostrarPanelAlertas() {
       html += '<div style="background:' + bg + ';border:1px solid ' + color + '44;border-radius:12px;padding:12px 14px;display:flex;justify-content:space-between;align-items:center;gap:12px;">'
         + '<div><div style="font-size:.82rem;font-weight:700;color:' + color + ';">' + icon + ' ' + a.cliente + '</div>'
         + '<div style="font-size:.72rem;color:rgba(200,220,255,.7);margin-top:3px;">' + a.msg + '</div></div>'
-        + '<button onclick="enviarAlertaWhatsApp(' + a.clientId + ')" style="flex-shrink:0;padding:6px 12px;background:rgba(37,211,102,.15);border:1px solid rgba(37,211,102,.3);border-radius:8px;font-family:inherit;font-size:.65rem;font-weight:700;color:#25d366;cursor:pointer;white-space:nowrap;">💬 WhatsApp</button>'
+        + '<button onclick="enviarAlertaWhatsApp(\'' + a.clientId + '\')" style="flex-shrink:0;padding:6px 12px;background:rgba(37,211,102,.15);border:1px solid rgba(37,211,102,.3);border-radius:8px;font-family:inherit;font-size:.65rem;font-weight:700;color:#25d366;cursor:pointer;white-space:nowrap;">💬 WhatsApp</button>'
         + '</div>';
     });
     html += '</div>';
