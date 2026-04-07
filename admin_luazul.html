@@ -1775,45 +1775,38 @@ async function addClient() {
   var cuotas  = parseInt(document.getElementById('nCuotas').value) || 10;
   if (!nombre || !email) { alert('Nombre y email son obligatorios'); return; }
   if (!_currentProfile) { showToast('⚠️ Sesión no cargada. Recargá la página.'); return; }
-  if (!sbClient) { showToast('❌ Sin conexión a Supabase'); return; }
 
   var newClient = {
-    nombre:         nombre,
-    email:          email,
-    documento:      document.getElementById('nDoc').value,
-    telefono:       document.getElementById('nTel1').value.trim(),
-    destino:        document.getElementById('nDest').value,
-    paquete:        document.getElementById('nPkg').value,
-    fecha_viaje:    document.getElementById('nFecha').value,
-    total_usd:      total,
-    cuotas_total:   cuotas,
+    nombre:        nombre,
+    email:         email,
+    documento:     document.getElementById('nDoc').value.trim() || null,
+    telefono:      document.getElementById('nTel1').value.trim() || null,
+    destino:       document.getElementById('nDest').value || null,
+    paquete:       document.getElementById('nPkg').value || null,
+    fecha_viaje:   document.getElementById('nFecha').value || null,
+    total_usd:     total,
+    cuotas_total:  cuotas,
     cuotas_pagadas: 0,
-    monto_cuota:    total > 0 ? parseFloat((total / cuotas).toFixed(2)) : 0,
-    estado:         'activo',
-    seller_id:      _currentProfile.id,
-    region_id:      _currentProfile.region_id || null,
-    fecha_alta:     new Date().toISOString().slice(0,10),
-    mora_json:      '[]',
-    notas:          ''
+    monto_cuota:   total > 0 ? parseFloat((total / cuotas).toFixed(2)) : 0,
+    estado:        'activo',
+    seller_id:     _currentProfile.id,
+    notas:         ''
   };
 
-  var btn = document.querySelector('#modal .m-btn.primary');
-  if(btn){ btn.disabled = true; btn.textContent = '⏳ Guardando...'; }
-
+  if (!sbClient) { showToast('❌ Sin conexión a Supabase'); return; }
   try {
     var r = await sbClient.from('clientes').insert([newClient]).select().single();
     if (r.error) throw r.error;
     var inserted = enrich(r.data);
     allClients.push(inserted);
+    // Procesar referido si se ingresó código
     procesarReferidoNuevoCliente(inserted);
     closeModal();
     renderAll();
-    showToast('✅ Cliente ' + nombre + ' agregado en Supabase');
+    showToast('✅ Cliente ' + nombre + ' agregado');
   } catch(e) {
     console.warn('[SB] addClient:', e.message);
-    showToast('⚠️ Error: ' + (e.message || 'No se pudo guardar el cliente'));
-  } finally {
-    if(btn){ btn.disabled = false; btn.textContent = '✅ Agregar cliente'; }
+    showToast('⚠️ Error al agregar cliente: ' + e.message);
   }
 }
 
