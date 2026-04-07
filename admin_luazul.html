@@ -1770,43 +1770,76 @@ function openAddModal() {
 
 async function addClient() {
   var nombre  = document.getElementById('nNombre').value.trim();
-  var email   = document.getElementById('nEmail').value.trim();
+  var email   = document.getElementById('nEmail').value.trim().toLowerCase();
+  var pass    = document.getElementById('nPass').value.trim();
   var total   = parseFloat(document.getElementById('nTotal').value) || 0;
   var cuotas  = parseInt(document.getElementById('nCuotas').value) || 10;
-  if (!nombre || !email) { alert('Nombre y email son obligatorios'); return; }
+
+  if (!nombre || !email) { showToast('⚠️ Nombre y email son obligatorios'); return; }
+  if (!pass || pass.length < 6) { showToast('⚠️ La contraseña debe tener al menos 6 caracteres'); return; }
   if (!_currentProfile) { showToast('⚠️ Sesión no cargada. Recargá la página.'); return; }
-
-  var newClient = {
-    nombre:        nombre,
-    email:         email,
-    documento:     document.getElementById('nDoc').value.trim() || null,
-    telefono:      document.getElementById('nTel1').value.trim() || null,
-    destino:       document.getElementById('nDest').value || null,
-    paquete:       document.getElementById('nPkg').value || null,
-    fecha_viaje:   document.getElementById('nFecha').value || null,
-    total_usd:     total,
-    cuotas_total:  cuotas,
-    cuotas_pagadas: 0,
-    monto_cuota:   total > 0 ? parseFloat((total / cuotas).toFixed(2)) : 0,
-    estado:        'activo',
-    seller_id:     _currentProfile.id,
-    notas:         ''
-  };
-
   if (!sbClient) { showToast('❌ Sin conexión a Supabase'); return; }
+
+  // Deshabilitar botón mientras procesa
+  var btnGuardar = document.querySelector('#modal .m-btn.primary');
+  if (btnGuardar) { btnGuardar.disabled = true; btnGuardar.textContent = '⏳ Creando...'; }
+
   try {
+    // ── PASO 1: Crear usuario en Supabase Auth ──────────────────────────────
+    // Se usa un cliente separado para no cerrar la sesión del vendedor actual
+    var sbTemp = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
+    });
+
+    var authResult = await sbTemp.auth.signUp({ email: email, password: pass });
+
+    if (authResult.error) {
+      // Si el usuario ya existe en Auth, continuar igual — puede ser un reintento
+      if (!authResult.error.message.toLowerCase().includes('already registered')) {
+        throw new Error('Auth: ' + authResult.error.message);
+      }
+    }
+
+    var authUserId = authResult.data && authResult.data.user
+      ? authResult.data.user.id
+      : null;
+
+    // ── PASO 2: Insertar en tabla clientes ──────────────────────────────────
+    var newClient = {
+      nombre:         nombre,
+      email:          email,
+      user_id:        authUserId,   // FK a auth.users — permite el login
+      documento:      document.getElementById('nDoc').value.trim() || null,
+      telefono:       document.getElementById('nTel1').value.trim() || null,
+      destino:        document.getElementById('nDest').value || null,
+      paquete:        document.getElementById('nPkg').value || null,
+      fecha_viaje:    document.getElementById('nFecha').value || null,
+      total_usd:      total,
+      cuotas_total:   cuotas,
+      cuotas_pagadas: 0,
+      monto_cuota:    total > 0 ? parseFloat((total / cuotas).toFixed(2)) : 0,
+      estado:         'activo',
+      seller_id:      _currentProfile.id,
+      notas:          ''
+    };
+
     var r = await sbClient.from('clientes').insert([newClient]).select().single();
-    if (r.error) throw r.error;
+    if (r.error) throw new Error('DB: ' + r.error.message);
+
     var inserted = enrich(r.data);
     allClients.push(inserted);
-    // Procesar referido si se ingresó código
+
+    // ── PASO 3: Procesar referido si se ingresó código ──────────────────────
     procesarReferidoNuevoCliente(inserted);
+
     closeModal();
     renderAll();
-    showToast('✅ Cliente ' + nombre + ' agregado');
+    showToast('✅ Cliente ' + nombre + ' creado — puede ingresar al panel con su email y contraseña');
+
   } catch(e) {
     console.warn('[SB] addClient:', e.message);
-    showToast('⚠️ Error al agregar cliente: ' + e.message);
+    showToast('⚠️ Error al crear cliente: ' + e.message);
+    if (btnGuardar) { btnGuardar.disabled = false; btnGuardar.textContent = '✅ Agregar cliente'; }
   }
 }
 
