@@ -232,6 +232,15 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;back
     <!-- OVERVIEW -->
     <div class="tabpg active" id="tabpg-overview">
       <div class="stats-row" id="oStats"></div>
+
+      <!-- ── BOTÓN ALTA Y ASIGNACIÓN DE CLIENTE ── -->
+      <div style="margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+        <div style="font-size:.78rem;color:var(--muted);">Asigná un nuevo cliente directamente a uno de tus asesores</div>
+        <button class="mbtn gold" onclick="openAltaClienteGerente()" style="padding:11px 22px;font-size:.88rem;display:flex;align-items:center;gap:8px;">
+          ➕ Alta y Asignación de Cliente
+        </button>
+      </div>
+
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:22px;">
         <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:20px;">
           <h3 style="font-family:'Syne',sans-serif;font-size:.9rem;font-weight:800;margin-bottom:16px;">📈 Rendimiento por Vendedor</h3>
@@ -932,6 +941,221 @@ function verCompGerente(idx){
     w.document.write('<img src="' + comp.data + '" style="max-width:100%;" />');
   } else {
     w.document.write('<iframe src="' + comp.data + '" style="width:100%;height:100vh;border:0;"></iframe>');
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  ALTA Y ASIGNACIÓN DE CLIENTE — Panel Gerente
+//  Carga el cliente en Supabase Auth + tabla clientes
+//  seller_id = asesor seleccionado (de la región del gerente)
+// ══════════════════════════════════════════════════════════════════
+
+async function openAltaClienteGerente() {
+  var mbox = document.getElementById('mbox');
+  if (!mbox) return;
+
+  // Cargar asesores de la región del gerente (role_id = 2)
+  var regionIds = window._gerenteRegionIds || [];
+  var asesores  = [];
+
+  try {
+    var q = sbClient.from('staff_profiles').select('id, nombre, email').eq('role_id', 2).eq('activo', true);
+    if (regionIds.length > 0) q = q.in('region_id', regionIds);
+    var { data: vendData } = await q;
+    if (vendData) asesores = vendData;
+  } catch(e) {
+    console.warn('[SB] openAltaClienteGerente - asesores:', e.message);
+  }
+
+  var asesorOptions = asesores.length
+    ? asesores.map(function(v) {
+        return '<option value="' + v.id + '">' + v.nombre + ' — ' + (v.email || '') + '</option>';
+      }).join('')
+    : '<option value="">— Sin asesores en tu región —</option>';
+
+  mbox.innerHTML =
+    '<div class="mhead">'
+    + '<div><h2>➕ Alta y Asignación de Cliente</h2>'
+    + '<p style="font-size:.76rem;color:var(--muted);margin-top:3px;">El cliente quedará asignado al asesor seleccionado</p></div>'
+    + '<button class="mclose" onclick="closeModal()">✕</button>'
+    + '</div>'
+    + '<div class="mbody">'
+    + '<div class="mgrid">'
+
+    // Nombre
+    + '<div><div class="ml">Nombre completo *</div>'
+    + '<input class="min" id="gcNombre" placeholder="Ej: Juan Pérez"/></div>'
+
+    // Email
+    + '<div><div class="ml">Email *</div>'
+    + '<input class="min" id="gcEmail" placeholder="juan@email.com" type="email"/></div>'
+
+    // Contraseña
+    + '<div><div class="ml">Contraseña temporal *</div>'
+    + '<input class="min" id="gcPass" placeholder="Mínimo 6 caracteres" type="password"/></div>'
+
+    // Teléfono
+    + '<div><div class="ml">Teléfono</div>'
+    + '<input class="min" id="gcTel" placeholder="+54 9 11 1234-5678"/></div>'
+
+    // Documento
+    + '<div><div class="ml">Documento</div>'
+    + '<input class="min" id="gcDoc" placeholder="DNI 32.456.789"/></div>'
+
+    // Fecha de viaje
+    + '<div><div class="ml">Fecha de viaje</div>'
+    + '<input class="min" id="gcFecha" type="date"/></div>'
+
+    // Destino
+    + '<div><div class="ml">Destino</div>'
+    + '<select class="msel" id="gcDest">'
+    + '<option value="Cabo Frío, Brasil">🏖️ Cabo Frío</option>'
+    + '<option value="Arraial do Cabo, Brasil">🌊 Arraial do Cabo</option>'
+    + '<option value="Búzios, Brasil">⛵ Búzios</option>'
+    + '<option value="Río de Janeiro, Brasil">🌆 Río de Janeiro</option>'
+    + '</select></div>'
+
+    // Paquete
+    + '<div><div class="ml">Paquete</div>'
+    + '<select class="msel" id="gcPkg" onchange="gcCalcCuota()">'
+    + '<option value="Escapada en Pareja" data-price="870"  data-pers="2">Escapada en Pareja — USD 870</option>'
+    + '<option value="Paquete 4 Amigos"   data-price="1450" data-pers="4">Paquete 4 Amigos — USD 1.450</option>'
+    + '<option value="Paquete 6 Amigos"   data-price="1740" data-pers="6">Paquete 6 Amigos — USD 1.740</option>'
+    + '</select></div>'
+
+    // Cuotas
+    + '<div><div class="ml">Cuotas totales</div>'
+    + '<select class="msel" id="gcCuotas" onchange="gcCalcCuota()">'
+    + '<option value="6">6 cuotas</option>'
+    + '<option value="10" selected>10 cuotas</option>'
+    + '<option value="12">12 cuotas</option>'
+    + '<option value="18">18 cuotas</option>'
+    + '</select></div>'
+
+    // Resumen calculado
+    + '<div style="grid-column:span 2;background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.25);border-radius:10px;padding:12px 16px;display:flex;gap:20px;align-items:center;flex-wrap:wrap;">'
+    + '<div><div class="ml">Total del plan</div><div id="gcTotalDisplay" style="font-size:1.2rem;font-weight:900;color:var(--gold);">USD 870</div></div>'
+    + '<div style="width:1px;height:32px;background:var(--border);"></div>'
+    + '<div><div class="ml">Valor por cuota</div><div id="gcCuotaDisplay" style="font-size:1.2rem;font-weight:900;color:#60a5fa;">USD 87</div></div>'
+    + '<input type="hidden" id="gcTotal" value="870"/>'
+    + '</div>'
+
+    // Asesor asignado
+    + '<div style="grid-column:span 2;"><div class="ml">Asesor asignado *</div>'
+    + '<select class="msel" id="gcAsesor">' + asesorOptions + '</select>'
+    + (asesores.length === 0
+        ? '<div style="font-size:.74rem;color:#fca5a5;margin-top:5px;">⚠️ No hay asesores activos en tu región. El cliente quedará sin asesor asignado.</div>'
+        : '<div style="font-size:.74rem;color:var(--muted);margin-top:5px;">Solo se muestran asesores activos de tu región.</div>')
+    + '</div>'
+
+    + '</div>' // fin mgrid
+
+    + '<div class="mact">'
+    + '<button class="mbtn gold" id="gcBtnGuardar" onclick="saveClientFromManager()">✅ Crear y Asignar Cliente</button>'
+    + '<button class="mbtn ghost" onclick="closeModal()">Cancelar</button>'
+    + '</div>'
+    + '</div>'; // fin mbody
+
+  document.getElementById('modal').classList.add('open');
+  setTimeout(gcCalcCuota, 50);
+}
+
+// Calculador de cuota para el modal del gerente
+function gcCalcCuota() {
+  var pkgEl    = document.getElementById('gcPkg');
+  var cuotasEl = document.getElementById('gcCuotas');
+  if (!pkgEl || !cuotasEl) return;
+  var sel    = pkgEl.options[pkgEl.selectedIndex];
+  var price  = parseFloat(sel.getAttribute('data-price')) || 0;
+  var cuotas = parseInt(cuotasEl.value) || 10;
+  var cuota  = cuotas > 0 ? parseFloat((price / cuotas).toFixed(2)) : 0;
+  var tdEl   = document.getElementById('gcTotalDisplay');
+  var cdEl   = document.getElementById('gcCuotaDisplay');
+  var hEl    = document.getElementById('gcTotal');
+  if (tdEl) tdEl.textContent = 'USD ' + price.toLocaleString('es-AR');
+  if (cdEl) cdEl.textContent = 'USD ' + cuota.toFixed(2);
+  if (hEl)  hEl.value = price;
+}
+
+// Guarda el cliente en Auth + tabla clientes
+async function saveClientFromManager() {
+  var nombre  = (document.getElementById('gcNombre').value  || '').trim();
+  var email   = (document.getElementById('gcEmail').value   || '').trim().toLowerCase();
+  var pass    = (document.getElementById('gcPass').value    || '').trim();
+  var tel     = (document.getElementById('gcTel').value     || '').trim();
+  var doc     = (document.getElementById('gcDoc').value     || '').trim();
+  var fecha   = document.getElementById('gcFecha').value    || null;
+  var destino = document.getElementById('gcDest').value     || null;
+  var paquete = document.getElementById('gcPkg').value      || null;
+  var total   = parseFloat(document.getElementById('gcTotal').value)   || 0;
+  var cuotas  = parseInt(document.getElementById('gcCuotas').value)    || 10;
+  var asesorId = document.getElementById('gcAsesor').value  || null;
+
+  // Validaciones
+  if (!nombre) { showToast('⚠️ El nombre es obligatorio'); return; }
+  if (!email || !email.includes('@')) { showToast('⚠️ Email inválido'); return; }
+  if (!pass || pass.length < 6) { showToast('⚠️ La contraseña debe tener al menos 6 caracteres'); return; }
+
+  // Deshabilitar botón
+  var btn = document.getElementById('gcBtnGuardar');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Creando...'; }
+
+  try {
+    // ── PASO 1: Crear usuario en Supabase Auth (sesión temporal, no afecta la del gerente) ──
+    var sbTemp = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
+    });
+
+    var authResult = await sbTemp.auth.signUp({ email: email, password: pass });
+
+    if (authResult.error) {
+      if (!authResult.error.message.toLowerCase().includes('already registered')) {
+        throw new Error('Auth: ' + authResult.error.message);
+      }
+    }
+
+    var authUserId = (authResult.data && authResult.data.user)
+      ? authResult.data.user.id
+      : null;
+
+    // ── PASO 2: Insertar en tabla clientes ──
+    var region_id = (window._gerenteRegionIds && window._gerenteRegionIds.length > 0)
+      ? window._gerenteRegionIds[0]
+      : null;
+
+    var newClient = {
+      user_id:        authUserId,
+      nombre:         nombre,
+      email:          email,
+      documento:      doc     || null,
+      telefono:       tel     || null,
+      destino:        destino,
+      paquete:        paquete,
+      fecha_viaje:    fecha,
+      total_usd:      total,
+      cuotas_total:   cuotas,
+      cuotas_pagadas: 0,
+      monto_cuota:    total > 0 ? parseFloat((total / cuotas).toFixed(2)) : 0,
+      estado:         'activo',
+      seller_id:      asesorId || null,
+      region_id:      region_id,
+      notas:          'Alta realizada por gerente ' + ((window._gerenteProfile && window._gerenteProfile.nombre) || ''),
+      mora_json:      '[]'
+    };
+
+    var r = await sbClient.from('clientes').insert([newClient]).select().single();
+    if (r.error) throw new Error('DB: ' + r.error.message);
+
+    closeModal();
+    showToast('✅ Cliente ' + nombre + ' creado y asignado correctamente');
+
+    // Recargar datos para que aparezca en la tabla de clientes
+    if (typeof loadAll === 'function') loadAll();
+
+  } catch(e) {
+    console.warn('[SB] saveClientFromManager:', e.message);
+    showToast('⚠️ Error: ' + e.message);
+    if (btn) { btn.disabled = false; btn.textContent = '✅ Crear y Asignar Cliente'; }
   }
 }
 
