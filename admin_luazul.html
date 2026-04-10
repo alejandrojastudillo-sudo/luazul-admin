@@ -894,9 +894,12 @@ async function loadClients() {
   try {
     showToast('⏳ Cargando clientes...');
     var query = sbClient.from('clientes').select('*').order('nombre');
-    // El asesor solo ve sus propios clientes (RLS + filtro explícito)
+    // Permiso total: el asesor ve todos los clientes asignados a él,
+    // sea que los creó directamente (seller_id) o que el Gerente los asignó (vid)
     if (_currentProfile && _currentProfile.id) {
-      query = query.eq('seller_id', _currentProfile.id);
+      query = query.or(
+        'seller_id.eq.' + _currentProfile.id + ',vid.eq.' + _currentProfile.id
+      );
     }
     var r = await query;
     if (r.error) throw r.error;
@@ -941,6 +944,13 @@ function enrich(c) {
     c._semaforo = 'verde';
     c._prioridad = 5;
   }
+  // Origen: asignacion directa = el gerente lo asignó (vid set, seller_id diferente o null)
+  c._asignacion = (
+    c.vid && _currentProfile &&
+    c.vid === _currentProfile.id &&
+    (!c.seller_id || c.seller_id !== _currentProfile.id)
+  );
+
   // Days to trip
   if (c.fecha_viaje) {
     c._dias = Math.ceil((new Date(c.fecha_viaje) - new Date()) / (1000*60*60*24));
@@ -957,11 +967,64 @@ function renderAll() {
   renderStats();
   renderPriorityBanner();
   renderTable();
+  checkNuevasAsignaciones();
   // Check alerts on load
   var _alertas = detectarAlertas ? detectarAlertas() : [];
   var dot = document.getElementById("alertDot");
   if(dot && _alertas.filter(function(a){return a.nivel!=="info";}).length > 0) dot.style.display="block";
   document.getElementById('tbTotal').textContent = allClients.length + ' clientes';
+}
+
+// ── NOTIFICACION DE BIENVENIDA — clientes recién asignados por el Gerente ──
+// Detecta clientes con _asignacion=true y cuotas_pagadas=0 (nunca gestionados)
+var _asignacionesYaVistas = {};
+function checkNuevasAsignaciones() {
+  var nuevos = allClients.filter(function(c) {
+    return c._asignacion && (parseInt(c.cuotas_pagadas) || 0) === 0;
+  });
+  if (!nuevos.length) return;
+
+  // Evitar repetir el banner en cada re-render de la misma sesión
+  var key = nuevos.map(function(c){ return c.id; }).sort().join(',');
+  if (_asignacionesYaVistas[key]) return;
+  _asignacionesYaVistas[key] = true;
+
+  var banner = document.getElementById('asignacionBanner');
+  if (!banner) {
+    banner = document.createElement('div');
+    banner.id = 'asignacionBanner';
+    banner.style.cssText = [
+      'position:fixed;top:72px;right:20px;z-index:9999',
+      'background:rgba(14,30,80,.97)',
+      'border:1px solid rgba(99,179,255,.4)',
+      'border-radius:14px;padding:14px 18px',
+      'max-width:320px;box-shadow:0 4px 24px rgba(0,0,0,.5)',
+      'display:flex;flex-direction:column;gap:8px'
+    ].join(';');
+    document.body.appendChild(banner);
+  }
+
+  var lista = nuevos.map(function(c) {
+    return '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(99,179,255,.1);">'
+      + '<span style="font-size:1rem;">🔔</span>'
+      + '<div>'
+      + '<div style="font-weight:700;font-size:.88rem;color:#7eb8ff;">Nueva Asignación</div>'
+      + '<div style="font-size:.82rem;color:rgba(200,220,255,.85);">' + c.nombre + '</div>'
+      + '<div style="font-size:.72rem;color:rgba(180,200,255,.5);">' + (c.destino || 'Sin destino') + '</div>'
+      + '</div></div>';
+  }).join('');
+
+  banner.innerHTML = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">'
+    + '<span style="font-size:.72rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#7eb8ff;">👔 Asignados por el Gerente</span>'
+    + '<button onclick="document.getElementById("asignacionBanner").remove()" style="background:none;border:none;color:rgba(180,200,255,.5);cursor:pointer;font-size:1rem;line-height:1;padding:0;">&times;</button>'
+    + '</div>'
+    + lista;
+
+  // Auto-cerrar a los 12s
+  setTimeout(function() {
+    var b = document.getElementById('asignacionBanner');
+    if (b) b.remove();
+  }, 12000);
 }
 
 // ── STATS ──
@@ -1314,7 +1377,7 @@ function renderTable() {
       + '<div class="tbl-cell" style="display:flex;align-items:center;"><div class="sem ' + c._semaforo + '"></div></div>'
       // Nombre
       + '<div class="tbl-cell">'
-      +   '<div class="cli-name">' + c.nombre + ((parseInt(c.cuotas_pagadas)||0) <= 3 && c.estado !== 'baja' && c.estado !== 'completo' ? ' <span style="font-size:.62rem;background:rgba(245,158,11,.2);color:#f59e0b;border:1px solid rgba(245,158,11,.3);border-radius:10px;padding:1px 7px;font-weight:700;vertical-align:middle;">&#127919; seguimiento</span>' : '') + '</div>'
+      +   '<div class="cli-name">' + c.nombre + ((parseInt(c.cuotas_pagadas)||0) <= 3 && c.estado !== 'baja' && c.estado !== 'completo' ? ' <span style="font-size:.62rem;background:rgba(245,158,11,.2);color:#f59e0b;border:1px solid rgba(245,158,11,.3);border-radius:10px;padding:1px 7px;font-weight:700;vertical-align:middle;">&#127919; seguimiento</span>' : '') + (c._asignacion ? ' <span title="Asignación Directa — cliente enviado por el Gerente" style="font-size:.62rem;background:rgba(99,179,255,.15);color:#7eb8ff;border:1px solid rgba(99,179,255,.3);border-radius:10px;padding:1px 7px;font-weight:700;vertical-align:middle;cursor:default;">&#128105;&#8203;&#128188; asignado</span>' : '') + '</div>'
       +   '<div class="cli-email">' + c.email + '</div>'
       + '</div>'
       // Destino
