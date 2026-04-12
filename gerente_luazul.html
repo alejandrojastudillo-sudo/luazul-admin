@@ -514,112 +514,120 @@ function dbs(k,v){
 }
 
 // ── SUPABASE DIRECTO: guardar cliente ────────────────
-async function _sbUpdateClient(id, fields){
-  if(!sbClient) return;
-  try{
-    var { error } = await sbClient.from('clientes').update(fields).eq('id', id);
-    if(error) console.warn('Supabase update clientes:', error.message);
-  }catch(e){ console.warn('_sbUpdateClient error:', e); }
+function _sbUpdateClient(id, fields){
+  if(!sbClient) return Promise.resolve();
+  return sbClient.from('clientes').update(fields).eq('id', id)
+    .then(function(res){
+      if(res.error) console.warn('Supabase update clientes:', res.error.message);
+    })
+    .catch(function(e){ console.warn('_sbUpdateClient error:', e); });
 }
 
 // ── SUPABASE DIRECTO: guardar vendor ─────────────────
-async function _sbUpdateVendor(id, fields){
-  if(!sbClient) return;
-  try{
-    var { error } = await sbClient.from('staff_profiles').update(fields).eq('id', id);
-    if(error) console.warn('Supabase update staff_profiles:', error.message);
-  }catch(e){ console.warn('_sbUpdateVendor error:', e); }
+function _sbUpdateVendor(id, fields){
+  if(!sbClient) return Promise.resolve();
+  return sbClient.from('staff_profiles').update(fields).eq('id', id)
+    .then(function(res){
+      if(res.error) console.warn('Supabase update staff_profiles:', res.error.message);
+    })
+    .catch(function(e){ console.warn('_sbUpdateVendor error:', e); });
 }
 
 // ── SUPABASE DIRECTO: aprobar pago ───────────────────
-async function _sbApprovePayment(id){
-  if(!sbClient) return false;
-  try{
-    var { error } = await sbClient.from('pagos')
-      .update({ estado:'aprobado', aprobado_por:'Gerencia', fecha_pago: new Date().toISOString() })
-      .eq('id', id);
-    if(error){ console.warn('Supabase approve pago:', error.message); return false; }
-    return true;
-  }catch(e){ console.warn('_sbApprovePayment error:', e); return false; }
+function _sbApprovePayment(id){
+  if(!sbClient) return Promise.resolve(false);
+  return sbClient.from('pagos')
+    .update({ estado:'aprobado', aprobado_por:'Gerencia', fecha_pago: new Date().toISOString() })
+    .eq('id', id)
+    .then(function(res){
+      if(res.error){ console.warn('Supabase approve pago:', res.error.message); return false; }
+      return true;
+    })
+    .catch(function(e){ console.warn('_sbApprovePayment error:', e); return false; });
 }
 
 // ── CARGA INICIAL DESDE SUPABASE ─────────────────────
-async function _sbLoad(){
-  try{
-    // 1. Obtener perfil del gerente autenticado
-    if(sbClient && !window._gerenteProfile){
-      var { data: { user } } = await sbClient.auth.getUser();
-      if(user){
-        var { data: profile } = await sbClient.from('staff_profiles')
-          .select('*').eq('user_id', user.id).single();
-        if(profile) window._gerenteProfile = profile;
-      }
-    }
+function _sbLoad(){
+  function fallback(){
+    if(!_memCache[VK])     _memCache[VK]     = [];
+    if(!_memCache[DB_KEY]) _memCache[DB_KEY] = [];
+    if(!_memCache[NK])     _memCache[NK]     = [];
+  }
 
+  // 1. Obtener perfil del gerente autenticado
+  var step1 = Promise.resolve();
+  if(sbClient && !window._gerenteProfile){
+    step1 = sbClient.auth.getUser().then(function(res){
+      var user = res.data && res.data.user ? res.data.user : null;
+      if(!user) return Promise.resolve();
+      return sbClient.from('staff_profiles')
+        .select('*').eq('user_id', user.id).single()
+        .then(function(p){ if(p.data) window._gerenteProfile = p.data; });
+    });
+  }
+
+  return step1.then(function(){
     // 2. Regiones del gerente
     var gerenteId = window._gerenteProfile ? window._gerenteProfile.id : null;
-    var regionIds = [];
-    if(gerenteId && sbClient){
-      var { data: grData } = await sbClient.from('gerente_regiones')
-        .select('region_id').eq('gerente_id', gerenteId);
-      if(grData) regionIds = grData.map(function(r){ return r.region_id; });
-      window._gerenteRegionIds = regionIds;
-    }
-
+    if(!gerenteId || !sbClient) return Promise.resolve([]);
+    return sbClient.from('gerente_regiones')
+      .select('region_id').eq('gerente_id', gerenteId)
+      .then(function(res){
+        var regionIds = [];
+        if(res.data) regionIds = res.data.map(function(r){ return r.region_id; });
+        window._gerenteRegionIds = regionIds;
+        return regionIds;
+      });
+  })
+  .then(function(regionIds){
+    regionIds = regionIds || [];
     // 3. Cargar regiones
-    if(sbClient){
-      var { data: regData } = await sbClient.from('regiones').select('*').eq('activo', true);
-      if(regData) _memCache['luazul_regiones'] = regData;
-    }
+    var p3 = sbClient
+      ? sbClient.from('regiones').select('*').eq('activo', true).then(function(res){
+          if(res.data) _memCache['luazul_regiones'] = res.data;
+        })
+      : Promise.resolve();
 
-    // 4. Cargar asesores (role_id=2) de las regiones del gerente
-    if(sbClient){
-      var vendQ = sbClient.from('staff_profiles').select('*').eq('role_id', 2);
-      if(regionIds.length > 0) vendQ = vendQ.in('region_id', regionIds);
-      var { data: vendData, error: vErr } = await vendQ;
-      if(!vErr && vendData){
-        _memCache[VK] = vendData.map(mapVendorFromSB);
-      }
-    }
+    // 4. Cargar asesores role_id=2
+    var p4 = sbClient
+      ? (function(){
+          var q = sbClient.from('staff_profiles').select('*').eq('role_id', 2);
+          if(regionIds.length > 0) q = q.in('region_id', regionIds);
+          return q.then(function(res){
+            if(!res.error && res.data) _memCache[VK] = res.data.map(mapVendorFromSB);
+          });
+        })()
+      : Promise.resolve();
 
-    // 5. Cargar clientes de las regiones del gerente
-    if(sbClient){
-      var cliQ = sbClient.from('clientes').select('*');
-      if(regionIds.length > 0) cliQ = cliQ.in('region_id', regionIds);
-      var { data: cliData, error: cErr } = await cliQ.order('created_at', {ascending:false}).limit(1000);
-      if(!cErr && cliData){
-        _memCache[DB_KEY] = cliData.map(mapClientFromSB);
-      }
-    }
+    // 5. Cargar clientes
+    var p5 = sbClient
+      ? (function(){
+          var q = sbClient.from('clientes').select('*');
+          if(regionIds.length > 0) q = q.in('region_id', regionIds);
+          return q.order('created_at', {ascending:false}).limit(1000).then(function(res){
+            if(!res.error && res.data) _memCache[DB_KEY] = res.data.map(mapClientFromSB);
+          });
+        })()
+      : Promise.resolve();
 
-    // 6. Cargar pagos de los clientes cargados
-    if(sbClient){
-      var clientIds = (_memCache[DB_KEY]||[]).map(function(c){ return c.id; });
-      if(clientIds.length > 0){
-        var { data: pagosData, error: pErr } = await sbClient.from('pagos')
-          .select('*')
-          .in('cliente_id', clientIds)
-          .order('created_at', {ascending:false})
-          .limit(500);
-        if(!pErr && pagosData){
-          _memCache[NK] = pagosData.map(mapPagoToNotif);
-        }
-      } else {
-        _memCache[NK] = [];
-      }
-    }
-
-    // Inicializar arrays vacíos si no se cargó nada
-    if(!_memCache[VK])    _memCache[VK]    = [];
-    if(!_memCache[DB_KEY]) _memCache[DB_KEY] = [];
-    if(!_memCache[NK])    _memCache[NK]    = [];
-
-  }catch(e){
-    console.warn('_sbLoad error:', e);
-    if(!_memCache[VK])    _memCache[VK]    = [];
-    if(!_memCache[DB_KEY]) _memCache[DB_KEY] = [];
-    if(!_memCache[NK])    _memCache[NK]    = [];
-  }
+    return Promise.all([p3, p4, p5]);
+  })
+  .then(function(){
+    // 6. Cargar pagos
+    if(!sbClient){ _memCache[NK] = []; return Promise.resolve(); }
+    var clientIds = (_memCache[DB_KEY]||[]).map(function(c){ return c.id; });
+    if(clientIds.length === 0){ _memCache[NK] = []; return Promise.resolve(); }
+    return sbClient.from('pagos')
+      .select('*')
+      .in('cliente_id', clientIds)
+      .order('created_at', {ascending:false})
+      .limit(500)
+      .then(function(res){
+        if(!res.error && res.data) _memCache[NK] = res.data.map(mapPagoToNotif);
+      });
+  })
+  .then(function(){ fallback(); })
+  .catch(function(e){ console.warn('_sbLoad error:', e); fallback(); });
 }
 
 
@@ -750,7 +758,7 @@ function sc(s){return{r:'#ef4444',n:'#f97316',a:'#eab308',v:'#22c55e',b:'#6b7280
 function vby(id){return((_memCache[VK]||[])||[]).find(function(v){return v.id===id;})||{nombre:'Sin asignar',id:'',password:''};}
 function fmtTs(ts){var d=Math.round((Date.now()-ts)/60000);return d<60?'Hace '+d+' min':d<1440?'Hace '+Math.round(d/60)+' h':'Hace '+Math.round(d/1440)+' días';}
 
-async function gLogin(){
+function gLogin(){
   var emailOrUser = document.getElementById('gUser').value.trim();
   var pass = document.getElementById('gPass').value.trim();
   var errEl = document.getElementById('gErr');
@@ -762,40 +770,34 @@ async function gLogin(){
     return;
   }
 
-  // Si no tiene "@" asumimos que es el alias heredado "gerente" → buscar en staff_profiles
-  // Si tiene "@" es email directo de Supabase Auth
   if(!sbClient){
     errEl.style.display='block';
     errEl.textContent='❌ Sin conexión con Supabase.';
     return;
   }
 
-  try{
-    // Intentar login con Supabase Auth (email + password)
-    var emailToUse = emailOrUser.indexOf('@') >= 0 ? emailOrUser : emailOrUser + '@luazul.com';
-    var { data, error } = await sbClient.auth.signInWithPassword({
-      email: emailToUse,
-      password: pass
+  var emailToUse = emailOrUser.indexOf('@') >= 0 ? emailOrUser : emailOrUser + '@luazul.com';
+
+  sbClient.auth.signInWithPassword({ email: emailToUse, password: pass })
+    .then(function(res){
+      if(res.error || !res.data || !res.data.user){
+        throw new Error(res.error ? res.error.message : 'Sin respuesta del servidor');
+      }
+      return sbClient.from('staff_profiles')
+        .select('*').eq('user_id', res.data.user.id).single();
+    })
+    .then(function(p){
+      if(p.error || !p.data) throw new Error('Perfil de gerente no encontrado. Contactá al administrador.');
+      if(p.data.role_id !== 3) throw new Error('Este acceso es exclusivo para gerentes (role_id=3).');
+      window._gerenteProfile = p.data;
+      LZ_AUTH.setPanelSession(LZ_AUTH.PANEL_KEYS.gerente);
+      LZ_AUTH._showApp('loginWrap','app');
+      initApp();
+    })
+    .catch(function(e){
+      errEl.style.display='block';
+      errEl.textContent='❌ ' + (e.message || 'Credenciales incorrectas');
     });
-
-    if(error || !data || !data.user) throw new Error(error ? error.message : 'Sin respuesta del servidor');
-
-    // Verificar rol en staff_profiles
-    var { data: profile, error: pErr } = await sbClient.from('staff_profiles')
-      .select('*').eq('user_id', data.user.id).single();
-
-    if(pErr || !profile) throw new Error('Perfil de gerente no encontrado. Contactá al administrador.');
-    if(profile.role_id !== 3) throw new Error('Este acceso es exclusivo para gerentes (role_id=3).');
-
-    window._gerenteProfile = profile;
-    LZ_AUTH.setPanelSession(LZ_AUTH.PANEL_KEYS.gerente);
-    LZ_AUTH._showApp('loginWrap','app');
-    initApp();
-
-  }catch(e){
-    errEl.style.display='block';
-    errEl.textContent='❌ ' + (e.message || 'Credenciales incorrectas');
-  }
 }
 
 
@@ -950,28 +952,22 @@ function verCompGerente(idx){
 //  seller_id = asesor seleccionado (de la región del gerente)
 // ══════════════════════════════════════════════════════════════════
 
-async function openAltaClienteGerente() {
+function openAltaClienteGerente() {
   var mbox = document.getElementById('mbox');
   if (!mbox) return;
 
-  // Cargar asesores de la región del gerente (role_id = 2)
   var regionIds = window._gerenteRegionIds || [];
-  var asesores  = [];
+  var q = sbClient.from('staff_profiles').select('id, nombre, email').eq('role_id', 2).eq('activo', true);
+  if (regionIds.length > 0) q = q.in('region_id', regionIds);
 
-  try {
-    var q = sbClient.from('staff_profiles').select('id, nombre, email').eq('role_id', 2).eq('activo', true);
-    if (regionIds.length > 0) q = q.in('region_id', regionIds);
-    var { data: vendData } = await q;
-    if (vendData) asesores = vendData;
-  } catch(e) {
-    console.warn('[SB] openAltaClienteGerente - asesores:', e.message);
-  }
+  q.then(function(res) {
+    var asesores = (res.data) ? res.data : [];
 
-  var asesorOptions = asesores.length
-    ? asesores.map(function(v) {
-        return '<option value="' + v.id + '">' + v.nombre + ' — ' + (v.email || '') + '</option>';
-      }).join('')
-    : '<option value="">— Sin asesores en tu región —</option>';
+    var asesorOptions = asesores.length
+      ? asesores.map(function(v) {
+          return '<option value="' + v.id + '">' + v.nombre + ' — ' + (v.email || '') + '</option>';
+        }).join('')
+      : '<option value="">— Sin asesores en tu región —</option>';
 
   mbox.innerHTML =
     '<div class="mhead">'
@@ -1058,6 +1054,8 @@ async function openAltaClienteGerente() {
 
   document.getElementById('modal').classList.add('open');
   setTimeout(gcCalcCuota, 50);
+
+  }).catch(function(e){ console.warn('[SB] openAltaClienteGerente - asesores:', e.message); });
 }
 
 // Calculador de cuota para el modal del gerente
@@ -1078,7 +1076,7 @@ function gcCalcCuota() {
 }
 
 // Guarda el cliente en Auth + tabla clientes
-async function saveClientFromManager() {
+function saveClientFromManager() {
   var nombre  = (document.getElementById('gcNombre').value  || '').trim();
   var email   = (document.getElementById('gcEmail').value   || '').trim().toLowerCase();
   var pass    = (document.getElementById('gcPass').value    || '').trim();
@@ -1093,70 +1091,63 @@ async function saveClientFromManager() {
 
   // Validaciones
   if (!nombre) { showToast('⚠️ El nombre es obligatorio'); return; }
-  if (!email || !email.includes('@')) { showToast('⚠️ Email inválido'); return; }
+  if (!email || email.indexOf('@') === -1) { showToast('⚠️ Email inválido'); return; }
   if (!pass || pass.length < 6) { showToast('⚠️ La contraseña debe tener al menos 6 caracteres'); return; }
 
-  // Deshabilitar botón
   var btn = document.getElementById('gcBtnGuardar');
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Creando...'; }
 
-  try {
-    // ── PASO 1: Crear usuario en Supabase Auth (sesión temporal, no afecta la del gerente) ──
-    var sbTemp = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
-      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
-    });
+  // PASO 1: Crear usuario en Supabase Auth (sesión temporal)
+  var sbTemp = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
+  });
 
-    var authResult = await sbTemp.auth.signUp({ email: email, password: pass });
-
-    if (authResult.error) {
-      if (!authResult.error.message.toLowerCase().includes('already registered')) {
-        throw new Error('Auth: ' + authResult.error.message);
+  sbTemp.auth.signUp({ email: email, password: pass })
+    .then(function(authResult) {
+      if (authResult.error) {
+        if (authResult.error.message.toLowerCase().indexOf('already registered') === -1) {
+          throw new Error('Auth: ' + authResult.error.message);
+        }
       }
-    }
+      var authUserId = (authResult.data && authResult.data.user)
+        ? authResult.data.user.id : null;
 
-    var authUserId = (authResult.data && authResult.data.user)
-      ? authResult.data.user.id
-      : null;
+      // PASO 2: Insertar en tabla clientes
+      var region_id = (window._gerenteRegionIds && window._gerenteRegionIds.length > 0)
+        ? window._gerenteRegionIds[0] : null;
 
-    // ── PASO 2: Insertar en tabla clientes ──
-    var region_id = (window._gerenteRegionIds && window._gerenteRegionIds.length > 0)
-      ? window._gerenteRegionIds[0]
-      : null;
-
-    var newClient = {
-      user_id:        authUserId,
-      nombre:         nombre,
-      email:          email,
-      documento:      doc     || null,
-      telefono:       tel     || null,
-      destino:        destino,
-      paquete:        paquete,
-      fecha_viaje:    fecha,
-      total_usd:      total,
-      cuotas_total:   cuotas,
-      cuotas_pagadas: 0,
-      monto_cuota:    total > 0 ? parseFloat((total / cuotas).toFixed(2)) : 0,
-      estado:         'activo',
-      seller_id:      asesorId || null,
-      region_id:      region_id,
-      notas:          'Alta realizada por gerente ' + ((window._gerenteProfile && window._gerenteProfile.nombre) || ''),
-      mora_json:      '[]'
-    };
-
-    var r = await sbClient.from('clientes').insert([newClient]).select().single();
-    if (r.error) throw new Error('DB: ' + r.error.message);
-
-    closeModal();
-    showToast('✅ Cliente ' + nombre + ' creado y asignado correctamente');
-
-    // Recargar datos para que aparezca en la tabla de clientes
-    if (typeof loadAll === 'function') loadAll();
-
-  } catch(e) {
-    console.warn('[SB] saveClientFromManager:', e.message);
-    showToast('⚠️ Error: ' + e.message);
-    if (btn) { btn.disabled = false; btn.textContent = '✅ Crear y Asignar Cliente'; }
-  }
+      var newClient = {
+        user_id:        authUserId,
+        nombre:         nombre,
+        email:          email,
+        documento:      doc     || null,
+        telefono:       tel     || null,
+        destino:        destino,
+        paquete:        paquete,
+        fecha_viaje:    fecha,
+        total_usd:      total,
+        cuotas_total:   cuotas,
+        cuotas_pagadas: 0,
+        monto_cuota:    total > 0 ? parseFloat((total / cuotas).toFixed(2)) : 0,
+        estado:         'activo',
+        seller_id:      asesorId || null,
+        region_id:      region_id,
+        notas:          'Alta realizada por gerente ' + ((window._gerenteProfile && window._gerenteProfile.nombre) || ''),
+        mora_json:      '[]'
+      };
+      return sbClient.from('clientes').insert([newClient]).select().single();
+    })
+    .then(function(r) {
+      if (r.error) throw new Error('DB: ' + r.error.message);
+      closeModal();
+      showToast('✅ Cliente ' + nombre + ' creado y asignado correctamente');
+      if (typeof loadAll === 'function') loadAll();
+    })
+    .catch(function(e) {
+      console.warn('[SB] saveClientFromManager:', e.message);
+      showToast('⚠️ Error: ' + e.message);
+      if (btn) { btn.disabled = false; btn.textContent = '✅ Crear y Asignar Cliente'; }
+    });
 }
 
 function gLogout(){
@@ -1190,38 +1181,41 @@ document.addEventListener('DOMContentLoaded',function(){
   }
 });
 
-async function initApp(){
+function initApp(){
   // Intentar restaurar sesión de Supabase si existe
+  var step1 = Promise.resolve();
   if(sbClient && !window._gerenteProfile){
-    try{
-      var { data: { session } } = await sbClient.auth.getSession();
-      if(session && session.user){
-        var { data: profile } = await sbClient.from('staff_profiles')
-          .select('*').eq('user_id', session.user.id).single();
-        if(profile && profile.role_id === 3){
-          window._gerenteProfile = profile;
-        }
-      }
-    }catch(e){ console.warn('Restaurar sesión:', e); }
+    step1 = sbClient.auth.getSession()
+      .then(function(res){
+        var session = res.data && res.data.session ? res.data.session : null;
+        if(!session || !session.user) return Promise.resolve();
+        return sbClient.from('staff_profiles')
+          .select('*').eq('user_id', session.user.id).single()
+          .then(function(p){
+            if(p.data && p.data.role_id === 3) window._gerenteProfile = p.data;
+          });
+      })
+      .catch(function(e){ console.warn('Restaurar sesión:', e); });
   }
 
-  // Show loading overlay
-  var app = document.getElementById('app');
-  var overlay = document.createElement('div');
-  overlay.id = 'sbLoadingOverlay';
-  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(4,8,15,.97);z-index:98;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:20px;';
-  overlay.innerHTML = '<div style="font-family:\'Syne\',sans-serif;font-size:1.1rem;font-weight:800;color:#f59e0b;letter-spacing:1px;">Cargando datos...</div>'
-    + '<div style="width:44px;height:44px;border:3px solid rgba(245,158,11,.15);border-top-color:#f59e0b;border-radius:50%;animation:lzSpin .7s linear infinite;"></div>'
-    + '<div style="font-size:.72rem;color:rgba(180,200,240,.4);">Conectando con Supabase</div>';
-  app.appendChild(overlay);
+  step1.then(function(){
+    // Show loading overlay
+    var app = document.getElementById('app');
+    var overlay = document.createElement('div');
+    overlay.id = 'sbLoadingOverlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(4,8,15,.97);z-index:98;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:20px;';
+    overlay.innerHTML = '<div style="font-family:\'Syne\',sans-serif;font-size:1.1rem;font-weight:800;color:#f59e0b;letter-spacing:1px;">Cargando datos...</div>'
+      + '<div style="width:44px;height:44px;border:3px solid rgba(245,158,11,.15);border-top-color:#f59e0b;border-radius:50%;animation:lzSpin .7s linear infinite;"></div>'
+      + '<div style="font-size:.72rem;color:rgba(180,200,240,.4);">Conectando con Supabase</div>';
+    app.appendChild(overlay);
 
-  await _sbLoad();
-
-  // Remove loading overlay
-  var lo = document.getElementById('sbLoadingOverlay');
-  if(lo) lo.remove();
-
-  renderAll(); refreshBadge(); populateVFilt(); populateVendDashSel(); populatePagoFiltros(); renderEquipoDash(); renderPasswords();
+    return _sbLoad();
+  })
+  .then(function(){
+    var lo = document.getElementById('sbLoadingOverlay');
+    if(lo) lo.parentNode.removeChild(lo);
+    renderAll(); refreshBadge(); populateVFilt(); populateVendDashSel(); populatePagoFiltros(); renderEquipoDash(); renderPasswords();
+  });
 }
 
 
@@ -1510,7 +1504,7 @@ function openAddVendor(){
 }
 
 
-async function saveVendor(){
+function saveVendor(){
   var n  = (document.getElementById('vN').value||'').trim();
   var e  = (document.getElementById('vE').value||'').trim().toLowerCase();
   var p  = (document.getElementById('vP').value||'').trim();
@@ -1520,16 +1514,16 @@ async function saveVendor(){
   var btn = document.querySelector('#modal .mbtn.gold');
   if(btn){ btn.disabled=true; btn.textContent='⏳ Creando...'; }
 
-  try{
-    // 1. Registrar en Supabase Auth
-    var signUp = await sbClient.auth.signUp({
-      email: e, password: p,
-      options:{ data:{ nombre: n, role: 'seller' } }
-    });
+  // 1. Registrar en Supabase Auth
+  sbClient.auth.signUp({
+    email: e, password: p,
+    options:{ data:{ nombre: n, role: 'seller' } }
+  })
+  .then(function(signUp){
     if(signUp.error) throw signUp.error;
     var uid = signUp.data && signUp.data.user ? signUp.data.user.id : null;
 
-    // 2. Obtener la primera región del gerente para asignarla al asesor
+    // 2. Región del gerente
     var regionId = null;
     if(window._gerenteRegionIds && window._gerenteRegionIds.length > 0){
       regionId = window._gerenteRegionIds[0];
@@ -1537,7 +1531,7 @@ async function saveVendor(){
 
     // 3. Insertar en staff_profiles
     var nombres = n.split(' ');
-    var ins = await sbClient.from('staff_profiles').insert({
+    return sbClient.from('staff_profiles').insert({
       role_id:    2,
       nombre:     nombres[0],
       apellido:   nombres.slice(1).join(' ') || '',
@@ -1552,20 +1546,23 @@ async function saveVendor(){
       comprobantes_json: '[]',
       user_id:    uid || undefined
     }).select().single();
+  })
+  .then(function(ins){
     if(ins.error) throw ins.error;
-
     // 4. Agregar al cache local y re-renderizar
     var newV = mapVendorFromSB(ins.data);
     if(!_memCache[VK]) _memCache[VK] = [];
     _memCache[VK].push(newV);
     closeModal(); renderAll(); populateVFilt();
     showToast('✅ Asesor ' + n + ' creado en Supabase');
-  } catch(err){
+  })
+  .catch(function(err){
     console.error('[SB] saveVendor:', err);
     showToast('❌ Error al crear asesor: ' + (err.message || 'Verificá los datos'));
-  } finally{
+  })
+  .then(function(){
     if(btn){ btn.disabled=false; btn.textContent='✅ Crear Vendedor'; }
-  }
+  });
 }
 
 function editVendor(vid){
@@ -1606,7 +1603,7 @@ function editVendor(vid){
   document.getElementById('modal').classList.add('open');
 }
 
-async function saveEditV(vid){
+function saveEditV(vid){
   var nombre = (document.getElementById('evN')||{}).value||'';
   var email  = (document.getElementById('evE')||{}).value||'';
   if(!nombre||!email){showToast('⚠️ Nombre y email son requeridos');return;}
@@ -1616,49 +1613,52 @@ async function saveEditV(vid){
   var dom = (document.getElementById('evDom').value||'').trim();
   var cbu = (document.getElementById('evCBU').value||'').trim();
 
-  // Separar nombre y apellido
   var partes = nombre.trim().split(' ');
   var nombreSB = partes[0];
   var apellidoSB = partes.slice(1).join(' ');
 
-  // Actualizar en Supabase staff_profiles
-  await _sbUpdateVendor(vid, {
+  _sbUpdateVendor(vid, {
     nombre:    nombreSB,
     apellido:  apellidoSB,
-    badge:     email,       // badge = email
+    badge:     email,
     telefono1: t1,
     telefono2: t2,
     domicilio: dom,
     cbu:       cbu
+  }).then(function(){
+    var vs = (_memCache[VK]||[]).map(function(v){
+      if(v.id===vid){
+        v.nombre    = nombre;
+        v.email     = email;
+        v.telefono1 = t1;
+        v.telefono2 = t2;
+        v.domicilio = dom;
+        v.cbu       = cbu;
+      }
+      return v;
+    });
+    _memCache[VK] = vs;
+    closeModal();
+    renderAll();
+    showToast('✅ Asesor actualizado en Supabase');
   });
-
-  // Actualizar caché local
-  var vs = (_memCache[VK]||[]).map(function(v){
-    if(v.id===vid){
-      v.nombre    = nombre;
-      v.email     = email;
-      v.telefono1 = t1;
-      v.telefono2 = t2;
-      v.domicilio = dom;
-      v.cbu       = cbu;
-    }
-    return v;
-  });
-  _memCache[VK] = vs;
-  closeModal();
-  renderAll();
-  showToast('✅ Asesor actualizado en Supabase');
 }
 
 
-async function delVendor(vid){
+function delVendor(vid){
   if(!confirm('¿Eliminar asesor? Sus clientes quedarán sin asignar.'))return;
-  if(sbClient){
-    var { error } = await sbClient.from('staff_profiles').delete().eq('id', vid);
-    if(error){ showToast('❌ Error al eliminar: '+error.message); return; }
+  if(!sbClient){
+    _memCache[VK] = (_memCache[VK]||[]).filter(function(v){return v.id!==vid;});
+    closeModal(); renderAll(); showToast('🗑️ Asesor eliminado');
+    return;
   }
-  _memCache[VK] = (_memCache[VK]||[]).filter(function(v){return v.id!==vid;});
-  closeModal(); renderAll(); showToast('🗑️ Asesor eliminado');
+  sbClient.from('staff_profiles').delete().eq('id', vid)
+    .then(function(res){
+      if(res.error){ showToast('❌ Error al eliminar: '+res.error.message); return; }
+      _memCache[VK] = (_memCache[VK]||[]).filter(function(v){return v.id!==vid;});
+      closeModal(); renderAll(); showToast('🗑️ Asesor eliminado');
+    })
+    .catch(function(e){ showToast('❌ Error al eliminar: '+e.message); });
 }
 
 function verCompVend(vid, idx){
@@ -1674,14 +1674,15 @@ function verCompVend(vid, idx){
   }
 }
 
-async function toggleVendor(vid){
+function toggleVendor(vid){
   var vs = _memCache[VK]||[];
-  var v = vs.find(function(x){ return x.id===vid; });
+  var v = vs.filter(function(x){ return x.id===vid; })[0];
   if(!v) return;
   var nuevoActivo = !v.activo;
-  await _sbUpdateVendor(vid, { activo: nuevoActivo });
-  _memCache[VK] = vs.map(function(x){ if(x.id===vid) x.activo=nuevoActivo; return x; });
-  renderAll(); showToast('Estado de asesor actualizado en Supabase');
+  _sbUpdateVendor(vid, { activo: nuevoActivo }).then(function(){
+    _memCache[VK] = vs.map(function(x){ if(x.id===vid) x.activo=nuevoActivo; return x; });
+    renderAll(); showToast('Estado de asesor actualizado en Supabase');
+  });
 }
 
 // ── CLIENTS ───────────────────────────────────────────
@@ -1696,7 +1697,7 @@ function renderClients(){
   var cs=((_memCache[DB_KEY]||[])||[]).map(enrich).filter(function(c){
     if(vf&&c.vid!==vf)return false;
     if(sf&&c.estado!==sf)return false;
-    if(srch&&!(c.nombre+c.email+c.destino).toLowerCase().includes(srch))return false;
+    if(srch&&(c.nombre+c.email+c.destino).toLowerCase().indexOf(srch) === -1)return false;
     return true;
   }).sort(function(a,b){return a._p-b._p;});
   if(!cs.length){document.getElementById('clientsBody').innerHTML='<div class="empty"><div class="ei">🔍</div><p>Sin resultados</p></div>';return;}
@@ -1758,26 +1759,24 @@ function openClientDetail(id){
   document.getElementById('modal').classList.add('open');
 }
 
-async function gerenteUpdate(id){
+function gerenteUpdate(id){
   var nuevasCuotas = parseInt(document.getElementById('gc').value)||0;
   var nuevoEstado  = document.getElementById('ge').value;
   var nuevoVid     = document.getElementById('gv').value;
 
-  // Escribir en Supabase
-  await _sbUpdateClient(id, {
+  _sbUpdateClient(id, {
     cuotas_pagadas: nuevasCuotas,
     estado:         nuevoEstado,
     seller_id:      nuevoVid
+  }).then(function(){
+    var cs = (_memCache[DB_KEY]||[]).map(function(c){
+      if(c.id==id){ c.cuotas_pagadas=nuevasCuotas; c.estado=nuevoEstado; c.vid=nuevoVid; }
+      return c;
+    });
+    _memCache[DB_KEY] = cs;
+    closeModal(); renderAll();
+    showToast('💾 Cambios guardados en Supabase');
   });
-
-  // Actualizar caché en memoria
-  var cs = (_memCache[DB_KEY]||[]).map(function(c){
-    if(c.id==id){ c.cuotas_pagadas=nuevasCuotas; c.estado=nuevoEstado; c.vid=nuevoVid; }
-    return c;
-  });
-  _memCache[DB_KEY] = cs;
-  closeModal(); renderAll();
-  showToast('💾 Cambios guardados en Supabase');
 }
 
 // ── NOTIFICATIONS ──────────────────────────────────────
@@ -1829,40 +1828,37 @@ function refreshBadge(){
   else{b.style.display='none';tb.style.display='none';}
 }
 
-async function approvePayment(nid){
-  var ok = await _sbApprovePayment(nid);
-  if(!ok){ showToast('❌ Error al aprobar el pago'); return; }
+function approvePayment(nid){
+  _sbApprovePayment(nid).then(function(ok){
+    if(!ok){ showToast('❌ Error al aprobar el pago'); return; }
 
-  // Actualizar caché local
-  var ns = (_memCache[NK]||[]).map(function(n){
-    if(n.id===nid){ n.aprobada=true; n.leida=true; n.aprobadoPor='Gerencia'; }
-    return n;
-  });
-  _memCache[NK] = ns;
-
-  // Actualizar cuotas_pagadas del cliente
-  var notif = ns.find(function(n){ return n.id===nid; });
-  if(notif && notif.cid){
-    var cs = (_memCache[DB_KEY]||[]).map(function(c){
-      if(c.id==notif.cid && notif.cuota>(parseInt(c.cuotas_pagadas)||0)){
-        c.cuotas_pagadas = notif.cuota;
-        _sbUpdateClient(notif.cid, { cuotas_pagadas: notif.cuota });
-      }
-      return c;
+    var ns = (_memCache[NK]||[]).map(function(n){
+      if(n.id===nid){ n.aprobada=true; n.leida=true; n.aprobadoPor='Gerencia'; }
+      return n;
     });
-    _memCache[DB_KEY] = cs;
-  }
-  renderAll(); showToast('✅ Pago aprobado en Supabase');
+    _memCache[NK] = ns;
+
+    var notif = null;
+    for(var i=0; i<ns.length; i++){ if(ns[i].id===nid){ notif=ns[i]; break; } }
+    if(notif && notif.cid){
+      var cs = (_memCache[DB_KEY]||[]).map(function(c){
+        if(c.id==notif.cid && notif.cuota>(parseInt(c.cuotas_pagadas)||0)){
+          c.cuotas_pagadas = notif.cuota;
+          _sbUpdateClient(notif.cid, { cuotas_pagadas: notif.cuota });
+        }
+        return c;
+      });
+      _memCache[DB_KEY] = cs;
+    }
+    renderAll(); showToast('✅ Pago aprobado en Supabase');
+  });
 }
 
-async function mkRead(nid){
-  if(sbClient){
-    // Marcar como leído: en pagos no hay campo "leida", simplemente actualizamos la caché
-  }
+function mkRead(nid){
   var ns=(_memCache[NK]||[]).map(function(n){if(n.id===nid)n.leida=true;return n;});
   _memCache[NK]=ns; renderAll();
 }
-async function markAllRead(){
+function markAllRead(){
   var ns=(_memCache[NK]||[]).map(function(n){n.leida=true;return n;});
   _memCache[NK]=ns; renderAll(); showToast('✅ Todas leídas');
 }
@@ -1977,7 +1973,7 @@ function gerenteMora(id) {
   document.getElementById('modal').classList.add('open');
 }
 
-async function gerenteSaveMora(id) {
+function gerenteSaveMora(id) {
   var motivo = (document.getElementById('gmorMotivo').value || '').trim();
   var compromiso = (document.getElementById('gmorCompromiso').value || '').trim();
   var contacto = document.getElementById('gmorContacto').value;
@@ -1986,23 +1982,24 @@ async function gerenteSaveMora(id) {
   var now = new Date();
   var fecha = now.getDate()+'/'+(now.getMonth()+1)+'/'+now.getFullYear()+' '+now.getHours()+':'+String(now.getMinutes()).padStart(2,'0');
   var cs = _memCache[DB_KEY] || [];
+  var promesas = [];
   cs = cs.map(function(c) {
     if (c.id == id) {
       if (!c.mora) c.mora = [];
       c.mora.push({ fecha: fecha, motivo: motivo, compromiso: compromiso, contacto: contacto, resuelta: false, vendedorNombre: 'Gerencia' });
       if (estado) c.estado = estado;
-      // Persistir notas en Supabase
       var updateFields = {};
       if(estado) updateFields.estado = estado;
-      // Guardamos gestiones en el campo notas como JSON
       updateFields.mora_json = JSON.stringify(c.mora);
-      _sbUpdateClient(c.id, updateFields);
+      promesas.push(_sbUpdateClient(c.id, updateFields));
     }
     return c;
   });
   _memCache[DB_KEY] = cs;
-  closeModal(); renderAll();
-  showToast('📋 Gestión de mora registrada en Supabase');
+  Promise.all(promesas).then(function(){
+    closeModal(); renderAll();
+    showToast('📋 Gestión de mora registrada en Supabase');
+  });
 }
 
 function gerenteResolverMora(id, idx) {
@@ -2360,34 +2357,44 @@ function viewPagoComp(nid){
   document.getElementById('modal').classList.add('open');
 }
 
-async function aprobarPago(nid){
-  var ok = await _sbApprovePayment(nid);
-  if(!ok){ showToast('❌ Error al aprobar el pago'); return; }
-  var ns=(_memCache[NK]||[]).map(function(n){
-    if(n.id===nid){n.aprobada=true;n.aprobadoPor='Gerencia';n.tsAprobado=Date.now();}
-    return n;
+function aprobarPago(nid){
+  _sbApprovePayment(nid).then(function(ok){
+    if(!ok){ showToast('❌ Error al aprobar el pago'); return; }
+    var ns=(_memCache[NK]||[]).map(function(n){
+      if(n.id===nid){n.aprobada=true;n.aprobadoPor='Gerencia';n.tsAprobado=Date.now();}
+      return n;
+    });
+    _memCache[NK]=ns;
+    renderAll(); renderPagos();
+    showToast('✅ Pago aprobado en Supabase');
   });
-  _memCache[NK]=ns;
-  renderAll(); renderPagos();
-  showToast('✅ Pago aprobado en Supabase');
 }
 
-async function aprobarTodos(){
-  var ns=_memCache[NK]||[];
+function aprobarTodos(){
+  var ns = _memCache[NK]||[];
   var pendientes = ns.filter(function(n){return n.tipo==='payment'&&!n.aprobada;});
-  var count=0;
-  for(var i=0;i<pendientes.length;i++){
-    var ok = await _sbApprovePayment(pendientes[i].id);
-    if(ok) count++;
-  }
-  // Actualizar caché
-  ns = ns.map(function(n){
-    if(n.tipo==='payment'&&!n.aprobada){n.aprobada=true;n.aprobadoPor='Gerencia';n.tsAprobado=Date.now();}
-    return n;
+  if(!pendientes.length){ showToast('✅ No hay pagos pendientes'); return; }
+
+  // Ejecutar aprobaciones secuencialmente con cadena de Promises
+  var count = 0;
+  var cadena = Promise.resolve();
+  pendientes.forEach(function(pago){
+    cadena = cadena.then(function(){
+      return _sbApprovePayment(pago.id).then(function(ok){
+        if(ok) count++;
+      });
+    });
   });
-  _memCache[NK]=ns;
-  renderAll(); renderPagos();
-  showToast('✅ '+count+' pagos aprobados en Supabase');
+
+  cadena.then(function(){
+    var nsActualizado = (_memCache[NK]||[]).map(function(n){
+      if(n.tipo==='payment'&&!n.aprobada){n.aprobada=true;n.aprobadoPor='Gerencia';n.tsAprobado=Date.now();}
+      return n;
+    });
+    _memCache[NK] = nsActualizado;
+    renderAll(); renderPagos();
+    showToast('✅ '+count+' pagos aprobados en Supabase');
+  });
 }
 
 // ══════════════════════════════════════════════════════
@@ -2471,18 +2478,17 @@ function renderMoraTab(){
   }
 }
 
-async function notificarAsesorMora(clientId){
+function notificarAsesorMora(clientId){
   var cs = _memCache[DB_KEY]||[];
-  var c = cs.find(function(x){ return x.id==clientId; });
+  var c = null;
+  for(var i=0; i<cs.length; i++){ if(cs[i].id==clientId){ c=cs[i]; break; } }
   if(!c) return;
   var v = vby(c.vid);
 
-  // Insertar alerta en tabla pagos (estado='pendiente', tipo mora)
-  // Se registra en mora_json del cliente (columna específica para historial de mora)
+  var guardar = Promise.resolve();
   if(sbClient){
-    // Guardamos la alerta actualizando notas del cliente con flag de mora notificada
-    var clienteActual = _memCache[DB_KEY]||[];
-    var ci = clienteActual.find(function(x){ return x.id==clientId; });
+    var ci = null;
+    for(var j=0; j<cs.length; j++){ if(cs[j].id==clientId){ ci=cs[j]; break; } }
     if(ci){
       var notasActuales = [];
       try{ notasActuales = ci.mora_json ? JSON.parse(ci.mora_json) : (ci.mora||[]); }catch(e){ notasActuales = []; }
@@ -2496,15 +2502,16 @@ async function notificarAsesorMora(clientId){
         vendedorNombre: 'Gerencia (Alerta automática)'
       };
       notasActuales.push(notaAlerta);
-      await _sbUpdateClient(clientId, { mora_json: JSON.stringify(notasActuales) });
+      guardar = _sbUpdateClient(clientId, { mora_json: JSON.stringify(notasActuales) });
     }
   }
 
-  // También actualizar caché local de notificaciones
-  var ns = _memCache[NK]||[];
-  ns.unshift({id:'gmora'+Date.now(),tipo:'atraso',cid:clientId,cliente:c.nombre,vid:c.vid,vendedor:v.nombre,ts:Date.now(),leida:false,aprobada:false,comp:null,msg:'Gerencia solicita gestión de mora'});
-  _memCache[NK] = ns;
-  showToast('📨 Notificación enviada a '+v.nombre);
+  guardar.then(function(){
+    var ns = _memCache[NK]||[];
+    ns.unshift({id:'gmora'+Date.now(),tipo:'atraso',cid:clientId,cliente:c.nombre,vid:c.vid,vendedor:v.nombre,ts:Date.now(),leida:false,aprobada:false,comp:null,msg:'Gerencia solicita gestión de mora'});
+    _memCache[NK] = ns;
+    showToast('📨 Notificación enviada a '+v.nombre);
+  });
 }
 
 // ══════════════════════════════════════════════════════
@@ -2882,7 +2889,7 @@ function renderPasswords(){
 function renderPwClients(){
   var cs=_memCache[DB_KEY]||[];
   var srch=(document.getElementById('pwClientSearch')||{}).value||'';
-  if(srch) cs=cs.filter(function(c){return (c.nombre||'').toLowerCase().includes(srch.toLowerCase())||(c.email||'').toLowerCase().includes(srch.toLowerCase());});
+  if(srch) cs=cs.filter(function(c){return (c.nombre||'').toLowerCase().indexOf(srch.toLowerCase())!==-1||(c.email||'').toLowerCase().indexOf(srch.toLowerCase())!==-1;});
   var el=document.getElementById('pwClients');
   if(!el)return;
   if(!cs.length){
@@ -2902,16 +2909,17 @@ function saveGerPass(){
   showToast('⚠️ Para cambiar la contraseña de gerencia usá "Forgot Password" o el panel Admin.');
 }
 
-async function saveVendorPass(vid,idx){
+function saveVendorPass(vid,idx){
   var email=(document.getElementById('vpu-'+idx)||{}).value||'';
   // Nota: contraseñas de Supabase Auth NO se pueden cambiar desde frontend con anon key
   // Solo se puede actualizar el badge (email de display) en staff_profiles
   if(!email){showToast('⚠️ El email no puede estar vacío');return;}
-  await _sbUpdateVendor(vid, { badge: email });
-  var vs = (_memCache[VK]||[]).map(function(v){ if(v.id===vid){ v.email=email; } return v; });
-  _memCache[VK] = vs;
-  renderAll();
-  showToast('✅ Email del asesor actualizado en Supabase. Para cambiar contraseña, usar "Forgot Password" o el panel Admin.');
+  _sbUpdateVendor(vid, { badge: email }).then(function(){
+    var vs = (_memCache[VK]||[]).map(function(v){ if(v.id===vid){ v.email=email; } return v; });
+    _memCache[VK] = vs;
+    renderAll();
+    showToast('✅ Email del asesor actualizado en Supabase. Para cambiar contraseña, usar "Forgot Password" o el panel Admin.');
+  });
 }
 
 function saveClientPass(cid){

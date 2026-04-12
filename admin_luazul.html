@@ -656,21 +656,24 @@ body::after {
 // ══════════════════════════════════════════════════════
 var _currentProfile = null;
 
-async function loadCurrentProfile() {
-  if (!sbClient) return;
-  try {
-    var result = await sbClient.auth.getSession();
-    var session = result.data && result.data.session;
-    if (!session) return;
-    var r = await sbClient
-      .from('staff_profiles')
-      .select('*')
-      .eq('user_id', session.user.id)
-      .single();
-    if (r.data) _currentProfile = r.data;
-  } catch(e) {
-    console.warn('[SB] loadCurrentProfile error:', e.message);
-  }
+function loadCurrentProfile() {
+  if (!sbClient) return Promise.resolve();
+  return sbClient.auth.getSession()
+    .then(function(_gsRes) {
+      var session = _gsRes.data && _gsRes.data.session;
+      if (!session) return;
+      return sbClient
+        .from('staff_profiles')
+        .select('*')
+        .eq('user_id', session.user.id)
+        .single()
+        .then(function(r) {
+          if (r.data) _currentProfile = r.data;
+        });
+    })
+    .catch(function(e) {
+      console.warn('[SB] loadCurrentProfile error:', e.message);
+    });
 }
 
 // ══════════════════════════════════════════════════════
@@ -698,220 +701,245 @@ function showToast(msg, duration) {
 //  NOTIFICACIONES — Supabase tabla: notificaciones
 // ══════════════════════════════════════════════════════
 
-async function refreshAdminNotifBadge() {
+function refreshAdminNotifBadge() {
   if (!sbClient || !_currentProfile) return;
-  try {
-    // Notificaciones propias (destinatario_id = auth.uid) O grupales para vendedores
-    var r = await sbClient
-      .from('notificaciones')
-      .select('id', { count: 'exact' })
-      .eq('leida', false)
-      .or('destinatario_id.eq.' + _currentProfile.user_id + ',destinatario_rol.eq.seller');
-    var count = r.count || 0;
-    var dot = document.getElementById('adminNotifDot');
-    var lbl = document.getElementById('adminNotifLabel');
-    if (count > 0) {
-      dot.style.display = 'flex';
-      dot.textContent = count;
-      lbl.textContent = 'Alertas (' + count + ')';
-    } else {
-      dot.style.display = 'none';
-      lbl.textContent = 'Alertas';
-    }
-  } catch(e) { console.warn('[SB] refreshAdminNotifBadge:', e.message); }
+  sbClient
+    .from('notificaciones')
+    .select('id', { count: 'exact' })
+    .eq('leida', false)
+    .or('destinatario_id.eq.' + _currentProfile.user_id + ',destinatario_rol.eq.seller')
+    .then(function(r) {
+      var count = r.count || 0;
+      var dot = document.getElementById('adminNotifDot');
+      var lbl = document.getElementById('adminNotifLabel');
+      if (count > 0) {
+        dot.style.display = 'flex';
+        dot.textContent = count;
+        lbl.textContent = 'Alertas (' + count + ')';
+      } else {
+        dot.style.display = 'none';
+        lbl.textContent = 'Alertas';
+      }
+    })
+    .catch(function(e) { console.warn('[SB] refreshAdminNotifBadge:', e.message); });
 }
 
-async function openAdminNotifs() {
+function openAdminNotifs() {
   if (!sbClient || !_currentProfile) return;
   document.getElementById('modal').classList.add('open');
   document.getElementById('modalBox').innerHTML =
-    '<div class="modal-head"><div><h2>🔔 Notificaciones</h2></div>'
-    + '<button class="modal-close" onclick="closeModal()">✕</button></div>'
+    '<div class="modal-head"><div><h2>\uD83D\uDD14 Notificaciones</h2></div>'
+    + '<button class="modal-close" onclick="closeModal()">\u2715</button></div>'
     + '<div class="modal-body" style="max-height:70vh;overflow-y:auto;">'
-    + '<p style="text-align:center;color:rgba(180,200,240,.5);padding:30px;">⏳ Cargando...</p></div>';
+    + '<p style="text-align:center;color:rgba(180,200,240,.5);padding:30px;">\u23F3 Cargando...</p></div>';
 
-  try {
-    // Trae notifs propias (auth.uid) + grupales para vendedores
-    var r = await sbClient
-      .from('notificaciones')
-      .select('*')
-      .or('destinatario_id.eq.' + _currentProfile.user_id + ',destinatario_rol.eq.seller')
-      .order('created_at', { ascending: false })
-      .limit(50);
-    var ns = r.data || [];
+  sbClient
+    .from('notificaciones')
+    .select('*')
+    .or('destinatario_id.eq.' + _currentProfile.user_id + ',destinatario_rol.eq.seller')
+    .order('created_at', { ascending: false })
+    .limit(50)
+    .then(function(r) {
+      var ns = r.data || [];
 
-    function fmtTs(ts) {
-      var d = Math.round((Date.now() - new Date(ts)) / 60000);
-      return d < 60 ? 'Hace ' + d + ' min' : d < 1440 ? 'Hace ' + Math.round(d/60) + ' h' : 'Hace ' + Math.round(d/1440) + ' días';
-    }
+      function fmtTs(ts) {
+        var d = Math.round((Date.now() - new Date(ts)) / 60000);
+        return d < 60 ? 'Hace ' + d + ' min' : d < 1440 ? 'Hace ' + Math.round(d/60) + ' h' : 'Hace ' + Math.round(d/1440) + ' d\u00edas';
+      }
 
-    var TIPO_LABEL = {
-      pago_pendiente:  '💰 Comprobante de pago',
-      gestion_mora:    '⚠️ Gestión de mora',
-      comunicado:      '📢 Comunicado del equipo',
-      actualizacion:   '🔄 Actualización',
-      alerta:          '🚨 Alerta'
-    };
-    var TIPO_COLOR = {
-      pago_pendiente: '#22c55e',
-      gestion_mora:   '#f97316',
-      comunicado:     '#60a5fa',
-      actualizacion:  '#a78bfa',
-      alerta:         '#ef4444'
-    };
+      var TIPO_LABEL = {
+        pago_pendiente:  '\uD83D\uDCB0 Comprobante de pago',
+        gestion_mora:    '\u26A0\uFE0F Gesti\u00f3n de mora',
+        comunicado:      '\uD83D\uDCE2 Comunicado del equipo',
+        actualizacion:   '\uD83D\uDD04 Actualizaci\u00f3n',
+        alerta:          '\uD83D\uDEA8 Alerta'
+      };
+      var TIPO_COLOR = {
+        pago_pendiente: '#22c55e',
+        gestion_mora:   '#f97316',
+        comunicado:     '#60a5fa',
+        actualizacion:  '#a78bfa',
+        alerta:         '#ef4444'
+      };
 
-    var rows = ns.map(function(n) {
-      var col    = TIPO_COLOR[n.tipo] || '#60a5fa';
-      var label  = TIPO_LABEL[n.tipo] || ('📌 ' + (n.tipo || 'Notificación'));
-      var border = n.leida ? 'rgba(255,255,255,.07)' : ('rgba(' + hexToRgb(col) + ',.25)');
-      var readBtn = '<button onclick="adminMarkRead(\'' + n.id + '\')" style="padding:6px 12px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:rgba(180,200,240,.6);border-radius:8px;font-size:.74rem;cursor:pointer;">Marcar leída</button>';
-      return '<div style="padding:14px;background:rgba(255,255,255,.03);border:1px solid ' + border + ';border-left:3px solid ' + col + ';border-radius:12px;margin-bottom:10px;">'
-        + '<div style="font-weight:700;font-size:.88rem;color:' + col + ';margin-bottom:4px;">' + label + '</div>'
-        + '<div style="font-size:.82rem;color:rgba(220,230,255,.85);margin-bottom:6px;">' + (n.mensaje || '') + '</div>'
-        + '<div style="font-size:.72rem;color:rgba(180,200,240,.5);">' + fmtTs(n.created_at)
-        + (n.leida ? '' : ' · <span style="color:#f59e0b;font-weight:700;">sin leer</span>') + '</div>'
-        + '<div style="margin-top:10px;">' + (n.leida ? '' : readBtn) + '</div>'
-        + '</div>';
-    }).join('') || '<p style="text-align:center;color:rgba(180,200,240,.5);padding:30px;">Sin notificaciones</p>';
+      function hexToRgb(hex) {
+        var rv = parseInt(hex.slice(1,3),16), gv = parseInt(hex.slice(3,5),16), bv = parseInt(hex.slice(5,7),16);
+        return rv + ',' + gv + ',' + bv;
+      }
 
-    function hexToRgb(hex) {
-      var r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
-      return r + ',' + g + ',' + b;
-    }
+      var rows = ns.map(function(n) {
+        var col    = TIPO_COLOR[n.tipo] || '#60a5fa';
+        var label  = TIPO_LABEL[n.tipo] || ('\uD83D\uDCCC ' + (n.tipo || 'Notificaci\u00f3n'));
+        var border = n.leida ? 'rgba(255,255,255,.07)' : ('rgba(' + hexToRgb(col) + ',.25)');
+        var readBtn = '<button onclick="adminMarkRead(\'' + n.id + '\')" style="padding:6px 12px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:rgba(180,200,240,.6);border-radius:8px;font-size:.74rem;cursor:pointer;">Marcar le\u00edda</button>';
+        return '<div style="padding:14px;background:rgba(255,255,255,.03);border:1px solid ' + border + ';border-left:3px solid ' + col + ';border-radius:12px;margin-bottom:10px;">'
+          + '<div style="font-weight:700;font-size:.88rem;color:' + col + ';margin-bottom:4px;">' + label + '</div>'
+          + '<div style="font-size:.82rem;color:rgba(220,230,255,.85);margin-bottom:6px;">' + (n.mensaje || '') + '</div>'
+          + '<div style="font-size:.72rem;color:rgba(180,200,240,.5);">' + fmtTs(n.created_at)
+          + (n.leida ? '' : ' \u00b7 <span style="color:#f59e0b;font-weight:700;">sin leer</span>') + '</div>'
+          + '<div style="margin-top:10px;">' + (n.leida ? '' : readBtn) + '</div>'
+          + '</div>';
+      }).join('') || '<p style="text-align:center;color:rgba(180,200,240,.5);padding:30px;">Sin notificaciones</p>';
 
-    var sinLeer = ns.filter(function(n){ return !n.leida; }).length;
-    document.getElementById('modalBox').innerHTML =
-      '<div class="modal-head"><div><h2>🔔 Notificaciones</h2>'
-      + '<p style="font-size:.8rem;color:rgba(180,200,240,.6);">' + sinLeer + ' sin leer · ' + ns.length + ' total</p></div>'
-      + '<button class="modal-close" onclick="closeModal()">✕</button></div>'
-      + '<div class="modal-body" style="max-height:70vh;overflow-y:auto;">' + rows + '</div>';
-  } catch(e) {
-    console.warn('[SB] openAdminNotifs:', e.message);
-    showToast('⚠️ Error al cargar notificaciones');
-  }
+      var sinLeer = ns.filter(function(n){ return !n.leida; }).length;
+      document.getElementById('modalBox').innerHTML =
+        '<div class="modal-head"><div><h2>\uD83D\uDD14 Notificaciones</h2>'
+        + '<p style="font-size:.8rem;color:rgba(180,200,240,.6);">' + sinLeer + ' sin leer \u00b7 ' + ns.length + ' total</p></div>'
+        + '<button class="modal-close" onclick="closeModal()">\u2715</button></div>'
+        + '<div class="modal-body" style="max-height:70vh;overflow-y:auto;">' + rows + '</div>';
+    })
+    .catch(function(e) {
+      console.warn('[SB] openAdminNotifs:', e.message);
+      showToast('\u26A0\uFE0F Error al cargar notificaciones');
+    });
 }
 
-async function adminMarkRead(nid) {
+function adminMarkRead(nid) {
   if (!sbClient) return;
-  try {
-    await sbClient.from('notificaciones').update({ leida: true }).eq('id', nid);
-    refreshAdminNotifBadge();
-    openAdminNotifs();
-  } catch(e) { console.warn('[SB] adminMarkRead:', e.message); }
+  sbClient.from('notificaciones').update({ leida: true }).eq('id', nid)
+    .then(function() {
+      refreshAdminNotifBadge();
+      openAdminNotifs();
+    })
+    .catch(function(e) { console.warn('[SB] adminMarkRead:', e.message); });
 }
 
-async function notificarGerenteGestion(cliente, detalle) {
+function notificarGerenteGestion(cliente, detalle) {
   if (!sbClient || !_currentProfile) return;
-  try {
-    var asesorNombre = (_currentProfile.nombre + ' ' + (_currentProfile.apellido || '')).trim();
-    await sbClient.from('notificaciones').insert([{
-      tipo:             'gestion_mora',
-      mensaje:          'Asesor: ' + asesorNombre + ' — Cliente: ' + cliente.nombre + ' | ' + detalle,
-      destinatario_rol: 'manager',
-      remitente_id:     _currentProfile.user_id,
-      cliente_id:       cliente.id || null,
-      leida:            false
-    }]);
-  } catch(e) { console.warn('[SB] notificarGerenteGestion:', e.message); }
+  var asesorNombre = (_currentProfile.nombre + ' ' + (_currentProfile.apellido || '')).trim();
+  sbClient.from('notificaciones').insert([{
+    tipo:             'gestion_mora',
+    mensaje:          'Asesor: ' + asesorNombre + ' \u2014 Cliente: ' + cliente.nombre + ' | ' + detalle,
+    destinatario_rol: 'manager',
+    remitente_id:     _currentProfile.user_id,
+    cliente_id:       cliente.id || null,
+    leida:            false
+  }])
+  .catch(function(e) { console.warn('[SB] notificarGerenteGestion:', e.message); });
 }
 
 // Actualizar badge cada 30 segundos
 setInterval(refreshAdminNotifBadge, 30000);
 
 
-// [SUPABASE] Login del asesor via Supabase Auth
-async function adminLogin() {
+function adminLogin() {
   var u = document.getElementById('adUser').value.trim().toLowerCase();
   var p = document.getElementById('adPass').value.trim();
   var errEl = document.getElementById('adErr');
   errEl.style.display = 'none';
-  if (!sbClient) { errEl.style.display = 'block'; errEl.textContent = '❌ Sin conexión a Supabase.'; return; }
+  if (!sbClient) { errEl.style.display = 'block'; errEl.textContent = '\u274C Sin conexi\u00f3n a Supabase.'; return; }
   var btn = document.querySelector('.lc-btn');
-  if (btn) { btn.disabled = true; btn.textContent = '⏳ Verificando...'; }
-  try {
-    var result = await sbClient.auth.signInWithPassword({ email: u, password: p });
-    if (result.error) throw result.error;
-    var meta = result.data.user.user_metadata || {};
-    var nombre = meta.nombre || meta.full_name || u.split('@')[0];
-    LZ_AUTH.setPanelSession('luazul_admin');
-    try { sessionStorage.setItem('luazul_asesor_user', nombre); } catch(e){}
-    LZ_AUTH._showApp('loginWrap','app');
-    await loadCurrentProfile();
-    await loadClients();
-    refreshAdminNotifBadge();
-  } catch(err) {
-    errEl.style.display = 'block';
-    errEl.textContent = (err.message === 'Invalid login credentials')
-      ? '❌ Usuario o contraseña incorrectos.'
-      : ('❌ ' + (err.message || 'Error al iniciar sesión.'));
-  } finally {
-    if (btn) { btn.disabled = false; btn.textContent = 'Ingresar'; }
-  }
+  if (btn) { btn.disabled = true; btn.textContent = '\u23F3 Verificando...'; }
+
+  sbClient.auth.signInWithPassword({ email: u, password: p })
+    .then(function(result) {
+      if (result.error) throw result.error;
+      var meta   = result.data.user.user_metadata || {};
+      var nombre = meta.nombre || meta.full_name || u.split('@')[0];
+      LZ_AUTH.setPanelSession('luazul_admin');
+      try { sessionStorage.setItem('luazul_asesor_user', nombre); } catch(e2){}
+      LZ_AUTH._showApp('loginWrap', 'app');
+      return loadCurrentProfile()
+        .then(function() { return loadClients(); })
+        .then(function() { refreshAdminNotifBadge(); });
+    })
+    .catch(function(err) {
+      errEl.style.display = 'block';
+      errEl.textContent = (err.message === 'Invalid login credentials')
+        ? '\u274C Usuario o contrase\u00f1a incorrectos.'
+        : ('\u274C ' + (err.message || 'Error al iniciar sesi\u00f3n.'));
+    })
+    .then(function() {
+      if (btn) { btn.disabled = false; btn.textContent = 'Ingresar'; }
+    });
 }
 document.getElementById('adPass').addEventListener('keypress', function(e){ if(e.key==='Enter') adminLogin(); });
 // Acceso directo desde portal staff_login o sesión activa en Supabase
-document.addEventListener('DOMContentLoaded', async function() {
+document.addEventListener('DOMContentLoaded', function() {
   if (sbClient) {
-    var result = await sbClient.auth.getSession();
-    var session = result.data && result.data.session;
-    if (session && session.user) {
-      var meta = session.user.user_metadata || {};
-      var nombre = meta.nombre || meta.full_name || session.user.email.split('@')[0];
-      try { sessionStorage.setItem('luazul_asesor_user', nombre); } catch(e){}
-      LZ_AUTH.setPanelSession('luazul_admin');
-      LZ_AUTH._showApp('loginWrap','app');
-      await loadCurrentProfile();
-      await loadClients();
-      refreshAdminNotifBadge();
-      return;
-    }
+    sbClient.auth.getSession()
+      .then(function(result) {
+        var session = result.data && result.data.session;
+        if (session && session.user) {
+          var meta   = session.user.user_metadata || {};
+          var nombre = meta.nombre || meta.full_name || session.user.email.split('@')[0];
+          try { sessionStorage.setItem('luazul_asesor_user', nombre); } catch(e){}
+          LZ_AUTH.setPanelSession('luazul_admin');
+          LZ_AUTH._showApp('loginWrap', 'app');
+          return loadCurrentProfile()
+            .then(function() { return loadClients(); })
+            .then(function() { refreshAdminNotifBadge(); });
+        }
+        LZ_AUTH.guard({
+          panelKey:    'luazul_admin',
+          portalRoles: ['owner','super_admin'],
+          loginWrapId: 'loginWrap',
+          appId:       'app',
+          onSuccess:   function() {
+            loadCurrentProfile()
+              .then(function() { loadClients(); refreshAdminNotifBadge(); });
+          }
+        });
+      })
+      .catch(function() {
+        LZ_AUTH.guard({
+          panelKey:    'luazul_admin',
+          portalRoles: ['owner','super_admin'],
+          loginWrapId: 'loginWrap',
+          appId:       'app',
+          onSuccess:   function() {
+            loadCurrentProfile()
+              .then(function() { loadClients(); refreshAdminNotifBadge(); });
+          }
+        });
+      });
+  } else {
+    LZ_AUTH.guard({
+      panelKey:    'luazul_admin',
+      portalRoles: ['owner','super_admin'],
+      loginWrapId: 'loginWrap',
+      appId:       'app',
+      onSuccess:   function() {
+        loadCurrentProfile()
+          .then(function() { loadClients(); refreshAdminNotifBadge(); });
+      }
+    });
   }
-  LZ_AUTH.guard({
-    panelKey:    'luazul_admin',
-    portalRoles: ['owner','super_admin'],
-    loginWrapId: 'loginWrap',
-    appId:       'app',
-    onSuccess:   async function(){ await loadCurrentProfile(); loadClients(); refreshAdminNotifBadge(); }
-  });
 });
 
-async function adminLogout() {
-  if (sbClient) { try { await sbClient.auth.signOut(); } catch(e){} }
-  try { sessionStorage.removeItem('luazul_asesor_user'); } catch(e){}
-  LZ_AUTH.logout({
-    panelKey:    'luazul_admin',
-    loginWrapId: 'loginWrap',
-    appId:       'app',
-    clearInputIds: ['adUser','adPass']
+function adminLogout() {
+  var p = sbClient ? sbClient.auth.signOut() : Promise.resolve();
+  p.catch(function(){}).then(function() {
+    try { sessionStorage.removeItem('luazul_asesor_user'); } catch(e){}
+    LZ_AUTH.logout({
+      panelKey:      'luazul_admin',
+      loginWrapId:   'loginWrap',
+      appId:         'app',
+      clearInputIds: ['adUser','adPass']
+    });
   });
 }
 
-// ══════════════════════════════════════════════════════
-//  DATA — carga desde Supabase (única fuente de verdad)
-// ══════════════════════════════════════════════════════
-async function loadClients() {
-  if (!sbClient) { showToast('❌ Sin conexión a Supabase'); return; }
-  try {
-    showToast('⏳ Cargando clientes...');
-    var query = sbClient.from('clientes').select('*').order('nombre');
-    // Permiso total: el asesor ve todos los clientes asignados a él,
-    // sea que los creó directamente (seller_id) o que el Gerente los asignó (vid)
-    if (_currentProfile && _currentProfile.id) {
-      query = query.or(
-        'seller_id.eq.' + _currentProfile.id + ',vid.eq.' + _currentProfile.id
-      );
-    }
-    var r = await query;
-    if (r.error) throw r.error;
-    allClients = (r.data || []).map(enrich);
-    renderAll();
-    showToast('✅ ' + allClients.length + ' clientes cargados');
-  } catch(e) {
-    console.warn('[SB] loadClients error:', e.message);
-    showToast('⚠️ Error al cargar clientes: ' + e.message);
-    allClients = [];
-    renderAll();
+function loadClients() {
+  if (!sbClient) { showToast('\u274C Sin conexi\u00f3n a Supabase'); return Promise.resolve(); }
+  showToast('\u23F3 Cargando clientes...');
+  var query = sbClient.from('clientes').select('*').order('nombre');
+  if (_currentProfile && _currentProfile.id) {
+    query = query.or('seller_id.eq.' + _currentProfile.id + ',vid.eq.' + _currentProfile.id);
   }
+  return query
+    .then(function(r) {
+      if (r.error) throw r.error;
+      allClients = (r.data || []).map(enrich);
+      renderAll();
+      showToast('\u2705 ' + allClients.length + ' clientes cargados');
+    })
+    .catch(function(e) {
+      console.warn('[SB] loadClients error:', e.message);
+      showToast('\u26A0\uFE0F Error al cargar clientes: ' + e.message);
+      allClients = [];
+      renderAll();
+    });
 }
 
 // Enrich with computed fields
@@ -1334,7 +1362,7 @@ function getFiltered() {
     }
     if (search) {
       var hay = (c.nombre + c.email + c.destino + c.paquete).toLowerCase();
-      if (!hay.includes(search)) return false;
+      if (hay.indexOf(search) === -1) return false;
     }
     return true;
   });
@@ -1437,80 +1465,68 @@ function openModal(id) {
 
   var diasStr = c._dias < 0 ? '¡Viaje realizado!' : c._dias < 30 ? '⚡ ' + c._dias + ' días' : c._dias + ' días';
 
-  document.getElementById('modalBox').innerHTML = `
-    <div class="modal-head">
-      <div>
-        <h2>${c.nombre}</h2>
-        <p>${c.email} · ${c.documento || '—'} · ${c.domicilio || '—'}</p>
-      </div>
-      <div style="display:flex;align-items:center;gap:10px;">
-        <span class="badge ${c.estado}">${c.estado.toUpperCase()}</span>
-        <button class="modal-close" onclick="closeModal()">✕</button>
-      </div>
-    </div>
-    <div class="modal-body">
-
-      <!-- Semáforo -->
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px;padding:12px 16px;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:12px;">
-        <div class="sem ${c._semaforo}" style="width:16px;height:16px;"></div>
-        <span style="font-weight:700;color:${semColor[c._semaforo]}">${semLabel[c._semaforo]}</span>
-        <span style="color:var(--muted);font-size:.82rem;margin-left:auto;">Progreso: <strong style="color:var(--text);">${c._pct}%</strong></span>
-      </div>
-
-      <!-- Info grid -->
-      <div class="modal-grid">
-        <div class="m-item"><div class="m-label">🏖️ Destino</div><div class="m-val">${c.destino||'—'}</div></div>
-        <div class="m-item"><div class="m-label">📦 Paquete</div><div class="m-val">${c.paquete||'—'}</div></div>
-        <div class="m-item"><div class="m-label">👥 Personas</div><div class="m-val">${c.personas||'—'} personas · ${c.noches||'—'} noches</div></div>
-        <div class="m-item"><div class="m-label">📅 Fecha de viaje</div><div class="m-val">${c.fecha_viaje||'Por confirmar'} · ${diasStr}</div></div>
-        <div class="m-item"><div class="m-label">💵 Total del plan</div><div class="m-val">USD ${c.total_usd||'—'}</div></div>
-        <div class="m-item"><div class="m-label">💳 Cuota mensual</div><div class="m-val">USD ${c.monto_cuota||'—'}</div></div>
-        <div class="m-item"><div class="m-label">✅ Abonado</div><div class="m-val" style="color:var(--green);">USD ${abonado.toFixed(0)}</div></div>
-        <div class="m-item"><div class="m-label">⏳ Saldo pendiente</div><div class="m-val" style="color:${restante>0?'var(--yellow)':'var(--green)'};">USD ${restante.toFixed(0)}</div></div>
-      </div>
-
-      <!-- Cuotas timeline -->
-      <div style="font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--accent2);margin-bottom:8px;">Línea de cuotas</div>
-      <div class="cuotas-timeline">${timeline}</div>
-      <div style="display:flex;gap:14px;margin-top:8px;font-size:.75rem;color:var(--muted);">
-        <span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;background:var(--green-bg);border:1px solid var(--green-bd);border-radius:3px;display:inline-block;"></span>Pagada</span>
-        <span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;background:var(--yellow-bg);border:1px solid var(--yellow-bd);border-radius:3px;display:inline-block;"></span>Próxima</span>
-        <span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:3px;display:inline-block;"></span>Futura</span>
-      </div>
-
-      <!-- Update cuotas pagadas -->
-      <div style="margin-top:20px;padding:16px;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:12px;">
-        <div style="font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--accent2);margin-bottom:10px;">Actualizar cuotas pagadas</div>
-        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-          <label style="font-size:.85rem;color:var(--muted);">Cuotas pagadas:</label>
-          <input type="number" id="editCuotas" value="${pagadas}" min="0" max="${total}" class="edit-input" style="width:80px;" />
-          <label style="font-size:.85rem;color:var(--muted);">Estado:</label>
-          <select id="editEstado" class="edit-input" style="width:140px;">
-            <option value="activo"   ${c.estado==='activo'  ?'selected':''}>Activo</option>
-            <option value="atraso"        ${c.estado==='atraso'        ?'selected':''}>En atraso</option>
-            <option value="atraso_gestion" ${c.estado==='atraso_gestion'?'selected':''}>🗂 En atraso (con gestión)</option>
-            <option value="completo"       ${c.estado==='completo'      ?'selected':''}>Completo</option>
-            <option value="baja"           ${c.estado==='baja'          ?'selected':''}>Baja</option>
-          </select>
-          <button class="m-btn primary" onclick="updateClient('${c.id}')">💾 Guardar</button>
-        </div>
-      </div>
-
-      <!-- Actions -->
-      <div class="modal-actions">
-        <button class="m-btn green" onclick="waMensaje('${c.id}')">💬 WhatsApp</button>
-        <button class="m-btn ghost" onclick="waRecordatorio('${c.id}')">📲 Recordatorio</button>
-        <button class="m-btn ghost" onclick="abrirCargaReferido('${c.id}')" style="color:#fbbf24;border-color:rgba(251,191,36,.3);">🎁 Referido</button>
-        <button class="m-btn ghost" onclick="closeModal()">✕ Cerrar</button>
-      </div>
-      <!-- NUEVAS FUNCIONES v3 -->
-      <div class="modal-actions" style="margin-top:8px;border-top:1px solid rgba(100,160,255,.1);padding-top:12px;">
-        <button class="m-btn" style="background:rgba(11,61,145,.3);border-color:rgba(100,160,255,.3);color:#7eb8ff;" onclick="generarContratoPDF('${c.id}')">📄 Generar Contrato PDF</button>
-        <button class="m-btn" style="background:rgba(251,146,60,.1);border-color:rgba(251,146,60,.3);color:#fb923c;" onclick="abrirRegistroPago('${c.id}')">📤 Enviar Comprobante</button>
-        <button class="m-btn" style="background:rgba(251,146,60,.1);border-color:rgba(251,146,60,.3);color:#fb923c;" onclick="verComprobantes('${c.id}')">📎 Comprobantes</button>
-      </div>
-    </div>
-  `;
+  document.getElementById('modalBox').innerHTML =
+    '<div class="modal-head">'
+    + '<div>'
+    +   '<h2>' + c.nombre + '</h2>'
+    +   '<p>' + c.email + ' \u00b7 ' + (c.documento || '\u2014') + ' \u00b7 ' + (c.domicilio || '\u2014') + '</p>'
+    + '</div>'
+    + '<div style="display:flex;align-items:center;gap:10px;">'
+    +   '<span class="badge ' + c.estado + '">' + c.estado.toUpperCase() + '</span>'
+    +   '<button class="modal-close" onclick="closeModal()">\u2715</button>'
+    + '</div>'
+    + '</div>'
+    + '<div class="modal-body">'
+    + '<div style="display:flex;align-items:center;gap:10px;margin-bottom:20px;padding:12px 16px;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:12px;">'
+    +   '<div class="sem ' + c._semaforo + '" style="width:16px;height:16px;"></div>'
+    +   '<span style="font-weight:700;color:' + semColor[c._semaforo] + '">' + semLabel[c._semaforo] + '</span>'
+    +   '<span style="color:var(--muted);font-size:.82rem;margin-left:auto;">Progreso: <strong style="color:var(--text);">' + c._pct + '%</strong></span>'
+    + '</div>'
+    + '<div class="modal-grid">'
+    +   '<div class="m-item"><div class="m-label">\uD83C\uDFD6\uFE0F Destino</div><div class="m-val">' + (c.destino || '\u2014') + '</div></div>'
+    +   '<div class="m-item"><div class="m-label">\uD83D\uDCE6 Paquete</div><div class="m-val">' + (c.paquete || '\u2014') + '</div></div>'
+    +   '<div class="m-item"><div class="m-label">\uD83D\uDC65 Personas</div><div class="m-val">' + (c.personas || '\u2014') + ' personas \u00b7 ' + (c.noches || '\u2014') + ' noches</div></div>'
+    +   '<div class="m-item"><div class="m-label">\uD83D\uDCC5 Fecha de viaje</div><div class="m-val">' + (c.fecha_viaje || 'Por confirmar') + ' \u00b7 ' + diasStr + '</div></div>'
+    +   '<div class="m-item"><div class="m-label">\uD83D\uDCB5 Total del plan</div><div class="m-val">USD ' + (c.total_usd || '\u2014') + '</div></div>'
+    +   '<div class="m-item"><div class="m-label">\uD83D\uDCB3 Cuota mensual</div><div class="m-val">USD ' + (c.monto_cuota || '\u2014') + '</div></div>'
+    +   '<div class="m-item"><div class="m-label">\u2705 Abonado</div><div class="m-val" style="color:var(--green);">USD ' + abonado.toFixed(0) + '</div></div>'
+    +   '<div class="m-item"><div class="m-label">\u23F3 Saldo pendiente</div><div class="m-val" style="color:' + (restante > 0 ? 'var(--yellow)' : 'var(--green)') + ';">USD ' + restante.toFixed(0) + '</div></div>'
+    + '</div>'
+    + '<div style="font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--accent2);margin-bottom:8px;">L\u00ednea de cuotas</div>'
+    + '<div class="cuotas-timeline">' + timeline + '</div>'
+    + '<div style="display:flex;gap:14px;margin-top:8px;font-size:.75rem;color:var(--muted);">'
+    +   '<span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;background:var(--green-bg);border:1px solid var(--green-bd);border-radius:3px;display:inline-block;"></span>Pagada</span>'
+    +   '<span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;background:var(--yellow-bg);border:1px solid var(--yellow-bd);border-radius:3px;display:inline-block;"></span>Pr\u00f3xima</span>'
+    +   '<span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:3px;display:inline-block;"></span>Futura</span>'
+    + '</div>'
+    + '<div style="margin-top:20px;padding:16px;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:12px;">'
+    +   '<div style="font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--accent2);margin-bottom:10px;">Actualizar cuotas pagadas</div>'
+    +   '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">'
+    +     '<label style="font-size:.85rem;color:var(--muted);">Cuotas pagadas:</label>'
+    +     '<input type="number" id="editCuotas" value="' + pagadas + '" min="0" max="' + total + '" class="edit-input" style="width:80px;" />'
+    +     '<label style="font-size:.85rem;color:var(--muted);">Estado:</label>'
+    +     '<select id="editEstado" class="edit-input" style="width:140px;">'
+    +       '<option value="activo"'            + (c.estado === 'activo'           ? ' selected' : '') + '>Activo</option>'
+    +       '<option value="atraso"'            + (c.estado === 'atraso'           ? ' selected' : '') + '>En atraso</option>'
+    +       '<option value="atraso_gestion"'    + (c.estado === 'atraso_gestion'   ? ' selected' : '') + '>\uD83D\uDDC2 En atraso (con gesti\u00f3n)</option>'
+    +       '<option value="completo"'          + (c.estado === 'completo'         ? ' selected' : '') + '>Completo</option>'
+    +       '<option value="baja"'              + (c.estado === 'baja'             ? ' selected' : '') + '>Baja</option>'
+    +     '</select>'
+    +     '<button class="m-btn primary" onclick="updateClient(\'' + c.id + '\')">\uD83D\uDCBE Guardar</button>'
+    +   '</div>'
+    + '</div>'
+    + '<div class="modal-actions">'
+    +   '<button class="m-btn green" onclick="waMensaje(\'' + c.id + '\')">\uD83D\uDCAC WhatsApp</button>'
+    +   '<button class="m-btn ghost" onclick="waRecordatorio(\'' + c.id + '\')">\uD83D\uDCF2 Recordatorio</button>'
+    +   '<button class="m-btn ghost" onclick="abrirCargaReferido(\'' + c.id + '\')" style="color:#fbbf24;border-color:rgba(251,191,36,.3);">\uD83C\uDF81 Referido</button>'
+    +   '<button class="m-btn ghost" onclick="closeModal()">\u2715 Cerrar</button>'
+    + '</div>'
+    + '<div class="modal-actions" style="margin-top:8px;border-top:1px solid rgba(100,160,255,.1);padding-top:12px;">'
+    +   '<button class="m-btn" style="background:rgba(11,61,145,.3);border-color:rgba(100,160,255,.3);color:#7eb8ff;" onclick="generarContratoPDF(\'' + c.id + '\')">\uD83D\uDCC4 Generar Contrato PDF</button>'
+    +   '<button class="m-btn" style="background:rgba(251,146,60,.1);border-color:rgba(251,146,60,.3);color:#fb923c;" onclick="abrirRegistroPago(\'' + c.id + '\')">\uD83D\uDCE4 Enviar Comprobante</button>'
+    +   '<button class="m-btn" style="background:rgba(251,146,60,.1);border-color:rgba(251,146,60,.3);color:#fb923c;" onclick="verComprobantes(\'' + c.id + '\')">\uD83D\uDCCE Comprobantes</button>'
+    + '</div>'
+    + '</div>';
 
   document.getElementById('modal').classList.add('open');
 }
@@ -1518,7 +1534,7 @@ function openModal(id) {
 function closeModal() { document.getElementById('modal').classList.remove('open'); }
 function closeModalOutside(e) { if (e.target === document.getElementById('modal')) closeModal(); }
 
-async function updateClient(id) {
+function updateClient(id) {
   var c = allClients.find(function(x){ return x.id == id; });
   if (!c) return;
   c.cuotas_pagadas = parseInt(document.getElementById('editCuotas').value) || 0;
@@ -1526,31 +1542,39 @@ async function updateClient(id) {
   var idx = allClients.indexOf(c);
   allClients[idx]  = enrich(c);
 
-  // Guardar en Supabase
-  if (sbClient) {
-    try {
-      var r = await sbClient.from('clientes').update({
-        cuotas_pagadas: c.cuotas_pagadas,
-        estado: c.estado
-      }).eq('id', id);
-      if (r.error) throw r.error;
-    } catch(e) {
-      console.warn('[SB] updateClient:', e.message);
-      showToast('⚠️ Error al guardar cambios: ' + e.message);
-      return;
+  if (!sbClient) {
+    if (c.estado === 'atraso_gestion') {
+      var motivo = (document.getElementById('editObs') || {}).value || '\u2014';
+      notificarGerenteGestion(c, motivo);
+      showToast('\uD83D\uDCBE Guardado \u2014 gesti\u00f3n notificada al gerente');
+    } else {
+      showToast('\uD83D\uDCBE Cambios guardados');
     }
+    closeModal();
+    renderAll();
+    return;
   }
 
-  if (c.estado === 'atraso_gestion') {
-    var motivo = (document.getElementById('editObs') || {}).value || '—';
-    notificarGerenteGestion(c, motivo);
-    showToast('💾 Guardado — gestión notificada al gerente');
-  } else {
-    showToast('💾 Cambios guardados');
-  }
-
-  closeModal();
-  renderAll();
+  sbClient.from('clientes').update({
+    cuotas_pagadas: c.cuotas_pagadas,
+    estado:         c.estado
+  }).eq('id', id)
+    .then(function(r) {
+      if (r.error) throw r.error;
+      if (c.estado === 'atraso_gestion') {
+        var motivo2 = (document.getElementById('editObs') || {}).value || '\u2014';
+        notificarGerenteGestion(c, motivo2);
+        showToast('\uD83D\uDCBE Guardado \u2014 gesti\u00f3n notificada al gerente');
+      } else {
+        showToast('\uD83D\uDCBE Cambios guardados');
+      }
+      closeModal();
+      renderAll();
+    })
+    .catch(function(e) {
+      console.warn('[SB] updateClient:', e.message);
+      showToast('\u26A0\uFE0F Error al guardar cambios: ' + e.message);
+    });
 }
 
 
@@ -1605,13 +1629,13 @@ function openMoraModal(id) {
   document.getElementById('modal').classList.add('open');
 }
 
-async function saveMora(id) {
+function saveMora(id) {
   var motivo     = document.getElementById('morMotivo').value.trim();
   var compromiso = document.getElementById('morCompromiso').value.trim();
   var contacto   = document.getElementById('morContacto').value;
   var newEstado  = document.getElementById('morEstado').value;
 
-  if (!motivo || !compromiso) { showToast('⚠️ Completá motivo y compromiso de pago'); return; }
+  if (!motivo || !compromiso) { showToast('\u26A0\uFE0F Complet\u00e1 motivo y compromiso de pago'); return; }
 
   var now = new Date();
   var fecha = now.getDate() + '/' + (now.getMonth()+1) + '/' + now.getFullYear()
@@ -1619,7 +1643,6 @@ async function saveMora(id) {
 
   var entry = { fecha: fecha, motivo: motivo, compromiso: compromiso, contacto: contacto, resuelta: false };
 
-  // Actualizar cliente local
   var c = allClients.find(function(x){ return x.id == id; });
   if (!c) return;
   if (!c.mora) c.mora = [];
@@ -1628,52 +1651,58 @@ async function saveMora(id) {
   var idx = allClients.indexOf(c);
   allClients[idx] = enrich(c);
 
-  // Guardar en Supabase: mora como JSON en notas + estado
-  if (sbClient) {
-    try {
-      var updateData = { mora_json: JSON.stringify(c.mora) };
-      if (newEstado) updateData.estado = newEstado;
-      var r = await sbClient.from('clientes').update(updateData).eq('id', id);
-      if (r.error) throw r.error;
-    } catch(e) {
-      console.warn('[SB] saveMora:', e.message);
-      showToast('⚠️ Error al guardar: ' + e.message);
-      return;
+  if (!sbClient) {
+    if (newEstado === 'atraso_gestion' || newEstado === 'atraso') {
+      notificarGerenteGestion(c, motivo + ' | Compromiso: ' + compromiso + ' | Contacto: ' + contacto);
     }
+    closeModal(); renderAll(); showToast('\uD83D\uDCCB Gesti\u00f3n registrada');
+    return;
   }
 
-  // Notificar al gerente via Supabase
-  if (newEstado === 'atraso_gestion' || newEstado === 'atraso') {
-    notificarGerenteGestion(c, motivo + ' | Compromiso: ' + compromiso + ' | Contacto: ' + contacto);
-  }
+  var updateData = { mora_json: JSON.stringify(c.mora) };
+  if (newEstado) updateData.estado = newEstado;
 
-  closeModal();
-  renderAll();
-  showToast('📋 Gestión registrada — notificado a gerencia');
+  sbClient.from('clientes').update(updateData).eq('id', id)
+    .then(function(r) {
+      if (r.error) throw r.error;
+      if (newEstado === 'atraso_gestion' || newEstado === 'atraso') {
+        notificarGerenteGestion(c, motivo + ' | Compromiso: ' + compromiso + ' | Contacto: ' + contacto);
+      }
+      closeModal();
+      renderAll();
+      showToast('\uD83D\uDCCB Gesti\u00f3n registrada \u2014 notificado a gerencia');
+    })
+    .catch(function(e) {
+      console.warn('[SB] saveMora:', e.message);
+      showToast('\u26A0\uFE0F Error al guardar: ' + e.message);
+    });
 }
 
-async function resolverMora(id, idx) {
+function resolverMora(id, idx) {
   var c = allClients.find(function(x){ return x.id == id; });
   if (!c || !c.mora || !c.mora[idx]) return;
   c.mora[idx].resuelta = true;
   var ci = allClients.indexOf(c);
   allClients[ci] = enrich(c);
 
-  if (sbClient) {
-    try {
-      var r = await sbClient.from('clientes').update({ mora_json: JSON.stringify(c.mora) }).eq('id', id);
-      if (r.error) throw r.error;
-    } catch(e) {
-      console.warn('[SB] resolverMora:', e.message);
-      showToast('⚠️ Error al guardar: ' + e.message);
-      return;
-    }
+  if (!sbClient) {
+    closeModal(); renderAll(); openMoraModal(id);
+    showToast('\u2705 Mora marcada como resuelta');
+    return;
   }
 
-  closeModal();
-  renderAll();
-  openMoraModal(id);
-  showToast('✅ Mora marcada como resuelta');
+  sbClient.from('clientes').update({ mora_json: JSON.stringify(c.mora) }).eq('id', id)
+    .then(function(r) {
+      if (r.error) throw r.error;
+      closeModal();
+      renderAll();
+      openMoraModal(id);
+      showToast('\u2705 Mora marcada como resuelta');
+    })
+    .catch(function(e) {
+      console.warn('[SB] resolverMora:', e.message);
+      showToast('\u26A0\uFE0F Error al guardar: ' + e.message);
+    });
 }
 
 // ══════════════════════════════════════════════════════
@@ -1754,156 +1783,144 @@ function calcCuota() {
 }
 
 function openAddModal() {
-  document.getElementById('modalBox').innerHTML = `
-    <div class="modal-head">
-      <div><h2>➕ Nuevo Cliente</h2><p>Completá los datos del nuevo plan</p></div>
-      <button class="modal-close" onclick="closeModal()">✕</button>
-    </div>
-    <div class="modal-body">
-      <div class="modal-grid">
-        <div class="m-item"><div class="m-label">Nombre completo</div><input class="edit-input" id="nNombre" placeholder="Ej: Juan Pérez" /></div>
-        <div class="m-item"><div class="m-label">Email</div><input class="edit-input" id="nEmail" placeholder="juan@email.com" /></div>
-        <div class="m-item"><div class="m-label">Contraseña (panel cliente)</div><input class="edit-input" id="nPass" placeholder="Contraseña" /></div>
-        <div class="m-item"><div class="m-label">Documento</div><input class="edit-input" id="nDoc" placeholder="DNI 32.456.789" /></div>
-        <div class="m-item"><div class="m-label">Teléfono principal</div><input class="edit-input" id="nTel1" placeholder="Ej: +54 9 11 1234-5678" /></div>
-        <div class="m-item"><div class="m-label">Teléfono de referencia</div><input class="edit-input" id="nTel2" placeholder="Ej: +54 9 351 9876-5432" /></div>
-        <div class="m-item" style="grid-column:span 2;"><div class="m-label">Domicilio</div><input class="edit-input" id="nDomicilio" placeholder="Ej: Av. Corrientes 1234, Buenos Aires" /></div>
-        <div class="m-item"><div class="m-label">Destino</div>
-          <select class="edit-input" id="nDest">
-            <option value="Cabo Frío, Brasil">🏖️ Cabo Frío</option>
-            <option value="Arraial do Cabo, Brasil">🌊 Arraial do Cabo</option>
-            <option value="Búzios, Brasil">⛵ Búzios</option>
-            <option value="Río de Janeiro – Copacabana, Brasil">🌆 Río de Janeiro – Copacabana</option>
-          </select>
-        </div>
-        <div class="m-item"><div class="m-label">Paquete</div>
-          <select class="edit-input" id="nPkg" onchange="calcCuota()" >
-            <option value="Escapada en Pareja" data-price="870"  data-pers="2">Escapada en Pareja — USD 870</option>
-            <option value="Paquete 4 Amigos"   data-price="1450" data-pers="4">Paquete 4 Amigos — USD 1.450</option>
-            <option value="Paquete 6 Amigos"   data-price="1740" data-pers="6">Paquete 6 Amigos — USD 1.740</option>
-          </select>
-        </div>
-        <div class="m-item">
-          <div class="m-label">Cuotas totales</div>
-          <select class="edit-input" id="nCuotas" onchange="calcCuota()">
-            <option value="6">6 cuotas</option>
-            <option value="10" selected>10 cuotas</option>
-            <option value="12">12 cuotas</option>
-            <option value="18">18 cuotas</option>
-          </select>
-          <div id="nBreakdown" style="margin-top:6px;min-height:18px;"></div>
-        </div>
-        <div class="m-item" style="grid-column:span 2;">
-          <div id="calcBox" style="display:flex;gap:12px;align-items:center;padding:14px 16px;background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.25);border-radius:12px;transition:background .3s;">
-            <div style="flex:1;">
-              <div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--accent2);margin-bottom:4px;">Total del plan</div>
-              <div id="nTotalDisplay" style="font-family:Syne,sans-serif;font-size:1.3rem;font-weight:800;color:var(--text);">USD 870</div>
-            </div>
-            <div style="width:1px;height:40px;background:var(--border2);"></div>
-            <div style="flex:1;text-align:center;">
-              <div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--accent2);margin-bottom:4px;">Valor por cuota</div>
-              <div id="nCuotaDisplay" style="font-family:Syne,sans-serif;font-size:1.5rem;font-weight:800;color:#60a5fa;">USD 87</div>
-            </div>
-            <div style="width:1px;height:40px;background:var(--border2);"></div>
-            <div style="flex:1;text-align:right;">
-              <div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--accent2);margin-bottom:4px;">Personas</div>
-              <div id="nPersDisplay" style="font-family:Syne,sans-serif;font-size:1.3rem;font-weight:800;color:var(--text);">2</div>
-            </div>
-          </div>
-        </div>
-        <input type="hidden" id="nTotal" value="870" />
-        <input type="hidden" id="nPersonas" value="2" />
-        <div class="m-item"><div class="m-label">Fecha de viaje</div><input class="edit-input" id="nFecha" type="date" /></div>
-        <div class="m-item"><div class="m-label">Noches</div><input class="edit-input" id="nNoches" placeholder="7" value="7" /></div>
-        <div class="m-item" style="grid-column:span 2;">
-          <div class="m-label">🎁 Código de referido <span style="font-weight:400;color:var(--muted);font-size:.78rem;">(opcional — solo si el cliente ingresó por un referido)</span></div>
-          <input class="edit-input" id="nRefCodigo" placeholder="Ej: LUA-VALENTINA" style="font-family:monospace;" oninput="buscarReferidor(this.value)" />
-          <div id="nRefInfo" style="margin-top:6px;min-height:18px;font-size:.78rem;color:#fbbf24;"></div>
-        </div>
-      </div>
-      <div class="modal-actions">
-        <button class="m-btn primary" onclick="addClient()">✅ Agregar cliente</button>
-        <button class="m-btn ghost" onclick="closeModal()">Cancelar</button>
-      </div>
-    </div>
-  `;
+  document.getElementById('modalBox').innerHTML =
+    '<div class="modal-head">'
+    + '<div><h2>\u2795 Nuevo Cliente</h2><p>Complet\u00e1 los datos del nuevo plan</p></div>'
+    + '<button class="modal-close" onclick="closeModal()">\u2715</button>'
+    + '</div>'
+    + '<div class="modal-body">'
+    + '<div class="modal-grid">'
+    +   '<div class="m-item"><div class="m-label">Nombre completo</div><input class="edit-input" id="nNombre" placeholder="Ej: Juan P\u00e9rez" /></div>'
+    +   '<div class="m-item"><div class="m-label">Email</div><input class="edit-input" id="nEmail" placeholder="juan@email.com" /></div>'
+    +   '<div class="m-item"><div class="m-label">Contrase\u00f1a (panel cliente)</div><input class="edit-input" id="nPass" placeholder="Contrase\u00f1a" /></div>'
+    +   '<div class="m-item"><div class="m-label">Documento</div><input class="edit-input" id="nDoc" placeholder="DNI 32.456.789" /></div>'
+    +   '<div class="m-item"><div class="m-label">Tel\u00e9fono principal</div><input class="edit-input" id="nTel1" placeholder="Ej: +54 9 11 1234-5678" /></div>'
+    +   '<div class="m-item"><div class="m-label">Tel\u00e9fono de referencia</div><input class="edit-input" id="nTel2" placeholder="Ej: +54 9 351 9876-5432" /></div>'
+    +   '<div class="m-item" style="grid-column:span 2;"><div class="m-label">Domicilio</div><input class="edit-input" id="nDomicilio" placeholder="Ej: Av. Corrientes 1234, Buenos Aires" /></div>'
+    +   '<div class="m-item"><div class="m-label">Destino</div>'
+    +     '<select class="edit-input" id="nDest">'
+    +       '<option value="Cabo Fr\u00edo, Brasil">\uD83C\uDFD6\uFE0F Cabo Fr\u00edo</option>'
+    +       '<option value="Arraial do Cabo, Brasil">\uD83C\uDF0A Arraial do Cabo</option>'
+    +       '<option value="B\u00fazios, Brasil">\u26F5 B\u00fazios</option>'
+    +       '<option value="R\u00edo de Janeiro \u2013 Copacabana, Brasil">\uD83C\uDFD9\uFE0F R\u00edo de Janeiro \u2013 Copacabana</option>'
+    +     '</select>'
+    +   '</div>'
+    +   '<div class="m-item"><div class="m-label">Paquete</div>'
+    +     '<select class="edit-input" id="nPkg" onchange="calcCuota()">'
+    +       '<option value="Escapada en Pareja" data-price="870" data-pers="2">Escapada en Pareja \u2014 USD 870</option>'
+    +       '<option value="Paquete 4 Amigos" data-price="1450" data-pers="4">Paquete 4 Amigos \u2014 USD 1.450</option>'
+    +       '<option value="Paquete 6 Amigos" data-price="1740" data-pers="6">Paquete 6 Amigos \u2014 USD 1.740</option>'
+    +     '</select>'
+    +   '</div>'
+    +   '<div class="m-item">'
+    +     '<div class="m-label">Cuotas totales</div>'
+    +     '<select class="edit-input" id="nCuotas" onchange="calcCuota()">'
+    +       '<option value="6">6 cuotas</option>'
+    +       '<option value="10" selected>10 cuotas</option>'
+    +       '<option value="12">12 cuotas</option>'
+    +       '<option value="18">18 cuotas</option>'
+    +     '</select>'
+    +     '<div id="nBreakdown" style="margin-top:6px;min-height:18px;"></div>'
+    +   '</div>'
+    +   '<div class="m-item" style="grid-column:span 2;">'
+    +     '<div id="calcBox" style="display:flex;gap:12px;align-items:center;padding:14px 16px;background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.25);border-radius:12px;transition:background .3s;">'
+    +       '<div style="flex:1;">'
+    +         '<div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--accent2);margin-bottom:4px;">Total del plan</div>'
+    +         '<div id="nTotalDisplay" style="font-family:Syne,sans-serif;font-size:1.3rem;font-weight:800;color:var(--text);">USD 870</div>'
+    +       '</div>'
+    +       '<div style="width:1px;height:40px;background:var(--border2);"></div>'
+    +       '<div style="flex:1;text-align:center;">'
+    +         '<div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--accent2);margin-bottom:4px;">Valor por cuota</div>'
+    +         '<div id="nCuotaDisplay" style="font-family:Syne,sans-serif;font-size:1.5rem;font-weight:800;color:#60a5fa;">USD 87</div>'
+    +       '</div>'
+    +       '<div style="width:1px;height:40px;background:var(--border2);"></div>'
+    +       '<div style="flex:1;text-align:right;">'
+    +         '<div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--accent2);margin-bottom:4px;">Personas</div>'
+    +         '<div id="nPersDisplay" style="font-family:Syne,sans-serif;font-size:1.3rem;font-weight:800;color:var(--text);">2</div>'
+    +       '</div>'
+    +     '</div>'
+    +   '</div>'
+    +   '<input type="hidden" id="nTotal" value="870" />'
+    +   '<input type="hidden" id="nPersonas" value="2" />'
+    +   '<div class="m-item"><div class="m-label">Fecha de viaje</div><input class="edit-input" id="nFecha" type="date" /></div>'
+    +   '<div class="m-item"><div class="m-label">Noches</div><input class="edit-input" id="nNoches" placeholder="7" value="7" /></div>'
+    +   '<div class="m-item" style="grid-column:span 2;">'
+    +     '<div class="m-label">\uD83C\uDF81 C\u00f3digo de referido <span style="font-weight:400;color:var(--muted);font-size:.78rem;">(opcional \u2014 solo si el cliente ingres\u00f3 por un referido)</span></div>'
+    +     '<input class="edit-input" id="nRefCodigo" placeholder="Ej: LUA-VALENTINA" style="font-family:monospace;" oninput="buscarReferidor(this.value)" />'
+    +     '<div id="nRefInfo" style="margin-top:6px;min-height:18px;font-size:.78rem;color:#fbbf24;"></div>'
+    +   '</div>'
+    + '</div>'
+    + '<div class="modal-actions">'
+    +   '<button class="m-btn primary" onclick="addClient()">\u2705 Agregar cliente</button>'
+    +   '<button class="m-btn ghost" onclick="closeModal()">Cancelar</button>'
+    + '</div>'
+    + '</div>';
   document.getElementById('modal').classList.add('open');
   setTimeout(calcCuota, 50);
 }
 
-async function addClient() {
+function addClient() {
   var nombre  = document.getElementById('nNombre').value.trim();
   var email   = document.getElementById('nEmail').value.trim().toLowerCase();
   var pass    = document.getElementById('nPass').value.trim();
   var total   = parseFloat(document.getElementById('nTotal').value) || 0;
   var cuotas  = parseInt(document.getElementById('nCuotas').value) || 10;
 
-  if (!nombre || !email) { showToast('⚠️ Nombre y email son obligatorios'); return; }
-  if (!pass || pass.length < 6) { showToast('⚠️ La contraseña debe tener al menos 6 caracteres'); return; }
-  if (!_currentProfile) { showToast('⚠️ Sesión no cargada. Recargá la página.'); return; }
-  if (!sbClient) { showToast('❌ Sin conexión a Supabase'); return; }
+  if (!nombre || !email) { showToast('\u26A0\uFE0F Nombre y email son obligatorios'); return; }
+  if (!pass || pass.length < 6) { showToast('\u26A0\uFE0F La contrase\u00f1a debe tener al menos 6 caracteres'); return; }
+  if (!_currentProfile) { showToast('\u26A0\uFE0F Sesi\u00f3n no cargada. Recargu\u00e1 la p\u00e1gina.'); return; }
+  if (!sbClient) { showToast('\u274C Sin conexi\u00f3n a Supabase'); return; }
 
-  // Deshabilitar botón mientras procesa
   var btnGuardar = document.querySelector('#modal .m-btn.primary');
-  if (btnGuardar) { btnGuardar.disabled = true; btnGuardar.textContent = '⏳ Creando...'; }
+  if (btnGuardar) { btnGuardar.disabled = true; btnGuardar.textContent = '\u23F3 Creando...'; }
 
-  try {
-    // ── PASO 1: Crear usuario en Supabase Auth ──────────────────────────────
-    // Se usa un cliente separado para no cerrar la sesión del vendedor actual
-    var sbTemp = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
-      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
-    });
+  var sbTemp = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
+  });
 
-    var authResult = await sbTemp.auth.signUp({ email: email, password: pass });
-
-    if (authResult.error) {
-      // Si el usuario ya existe en Auth, continuar igual — puede ser un reintento
-      if (!authResult.error.message.toLowerCase().includes('already registered')) {
-        throw new Error('Auth: ' + authResult.error.message);
+  sbTemp.auth.signUp({ email: email, password: pass })
+    .then(function(authResult) {
+      if (authResult.error) {
+        if (authResult.error.message.toLowerCase().indexOf('already registered') === -1) {
+          throw new Error('Auth: ' + authResult.error.message);
+        }
       }
-    }
+      var authUserId = authResult.data && authResult.data.user ? authResult.data.user.id : null;
 
-    var authUserId = authResult.data && authResult.data.user
-      ? authResult.data.user.id
-      : null;
+      var newClient = {
+        nombre:         nombre,
+        email:          email,
+        user_id:        authUserId,
+        documento:      document.getElementById('nDoc').value.trim() || null,
+        telefono:       document.getElementById('nTel1').value.trim() || null,
+        destino:        document.getElementById('nDest').value || null,
+        paquete:        document.getElementById('nPkg').value || null,
+        fecha_viaje:    document.getElementById('nFecha').value || null,
+        total_usd:      total,
+        cuotas_total:   cuotas,
+        cuotas_pagadas: 0,
+        monto_cuota:    total > 0 ? parseFloat((total / cuotas).toFixed(2)) : 0,
+        estado:         'activo',
+        seller_id:      _currentProfile.id,
+        notas:          ''
+      };
 
-    // ── PASO 2: Insertar en tabla clientes ──────────────────────────────────
-    var newClient = {
-      nombre:         nombre,
-      email:          email,
-      user_id:        authUserId,   // FK a auth.users — permite el login
-      documento:      document.getElementById('nDoc').value.trim() || null,
-      telefono:       document.getElementById('nTel1').value.trim() || null,
-      destino:        document.getElementById('nDest').value || null,
-      paquete:        document.getElementById('nPkg').value || null,
-      fecha_viaje:    document.getElementById('nFecha').value || null,
-      total_usd:      total,
-      cuotas_total:   cuotas,
-      cuotas_pagadas: 0,
-      monto_cuota:    total > 0 ? parseFloat((total / cuotas).toFixed(2)) : 0,
-      estado:         'activo',
-      seller_id:      _currentProfile.id,
-      notas:          ''
-    };
-
-    var r = await sbClient.from('clientes').insert([newClient]).select().single();
-    if (r.error) throw new Error('DB: ' + r.error.message);
-
-    var inserted = enrich(r.data);
-    allClients.push(inserted);
-
-    // ── PASO 3: Procesar referido si se ingresó código ──────────────────────
-    procesarReferidoNuevoCliente(inserted);
-
-    closeModal();
-    renderAll();
-    showToast('✅ Cliente ' + nombre + ' creado — puede ingresar al panel con su email y contraseña');
-
-  } catch(e) {
-    console.warn('[SB] addClient:', e.message);
-    showToast('⚠️ Error al crear cliente: ' + e.message);
-    if (btnGuardar) { btnGuardar.disabled = false; btnGuardar.textContent = '✅ Agregar cliente'; }
-  }
+      return sbClient.from('clientes').insert([newClient]).select().single();
+    })
+    .then(function(r) {
+      if (r.error) throw new Error('DB: ' + r.error.message);
+      var inserted = enrich(r.data);
+      allClients.push(inserted);
+      procesarReferidoNuevoCliente(inserted);
+      closeModal();
+      renderAll();
+      showToast('\u2705 Cliente ' + nombre + ' creado \u2014 puede ingresar al panel con su email y contrase\u00f1a');
+    })
+    .catch(function(e) {
+      console.warn('[SB] addClient:', e.message);
+      showToast('\u26A0\uFE0F Error al crear cliente: ' + e.message);
+      if (btnGuardar) { btnGuardar.disabled = false; btnGuardar.textContent = '\u2705 Agregar cliente'; }
+    });
 }
 
 function syncData() {
@@ -1915,7 +1932,7 @@ function syncData() {
 // ─── SECTION SWITCHER ─────────────────────────────────────────────────────
 
 // ── MIS COMISIONES (ASESOR) — datos desde staff_profiles en Supabase ──
-async function renderMisComisionesAdmin(){
+function renderMisComisionesAdmin(){
   var el = document.getElementById('misComisionesSection');
   if(!el) return;
 
@@ -2033,16 +2050,15 @@ function showSection(name) {
 // referido_nombre / referido_email / referido_tel = la persona referida
 // vendedor_id = el asesor que registra
 
-async function getAllReferidos() {
-  if (!sbClient || !_currentProfile) return [];
-  try {
-    var r = await sbClient
-      .from('referidos')
-      .select('*, cliente:clientes(nombre, email)')
-      .eq('vendedor_id', _currentProfile.id)
-      .order('created_at', { ascending: false });
-    return r.data || [];
-  } catch(e) { console.warn('[SB] getAllReferidos:', e.message); return []; }
+function getAllReferidos() {
+  if (!sbClient || !_currentProfile) return Promise.resolve([]);
+  return sbClient
+    .from('referidos')
+    .select('*, cliente:clientes(nombre, email)')
+    .eq('vendedor_id', _currentProfile.id)
+    .order('created_at', { ascending: false })
+    .then(function(r) { return r.data || []; })
+    .catch(function(e) { console.warn('[SB] getAllReferidos:', e.message); return []; });
 }
 
 // Abrir modal para cargar referido desde la fila de un cliente existente
@@ -2080,57 +2096,60 @@ function abrirCargaReferido(clientId) {
   document.getElementById('modal').classList.add('open');
 }
 
-async function confirmarCargaReferido(clientId) {
+function confirmarCargaReferido(clientId) {
   var nombre = (document.getElementById('rNombre') || {}).value.trim();
-  if (!nombre) { showToast('⚠️ El nombre del referido es obligatorio'); return; }
+  if (!nombre) { showToast('\u26A0\uFE0F El nombre del referido es obligatorio'); return; }
   var c = allClients.find(function(x){ return x.id == clientId; });
   if (!c || !sbClient || !_currentProfile) return;
 
-  try {
-    var r = await sbClient.from('referidos').insert([{
-      vendedor_id:     _currentProfile.id,
-      cliente_id:      c.id,
-      referido_nombre: nombre,
-      referido_email:  (document.getElementById('rEmail') || {}).value.trim() || null,
-      referido_tel:    (document.getElementById('rTel') || {}).value.trim() || null,
-      notas:           (document.getElementById('rNotas') || {}).value.trim() || null,
-      estado:          'pendiente'
-    }]);
-    if (r.error) throw r.error;
-    closeModal();
-    showToast('✅ Referido registrado — visible en el panel de ' + c.nombre);
-  } catch(e) {
-    console.warn('[SB] confirmarCargaReferido:', e.message);
-    showToast('⚠️ Error al registrar referido: ' + e.message);
-  }
+  sbClient.from('referidos').insert([{
+    vendedor_id:     _currentProfile.id,
+    cliente_id:      c.id,
+    referido_nombre: nombre,
+    referido_email:  (document.getElementById('rEmail') || {}).value.trim() || null,
+    referido_tel:    (document.getElementById('rTel') || {}).value.trim() || null,
+    notas:           (document.getElementById('rNotas') || {}).value.trim() || null,
+    estado:          'pendiente'
+  }])
+    .then(function(r) {
+      if (r.error) throw r.error;
+      closeModal();
+      showToast('\u2705 Referido registrado \u2014 visible en el panel de ' + c.nombre);
+    })
+    .catch(function(e) {
+      console.warn('[SB] confirmarCargaReferido:', e.message);
+      showToast('\u26A0\uFE0F Error al registrar referido: ' + e.message);
+    });
 }
 
-async function guardarReferidoDesdeAdmin(clientId) {
+function guardarReferidoDesdeAdmin(clientId) {
   var c = allClients.find(function(x){ return x.id == clientId; });
   if (!c) return;
   var nuevoEmail = (document.getElementById('refNuevoEmail') || {}).value.trim();
-  if (!nuevoEmail) { showToast('⚠️ Ingresá el email del nuevo cliente'); return; }
+  if (!nuevoEmail) { showToast('\u26A0\uFE0F Ingres\u00e1 el email del nuevo cliente'); return; }
   if (!sbClient || !_currentProfile) return;
 
   var nuevoCliente = allClients.find(function(x){ return x.email.toLowerCase() === nuevoEmail.toLowerCase(); });
-  try {
-    var r = await sbClient.from('referidos').insert([{
-      vendedor_id:     _currentProfile.id,
-      cliente_id:      c.id,
-      referido_nombre: nuevoCliente ? nuevoCliente.nombre : nuevoEmail,
-      referido_email:  nuevoEmail,
-      estado:          'pendiente'
-    }]);
-    if (r.error) throw r.error;
-    closeModal();
-    showToast('✅ Referido registrado — visible en panel de ' + c.nombre);
-  } catch(e) {
-    console.warn('[SB] guardarReferidoDesdeAdmin:', e.message);
-    showToast('⚠️ Error al registrar referido: ' + e.message);
-  }
+
+  sbClient.from('referidos').insert([{
+    vendedor_id:     _currentProfile.id,
+    cliente_id:      c.id,
+    referido_nombre: nuevoCliente ? nuevoCliente.nombre : nuevoEmail,
+    referido_email:  nuevoEmail,
+    estado:          'pendiente'
+  }])
+    .then(function(r) {
+      if (r.error) throw r.error;
+      closeModal();
+      showToast('\u2705 Referido registrado \u2014 visible en panel de ' + c.nombre);
+    })
+    .catch(function(e) {
+      console.warn('[SB] guardarReferidoDesdeAdmin:', e.message);
+      showToast('\u26A0\uFE0F Error al registrar referido: ' + e.message);
+    });
 }
 
-async function procesarReferidoNuevoCliente(nuevoCliente) {
+function procesarReferidoNuevoCliente(nuevoCliente) {
   var codigoRef = (document.getElementById('nRefCodigo') || {}).value.trim();
   if (!codigoRef || !sbClient || !_currentProfile) return;
   var referidor = allClients.find(function(c) {
@@ -2138,15 +2157,14 @@ async function procesarReferidoNuevoCliente(nuevoCliente) {
     return code === codigoRef.toUpperCase() || (c.refCode && c.refCode.toUpperCase() === codigoRef.toUpperCase());
   });
   if (!referidor) return;
-  try {
-    await sbClient.from('referidos').insert([{
-      vendedor_id:     _currentProfile.id,
-      cliente_id:      referidor.id,
-      referido_nombre: nuevoCliente.nombre,
-      referido_email:  nuevoCliente.email,
-      estado:          'pendiente'
-    }]);
-  } catch(e) { console.warn('[SB] procesarReferidoNuevoCliente:', e.message); }
+  sbClient.from('referidos').insert([{
+    vendedor_id:     _currentProfile.id,
+    cliente_id:      referidor.id,
+    referido_nombre: nuevoCliente.nombre,
+    referido_email:  nuevoCliente.email,
+    estado:          'pendiente'
+  }])
+  .catch(function(e) { console.warn('[SB] procesarReferidoNuevoCliente:', e.message); });
 }
 
 function buscarReferidor(codigo) {
@@ -2167,108 +2185,109 @@ function buscarReferidor(codigo) {
 }
 
 // Guardar referido desde el formulario manual de la sección Referidos
-async function guardarReferido() {
+function guardarReferido() {
   var nombre  = (document.getElementById('refNombre').value  || '').trim();
   var email   = (document.getElementById('refEmail').value   || '').trim().toLowerCase();
   var por     = (document.getElementById('refPor').value     || '').trim().toLowerCase();
   var tel     = (document.getElementById('refTel')  ? document.getElementById('refTel').value.trim() : '');
-  if (!nombre || !por) { alert('Nombre del referido y email del cliente que refirió son obligatorios.'); return; }
-  if (!sbClient || !_currentProfile) { showToast('❌ Sin sesión activa'); return; }
+  if (!nombre || !por) { alert('Nombre del referido y email del cliente que refiri\u00f3 son obligatorios.'); return; }
+  if (!sbClient || !_currentProfile) { showToast('\u274C Sin sesi\u00f3n activa'); return; }
 
-  // Buscar cliente referidor por email
   var referidor = allClients.find(function(c){ return c.email.toLowerCase() === por; });
-  if (!referidor) { showToast('⚠️ No se encontró un cliente con ese email en tu cartera'); return; }
+  if (!referidor) { showToast('\u26A0\uFE0F No se encontr\u00f3 un cliente con ese email en tu cartera'); return; }
 
-  try {
-    var r = await sbClient.from('referidos').insert([{
-      vendedor_id:     _currentProfile.id,
-      cliente_id:      referidor.id,
-      referido_nombre: nombre,
-      referido_email:  email || null,
-      referido_tel:    tel || null,
-      estado:          'pendiente'
-    }]);
-    if (r.error) throw r.error;
-    document.getElementById('refNombre').value = '';
-    document.getElementById('refEmail').value  = '';
-    document.getElementById('refPor').value    = '';
-    if (document.getElementById('refTel')) document.getElementById('refTel').value = '';
-    showToast('✅ Referido guardado');
-    renderRefList();
-  } catch(e) {
-    console.warn('[SB] guardarReferido:', e.message);
-    showToast('⚠️ Error al guardar referido: ' + e.message);
-  }
+  sbClient.from('referidos').insert([{
+    vendedor_id:     _currentProfile.id,
+    cliente_id:      referidor.id,
+    referido_nombre: nombre,
+    referido_email:  email || null,
+    referido_tel:    tel || null,
+    estado:          'pendiente'
+  }])
+    .then(function(r) {
+      if (r.error) throw r.error;
+      document.getElementById('refNombre').value = '';
+      document.getElementById('refEmail').value  = '';
+      document.getElementById('refPor').value    = '';
+      if (document.getElementById('refTel')) document.getElementById('refTel').value = '';
+      showToast('\u2705 Referido guardado');
+      renderRefList();
+    })
+    .catch(function(e) {
+      console.warn('[SB] guardarReferido:', e.message);
+      showToast('\u26A0\uFE0F Error al guardar referido: ' + e.message);
+    });
 }
 
-async function renderRefList() {
+function renderRefList() {
   var el = document.getElementById('refListAdmin');
   if (!el) return;
-  el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted);font-size:.88rem;">⏳ Cargando...</div>';
-  var refs = await getAllReferidos();
-  if (refs.length === 0) {
-    el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted);font-size:.88rem;">No hay referidos cargados aún.</div>';
-    return;
-  }
-  var ESTADO_COLOR = { pendiente: '#f59e0b', convertido: '#22c55e', baja: '#ef4444' };
-  el.innerHTML = refs.map(function(r) {
-    var estadoCol = ESTADO_COLOR[r.estado] || '#60a5fa';
-    var referidorNombre = r.cliente ? r.cliente.nombre : '—';
-    return '<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:10px;flex-wrap:wrap;gap:8px;">'
-      + '<div>'
-        + '<div style="font-weight:600;font-size:.9rem;">' + r.referido_nombre + '</div>'
-        + '<div style="font-size:.77rem;color:var(--muted);margin-top:2px;">'
-        + (r.referido_email || '—') + (r.referido_tel ? ' · ' + r.referido_tel : '')
-        + ' · Ref. por: <strong style="color:#fbbf24;">' + referidorNombre + '</strong></div>'
-        + (r.notas ? '<div style="font-size:.72rem;color:rgba(180,200,240,.5);margin-top:2px;">📝 ' + r.notas + '</div>' : '')
-      + '</div>'
-      + '<div style="display:flex;align-items:center;gap:8px;">'
-        + '<span style="font-size:.74rem;font-weight:700;padding:3px 10px;border-radius:20px;background:rgba(0,0,0,.2);color:' + estadoCol + ';border:1px solid ' + estadoCol + '44;">' + (r.estado || 'pendiente') + '</span>'
-        + '<span style="font-size:.72rem;color:var(--muted);">' + (r.created_at ? r.created_at.slice(0,10) : '') + '</span>'
-        + '<button onclick="eliminarReferido(\'' + r.id + '\')" style="padding:3px 10px;border-radius:8px;background:rgba(239,68,68,.1);color:#fca5a5;border:1px solid rgba(239,68,68,.2);font-size:.72rem;cursor:pointer;">✕</button>'
-      + '</div>'
-    + '</div>';
-  }).join('');
+  el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted);font-size:.88rem;">\u23F3 Cargando...</div>';
+  getAllReferidos().then(function(refs) {
+    if (refs.length === 0) {
+      el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted);font-size:.88rem;">No hay referidos cargados a\u00fan.</div>';
+      return;
+    }
+    var ESTADO_COLOR = { pendiente: '#f59e0b', convertido: '#22c55e', baja: '#ef4444' };
+    el.innerHTML = refs.map(function(r) {
+      var estadoCol = ESTADO_COLOR[r.estado] || '#60a5fa';
+      var referidorNombre = r.cliente ? r.cliente.nombre : '\u2014';
+      return '<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:10px;flex-wrap:wrap;gap:8px;">'
+        + '<div>'
+          + '<div style="font-weight:600;font-size:.9rem;">' + r.referido_nombre + '</div>'
+          + '<div style="font-size:.77rem;color:var(--muted);margin-top:2px;">'
+          + (r.referido_email || '\u2014') + (r.referido_tel ? ' \u00b7 ' + r.referido_tel : '')
+          + ' \u00b7 Ref. por: <strong style="color:#fbbf24;">' + referidorNombre + '</strong></div>'
+          + (r.notas ? '<div style="font-size:.72rem;color:rgba(180,200,240,.5);margin-top:2px;">\uD83D\uDCDD ' + r.notas + '</div>' : '')
+        + '</div>'
+        + '<div style="display:flex;align-items:center;gap:8px;">'
+          + '<span style="font-size:.74rem;font-weight:700;padding:3px 10px;border-radius:20px;background:rgba(0,0,0,.2);color:' + estadoCol + ';border:1px solid ' + estadoCol + '44;">' + (r.estado || 'pendiente') + '</span>'
+          + '<span style="font-size:.72rem;color:var(--muted);">' + (r.created_at ? r.created_at.slice(0,10) : '') + '</span>'
+          + '<button onclick="eliminarReferido(\'' + r.id + '\')" style="padding:3px 10px;border-radius:8px;background:rgba(239,68,68,.1);color:#fca5a5;border:1px solid rgba(239,68,68,.2);font-size:.72rem;cursor:pointer;">\u2715</button>'
+        + '</div>'
+      + '</div>';
+    }).join('');
+  });
 }
 
-async function eliminarReferido(id) {
+function eliminarReferido(id) {
   if (!sbClient) return;
-  try {
-    await sbClient.from('referidos').delete().eq('id', id);
-    renderRefList();
-  } catch(e) { console.warn('[SB] eliminarReferido:', e.message); }
+  sbClient.from('referidos').delete().eq('id', id)
+    .then(function() { renderRefList(); })
+    .catch(function(e) { console.warn('[SB] eliminarReferido:', e.message); });
 }
 
 // ── CUENTAS DE PAGO — Supabase tabla: staff_profiles (campo cbu) ──────────
 // Las cuentas de cobro del asesor quedan en su propio perfil (campo cbu).
 // Esta sección muestra su CBU/alias y permite cargarlo si no está.
 
-async function guardarCuenta() {
+function guardarCuenta() {
   var alias   = (document.getElementById('ctaAlias')   || {}).value || '';
   var cbu     = (document.getElementById('ctaCbu')     || {}).value || '';
   var titular = (document.getElementById('ctaTitular') || {}).value || '';
   var banco   = (document.getElementById('ctaBanco')   || {}).value || '';
 
-  if (!alias && !cbu) { alert('Completá al menos el Alias o el CBU/CVU.'); return; }
-  if (!sbClient || !_currentProfile) { showToast('❌ Sin sesión activa'); return; }
+  if (!alias && !cbu) { alert('Complet\u00e1 al menos el Alias o el CBU/CVU.'); return; }
+  if (!sbClient || !_currentProfile) { showToast('\u274C Sin sesi\u00f3n activa'); return; }
 
-  var cbuStr = [banco ? banco + ':' : '', titular ? titular + ' — ' : '', cbu || alias].filter(Boolean).join('').trim();
+  var cbuStr = [banco ? banco + ':' : '', titular ? titular + ' \u2014 ' : '', cbu || alias].filter(Boolean).join('').trim();
 
-  try {
-    var r = await sbClient.from('staff_profiles')
-      .update({ cbu: cbuStr })
-      .eq('id', _currentProfile.id);
-    if (r.error) throw r.error;
-    _currentProfile.cbu = cbuStr;
-    ['ctaAlias','ctaCbu','ctaTitular','ctaBanco'].forEach(function(id){
-      var el = document.getElementById(id); if(el) el.value = '';
+  sbClient.from('staff_profiles')
+    .update({ cbu: cbuStr })
+    .eq('id', _currentProfile.id)
+    .then(function(r) {
+      if (r.error) throw r.error;
+      _currentProfile.cbu = cbuStr;
+      ['ctaAlias','ctaCbu','ctaTitular','ctaBanco'].forEach(function(id){
+        var el = document.getElementById(id); if(el) el.value = '';
+      });
+      renderCuentasList();
+      showToast('\u2705 Cuenta guardada en tu perfil');
+    })
+    .catch(function(e) {
+      console.warn('[SB] guardarCuenta:', e.message);
+      showToast('\u26A0\uFE0F Error al guardar: ' + e.message);
     });
-    renderCuentasList();
-    showToast('✅ Cuenta guardada en tu perfil');
-  } catch(e) {
-    console.warn('[SB] guardarCuenta:', e.message);
-    showToast('⚠️ Error al guardar: ' + e.message);
-  }
 }
 
 function eliminarCuenta() {
@@ -2434,7 +2453,7 @@ function abrirRegistroPago(clientId) {
   document.body.appendChild(modal);
 }
 
-async function enviarComprobante(clientId) {
+function enviarComprobante(clientId) {
   var cuotaNum  = parseInt(document.getElementById('pCuotaNum').value);
   var monto     = parseFloat(document.getElementById('pMonto').value);
   var fecha     = document.getElementById('pFecha').value;
@@ -2442,115 +2461,114 @@ async function enviarComprobante(clientId) {
   var fileInput = document.getElementById('pFile');
 
   if (!cuotaNum || isNaN(monto) || monto <= 0) {
-    showToast('⚠️ Completá cuota y monto'); return;
+    showToast('\u26A0\uFE0F Complet\u00e1 cuota y monto'); return;
   }
 
   var c = allClients.find(function(x){ return x.id == clientId; });
   if (!c) return;
-  if (!sbClient) { showToast('❌ Sin conexión a Supabase'); return; }
+  if (!sbClient) { showToast('\u274C Sin conexi\u00f3n a Supabase'); return; }
 
-  async function procesarEnvio(comprobanteUrl) {
-    try {
-      var asesorNombre = _currentProfile
-        ? (_currentProfile.nombre + ' ' + (_currentProfile.apellido || '')).trim()
-        : 'Asesor';
+  function procesarEnvio(comprobanteUrl) {
+    var asesorNombre = _currentProfile
+      ? (_currentProfile.nombre + ' ' + (_currentProfile.apellido || '')).trim()
+      : 'Asesor';
 
-      // INSERT en tabla pagos — estado pendiente
-      var r = await sbClient.from('pagos').insert([{
-        cliente_id:       c.id,
-        cliente_nombre:   c.nombre,
-        vendedor_nombre:  asesorNombre,
-        numero_cuota:     cuotaNum,
-        monto_usd:        monto,
-        estado:           'pendiente',
-        fecha_pago:       fecha || new Date().toISOString().slice(0,10),
-        comprobante_url:  comprobanteUrl || null
-      }]);
-      if (r.error) throw r.error;
-
-      // Notificación para el CEO/gerente
-      await sbClient.from('notificaciones').insert([{
-        tipo:             'pago_pendiente',
-        mensaje:          'Asesor: ' + asesorNombre + ' — ' + c.nombre + ' · Cuota ' + cuotaNum + ' · USD ' + monto + ' · Esperando aprobación',
-        destinatario_rol: 'manager',
-        remitente_id:     _currentProfile.user_id,
-        cliente_id:       c.id || null,
-        datos_extra:      JSON.stringify({ cuota: cuotaNum, monto: monto }),
-        leida:            false
-      }]);
-
-      document.getElementById('payModal').remove();
-      renderTable();
-      showToast('✅ Comprobante enviado · Cuota ' + cuotaNum + ' de ' + c.nombre);
-    } catch(e) {
-      console.warn('[SB] enviarComprobante:', e.message);
-      showToast('⚠️ Error al enviar comprobante: ' + e.message);
-    }
+    sbClient.from('pagos').insert([{
+      cliente_id:       c.id,
+      cliente_nombre:   c.nombre,
+      vendedor_nombre:  asesorNombre,
+      numero_cuota:     cuotaNum,
+      monto_usd:        monto,
+      estado:           'pendiente',
+      fecha_pago:       fecha || new Date().toISOString().slice(0,10),
+      comprobante_url:  comprobanteUrl || null
+    }])
+      .then(function(r) {
+        if (r.error) throw r.error;
+        return sbClient.from('notificaciones').insert([{
+          tipo:             'pago_pendiente',
+          mensaje:          'Asesor: ' + asesorNombre + ' \u2014 ' + c.nombre + ' \u00b7 Cuota ' + cuotaNum + ' \u00b7 USD ' + monto + ' \u00b7 Esperando aprobaci\u00f3n',
+          destinatario_rol: 'manager',
+          remitente_id:     _currentProfile.user_id,
+          cliente_id:       c.id || null,
+          datos_extra:      JSON.stringify({ cuota: cuotaNum, monto: monto }),
+          leida:            false
+        }]);
+      })
+      .then(function() {
+        document.getElementById('payModal').remove();
+        renderTable();
+        showToast('\u2705 Comprobante enviado \u00b7 Cuota ' + cuotaNum + ' de ' + c.nombre);
+      })
+      .catch(function(e) {
+        console.warn('[SB] enviarComprobante:', e.message);
+        showToast('\u26A0\uFE0F Error al enviar comprobante: ' + e.message);
+      });
   }
 
   if (fileInput.files && fileInput.files[0]) {
     var reader = new FileReader();
-    reader.onload = function(e) { procesarEnvio(e.target.result); };
+    reader.onload = function(ev) { procesarEnvio(ev.target.result); };
     reader.readAsDataURL(fileInput.files[0]);
   } else {
     procesarEnvio('');
   }
 }
 
-// Ver comprobantes de un cliente — carga desde tabla pagos
-async function verComprobantes(clientId) {
+function verComprobantes(clientId) {
   var c = allClients.find(function(x){ return x.id == clientId; });
   if (!c) return;
 
   document.getElementById('modalBox').innerHTML =
-    '<div class="modal-head"><div><h2>📎 Comprobantes · ' + c.nombre + '</h2></div>'
-    + '<button class="modal-close" onclick="closeModal()">✕</button></div>'
-    + '<div class="modal-body"><p style="text-align:center;padding:20px;">⏳ Cargando...</p></div>';
+    '<div class="modal-head"><div><h2>\uD83D\uDCCE Comprobantes \u00b7 ' + c.nombre + '</h2></div>'
+    + '<button class="modal-close" onclick="closeModal()">\u2715</button></div>'
+    + '<div class="modal-body"><p style="text-align:center;padding:20px;">\u23F3 Cargando...</p></div>';
   document.getElementById('modal').classList.add('open');
 
-  try {
-    var r = await sbClient.from('pagos')
-      .select('*')
-      .eq('cliente_id', clientId)
-      .order('numero_cuota');
-    var items = r.data || [];
+  sbClient.from('pagos')
+    .select('*')
+    .eq('cliente_id', clientId)
+    .order('numero_cuota')
+    .then(function(r) {
+      var items = r.data || [];
 
-    if (items.length === 0) {
+      if (items.length === 0) {
+        document.getElementById('modalBox').innerHTML =
+          '<div class="modal-head"><div><h2>\uD83D\uDCCE Comprobantes \u00b7 ' + c.nombre + '</h2></div>'
+          + '<button class="modal-close" onclick="closeModal()">\u2715</button></div>'
+          + '<div class="modal-body"><p style="text-align:center;color:var(--muted);padding:30px;">Sin comprobantes registrados</p>'
+          + '<div class="modal-actions"><button class="m-btn ghost" onclick="closeModal()">Cerrar</button></div></div>';
+        return;
+      }
+
+      var rows = items.map(function(p) {
+        var estadoBadge = p.estado === 'aprobado'
+          ? '<span style="font-size:.65rem;font-weight:700;padding:2px 10px;border-radius:10px;background:rgba(52,211,153,.12);border:1px solid rgba(52,211,153,.3);color:#34d399;">\u2705 Aprobado</span>'
+          : p.estado === 'rechazado'
+          ? '<span style="font-size:.65rem;font-weight:700;padding:2px 10px;border-radius:10px;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);color:#fca5a5;">\u274C Rechazado</span>'
+          : '<span style="font-size:.65rem;font-weight:700;padding:2px 10px;border-radius:10px;background:rgba(251,146,60,.12);border:1px solid rgba(251,146,60,.3);color:#fb923c;">\u23F3 Pendiente</span>';
+        return '<div style="background:rgba(11,61,145,.2);border:1px solid rgba(100,160,255,.15);border-radius:12px;padding:12px 14px;">'
+          + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">'
+          + '<span style="font-weight:700;font-size:.85rem;">Cuota ' + p.numero_cuota + ' \u00b7 USD ' + p.monto_usd + '</span>'
+          + '<span style="font-size:.7rem;color:rgba(200,220,255,.6);">' + (p.fecha_pago ? p.fecha_pago.slice(0,10) : '\u2014') + '</span>'
+          + '</div>'
+          + '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;">'
+          + (p.comprobante_url ? '<a href="' + p.comprobante_url + '" target="_blank" style="font-size:.72rem;color:#7eb8ff;text-decoration:none;">\uD83D\uDCCE Ver comprobante</a>' : '<span style="font-size:.7rem;color:rgba(150,190,255,.4);">Sin imagen</span>')
+          + estadoBadge
+          + '</div>'
+          + '</div>';
+      }).join('');
+
       document.getElementById('modalBox').innerHTML =
-        '<div class="modal-head"><div><h2>📎 Comprobantes · ' + c.nombre + '</h2></div>'
-        + '<button class="modal-close" onclick="closeModal()">✕</button></div>'
-        + '<div class="modal-body"><p style="text-align:center;color:var(--muted);padding:30px;">Sin comprobantes registrados</p>'
-        + '<div class="modal-actions"><button class="m-btn ghost" onclick="closeModal()">Cerrar</button></div></div>';
-      return;
-    }
-
-    var rows = items.map(function(p) {
-      var estadoBadge = p.estado === 'aprobado'
-        ? '<span style="font-size:.65rem;font-weight:700;padding:2px 10px;border-radius:10px;background:rgba(52,211,153,.12);border:1px solid rgba(52,211,153,.3);color:#34d399;">✅ Aprobado</span>'
-        : p.estado === 'rechazado'
-        ? '<span style="font-size:.65rem;font-weight:700;padding:2px 10px;border-radius:10px;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);color:#fca5a5;">❌ Rechazado</span>'
-        : '<span style="font-size:.65rem;font-weight:700;padding:2px 10px;border-radius:10px;background:rgba(251,146,60,.12);border:1px solid rgba(251,146,60,.3);color:#fb923c;">⏳ Pendiente</span>';
-      return '<div style="background:rgba(11,61,145,.2);border:1px solid rgba(100,160,255,.15);border-radius:12px;padding:12px 14px;">'
-        + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">'
-        + '<span style="font-weight:700;font-size:.85rem;">Cuota ' + p.numero_cuota + ' · USD ' + p.monto_usd + '</span>'
-        + '<span style="font-size:.7rem;color:rgba(200,220,255,.6);">' + (p.fecha_pago ? p.fecha_pago.slice(0,10) : '—') + '</span>'
-        + '</div>'
-        + '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;">'
-        + (p.comprobante_url ? '<a href="' + p.comprobante_url + '" target="_blank" style="font-size:.72rem;color:#7eb8ff;text-decoration:none;">📎 Ver comprobante</a>' : '<span style="font-size:.7rem;color:rgba(150,190,255,.4);">Sin imagen</span>')
-        + estadoBadge
-        + '</div>'
-        + '</div>';
-    }).join('');
-
-    document.getElementById('modalBox').innerHTML =
-      '<div class="modal-head"><div><h2>📎 Comprobantes · ' + c.nombre + '</h2></div>'
-      + '<button class="modal-close" onclick="closeModal()">✕</button></div>'
-      + '<div class="modal-body" style="max-height:400px;overflow-y:auto;">' + rows + '</div>'
-      + '<div class="modal-actions"><button class="m-btn ghost" onclick="closeModal()">Cerrar</button></div>';
-  } catch(e) {
-    console.warn('[SB] verComprobantes:', e.message);
-    showToast('⚠️ Error al cargar comprobantes');
-  }
+        '<div class="modal-head"><div><h2>\uD83D\uDCCE Comprobantes \u00b7 ' + c.nombre + '</h2></div>'
+        + '<button class="modal-close" onclick="closeModal()">\u2715</button></div>'
+        + '<div class="modal-body" style="max-height:400px;overflow-y:auto;">' + rows + '</div>'
+        + '<div class="modal-actions"><button class="m-btn ghost" onclick="closeModal()">Cerrar</button></div>';
+    })
+    .catch(function(e) {
+      console.warn('[SB] verComprobantes:', e.message);
+      showToast('\u26A0\uFE0F Error al cargar comprobantes');
+    });
 }
 
 // ════════════════════════════════════════════════════════
