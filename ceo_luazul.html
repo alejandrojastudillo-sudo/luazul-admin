@@ -531,9 +531,13 @@ function cLogin(){
   function onDone(){ if (btn) { btn.disabled = false; btn.textContent = '👑 Ingresar'; } }
   function onErr(err){
     errEl.style.display = 'block';
-    errEl.textContent = (err.message === 'Invalid login credentials')
-      ? 'Usuario o contraseña incorrectos.'
-      : (err.message || 'Error al iniciar sesión.');
+    var msg = err.message || 'Error al iniciar sesión.';
+    if(msg === 'Invalid login credentials') msg = 'Usuario o contraseña incorrectos.';
+    else if(msg.indexOf('Email not confirmed') !== -1 || msg.indexOf('email not confirmed') !== -1)
+      msg = 'Email no confirmado. Revisá la bandeja de entrada del gerente/asesor y confirmá el email antes de ingresar.';
+    else if(msg.indexOf('invalid') !== -1 && msg.indexOf('refresh') !== -1)
+      msg = 'Sesión expirada. Volvé a ingresar.';
+    errEl.textContent = msg;
     onDone();
   }
 
@@ -1075,7 +1079,11 @@ function renderRegiones(){
     return;
   }
   var html=rs.map(function(r){
-    var g=gs.find(function(x){return String(x.rid)===String(r.id);})||{};
+    var rid_str=String(r.id);
+    var g=gs.find(function(x){
+      return String(x.rid)===rid_str ||
+             (x.region_ids && x.region_ids.some(function(ri){ return String(ri)===rid_str; }));
+    })||{};
     var rv=vs.filter(function(v){return String(v.rid)===String(r.id);});
     var rc=cs.filter(function(c){return String(c.rid)===String(r.id);});
     var rec=rc.reduce(function(s,c){return s+(parseInt(c.cuotas_pagadas)||0)*(parseFloat(c.monto_cuota)||0);},0);
@@ -1117,7 +1125,10 @@ function renderRegiones(){
 
 function openRegionDetail(rid){
   var r=rby(rid), gs=ger(), vs=vend().filter(function(v){return String(v.rid)===String(rid);}), cs=cli().filter(function(c){return String(c.rid)===String(rid);});
-  var g=gs.find(function(x){return String(x.rid)===String(rid);})||{};
+  var g=gs.find(function(x){
+    return String(x.rid)===String(rid) ||
+           (x.region_ids && x.region_ids.some(function(ri){ return String(ri)===String(rid); }));
+  })||{};
   var rec=cs.reduce(function(s,c){return s+(parseInt(c.cuotas_pagadas)||0)*(parseFloat(c.monto_cuota)||0);},0);
   var activos=cs.filter(function(c){return c.estado==='activo';}).length;
   var atraso=cs.filter(function(c){return c.estado==='atraso';}).length;
@@ -1714,7 +1725,12 @@ function saveNewVendorCeo(){
     })
     .catch(function(e){
       console.error('saveNewVendorCeo:', e);
-      showToast('❌ Error: '+(e.message||'Verificá los datos'));
+      var msg = e.message || 'Verificá los datos';
+      if(msg.indexOf('already registered') !== -1 || msg.indexOf('already been registered') !== -1)
+        msg = 'Ese email ya existe en Supabase Auth. Usá otro email o borrá el usuario anterior.';
+      else if(msg.indexOf('duplicate') !== -1 || msg.indexOf('unique') !== -1)
+        msg = 'Ya existe un perfil con esos datos.';
+      showToast('❌ Error al crear asesor: ' + msg);
       onDone();
     });
 }
@@ -1722,7 +1738,7 @@ function saveNewVendorCeo(){
 function openVendPerfilCeo(){
   var vid = document.getElementById('vendDashSel').value;
   if(!vid){ showToast('⚠️ Seleccioná un asesor primero'); return; }
-  var v = vend().find(function(x){ return x.user_id===vid; });
+  var v = vend().find(function(x){ return String(x.user_id)===String(vid); });
   if(!v){ showToast('⚠️ Asesor no encontrado'); return; }
   var r = rby(v.rid);
   var comps = v.comprobantes || [];
@@ -1781,7 +1797,7 @@ function adjuntarCompVendCeo(vid){
   var file = fileInp.files[0];
   var reader = new FileReader();
   reader.onload = function(e){
-    var v = (_cacheVendedores||[]).find(function(x){ return x.user_id===vid; });
+    var v = (_cacheVendedores||[]).find(function(x){ return String(x.user_id)===String(vid); });
     if(!v) return;
     if(!v.comprobantes) v.comprobantes=[];
     v.comprobantes.push({nombre:nombre,monto:monto,fecha:new Date().toLocaleDateString('es-AR'),data:e.target.result,tipo:file.type});
@@ -1797,7 +1813,7 @@ function adjuntarCompVendCeo(vid){
 }
 
 function verCompVendCeo(vid, idx){
-  var v = vend().find(function(x){ return x.user_id===vid; });
+  var v = vend().find(function(x){ return String(x.user_id)===String(vid); });
   if(!v||!v.comprobantes||!v.comprobantes[idx]) return;
   var c = v.comprobantes[idx];
   var w = window.open('','_blank');
@@ -1810,7 +1826,7 @@ function verCompVendCeo(vid, idx){
 
 function borrarCompVendCeo(vid, idx){
   if(!confirm('¿Eliminar este comprobante?')) return;
-  var v = (_cacheVendedores||[]).find(function(x){ return x.user_id===vid; });
+  var v = (_cacheVendedores||[]).find(function(x){ return String(x.user_id)===String(vid); });
   if(!v||!v.comprobantes) return;
   v.comprobantes.splice(idx,1);
   sbClient.from('staff_profiles').update({comprobantes_json:JSON.stringify(v.comprobantes)}).eq('user_id',vid)
@@ -1820,7 +1836,7 @@ function borrarCompVendCeo(vid, idx){
 }
 
 function openEditVendCeo(vid){
-  var v = vend().find(function(x){ return x.user_id===vid; });
+  var v = vend().find(function(x){ return String(x.user_id)===String(vid); });
   if(!v){ showToast('⚠️ Asesor no encontrado'); return; }
   var rs = reg();
   var regOpts = rs.map(function(r){
@@ -1847,7 +1863,7 @@ function openEditVendCeo(vid){
 }
 
 function saveEditVendCeo(vid){
-  var v = (_cacheVendedores||[]).find(function(x){ return x.user_id===vid; });
+  var v = (_cacheVendedores||[]).find(function(x){ return String(x.user_id)===String(vid); });
   if(!v){ showToast('⚠️ Asesor no encontrado'); return; }
   var nombres = ((document.getElementById('ceVN').value||'').trim()||v.nombre).split(' ');
   var upd = {
@@ -1863,7 +1879,7 @@ function saveEditVendCeo(vid){
   sbClient.from('staff_profiles').update(upd).eq('user_id', vid).select().single()
     .then(function(res){
       if(res.error) throw res.error;
-      var idx = (_cacheVendedores||[]).findIndex(function(x){ return x.user_id===vid; });
+      var idx = (_cacheVendedores||[]).findIndex(function(x){ return String(x.user_id)===String(vid); });
       if(idx>=0) _cacheVendedores[idx] = mapVendedor(res.data);
       showToast('✅ Datos actualizados');
       openVendPerfilCeo(); populateAllFilters();
@@ -1918,12 +1934,14 @@ function saveNewGerente(){
   .then(function(signUp){
     if(signUp.error) throw signUp.error;
     var uid = signUp.data.user ? signUp.data.user.id : null;
+    if(!uid) showToast('⚠️ El email puede requerir confirmación. El gerente debe confirmar su email antes de ingresar.');
     var nombres = nombre.split(' ');
     var profileData = {
       role_id:    ROLE_MANAGER,
       nombre:     nombres[0],
       apellido:   nombres.slice(1).join(' ')||'',
       badge:      email, activo: true,
+      region_id:  regionIds.length > 0 ? regionIds[0] : null,
       ciudad:     (document.getElementById('gCiudad').value||'').trim()||null,
       telefono1:  (document.getElementById('gTel1').value||'').trim()||null,
       telefono2:  (document.getElementById('gTel2').value||'').trim()||null,
@@ -1954,13 +1972,18 @@ function saveNewGerente(){
   })
   .catch(function(e){
     console.error('saveNewGerente:', e);
-    showToast('❌ Error: '+(e.message||'Verificá los datos'));
+    var msg = e.message || 'Verificá los datos';
+    if(msg.indexOf('already registered') !== -1 || msg.indexOf('already been registered') !== -1)
+      msg = 'Ese email ya existe en Supabase Auth. Usá otro email o borrá el usuario anterior desde el Dashboard.';
+    else if(msg.indexOf('duplicate') !== -1 || msg.indexOf('unique') !== -1)
+      msg = 'Ya existe un perfil con esos datos. Verificá email o usuario.';
+    showToast('❌ Error al crear gerente: ' + msg);
     onDone();
   });
 }
 
 function openGerDetail(gid){
-  var g = ger().find(function(x){ return x.user_id === gid; });
+  var g = ger().find(function(x){ return String(x.user_id)===String(gid); });
   if(!g){ showToast('⚠️ Gerente no encontrado'); return; }
   var r = rby(g.rid);
   var comps = g.comprobantes || [];
@@ -2019,7 +2042,7 @@ function adjuntarComprobante(gid){
   var file = fileInp.files[0];
   var reader = new FileReader();
   reader.onload = function(e){
-    var g = (_cacheGerentes||[]).find(function(x){ return x.user_id===gid; });
+    var g = (_cacheGerentes||[]).find(function(x){ return String(x.user_id)===String(gid); });
     if(!g) return;
     if(!g.comprobantes) g.comprobantes=[];
     g.comprobantes.push({nombre:nombre,monto:monto,fecha:new Date().toLocaleDateString('es-AR'),data:e.target.result,tipo:file.type});
@@ -2035,7 +2058,7 @@ function adjuntarComprobante(gid){
 }
 
 function verComprobante(gid, idx){
-  var g = (_cacheGerentes||[]).find(function(x){ return x.user_id===gid; });
+  var g = (_cacheGerentes||[]).find(function(x){ return String(x.user_id)===String(gid); });
   if(!g||!g.comprobantes||!g.comprobantes[idx]) return;
   var c = g.comprobantes[idx];
   var w = window.open('','_blank');
@@ -2048,7 +2071,7 @@ function verComprobante(gid, idx){
 
 function borrarComprobante(gid, idx){
   if(!confirm('¿Eliminar este comprobante?')) return;
-  var g = (_cacheGerentes||[]).find(function(x){ return x.user_id===gid; });
+  var g = (_cacheGerentes||[]).find(function(x){ return String(x.user_id)===String(gid); });
   if(!g||!g.comprobantes) return;
   g.comprobantes.splice(idx,1);
   sbClient.from('staff_profiles').update({comprobantes_json:JSON.stringify(g.comprobantes)}).eq('user_id',gid)
@@ -2058,7 +2081,7 @@ function borrarComprobante(gid, idx){
 }
 
 function openEditGerente(gid){
-  var g = ger().find(function(x){ return x.user_id === gid; });
+  var g = ger().find(function(x){ return String(x.user_id)===String(gid); });
   if(!g){ showToast('⚠️ Gerente no encontrado'); return; }
   document.getElementById('mbox').innerHTML =
     '<div class="mhead"><div><h2>✏️ Editar Gerente</h2><p>'+g.nombre+'</p></div>'+
@@ -2084,7 +2107,7 @@ function openEditGerente(gid){
 }
 
 function saveEditGerente(gid){
-  var g = (_cacheGerentes||[]).find(function(x){ return x.user_id===gid; });
+  var g = (_cacheGerentes||[]).find(function(x){ return String(x.user_id)===String(gid); });
   if(!g){ showToast('⚠️ Gerente no encontrado'); return; }
   var nombres = ((document.getElementById('egNombre').value||'').trim()||g.nombre).split(' ');
   var newRegionIds = getSelectedRegionIds();
@@ -2112,7 +2135,7 @@ function saveEditGerente(gid){
         .then(function(){ return updatedData; });
     })
     .then(function(updatedData){
-      var idx = (_cacheGerentes||[]).findIndex(function(x){ return x.user_id===gid; });
+      var idx = (_cacheGerentes||[]).findIndex(function(x){ return String(x.user_id)===String(gid); });
       if(idx>=0){
         _cacheGerentes[idx] = mapGerente(updatedData);
         _cacheGerentes[idx].region_ids = newRegionIds;
@@ -2131,7 +2154,7 @@ function saveGerPass(gid, idx){
     sbClient.from('staff_profiles').update({badge:email}).eq('user_id',gid)
       .then(function(res){
         if(res.error) throw res.error;
-        var idx2=(_cacheGerentes||[]).findIndex(function(x){return x.user_id===gid;});
+        var idx2=(_cacheGerentes||[]).findIndex(function(x){return String(x.user_id)===String(gid);});
         if(idx2>=0) _cacheGerentes[idx2].email=email;
         showToast('✅ Email de gerente actualizado. Para cambiar contraseña usá el Dashboard de Supabase.');
       })
@@ -2694,7 +2717,7 @@ function guardarBonusGerente(gid){
   sbClient.from('staff_profiles').update({com_pct:val}).eq('user_id',gid)
     .then(function(res){
       if(res.error) throw res.error;
-      var idx = (_cacheGerentes||[]).findIndex(function(x){return x.user_id===gid;});
+      var idx = (_cacheGerentes||[]).findIndex(function(x){return String(x.user_id)===String(gid);});
       if(idx>=0) _cacheGerentes[idx].pct_bonus = val;
       showToast('✅ Bonus ' + val + '% guardado en Supabase');
       renderPagoComisiones();
