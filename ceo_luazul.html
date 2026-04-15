@@ -195,6 +195,8 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
       <div class="tab" onclick="window.open('https://luazul-smarttravel.vercel.app','_blank')" id="tab-tours" style="color:#34d399;">🌐 Web Luazul</div>
       <div class="tab" onclick="showTab('pagocomisiones')" id="tab-pagocomisiones" style="color:#4ade80;">💰 Pago de Comisiones</div>
       <div class="tab" onclick="showTab('backup')" id="tab-backup" style="color:#22d3ee;">📥 Backup Excel</div>
+      <div class="tab" onclick="showTab('contratos_pend')" id="tab-contratos_pend" style="color:#a78bfa;">📋 Contratos</div>
+      <div class="tab" onclick="showTab('comisiones_bloq')" id="tab-comisiones_bloq" style="color:#f87171;">🔒 Com. Bloqueadas</div>
     </div>
 
     <!-- ══ OVERVIEW ══ -->
@@ -399,6 +401,27 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
       <div id="pagoComisionesList"></div>
     </div>
 
+    <!-- ═══ CONTRATOS PENDIENTES ═══ -->
+    <div class="tabpg" id="tabpg-contratos_pend">
+      <div class="sec-head">
+        <h2>📋 Contratos Pendientes de Firma</h2>
+        <div style="display:flex;gap:10px;align-items:center;">
+          <button onclick="renderContratosPendientes()" style="padding:8px 16px;border-radius:9px;background:rgba(167,139,250,.1);border:1px solid rgba(167,139,250,.25);color:#a78bfa;font-family:inherit;font-size:.78rem;font-weight:700;cursor:pointer;">🔄 Actualizar</button>
+          <button onclick="escanearMora()" id="btnEscanearMora" style="padding:8px 16px;border-radius:9px;background:rgba(248,113,113,.1);border:1px solid rgba(248,113,113,.25);color:#f87171;font-family:inherit;font-size:.78rem;font-weight:700;cursor:pointer;">🚨 Escanear Mora Ahora</button>
+        </div>
+      </div>
+      <div id="contratosBody"></div>
+    </div>
+
+    <!-- ═══ COMISIONES BLOQUEADAS ═══ -->
+    <div class="tabpg" id="tabpg-comisiones_bloq">
+      <div class="sec-head">
+        <h2>🔒 Comisiones Bloqueadas por Mora</h2>
+        <button onclick="renderComisionesBloqueadas()" style="padding:8px 16px;border-radius:9px;background:rgba(248,113,113,.1);border:1px solid rgba(248,113,113,.25);color:#f87171;font-family:inherit;font-size:.78rem;font-weight:700;cursor:pointer;">🔄 Actualizar</button>
+      </div>
+      <div id="comisionesBloqBody"></div>
+    </div>
+
   </main>
 </div>
 
@@ -411,8 +434,12 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
 // ══════════════════════════════════════════════════════
 var ROLE_SELLER  = 2;
 var ROLE_MANAGER = 3;
+var ROLE_CEO     = 1;
 var RK = 'luazul_ceo_regiones';
 var _cacheGerentes=null, _cacheVendedores=null, _cacheClientes=null, _cachePagos=null, _cacheRegiones=null;
+// UUID del CEO autenticado — se setea en cLogin / DOMContentLoaded
+// Necesario para RPC resolver_mora(p_aprobado_por)
+var _ceoUid = null;
 var _regFiltMode = 'activo'; // 'activo' = solo con datos | 'todas' = las 26
 
 function dbg(k){try{var r=localStorage.getItem(k);return r?JSON.parse(r):null;}catch(e){return null;}}
@@ -550,15 +577,38 @@ function cLogin(){
           throw new Error('Este usuario no tiene acceso al panel CEO.');
         });
       }
-      var meta = result.data.user.user_metadata || {};
-      var nombre = meta.nombre || meta.full_name || email.split('@')[0];
-      try { sessionStorage.setItem('luazul_ceo','1'); sessionStorage.setItem('luazul_ceo_nombre', nombre); } catch(e){}
-      var lw = document.getElementById('loginWrap');
-      var ap = document.getElementById('app');
-      if (lw) lw.style.display = 'none';
-      if (ap) ap.style.display = 'block';
-      onDone();
-      initApp();
+      // ── SEGURIDAD — Checkpoint v3.1: verificar role_id === 1 en staff_profiles ──
+      // Aunque el email esté en la allowlist, el perfil debe tener role_id=1.
+      // Comparación con String() dual por consistencia.
+      return sbClient
+        .from('staff_profiles')
+        .select('id, user_id, role_id, nombre')
+        .eq('user_id', result.data.user.id)
+        .single()
+        .then(function(profRes) {
+          if (profRes.error || !profRes.data) {
+            return sbClient.auth.signOut().then(function(){
+              throw new Error('Perfil CEO no encontrado. Contact\u00e1 al administrador.');
+            });
+          }
+          if (String(profRes.data.role_id) !== '1') {
+            return sbClient.auth.signOut().then(function(){
+              throw new Error('Acceso denegado: este usuario no tiene rol CEO (role_id=1).');
+            });
+          }
+          // ✅ Email + role_id=1 verificados
+          var meta = result.data.user.user_metadata || {};
+          var nombre = profRes.data.nombre || meta.nombre || meta.full_name || email.split('@')[0];
+          // Guardar UUID del CEO para RPCs posteriores (resolver_mora, etc.)
+          _ceoUid = String(result.data.user.id);
+          try { sessionStorage.setItem('luazul_ceo','1'); sessionStorage.setItem('luazul_ceo_nombre', nombre); } catch(e){}
+          var lw = document.getElementById('loginWrap');
+          var ap = document.getElementById('app');
+          if (lw) lw.style.display = 'none';
+          if (ap) ap.style.display = 'block';
+          onDone();
+          initApp();
+        });
     })
     .catch(onErr);
 }
@@ -636,6 +686,7 @@ document.addEventListener('DOMContentLoaded', function(){
         if (CEO_ALLOWED_EMAILS.indexOf(email) !== -1) {
           var meta = session.user.user_metadata || {};
           var nombre = meta.nombre || meta.full_name || email.split('@')[0];
+          _ceoUid = String(session.user.id); // persistir UUID para RPCs
           try { sessionStorage.setItem('luazul_ceo','1'); sessionStorage.setItem('luazul_ceo_nombre', nombre); } catch(e){}
           var lw = document.getElementById('loginWrap');
           var ap = document.getElementById('app');
@@ -847,13 +898,16 @@ function showTab(id){
   var tb=document.getElementById('tab-'+id);
   if(pg) pg.classList.add('active');
   if(tb) tb.classList.add('active');
-  if(id==='pagos') renderPagos();
-  if(id==='clientes') renderClientes();
-  if(id==='mensual') renderMensual();
-  if(id==='passwords') renderPasswords();
-  if(id==='backup') initBackupTab();
-  if(id==='pagocomisiones') renderPagoComisiones();
-  if(id==='pagos_aprobacion') renderPagosAprobacion();
+  if(id==='pagos')             renderPagos();
+  if(id==='clientes')          renderClientes();
+  if(id==='mensual')           renderMensual();
+  if(id==='passwords')         renderPasswords();
+  if(id==='backup')            initBackupTab();
+  if(id==='pagocomisiones')    renderPagoComisiones();
+  if(id==='pagos_aprobacion')  renderPagosAprobacion();
+  // ── Checkpoint v3.1: nuevas secciones ─────────────
+  if(id==='contratos_pend')    renderContratosPendientes();
+  if(id==='comisiones_bloq')   renderComisionesBloqueadas();
 }
 
 // ── POPULATE FILTERS ─────────────────────────────────
@@ -867,11 +921,11 @@ function populateAllFilters(){
     rs.forEach(function(r){
       var o=document.createElement('option');
       o.value=r.id; o.textContent=r.bandera+' '+r.nombre;
-      if(r.id===cur)o.selected=true;
+      if(String(r.id)===String(cur))o.selected=true;
       el.appendChild(o);
     });
     // Regiones sin actividad al final (atenuadas)
-    var vacias = allRs.filter(function(r){ return !rs.find(function(a){ return a.id===r.id; }); });
+    var vacias = allRs.filter(function(r){ return !rs.find(function(a){ return String(a.id)===String(r.id); }); });
     if(vacias.length){
       var sep=document.createElement('option'); sep.disabled=true; sep.textContent='── Sin actividad ──';
       el.appendChild(sep);
@@ -879,7 +933,7 @@ function populateAllFilters(){
         var o=document.createElement('option'); o.value=r.id;
         o.textContent=r.bandera+' '+r.nombre+' (vacía)';
         o.style.color='#64748b';
-        if(r.id===cur)o.selected=true;
+        if(String(r.id)===String(cur))o.selected=true;
         el.appendChild(o);
       });
     }
@@ -901,7 +955,7 @@ function populateVendDashSel(){
     var og=document.createElement('optgroup'); og.label=r.bandera+' '+r.nombre;
     rvs.forEach(function(v){
       var o=document.createElement('option'); o.value=v.user_id; o.textContent=v.nombre;
-      if(v.user_id===cur)o.selected=true;
+      if(String(v.user_id)===String(cur))o.selected=true;
       og.appendChild(o);
     });
     sel.appendChild(og);
@@ -914,7 +968,7 @@ function populatePagoFiltros(){
   el.innerHTML='<option value="">Todas las regiones</option>';
   reg().forEach(function(r){
     var o=document.createElement('option'); o.value=r.id; o.textContent=r.bandera+' '+r.nombre;
-    if(r.id===cur)o.selected=true;
+    if(String(r.id)===String(cur))o.selected=true;
     el.appendChild(o);
   });
 }
@@ -1304,7 +1358,7 @@ function aprobarPagoSb(pagoId){
   sbClient.from('pagos').update({estado:'aprobado',aprobado_por:'CEO',fecha_pago:new Date().toISOString()}).eq('id',pagoId).select().single()
     .then(function(res){
       if(res.error) throw res.error;
-      var idx = (_cachePagos||[]).findIndex(function(x){ return x.id===pagoId; });
+      var idx = (_cachePagos||[]).findIndex(function(x){ return String(x.id)===String(pagoId); });
       if(idx>=0) _cachePagos[idx] = Object.assign(_cachePagos[idx], res.data);
       renderPagos();
       showToast('✅ Pago aprobado por CEO');
@@ -1328,7 +1382,7 @@ function aprobarTodos(){
 
 function getPendingPayments(){
   return (_cachePagos||[]).filter(function(p){ return p.estado==='pendiente'; }).map(function(p){
-    var c = (_cacheClientes||[]).find(function(x){ return x.id===p.cliente_id; })||{nombre:p.cliente_nombre||'—',destino:'—',paquete:'—',cuotas_pagadas:0,cuotas_total:10};
+    var c = (_cacheClientes||[]).find(function(x){ return String(x.id)===String(p.cliente_id); })||{nombre:p.cliente_nombre||'—',destino:'—',paquete:'—',cuotas_pagadas:0,cuotas_total:10};
     return{client:c,pago:{id:p.id,cuota:p.numero_cuota,monto:p.monto_usd,url:p.comprobante_url,fecha:p.fecha_pago,obs:''},dbKey:'supabase'};
   });
 }
@@ -1571,7 +1625,7 @@ function renderPwCeoUsers(){
   var visibles=users.filter(function(u){ return u.id !== 'u2'; });
   el.innerHTML=visibles.map(function(u){
     var ini=u.nombre[0].toUpperCase();
-    var realIdx=users.findIndex(function(x){ return x.id===u.id; });
+    var realIdx=users.findIndex(function(x){ return String(x.id)===String(u.id); });
     return '<div style="background:rgba(167,139,250,.06);border:1px solid var(--purple-bd);border-radius:10px;padding:14px;margin-bottom:12px;">'
       +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">'
       +'<div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#7c3aed,#a78bfa);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:.85rem;color:white;">'+ini+'</div>'
@@ -1594,7 +1648,7 @@ function saveCeoUser(uid, idx){
   if(nuevaPass.length < 8){showToast('Minimo 8 caracteres');return;}
   if(nuevaPass !== confirmaPass){showToast('Las contrasenas no coinciden');return;}
   var users=getCeoUsers().map(function(u){
-    if(u.id===uid){ u.password=nuevaPass.trim(); }
+    if(String(u.id)===String(uid)){ u.password=nuevaPass.trim(); }
     return u;
   });
   dbs(CEO_USERS_KEY,users);
@@ -1719,7 +1773,7 @@ function saveNewVendorCeo(){
       _cacheVendedores = _cacheVendedores||[];
       _cacheVendedores.push(mapVendedor(ins.data));
       closeModal(); populateAllFilters();
-      var rNombre = rid ? (reg().find(function(x){return x.id===rid;})||{}).nombre||'' : '';
+      var rNombre = rid ? (reg().find(function(x){return String(x.id)===String(rid);})||{}).nombre||'' : '';
       showToast('✅ Asesor '+nombre+' creado'+(rNombre?' · '+rNombre:''));
       onDone();
     })
@@ -1840,7 +1894,7 @@ function openEditVendCeo(vid){
   if(!v){ showToast('⚠️ Asesor no encontrado'); return; }
   var rs = reg();
   var regOpts = rs.map(function(r){
-    return '<option value="'+r.id+'"'+(r.id===v.rid?' selected':'')+'>'+r.bandera+' '+r.nombre+'</option>';
+    return '<option value="'+r.id+'"'+(String(r.id)===String(v.rid)?' selected':'')+'>'+r.bandera+' '+r.nombre+'</option>';
   }).join('');
   document.getElementById('mbox').innerHTML =
     '<div class="mhead"><div><h2>✏️ Editar Asesor</h2><p>'+v.nombre+'</p></div>'+
@@ -1966,7 +2020,7 @@ function saveNewGerente(){
     _cacheGerentes = _cacheGerentes||[];
     _cacheGerentes.push(newGer);
     closeModal(); renderRegiones(); renderPasswords();
-    var rNombres = regionIds.map(function(rid){ var r=reg().find(function(x){return x.id===rid;}); return r?r.nombre:''; }).filter(Boolean).join(', ');
+    var rNombres = regionIds.map(function(rid){ var r=reg().find(function(x){return String(x.id)===String(rid);}); return r?r.nombre:''; }).filter(Boolean).join(', ');
     showToast('✅ Gerente '+nombre+' creado'+(rNombres?' · '+rNombres:''));
     onDone();
   })
@@ -2735,7 +2789,7 @@ function adjuntarCompCentral(tipo, pid){
   var reader = new FileReader();
   reader.onload = function(e){
     var cache = tipo === 'gerente' ? _cacheGerentes : _cacheVendedores;
-    var persona = (cache||[]).find(function(x){ return x.user_id===pid; });
+    var persona = (cache||[]).find(function(x){ return String(x.user_id)===String(pid); });
     if(!persona){ showToast('⚠️ No encontrado'); return; }
     if(!persona.comprobantes) persona.comprobantes=[];
     persona.comprobantes.push({nombre:nombre,monto:monto,fecha:new Date().toLocaleDateString('es-AR'),data:e.target.result,tipo:file.type});
@@ -2752,7 +2806,7 @@ function adjuntarCompCentral(tipo, pid){
 
 function verCompCentral(tipo, pid, idx){
   var cache = tipo === 'gerente' ? _cacheGerentes : _cacheVendedores;
-  var persona = (cache||[]).find(function(x){ return x.user_id===pid; });
+  var persona = (cache||[]).find(function(x){ return String(x.user_id)===String(pid); });
   if(!persona||!persona.comprobantes||!persona.comprobantes[idx]) return;
   var comp = persona.comprobantes[idx];
   var w = window.open('','_blank');
@@ -2766,7 +2820,7 @@ function verCompCentral(tipo, pid, idx){
 function borrarCompCentral(tipo, pid, idx){
   if(!confirm('¿Eliminar este comprobante?')) return;
   var cache = tipo === 'gerente' ? _cacheGerentes : _cacheVendedores;
-  var persona = (cache||[]).find(function(x){ return x.user_id===pid; });
+  var persona = (cache||[]).find(function(x){ return String(x.user_id)===String(pid); });
   if(!persona||!persona.comprobantes) return;
   persona.comprobantes.splice(idx,1);
   sbClient.from('staff_profiles').update({comprobantes_json:JSON.stringify(persona.comprobantes)}).eq('user_id',pid)
@@ -2840,30 +2894,75 @@ function renderPagosAprobacion() {
 }
 
 function aprobarPago(clientId, cuotaKey, dbKey){
-  var pago = (_cachePagos||[]).find(function(p){ return String(p.cliente_id)===String(clientId) && String(p.numero_cuota)===String(cuotaKey) && p.estado==='pendiente'; });
-  if(!pago){ showToast('⚠️ Pago no encontrado'); return; }
-  // Aprobar el pago primero, luego actualizar cuotas del cliente
-  sbClient.from('pagos').update({estado:'aprobado',aprobado_por:'CEO',fecha_pago:new Date().toISOString()}).eq('id',pago.id).select().single()
+  // ── Checkpoint v3.1 v3.3: IDs son UUID (strings) — sin parseInt() ────
+  // clientId = UUID string del cliente
+  // cuotaKey = string del número de cuota
+  var pago = (_cachePagos||[]).find(function(p){
+    return String(p.cliente_id) === String(clientId)
+        && String(p.numero_cuota) === String(cuotaKey)
+        && p.estado === 'pendiente';
+  });
+  if(!pago){ showToast('⚠️ Pago no encontrado en el cache'); return; }
+
+  var _pagoId    = String(pago.id);
+  var _clientId  = String(clientId);
+  var _ceoUidNow = _ceoUid || '';
+
+  // PASO 1 — Aprobar el pago en tabla `pagos`
+  sbClient.from('pagos')
+    .update({ estado: 'aprobado', aprobado_por: 'CEO', fecha_pago: new Date().toISOString() })
+    .eq('id', _pagoId)
+    .select().single()
     .then(function(res){
       if(res.error) throw res.error;
-      var idx = (_cachePagos||[]).findIndex(function(x){ return x.id===pago.id; });
-      if(idx>=0) _cachePagos[idx] = Object.assign(_cachePagos[idx], res.data);
-      var c = (_cacheClientes||[]).find(function(x){ return String(x.id)===String(clientId); });
-      if(c && parseInt(cuotaKey) > (c.cuotas_pagadas||0)){
-        var nuevasCuotas = parseInt(cuotaKey);
-        var nuevoEstado = nuevasCuotas >= (c.cuotas_total||10) ? 'completo' : c.estado;
-        return sbClient.from('clientes').update({cuotas_pagadas:nuevasCuotas, estado:nuevoEstado}).eq('id',clientId)
+      // Actualizar caché local
+      var idx = (_cachePagos||[]).findIndex(function(x){ return String(x.id) === _pagoId; });
+      if(idx >= 0) _cachePagos[idx] = Object.assign(_cachePagos[idx], res.data);
+
+      // PASO 2 — Actualizar cuotas_pagadas y estado del cliente (IDs como string)
+      var c = (_cacheClientes||[]).find(function(x){ return String(x.id) === _clientId; });
+      var cuotaNum   = Number(cuotaKey);
+      var cuotasAct  = Number(c ? (c.cuotas_pagadas || 0) : 0);
+      var cuotasTotal= Number(c ? (c.cuotas_total  || 10): 10);
+      if(c && cuotaNum > cuotasAct){
+        var nuevoEstado = cuotaNum >= cuotasTotal ? 'completo' : c.estado;
+        return sbClient.from('clientes')
+          .update({ cuotas_pagadas: cuotaNum, estado: nuevoEstado })
+          .eq('id', _clientId)
           .then(function(){
-            c.cuotas_pagadas = nuevasCuotas;
+            c.cuotas_pagadas = cuotaNum;
             c.estado = nuevoEstado;
           });
       }
     })
     .then(function(){
-      renderPagosAprobacion();
-      showToast('✅ Pago aprobado · Cuota '+cuotaKey+' acreditada');
+      // PASO 3 — RPC resolver_mora (Checkpoint v3.1 §5A)
+      // Limpia mora del cliente si corresponde. p_cliente_id es UUID string.
+      if(_ceoUidNow) {
+        return sbClient.rpc('resolver_mora', {
+          p_cliente_id:   _clientId,
+          p_aprobado_por: _ceoUidNow
+        }).then(function(rpcRes){
+          if(rpcRes.error) console.warn('[RPC] resolver_mora:', rpcRes.error.message);
+        });
+      }
     })
-    .catch(function(e){ showToast('❌ Error al aprobar: '+(e.message||'')); });
+    .then(function(){
+      // PASO 4 — Firmar contrato borrador/revisado (Checkpoint v3.1 §3)
+      // Solo pasa a 'firmado' si existe un contrato pendiente para este cliente.
+      return sbClient.from('contratos')
+        .update({ estado: 'firmado', fecha_firma: new Date().toISOString() })
+        .eq('cliente_id', _clientId)
+        .in('estado', ['borrador', 'revisado'])
+        .then(function(cRes){
+          if(cRes.error) console.warn('[SB] firmar contrato:', cRes.error.message);
+        });
+    })
+    .then(function(){
+      renderPagosAprobacion();
+      showToast('\u2705 Pago aprobado \u00b7 Mora resuelta \u00b7 Contrato firmado \u00b7 Cuota ' + cuotaKey);
+    })
+    .catch(function(e){ showToast('\u274C Error al aprobar: ' + (e.message||'')); });
 }
 
 function rechazarPago(clientId, cuotaKey, dbKey){
@@ -2878,6 +2977,194 @@ function rechazarPago(clientId, cuotaKey, dbKey){
       showToast('❌ Comprobante rechazado · El asesor deberá reenviarlo');
     })
     .catch(function(e){ showToast('❌ Error: '+(e.message||'')); });
+}
+
+// ══════════════════════════════════════════════════════
+//  CONTRATOS PENDIENTES — Checkpoint v3.1 §3
+//  Lee tabla contratos filtrando estado IN (borrador, revisado).
+//  El CEO puede firmar desde aquí sin necesidad de que haya
+//  un pago pendiente asociado (firma manual de emergencia).
+// ══════════════════════════════════════════════════════
+function renderContratosPendientes(){
+  var el = document.getElementById('contratosBody');
+  if(!el) return;
+  el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted);">\u23F3 Cargando contratos...</div>';
+
+  sbClient.from('contratos')
+    .select('id, cliente_id, vendedor_id, estado, numero_contrato, fecha_firma, created_at, contenido_json')
+    .in('estado', ['borrador', 'revisado'])
+    .order('created_at', { ascending: false })
+    .limit(100)
+    .then(function(res){
+      if(res.error) throw res.error;
+      var rows = res.data || [];
+      if(!rows.length){
+        el.innerHTML = '<div style="text-align:center;padding:50px;background:rgba(5,18,55,.5);border:1px solid rgba(100,160,255,.15);border-radius:18px;">'
+          + '<div style="font-size:2.5rem;margin-bottom:14px;">\u2705</div>'
+          + '<div style="font-size:1rem;font-weight:700;margin-bottom:6px;">Sin contratos pendientes</div>'
+          + '<div style="font-size:.78rem;color:rgba(200,220,255,.6);">Todos los contratos fueron firmados o no hay borradores.</div>'
+          + '</div>';
+        return;
+      }
+
+      var html = '<div style="display:flex;flex-direction:column;gap:14px;">';
+      rows.forEach(function(ct){
+        var contenido = {};
+        try { contenido = JSON.parse(ct.contenido_json || '{}'); } catch(e){}
+        var clienteNombre = contenido.cliente_nombre || ct.cliente_id || '\u2014';
+        var destino       = contenido.destino        || '\u2014';
+        var totalUsd      = contenido.total_usd      ? 'USD ' + Number(contenido.total_usd).toLocaleString('es-AR') : '\u2014';
+        var cuotas        = contenido.cuotas_total   || '\u2014';
+        var vendedor      = contenido.vendedor_nombre || ct.vendedor_id || '\u2014';
+        var fechaCreado   = new Date(ct.created_at).toLocaleDateString('es-AR');
+        var estadoColor   = ct.estado === 'revisado' ? '#fbbf24' : '#93c5fd';
+        var estadoBg      = ct.estado === 'revisado' ? 'rgba(251,191,36,.1)' : 'rgba(59,130,246,.1)';
+
+        html += '<div style="background:rgba(5,18,55,.65);border:1px solid rgba(167,139,250,.2);border-radius:18px;padding:22px;">'
+          + '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;flex-wrap:wrap;gap:8px;">'
+          +   '<div>'
+          +     '<div style="font-size:.62rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:rgba(150,190,255,.5);margin-bottom:4px;">Cliente</div>'
+          +     '<div style="font-size:.95rem;font-weight:800;">' + clienteNombre + '</div>'
+          +     '<div style="font-size:.75rem;color:rgba(200,220,255,.65);margin-top:2px;">' + destino + ' · ' + totalUsd + ' · ' + cuotas + ' cuotas</div>'
+          +   '</div>'
+          +   '<span style="font-size:.68rem;font-weight:700;padding:3px 12px;border-radius:12px;background:' + estadoBg + ';color:' + estadoColor + ';border:1px solid ' + estadoColor + '33;">'
+          +     ct.estado.toUpperCase()
+          +   '</span>'
+          + '</div>'
+          + '<div style="font-size:.72rem;color:rgba(150,190,255,.5);margin-bottom:16px;">'
+          +   'Asesor: ' + vendedor + ' \u00b7 Creado: ' + fechaCreado
+          + '</div>'
+          + '<div style="display:flex;gap:10px;flex-wrap:wrap;">'
+          +   '<button onclick="firmarContratoCEO(\'' + String(ct.id) + '\',\'' + String(ct.cliente_id) + '\')" '
+          +   'style="padding:10px 22px;background:linear-gradient(135deg,#7c3aed,#a78bfa);border:none;border-radius:50px;font-family:inherit;font-size:.82rem;font-weight:700;color:white;cursor:pointer;">'
+          +   '\u270D\uFE0F Firmar contrato</button>'
+          +   '<button onclick="marcarRevisadoCEO(\'' + String(ct.id) + '\')" '
+          +   'style="padding:10px 20px;background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.3);border-radius:50px;font-family:inherit;font-size:.82rem;font-weight:700;color:#fbbf24;cursor:pointer;">'
+          +   '\uD83D\uDD0D Marcar revisado</button>'
+          + '</div>'
+          + '</div>';
+      });
+      html += '</div>';
+      el.innerHTML = html;
+    })
+    .catch(function(e){
+      el.innerHTML = '<div style="padding:30px;color:#f87171;text-align:center;">\u274C Error al cargar contratos: ' + (e.message||'') + '</div>';
+    });
+}
+
+// Firma manual de contrato desde panel contratos (sin pago asociado)
+function firmarContratoCEO(contratoId, clienteId){
+  if(!confirm('\u00bFFirmar este contrato? El cliente recibirá una notificación.')) return;
+  sbClient.from('contratos')
+    .update({ estado: 'firmado', fecha_firma: new Date().toISOString() })
+    .eq('id', String(contratoId))
+    .then(function(res){
+      if(res.error) throw res.error;
+      showToast('\u2705 Contrato firmado correctamente');
+      renderContratosPendientes();
+    })
+    .catch(function(e){ showToast('\u274C Error al firmar: ' + (e.message||'')); });
+}
+
+function marcarRevisadoCEO(contratoId){
+  sbClient.from('contratos')
+    .update({ estado: 'revisado' })
+    .eq('id', String(contratoId))
+    .eq('estado', 'borrador')
+    .then(function(res){
+      if(res.error) throw res.error;
+      showToast('\uD83D\uDD0D Contrato marcado como revisado');
+      renderContratosPendientes();
+    })
+    .catch(function(e){ showToast('\u274C Error: ' + (e.message||'')); });
+}
+
+// ══════════════════════════════════════════════════════
+//  COMISIONES BLOQUEADAS — Checkpoint v3.1 §5A + vista SQL
+//  Lee la vista comisiones_bloqueadas generada en el SQL.
+//  Muestra asesores con clientes en mora y el monto congelado.
+// ══════════════════════════════════════════════════════
+function renderComisionesBloqueadas(){
+  var el = document.getElementById('comisionesBloqBody');
+  if(!el) return;
+  el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted);">\u23F3 Cargando comisiones bloqueadas...</div>';
+
+  sbClient.from('comisiones_bloqueadas')
+    .select('*')
+    .order('monto_comision_congelado_usd', { ascending: false })
+    .then(function(res){
+      if(res.error) throw res.error;
+      var rows = res.data || [];
+      if(!rows.length){
+        el.innerHTML = '<div style="text-align:center;padding:50px;background:rgba(5,18,55,.5);border:1px solid rgba(100,160,255,.15);border-radius:18px;">'
+          + '<div style="font-size:2.5rem;margin-bottom:14px;">\uD83D\uDCB0</div>'
+          + '<div style="font-size:1rem;font-weight:700;margin-bottom:6px;">Sin comisiones bloqueadas</div>'
+          + '<div style="font-size:.78rem;color:rgba(200,220,255,.6);">Todos los asesores tienen su comisión desbloqueada. \u00a1Buen trabajo!</div>'
+          + '</div>';
+        return;
+      }
+
+      var totalCongelado = rows.reduce(function(s, r){ return s + (parseFloat(r.monto_comision_congelado_usd) || 0); }, 0);
+
+      var html = '<div style="background:rgba(248,113,113,.06);border:1px solid rgba(248,113,113,.2);border-radius:14px;padding:16px 20px;margin-bottom:20px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">'
+        + '<div style="font-size:.72rem;color:var(--muted);">Total comisiones congeladas</div>'
+        + '<div style="font-size:1.4rem;font-weight:900;color:#f87171;">USD ' + totalCongelado.toLocaleString('es-AR', {maximumFractionDigits:0}) + '</div>'
+        + '</div>';
+
+      html += '<div style="display:flex;flex-direction:column;gap:12px;">';
+      rows.forEach(function(r){
+        var pct   = parseFloat(r.porcentaje_comision) || 0;
+        var monto = parseFloat(r.monto_comision_congelado_usd) || 0;
+        html += '<div style="background:rgba(5,18,55,.65);border:1px solid rgba(248,113,113,.2);border-radius:14px;padding:18px 20px;">'
+          + '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px;">'
+          +   '<div>'
+          +     '<div style="font-weight:800;font-size:.9rem;">' + (r.asesor_nombre || '\u2014') + '</div>'
+          +     '<div style="font-size:.72rem;color:rgba(200,220,255,.6);margin-top:2px;">' + (r.asesor_email || '') + ' \u00b7 Com: ' + pct + '%</div>'
+          +   '</div>'
+          +   '<div style="text-align:right;">'
+          +     '<div style="font-size:1.1rem;font-weight:900;color:#f87171;">USD ' + monto.toLocaleString('es-AR', {maximumFractionDigits:0}) + '</div>'
+          +     '<div style="font-size:.68rem;color:var(--muted);">' + (r.clientes_en_mora || 0) + ' cliente' + ((r.clientes_en_mora||0)===1?'':'s') + ' en mora</div>'
+          +   '</div>'
+          + '</div>'
+          + '<div style="font-size:.7rem;color:rgba(248,113,113,.6);padding:6px 10px;background:rgba(248,113,113,.06);border-radius:8px;">'
+          +   '\uD83D\uDD12 Comisi\u00f3n congelada hasta que el CEO apruebe los pagos en mora'
+          + '</div>'
+          + '</div>';
+      });
+      html += '</div>';
+      el.innerHTML = html;
+    })
+    .catch(function(e){
+      el.innerHTML = '<div style="padding:30px;color:#f87171;text-align:center;">\u274C Error al cargar vista: ' + (e.message||'') + '<br><small>Verificar que la vista comisiones_bloqueadas exista en Supabase.</small></div>';
+    });
+}
+
+// ══════════════════════════════════════════════════════
+//  ESCANEAR MORA — Checkpoint v3.1 §5A
+//  Ejecuta la función detectar_mora() en Supabase.
+//  Detecta cuotas vencidas > 90 días y marca clientes.
+// ══════════════════════════════════════════════════════
+function escanearMora(){
+  var btn = document.getElementById('btnEscanearMora');
+  if(btn){ btn.disabled = true; btn.textContent = '\u23F3 Escaneando...'; }
+
+  sbClient.rpc('detectar_mora')
+    .then(function(res){
+      if(res.error) throw res.error;
+      var nuevos = res.data ? res.data.length : 0;
+      if(btn){ btn.disabled = false; btn.textContent = '\uD83D\uDEA8 Escanear Mora Ahora'; }
+      if(nuevos > 0){
+        showToast('\uD83D\uDEA8 Mora detectada: ' + nuevos + ' evento' + (nuevos===1?'':'s') + ' nuevos registrados');
+        // Recargar datos para reflejar los cambios de estado
+        cargarDatosSupabase().then(function(){ renderAll(); });
+      } else {
+        showToast('\u2705 Escaneo completo \u2014 Sin nuevas moras detectadas');
+      }
+    })
+    .catch(function(e){
+      if(btn){ btn.disabled = false; btn.textContent = '\uD83D\uDEA8 Escanear Mora Ahora'; }
+      showToast('\u274C Error al escanear mora: ' + (e.message||'') + '. Verificar función detectar_mora() en Supabase.');
+    });
 }
 </script>
 <script>

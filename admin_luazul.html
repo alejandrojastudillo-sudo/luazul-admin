@@ -654,6 +654,7 @@ body::after {
 //  PERFIL DEL ASESOR AUTENTICADO
 //  Se carga desde staff_profiles al iniciar sesión
 // ══════════════════════════════════════════════════════
+var _adminUuid = '';           // UUID del asesor autenticado (Supabase Auth)
 var _currentProfile = null;
 
 function loadCurrentProfile() {
@@ -665,7 +666,7 @@ function loadCurrentProfile() {
       return sbClient
         .from('staff_profiles')
         .select('*')
-        .eq('user_id', session.user.id)
+        .eq('user_id', String(session.user.id))
         .single()
         .then(function(r) {
           if (r.data) _currentProfile = r.data;
@@ -707,7 +708,7 @@ function refreshAdminNotifBadge() {
     .from('notificaciones')
     .select('id', { count: 'exact' })
     .eq('leida', false)
-    .or('destinatario_id.eq.' + _currentProfile.user_id + ',destinatario_rol.eq.seller')
+    .or('destinatario_id.eq.' + String(_currentProfile.user_id) + ',destinatario_rol.eq.seller')
     .then(function(r) {
       var count = r.count || 0;
       var dot = document.getElementById('adminNotifDot');
@@ -736,7 +737,7 @@ function openAdminNotifs() {
   sbClient
     .from('notificaciones')
     .select('*')
-    .or('destinatario_id.eq.' + _currentProfile.user_id + ',destinatario_rol.eq.seller')
+    .or('destinatario_id.eq.' + String(_currentProfile.user_id) + ',destinatario_rol.eq.seller')
     .order('created_at', { ascending: false })
     .limit(50)
     .then(function(r) {
@@ -796,7 +797,7 @@ function openAdminNotifs() {
 
 function adminMarkRead(nid) {
   if (!sbClient) return;
-  sbClient.from('notificaciones').update({ leida: true }).eq('id', nid)
+  sbClient.from('notificaciones').update({ leida: true }).eq('id', String(nid))
     .then(function() {
       refreshAdminNotifBadge();
       openAdminNotifs();
@@ -811,8 +812,8 @@ function notificarGerenteGestion(cliente, detalle) {
     tipo:             'gestion_mora',
     mensaje:          'Asesor: ' + asesorNombre + ' \u2014 Cliente: ' + cliente.nombre + ' | ' + detalle,
     destinatario_rol: 'manager',
-    remitente_id:     _currentProfile.user_id,
-    cliente_id:       cliente.id || null,
+    remitente_id:     String(_currentProfile.user_id),
+    cliente_id:       String(cliente.id) || null,
     leida:            false
   }])
   .catch(function(e) { console.warn('[SB] notificarGerenteGestion:', e.message); });
@@ -834,6 +835,7 @@ function adminLogin() {
   sbClient.auth.signInWithPassword({ email: u, password: p })
     .then(function(result) {
       if (result.error) throw result.error;
+      _adminUuid = String(result.data.user.id);
       var meta   = result.data.user.user_metadata || {};
       var nombre = meta.nombre || meta.full_name || u.split('@')[0];
       LZ_AUTH.setPanelSession('luazul_admin');
@@ -925,7 +927,7 @@ function loadClients() {
   showToast('\u23F3 Cargando clientes...');
   var query = sbClient.from('clientes').select('*').order('nombre');
   if (_currentProfile && _currentProfile.id) {
-    query = query.or('seller_id.eq.' + _currentProfile.id + ',vid.eq.' + _currentProfile.id);
+    query = query.or('seller_id.eq.' + String(_currentProfile.id) + ',vid.eq.' + String(_currentProfile.id));
   }
   return query
     .then(function(r) {
@@ -975,8 +977,8 @@ function enrich(c) {
   // Origen: asignacion directa = el gerente lo asignó (vid set, seller_id diferente o null)
   c._asignacion = (
     c.vid && _currentProfile &&
-    c.vid === _currentProfile.id &&
-    (!c.seller_id || c.seller_id !== _currentProfile.id)
+    String(c.vid) === String(_currentProfile.id) &&
+    (!c.seller_id || String(c.seller_id) !== String(_currentProfile.id))
   );
 
   // Days to trip
@@ -1443,7 +1445,7 @@ function renderTable() {
 //  MODAL DETAIL
 // ══════════════════════════════════════════════════════
 function openModal(id) {
-  var c = allClients.find(function(x){ return x.id == id; });
+  var c = allClients.find(function(x){ return String(x.id) === String(id); });
   if (!c) return;
   currentClient = c;
 
@@ -1535,7 +1537,7 @@ function closeModal() { document.getElementById('modal').classList.remove('open'
 function closeModalOutside(e) { if (e.target === document.getElementById('modal')) closeModal(); }
 
 function updateClient(id) {
-  var c = allClients.find(function(x){ return x.id == id; });
+  var c = allClients.find(function(x){ return String(x.id) === String(id); });
   if (!c) return;
   c.cuotas_pagadas = parseInt(document.getElementById('editCuotas').value) || 0;
   c.estado         = document.getElementById('editEstado').value;
@@ -1558,7 +1560,7 @@ function updateClient(id) {
   sbClient.from('clientes').update({
     cuotas_pagadas: c.cuotas_pagadas,
     estado:         c.estado
-  }).eq('id', id)
+  }).eq('id', String(id))
     .then(function(r) {
       if (r.error) throw r.error;
       if (c.estado === 'atraso_gestion') {
@@ -1585,7 +1587,7 @@ function updateClient(id) {
 //  MORA MANAGEMENT
 // ══════════════════════════════════════════════════════
 function openMoraModal(id) {
-  var c = allClients.find(function(x){ return x.id == id; });
+  var c = allClients.find(function(x){ return String(x.id) === String(id); });
   if (!c) return;
   var mora = c.mora || [];
   var hasMora = mora.length > 0;
@@ -1643,7 +1645,7 @@ function saveMora(id) {
 
   var entry = { fecha: fecha, motivo: motivo, compromiso: compromiso, contacto: contacto, resuelta: false };
 
-  var c = allClients.find(function(x){ return x.id == id; });
+  var c = allClients.find(function(x){ return String(x.id) === String(id); });
   if (!c) return;
   if (!c.mora) c.mora = [];
   c.mora.push(entry);
@@ -1662,7 +1664,7 @@ function saveMora(id) {
   var updateData = { mora_json: JSON.stringify(c.mora) };
   if (newEstado) updateData.estado = newEstado;
 
-  sbClient.from('clientes').update(updateData).eq('id', id)
+  sbClient.from('clientes').update(updateData).eq('id', String(id))
     .then(function(r) {
       if (r.error) throw r.error;
       if (newEstado === 'atraso_gestion' || newEstado === 'atraso') {
@@ -1679,7 +1681,7 @@ function saveMora(id) {
 }
 
 function resolverMora(id, idx) {
-  var c = allClients.find(function(x){ return x.id == id; });
+  var c = allClients.find(function(x){ return String(x.id) === String(id); });
   if (!c || !c.mora || !c.mora[idx]) return;
   c.mora[idx].resuelta = true;
   var ci = allClients.indexOf(c);
@@ -1691,7 +1693,7 @@ function resolverMora(id, idx) {
     return;
   }
 
-  sbClient.from('clientes').update({ mora_json: JSON.stringify(c.mora) }).eq('id', id)
+  sbClient.from('clientes').update({ mora_json: JSON.stringify(c.mora) }).eq('id', String(id))
     .then(function(r) {
       if (r.error) throw r.error;
       closeModal();
@@ -1709,14 +1711,14 @@ function resolverMora(id, idx) {
 //  WHATSAPP MESSAGES
 // ══════════════════════════════════════════════════════
 function waMensaje(id) {
-  var c = allClients.find(function(x){ return x.id == id; });
+  var c = allClients.find(function(x){ return String(x.id) === String(id); });
   if (!c) return;
   var msg = '¡Hola ' + c.nombre.split(' ')[0] + '! 👋 Te contactamos desde Luazul Smart Travel. ¿En qué te podemos ayudar?';
   window.open('https://wa.me/5492974726449?text=' + encodeURIComponent(msg), '_blank');
 }
 
 function waRecordatorio(id) {
-  var c = allClients.find(function(x){ return x.id == id; });
+  var c = allClients.find(function(x){ return String(x.id) === String(id); });
   if (!c) return;
   var next = (parseInt(c.cuotas_pagadas)||0) + 1;
   var msg = '¡Hola ' + c.nombre.split(' ')[0] + '! 👋 Te recordamos que la *cuota N°' + next + '* de tu plan Luazul está próxima a vencer. Total: *USD ' + c.monto_cuota + '*. ¡Seguís avanzando hacia tu viaje a ' + (c.destino||'Brasil') + '! 🌊';
@@ -1724,7 +1726,7 @@ function waRecordatorio(id) {
 }
 
 function waVoucher(id) {
-  var c = allClients.find(function(x){ return x.id == id; });
+  var c = allClients.find(function(x){ return String(x.id) === String(id); });
   if (!c) return;
   var msg = '🎉 ¡' + c.nombre.split(' ')[0] + ', tu plan Luazul está listo! Tu voucher para *' + (c.destino||'Brasil') + '* ya está disponible. ¡El viaje se acerca! ✈️🏖️';
   window.open('https://wa.me/5492974726449?text=' + encodeURIComponent(msg), '_blank');
@@ -1901,7 +1903,7 @@ function addClient() {
         cuotas_pagadas: 0,
         monto_cuota:    total > 0 ? parseFloat((total / cuotas).toFixed(2)) : 0,
         estado:         'activo',
-        seller_id:      _currentProfile.id,
+        seller_id:      String(_currentProfile.id),
         notas:          ''
       };
 
@@ -2055,7 +2057,7 @@ function getAllReferidos() {
   return sbClient
     .from('referidos')
     .select('*, cliente:clientes(nombre, email)')
-    .eq('vendedor_id', _currentProfile.id)
+    .eq('vendedor_id', String(_currentProfile.id))
     .order('created_at', { ascending: false })
     .then(function(r) { return r.data || []; })
     .catch(function(e) { console.warn('[SB] getAllReferidos:', e.message); return []; });
@@ -2063,7 +2065,7 @@ function getAllReferidos() {
 
 // Abrir modal para cargar referido desde la fila de un cliente existente
 function abrirCargaReferido(clientId) {
-  var c = allClients.find(function(x){ return x.id == clientId; });
+  var c = allClients.find(function(x){ return String(x.id) === String(clientId); });
   if (!c) return;
   var codigoActual = 'LUA-' + c.nombre.split(' ')[0].toUpperCase();
 
@@ -2099,12 +2101,12 @@ function abrirCargaReferido(clientId) {
 function confirmarCargaReferido(clientId) {
   var nombre = (document.getElementById('rNombre') || {}).value.trim();
   if (!nombre) { showToast('\u26A0\uFE0F El nombre del referido es obligatorio'); return; }
-  var c = allClients.find(function(x){ return x.id == clientId; });
+  var c = allClients.find(function(x){ return String(x.id) === String(clientId); });
   if (!c || !sbClient || !_currentProfile) return;
 
   sbClient.from('referidos').insert([{
-    vendedor_id:     _currentProfile.id,
-    cliente_id:      c.id,
+    vendedor_id:     String(_currentProfile.id),
+    cliente_id:      String(c.id),
     referido_nombre: nombre,
     referido_email:  (document.getElementById('rEmail') || {}).value.trim() || null,
     referido_tel:    (document.getElementById('rTel') || {}).value.trim() || null,
@@ -2123,7 +2125,7 @@ function confirmarCargaReferido(clientId) {
 }
 
 function guardarReferidoDesdeAdmin(clientId) {
-  var c = allClients.find(function(x){ return x.id == clientId; });
+  var c = allClients.find(function(x){ return String(x.id) === String(clientId); });
   if (!c) return;
   var nuevoEmail = (document.getElementById('refNuevoEmail') || {}).value.trim();
   if (!nuevoEmail) { showToast('\u26A0\uFE0F Ingres\u00e1 el email del nuevo cliente'); return; }
@@ -2132,8 +2134,8 @@ function guardarReferidoDesdeAdmin(clientId) {
   var nuevoCliente = allClients.find(function(x){ return x.email.toLowerCase() === nuevoEmail.toLowerCase(); });
 
   sbClient.from('referidos').insert([{
-    vendedor_id:     _currentProfile.id,
-    cliente_id:      c.id,
+    vendedor_id:     String(_currentProfile.id),
+    cliente_id:      String(c.id),
     referido_nombre: nuevoCliente ? nuevoCliente.nombre : nuevoEmail,
     referido_email:  nuevoEmail,
     estado:          'pendiente'
@@ -2158,8 +2160,8 @@ function procesarReferidoNuevoCliente(nuevoCliente) {
   });
   if (!referidor) return;
   sbClient.from('referidos').insert([{
-    vendedor_id:     _currentProfile.id,
-    cliente_id:      referidor.id,
+    vendedor_id:     String(_currentProfile.id),
+    cliente_id:      String(referidor.id),
     referido_nombre: nuevoCliente.nombre,
     referido_email:  nuevoCliente.email,
     estado:          'pendiente'
@@ -2197,8 +2199,8 @@ function guardarReferido() {
   if (!referidor) { showToast('\u26A0\uFE0F No se encontr\u00f3 un cliente con ese email en tu cartera'); return; }
 
   sbClient.from('referidos').insert([{
-    vendedor_id:     _currentProfile.id,
-    cliente_id:      referidor.id,
+    vendedor_id:     String(_currentProfile.id),
+    cliente_id:      String(referidor.id),
     referido_nombre: nombre,
     referido_email:  email || null,
     referido_tel:    tel || null,
@@ -2252,7 +2254,7 @@ function renderRefList() {
 
 function eliminarReferido(id) {
   if (!sbClient) return;
-  sbClient.from('referidos').delete().eq('id', id)
+  sbClient.from('referidos').delete().eq('id', String(id))
     .then(function() { renderRefList(); })
     .catch(function(e) { console.warn('[SB] eliminarReferido:', e.message); });
 }
@@ -2274,7 +2276,7 @@ function guardarCuenta() {
 
   sbClient.from('staff_profiles')
     .update({ cbu: cbuStr })
-    .eq('id', _currentProfile.id)
+    .eq('id', String(_currentProfile.id))
     .then(function(r) {
       if (r.error) throw r.error;
       _currentProfile.cbu = cbuStr;
@@ -2293,7 +2295,7 @@ function guardarCuenta() {
 function eliminarCuenta() {
   if (!sbClient || !_currentProfile) return;
   if (!confirm('¿Eliminar tu CBU/alias registrado?')) return;
-  sbClient.from('staff_profiles').update({ cbu: null }).eq('id', _currentProfile.id)
+  sbClient.from('staff_profiles').update({ cbu: null }).eq('id', String(_currentProfile.id))
     .then(function(r) {
       if (r.error) { showToast('⚠️ Error al eliminar'); return; }
       _currentProfile.cbu = null;
@@ -2323,7 +2325,7 @@ function renderCuentasList() {
 // FUNCIÓN 2: GENERADOR DE CONTRATOS PDF
 // ════════════════════════════════════════════════════════
 function generarContratoPDF(clientId) {
-  var c = allClients.find(function(x){ return x.id == clientId; });
+  var c = allClients.find(function(x){ return String(x.id) === String(clientId); });
   if (!c) { showToast('Cliente no encontrado'); return; }
 
   var hoy = new Date();
@@ -2407,7 +2409,7 @@ var _payModal = null;
 function closePayModal() { var m = document.getElementById('payModal'); if (m) m.remove(); }
 
 function abrirRegistroPago(clientId) {
-  var c = allClients.find(function(x){ return x.id == clientId; });
+  var c = allClients.find(function(x){ return String(x.id) === String(clientId); });
   if (!c) return;
   var pendientes = parseInt(c.cuotas_total||0) - parseInt(c.cuotas_pagadas||0);
   var proximaCuota = parseInt(c.cuotas_pagadas||0) + 1;
@@ -2464,7 +2466,7 @@ function enviarComprobante(clientId) {
     showToast('\u26A0\uFE0F Complet\u00e1 cuota y monto'); return;
   }
 
-  var c = allClients.find(function(x){ return x.id == clientId; });
+  var c = allClients.find(function(x){ return String(x.id) === String(clientId); });
   if (!c) return;
   if (!sbClient) { showToast('\u274C Sin conexi\u00f3n a Supabase'); return; }
 
@@ -2474,7 +2476,7 @@ function enviarComprobante(clientId) {
       : 'Asesor';
 
     sbClient.from('pagos').insert([{
-      cliente_id:       c.id,
+      cliente_id:       String(c.id),
       cliente_nombre:   c.nombre,
       vendedor_nombre:  asesorNombre,
       numero_cuota:     cuotaNum,
@@ -2489,8 +2491,8 @@ function enviarComprobante(clientId) {
           tipo:             'pago_pendiente',
           mensaje:          'Asesor: ' + asesorNombre + ' \u2014 ' + c.nombre + ' \u00b7 Cuota ' + cuotaNum + ' \u00b7 USD ' + monto + ' \u00b7 Esperando aprobaci\u00f3n',
           destinatario_rol: 'manager',
-          remitente_id:     _currentProfile.user_id,
-          cliente_id:       c.id || null,
+          remitente_id:     String(_currentProfile.user_id),
+          cliente_id:       String(c.id) || null,
           datos_extra:      JSON.stringify({ cuota: cuotaNum, monto: monto }),
           leida:            false
         }]);
@@ -2516,7 +2518,7 @@ function enviarComprobante(clientId) {
 }
 
 function verComprobantes(clientId) {
-  var c = allClients.find(function(x){ return x.id == clientId; });
+  var c = allClients.find(function(x){ return String(x.id) === String(clientId); });
   if (!c) return;
 
   document.getElementById('modalBox').innerHTML =
@@ -2527,7 +2529,7 @@ function verComprobantes(clientId) {
 
   sbClient.from('pagos')
     .select('*')
-    .eq('cliente_id', clientId)
+    .eq('cliente_id', String(clientId))
     .order('numero_cuota')
     .then(function(r) {
       var items = r.data || [];
@@ -2646,7 +2648,7 @@ function mostrarPanelAlertas() {
 }
 
 function enviarAlertaWhatsApp(clientId) {
-  var c = allClients.find(function(x){ return x.id == clientId; });
+  var c = allClients.find(function(x){ return String(x.id) === String(clientId); });
   if (!c) return;
   var pagadas   = parseInt(c.cuotas_pagadas  || 0);
   var total     = parseInt(c.cuotas_total    || 0);

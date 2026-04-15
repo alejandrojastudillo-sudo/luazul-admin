@@ -227,6 +227,7 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;back
       <div class="tab" onclick="showTab('mensual')" id="tab-mensual" style="color:#67e8f9;">📆 Recaudación Mensual</div>
       <div class="tab" onclick="showTab('miscomisiones')" id="tab-miscomisiones" style="color:#4ade80;">💰 Mis Comisiones</div>
       <div class="tab" onclick="showTab('passwords')" id="tab-passwords" style="color:#a78bfa;">🔑 Contraseñas</div>
+      <div class="tab" onclick="showTab('milegajo')" id="tab-milegajo" style="color:#34d399;">📋 Mi Legajo</div>
     </div>
 
     <!-- OVERVIEW -->
@@ -414,6 +415,15 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;back
       <div id="misComisionesGerente"></div>
     </div>
 
+    <!-- ══ MI LEGAJO ══ -->
+    <div class="tabpg" id="tabpg-milegajo">
+      <div class="sec-head">
+        <h2>📋 Mi Legajo</h2>
+        <button onclick="renderMiLegajo()" style="padding:8px 16px;border-radius:9px;background:rgba(52,211,153,.1);border:1px solid rgba(52,211,153,.25);color:#34d399;font-family:inherit;font-size:.78rem;font-weight:700;cursor:pointer;">🔄 Actualizar</button>
+      </div>
+      <div id="miLegajoContent"></div>
+    </div>
+
   </main>
 </div>
 
@@ -431,6 +441,7 @@ var DB_KEY='luazul_db', VK='luazul_vendors', NK='luazul_notifs';
 // gerente_regiones → relación gerente ↔ regiones
 
 // ── GERENTE PROFILE ────────────────────────────────────
+var _gerenteUuid = '';            // UUID del gerente autenticado (Supabase Auth)
 window._gerenteProfile   = null;  // perfil del gerente autenticado
 window._gerenteRegionIds = [];    // IDs de regiones asignadas
 
@@ -440,9 +451,10 @@ function mapVendorFromSB(v) {
   if(v.comprobantes_json){ try{ comps = JSON.parse(v.comprobantes_json); }catch(e){} }
   return {
     id:          v.id,
+    user_id:     v.user_id || '',
     nombre:      (v.nombre||'') + (v.apellido ? ' '+v.apellido : ''),
-    email:       v.badge || '',   // badge almacena el email
-    password:    '',              // nunca exponer contraseñas en frontend
+    email:       v.badge || '',
+    password:    '',
     activo:      v.activo !== false,
     fechaAlta:   v.fecha_alta || '',
     telefono1:   v.telefono1  || '',
@@ -516,7 +528,7 @@ function dbs(k,v){
 // ── SUPABASE DIRECTO: guardar cliente ────────────────
 function _sbUpdateClient(id, fields){
   if(!sbClient) return Promise.resolve();
-  return sbClient.from('clientes').update(fields).eq('id', id)
+  return sbClient.from('clientes').update(fields).eq('id', String(id))
     .then(function(res){
       if(res.error) console.warn('Supabase update clientes:', res.error.message);
     })
@@ -526,7 +538,7 @@ function _sbUpdateClient(id, fields){
 // ── SUPABASE DIRECTO: guardar vendor ─────────────────
 function _sbUpdateVendor(id, fields){
   if(!sbClient) return Promise.resolve();
-  return sbClient.from('staff_profiles').update(fields).eq('id', id)
+  return sbClient.from('staff_profiles').update(fields).eq('id', String(id))
     .then(function(res){
       if(res.error) console.warn('Supabase update staff_profiles:', res.error.message);
     })
@@ -537,8 +549,8 @@ function _sbUpdateVendor(id, fields){
 function _sbApprovePayment(id){
   if(!sbClient) return Promise.resolve(false);
   return sbClient.from('pagos')
-    .update({ estado:'aprobado', aprobado_por:'Gerencia', fecha_pago: new Date().toISOString() })
-    .eq('id', id)
+    .update({ estado:'aprobado', aprobado_por: String(_gerenteUuid || 'Gerencia'), gerente_id: _gerenteUuid || null, fecha_pago: new Date().toISOString() })
+    .eq('id', String(id))
     .then(function(res){
       if(res.error){ console.warn('Supabase approve pago:', res.error.message); return false; }
       return true;
@@ -561,7 +573,7 @@ function _sbLoad(){
       var user = res.data && res.data.user ? res.data.user : null;
       if(!user) return Promise.resolve();
       return sbClient.from('staff_profiles')
-        .select('*').eq('user_id', user.id).single()
+        .select('*').eq('user_id', String(user.id)).single()
         .then(function(p){ if(p.data) window._gerenteProfile = p.data; });
     });
   }
@@ -571,7 +583,7 @@ function _sbLoad(){
     var gerenteId = window._gerenteProfile ? window._gerenteProfile.id : null;
     if(!gerenteId || !sbClient) return Promise.resolve([]);
     return sbClient.from('gerente_regiones')
-      .select('region_id').eq('gerente_id', gerenteId)
+      .select('region_id').eq('gerente_id', String(gerenteId))
       .then(function(res){
         var regionIds = [];
         if(res.data) regionIds = res.data.map(function(r){ return r.region_id; });
@@ -653,7 +665,9 @@ function getClientMonth(c) {
 }
 
 function calcComision(v, allClients) {
-  var vc = allClients.filter(function(c){ return c.vid === v.id; });
+  var vc = allClients.filter(function(c){
+    return String(c.vid)===String(v.user_id) || String(c.vid)===String(v.id);
+  });
   var now = new Date();
   var curKey = now.getFullYear() + '-' + now.getMonth();
 
@@ -755,7 +769,11 @@ function enrich(c){
   return c;
 }
 function sc(s){return{r:'#ef4444',n:'#f97316',a:'#eab308',v:'#22c55e',b:'#6b7280'}[s]||'#6b7280';}
-function vby(id){return((_memCache[VK]||[])||[]).find(function(v){return v.id===id;})||{nombre:'Sin asignar',id:'',password:''};}
+function vby(id){
+  return((_memCache[VK]||[])||[]).find(function(v){
+    return String(v.user_id)===String(id) || String(v.id)===String(id);
+  })||{nombre:'Sin asignar',id:'',user_id:'',password:''};
+}
 function fmtTs(ts){var d=Math.round((Date.now()-ts)/60000);return d<60?'Hace '+d+' min':d<1440?'Hace '+Math.round(d/60)+' h':'Hace '+Math.round(d/1440)+' días';}
 
 function gLogin(){
@@ -783,8 +801,9 @@ function gLogin(){
       if(res.error || !res.data || !res.data.user){
         throw new Error(res.error ? res.error.message : 'Sin respuesta del servidor');
       }
+      _gerenteUuid = String(res.data.user.id);
       return sbClient.from('staff_profiles')
-        .select('*').eq('user_id', res.data.user.id).single();
+        .select('*').eq('user_id', String(res.data.user.id)).single();
     })
     .then(function(p){
       if(p.error || !p.data) throw new Error('Perfil de gerente no encontrado. Contactá al administrador.');
@@ -796,7 +815,14 @@ function gLogin(){
     })
     .catch(function(e){
       errEl.style.display='block';
-      errEl.textContent='❌ ' + (e.message || 'Credenciales incorrectas');
+      var msg = e.message || 'Credenciales incorrectas';
+      if(msg.indexOf('Invalid login credentials') !== -1)
+        msg = 'Email o contraseña incorrectos.';
+      else if(msg.indexOf('Email not confirmed') !== -1 || msg.indexOf('email not confirmed') !== -1)
+        msg = 'Email no confirmado. El gerente debe confirmar su email antes de ingresar. Revisá la bandeja de entrada o desactivá "Enable email confirmations" en Supabase Dashboard.';
+      else if(msg.indexOf('Invalid Refresh Token') !== -1 || msg.indexOf('refresh') !== -1)
+        msg = 'Sesión expirada. Volvé a ingresar.';
+      errEl.textContent='❌ ' + msg;
     });
 }
 
@@ -1145,7 +1171,12 @@ function saveClientFromManager() {
     })
     .catch(function(e) {
       console.warn('[SB] saveClientFromManager:', e.message);
-      showToast('⚠️ Error: ' + e.message);
+      var msg = e.message || 'Error desconocido';
+      if(msg.toLowerCase().indexOf('already registered') !== -1)
+        msg = 'Ese email ya existe en Auth. El cliente puede ingresar con su contraseña existente, o usá otro email.';
+      else if(msg.toLowerCase().indexOf('duplicate') !== -1)
+        msg = 'Ya existe un cliente con esos datos.';
+      showToast('⚠️ Error: ' + msg);
       if (btn) { btn.disabled = false; btn.textContent = '✅ Crear y Asignar Cliente'; }
     });
 }
@@ -1190,7 +1221,7 @@ function initApp(){
         var session = res.data && res.data.session ? res.data.session : null;
         if(!session || !session.user) return Promise.resolve();
         return sbClient.from('staff_profiles')
-          .select('*').eq('user_id', session.user.id).single()
+          .select('*').eq('user_id', String(session.user.id)).single()
           .then(function(p){
             if(p.data && p.data.role_id === 3) window._gerenteProfile = p.data;
           });
@@ -1251,7 +1282,7 @@ function renderOverview(){
   // Vendor performance
   var maxRec=1;
   var vp=vs.map(function(v){
-    var vc=cs.filter(function(c){return c.vid===v.id;});
+    var vc=cs.filter(function(c){return String(c.vid)===String(v.user_id)||String(c.vid)===String(v.id);});
     var r=vc.reduce(function(s,c){return s+(parseInt(c.cuotas_pagadas)||0)*(parseFloat(c.monto_cuota)||0);},0);
     if(r>maxRec)maxRec=r;
     return{v:v,n:vc.length,r:r,at:vc.filter(function(c){return c.estado==='atraso';}).length};
@@ -1308,13 +1339,13 @@ function renderOverview(){
 function renderVendors(){
   var vs=(_memCache[VK]||[])||[],cs=((_memCache[DB_KEY]||[])||[]).map(enrich),ns=(_memCache[NK]||[])||[];
   document.getElementById('vGrid').innerHTML=vs.map(function(v){
-    var vc=cs.filter(function(c){return c.vid===v.id;});
+    var vc=cs.filter(function(c){return String(c.vid)===String(v.user_id)||String(c.vid)===String(v.id);});
     var rec=vc.reduce(function(s,c){return s+(parseInt(c.cuotas_pagadas)||0)*(parseFloat(c.monto_cuota)||0);},0);
     var at=vc.filter(function(c){return c.estado==='atraso';}).length;
-    var al=ns.filter(function(n){return n.vid===v.id&&!n.leida;}).length;
+    var al=ns.filter(function(n){return String(n.vid)===String(v.user_id)||String(n.vid)===String(v.id)&&!n.leida;}).length;
     var cm=calcComision(v,cs);
     var ini=v.nombre.split(' ').map(function(w){return w[0];}).join('').slice(0,2).toUpperCase();
-    return '<div class="vcard" onclick="openVendorDetail(\''+v.id+'\')">'
+    return '<div class="vcard" onclick="openVendorDetail(\''+v.user_id+'\')">'
       +'<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">'
       +'<div class="vavatar">'+ini+'</div>'
       +'<div style="flex:1;min-width:0;">'
@@ -1411,15 +1442,17 @@ function renderVendors(){
 
     +'</div>'
     +'<div class="vactions" onclick="event.stopPropagation()">'
-      +'<button class="vcbtn p" onclick="openVendorDetail(\''+v.id+'\')">👥 Clientes</button>'
-      +'<button class="vcbtn" onclick="editVendor(\''+v.id+'\')">✏️ Editar</button>'
-      +'<button class="vcbtn" onclick="toggleVendor(\''+v.id+'\')">'+(v.activo?'⏸️':'▶️')+'</button>'
+      +'<button class="vcbtn p" onclick="openVendorDetail(\''+v.user_id+'\')">👥 Clientes</button>'
+      +'<button class="vcbtn" onclick="editVendor(\''+v.user_id+'\')">✏️ Editar</button>'
+      +'<button class="vcbtn" onclick="toggleVendor(\''+v.user_id+'\')">'+(v.activo?'⏸️':'▶️')+'</button>'
       +'</div></div>';
   }).join('')||'<div class="empty"><div class="ei">👔</div><p>Sin vendedores</p></div>';
 }
 
 function openVendorDetail(vid){
-  var v=vby(vid),cs=((_memCache[DB_KEY]||[])||[]).map(enrich).filter(function(c){return c.vid===vid;}).sort(function(a,b){return a._p-b._p;});
+  var v=vby(vid),cs=((_memCache[DB_KEY]||[])||[]).map(enrich).filter(function(c){
+    return String(c.vid)===String(vid) || (v.id && String(c.vid)===String(v.id));
+  }).sort(function(a,b){return a._p-b._p;});
   var rec=cs.reduce(function(s,c){return s+(parseInt(c.cuotas_pagadas)||0)*(parseFloat(c.monto_cuota)||0);},0);
   var rows=cs.map(function(c){
     return '<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);cursor:pointer;" onclick="openClientDetail('+c.id+')">'
@@ -1558,7 +1591,14 @@ function saveVendor(){
   })
   .catch(function(err){
     console.error('[SB] saveVendor:', err);
-    showToast('❌ Error al crear asesor: ' + (err.message || 'Verificá los datos'));
+    var msg = err.message || 'Verificá los datos';
+    if(msg.toLowerCase().indexOf('already registered') !== -1 || msg.toLowerCase().indexOf('already been registered') !== -1)
+      msg = 'Ese email ya existe en Supabase Auth. Usá otro email o eliminá el usuario anterior desde el Dashboard.';
+    else if(msg.toLowerCase().indexOf('duplicate') !== -1 || msg.toLowerCase().indexOf('unique') !== -1)
+      msg = 'Ya existe un perfil con esos datos. Verificá el email.';
+    else if(msg.toLowerCase().indexOf('email not confirmed') !== -1)
+      msg = 'El asesor fue creado pero debe confirmar su email antes de ingresar. Podés desactivar "Enable email confirmations" en Supabase → Authentication → Settings.';
+    showToast('❌ Error al crear asesor: ' + msg);
   })
   .then(function(){
     if(btn){ btn.disabled=false; btn.textContent='✅ Crear Vendedor'; }
@@ -1567,9 +1607,7 @@ function saveVendor(){
 
 function editVendor(vid){
   var v=vby(vid);
-  var com=v.comision||{tipo:'porcentaje',valor:5,base:'recaudado'};
-  var pen=v.penalizacion||{tipo:'porcentaje',valor:50,aplica:'baja_primeras3'};
-  var cTipoVal=com.tipo==='fijo'?'fijo':(com.base==='total_plan'?'porcentaje_total':'porcentaje');
+  if(!v||!v.nombre){showToast('⚠️ Asesor no encontrado');return;}
   document.getElementById('mbox').innerHTML='<div class="mhead"><div><h2>✏️ Editar Vendedor</h2></div><button class="mclose" onclick="closeModal()">✕</button></div>'
     +'<div class="mbody"><div class="mgrid">'
     +'<div class="mi"><div class="ml">Nombre</div><input class="min" id="evN" value="'+v.nombre+'"/></div>'
@@ -1617,17 +1655,21 @@ function saveEditV(vid){
   var nombreSB = partes[0];
   var apellidoSB = partes.slice(1).join(' ');
 
-  _sbUpdateVendor(vid, {
+  // Buscar el registro para obtener su id numérico de DB (FK real)
+  var vObj = (_memCache[VK]||[]).find(function(x){ return String(x.user_id)===String(vid)||String(x.id)===String(vid); });
+  var dbId = vObj ? vObj._sbId || vObj.id : vid;
+
+  _sbUpdateVendor(dbId, {
     nombre:    nombreSB,
     apellido:  apellidoSB,
     badge:     email,
-    telefono1: t1,
-    telefono2: t2,
-    domicilio: dom,
-    cbu:       cbu
+    telefono1: t1 || null,
+    telefono2: t2 || null,
+    domicilio: dom || null,
+    cbu:       cbu || null
   }).then(function(){
-    var vs = (_memCache[VK]||[]).map(function(v){
-      if(v.id===vid){
+    _memCache[VK] = (_memCache[VK]||[]).map(function(v){
+      if(String(v.user_id)===String(vid)||String(v.id)===String(vid)){
         v.nombre    = nombre;
         v.email     = email;
         v.telefono1 = t1;
@@ -1637,7 +1679,6 @@ function saveEditV(vid){
       }
       return v;
     });
-    _memCache[VK] = vs;
     closeModal();
     renderAll();
     showToast('✅ Asesor actualizado en Supabase');
@@ -1647,15 +1688,17 @@ function saveEditV(vid){
 
 function delVendor(vid){
   if(!confirm('¿Eliminar asesor? Sus clientes quedarán sin asignar.'))return;
+  var vObj = (_memCache[VK]||[]).find(function(v){ return String(v.user_id)===String(vid)||String(v.id)===String(vid); });
+  var dbId = vObj ? vObj._sbId || vObj.id : vid;
   if(!sbClient){
-    _memCache[VK] = (_memCache[VK]||[]).filter(function(v){return v.id!==vid;});
+    _memCache[VK] = (_memCache[VK]||[]).filter(function(v){ return String(v.user_id)!==String(vid)&&String(v.id)!==String(vid); });
     closeModal(); renderAll(); showToast('🗑️ Asesor eliminado');
     return;
   }
-  sbClient.from('staff_profiles').delete().eq('id', vid)
+  sbClient.from('staff_profiles').delete().eq('id', String(dbId))
     .then(function(res){
       if(res.error){ showToast('❌ Error al eliminar: '+res.error.message); return; }
-      _memCache[VK] = (_memCache[VK]||[]).filter(function(v){return v.id!==vid;});
+      _memCache[VK] = (_memCache[VK]||[]).filter(function(v){ return String(v.user_id)!==String(vid)&&String(v.id)!==String(vid); });
       closeModal(); renderAll(); showToast('🗑️ Asesor eliminado');
     })
     .catch(function(e){ showToast('❌ Error al eliminar: '+e.message); });
@@ -1663,7 +1706,7 @@ function delVendor(vid){
 
 function verCompVend(vid, idx){
   var vs = (_memCache[VK]||[])||[];
-  var v = vs.find(function(x){ return x.id===vid; });
+  var v = vs.find(function(x){ return String(x.user_id)===String(vid)||String(x.id)===String(vid); });
   if(!v||!v.comprobantes||!v.comprobantes[idx]) return;
   var c = v.comprobantes[idx];
   var w = window.open('','_blank');
@@ -1676,11 +1719,15 @@ function verCompVend(vid, idx){
 
 function toggleVendor(vid){
   var vs = _memCache[VK]||[];
-  var v = vs.filter(function(x){ return x.id===vid; })[0];
+  var v = vs.filter(function(x){ return String(x.user_id)===String(vid)||String(x.id)===String(vid); })[0];
   if(!v) return;
   var nuevoActivo = !v.activo;
-  _sbUpdateVendor(vid, { activo: nuevoActivo }).then(function(){
-    _memCache[VK] = vs.map(function(x){ if(x.id===vid) x.activo=nuevoActivo; return x; });
+  var dbId = v._sbId || v.id;
+  _sbUpdateVendor(dbId, { activo: nuevoActivo }).then(function(){
+    _memCache[VK] = vs.map(function(x){
+      if(String(x.user_id)===String(vid)||String(x.id)===String(vid)) x.activo=nuevoActivo;
+      return x;
+    });
     renderAll(); showToast('Estado de asesor actualizado en Supabase');
   });
 }
@@ -1688,14 +1735,16 @@ function toggleVendor(vid){
 // ── CLIENTS ───────────────────────────────────────────
 function populateVFilt(){
   var sel=document.getElementById('vFilt'),vs=(_memCache[VK]||[])||[],cur=sel.value;
-  sel.innerHTML='<option value="">Todos los vendedores</option>'+vs.map(function(v){return'<option value="'+v.id+'"'+(cur===v.id?' selected':'')+'>'+v.nombre+'</option>';}).join('');
+  sel.innerHTML='<option value="">Todos los vendedores</option>'+vs.map(function(v){
+    return '<option value="'+v.user_id+'"'+(String(cur)===String(v.user_id)?' selected':'')+'>'+v.nombre+'</option>';
+  }).join('');
 }
 
 function renderClients(){
   var srch=(document.getElementById('csrch').value||'').toLowerCase();
   var vf=document.getElementById('vFilt').value,sf=document.getElementById('sFilt').value;
   var cs=((_memCache[DB_KEY]||[])||[]).map(enrich).filter(function(c){
-    if(vf&&c.vid!==vf)return false;
+    if(vf && String(c.vid)!==String(vf))return false;
     if(sf&&c.estado!==sf)return false;
     if(srch&&(c.nombre+c.email+c.destino).toLowerCase().indexOf(srch) === -1)return false;
     return true;
@@ -1722,7 +1771,7 @@ function renderClients(){
 }
 
 function openClientDetail(id){
-  var cs=(_memCache[DB_KEY]||[])||[],c=cs.find(function(x){return x.id==id;});
+  var cs=(_memCache[DB_KEY]||[])||[],c=cs.find(function(x){return String(x.id)===String(id);});
   if(!c)return; c=enrich(c);
   var v=vby(c.vid),vs=(_memCache[VK]||[])||[];
   var pag=parseInt(c.cuotas_pagadas)||0,tot=parseInt(c.cuotas_total)||10,mnt=parseFloat(c.monto_cuota)||0;
@@ -1770,7 +1819,7 @@ function gerenteUpdate(id){
     seller_id:      nuevoVid
   }).then(function(){
     var cs = (_memCache[DB_KEY]||[]).map(function(c){
-      if(c.id==id){ c.cuotas_pagadas=nuevasCuotas; c.estado=nuevoEstado; c.vid=nuevoVid; }
+      if(String(c.id)===String(id)){ c.cuotas_pagadas=nuevasCuotas; c.estado=nuevoEstado; c.vid=nuevoVid; }
       return c;
     });
     _memCache[DB_KEY] = cs;
@@ -1815,7 +1864,7 @@ function renderNotifs(){
 
 function mkReadG(id){
   // gestiones de mora locales — marcar leída en caché
-  var ns = (_memCache[NK]||[]).map(function(n){if(n.id==id)n.leida=true;return n;});
+  var ns = (_memCache[NK]||[]).map(function(n){if(String(n.id)===String(id))n.leida=true;return n;});
   _memCache[NK] = ns;
   renderNotifs();
 }
@@ -1842,7 +1891,7 @@ function approvePayment(nid){
     for(var i=0; i<ns.length; i++){ if(ns[i].id===nid){ notif=ns[i]; break; } }
     if(notif && notif.cid){
       var cs = (_memCache[DB_KEY]||[]).map(function(c){
-        if(c.id==notif.cid && notif.cuota>(parseInt(c.cuotas_pagadas)||0)){
+        if(String(c.id)===String(notif.cid) && notif.cuota>(parseInt(c.cuotas_pagadas)||0)){
           c.cuotas_pagadas = notif.cuota;
           _sbUpdateClient(notif.cid, { cuotas_pagadas: notif.cuota });
         }
@@ -1877,7 +1926,7 @@ function viewComp(nid){
 // ══════════════════════════════════════════════════════
 function openGerenteMora(id) {
   var clients = (_memCache[DB_KEY]||[]) || [];
-  var c = clients.find(function(x){ return x.id == id; });
+  var c = clients.find(function(x){ return String(x.id) === String(id); });
   if (!c) return;
   var mora = c.mora || [];
 
@@ -1928,7 +1977,7 @@ function openGerenteMora(id) {
 // ── MORA MANAGEMENT (gerente) ──────────────────────────────────────────────
 function gerenteMora(id) {
   var cs = (_memCache[DB_KEY]||[]) || [];
-  var c = cs.find(function(x){ return x.id == id; });
+  var c = cs.find(function(x){ return String(x.id) === String(id); });
   if (!c) return;
   var mora = c.mora || [];
   var activas = mora.filter(function(m){ return !m.resuelta; }).length;
@@ -1984,7 +2033,7 @@ function gerenteSaveMora(id) {
   var cs = _memCache[DB_KEY] || [];
   var promesas = [];
   cs = cs.map(function(c) {
-    if (c.id == id) {
+    if (String(c.id) === String(id)) {
       if (!c.mora) c.mora = [];
       c.mora.push({ fecha: fecha, motivo: motivo, compromiso: compromiso, contacto: contacto, resuelta: false, vendedorNombre: 'Gerencia' });
       if (estado) c.estado = estado;
@@ -2005,7 +2054,7 @@ function gerenteSaveMora(id) {
 function gerenteResolverMora(id, idx) {
   var cs = _memCache[DB_KEY] || [];
   cs = cs.map(function(c) {
-    if (c.id == id && c.mora && c.mora[idx]) {
+    if (String(c.id) === String(id) && c.mora && c.mora[idx]) {
       c.mora[idx].resuelta = true;
       _sbUpdateClient(c.id, { mora_json: JSON.stringify(c.mora) });
     }
@@ -2029,8 +2078,8 @@ function populateVendDashSel(){
   sel.innerHTML='<option value="">— Seleccionar asesor —</option>';
   vs.forEach(function(v){
     var o=document.createElement('option');
-    o.value=v.id; o.textContent=v.nombre+(v.activo?'':' (inactivo)');
-    if(v.id===cur)o.selected=true;
+    o.value=v.user_id; o.textContent=v.nombre+(v.activo?'':' (inactivo)');
+    if(String(v.user_id)===String(cur))o.selected=true;
     sel.appendChild(o);
   });
 }
@@ -2041,8 +2090,8 @@ function renderVendDash(){
   if(!vid){el.innerHTML='<div style="text-align:center;padding:60px;color:var(--muted);">Seleccioná un asesor para ver su dashboard completo</div>';return;}
   var v=vby(vid);
   var allCs=((_memCache[DB_KEY]||[])||[]).map(enrich);
-  var cs=allCs.filter(function(c){return c.vid===vid;});
-  var ns=((_memCache[NK]||[])||[]).filter(function(n){return n.vid===vid;});
+  var cs=allCs.filter(function(c){return String(c.vid)===String(vid)||(v.id&&String(c.vid)===String(v.id));});
+  var ns=((_memCache[NK]||[])||[]).filter(function(n){return String(n.vid)===String(vid)||(v.id&&String(n.vid)===String(v.id));});
   var cm=calcComision(v,cs);
   var ini=v.nombre.split(' ').map(function(w){return w[0];}).join('').slice(0,2).toUpperCase();
 
@@ -2281,8 +2330,8 @@ function populatePagoFiltros(){
   sel.innerHTML='<option value="">Todos los asesores</option>';
   vs.forEach(function(v){
     var o=document.createElement('option');
-    o.value=v.id; o.textContent=v.nombre;
-    if(v.id===cur)o.selected=true;
+    o.value=v.user_id; o.textContent=v.nombre;
+    if(String(v.user_id)===String(cur))o.selected=true;
     sel.appendChild(o);
   });
 }
@@ -2293,7 +2342,7 @@ function renderPagos(){
   var ef=document.getElementById('pagoEstFilt')?document.getElementById('pagoEstFilt').value:'';
 
   var pays=ns.filter(function(n){return n.tipo==='payment';});
-  if(vf)pays=pays.filter(function(n){return n.vid===vf;});
+  if(vf)pays=pays.filter(function(n){return String(n.vid)===String(vf);});
   if(ef==='pendiente')pays=pays.filter(function(n){return !n.aprobada;});
   if(ef==='aprobado')pays=pays.filter(function(n){return !!n.aprobada;});
   pays.sort(function(a,b){return b.ts-a.ts;});
@@ -2481,14 +2530,14 @@ function renderMoraTab(){
 function notificarAsesorMora(clientId){
   var cs = _memCache[DB_KEY]||[];
   var c = null;
-  for(var i=0; i<cs.length; i++){ if(cs[i].id==clientId){ c=cs[i]; break; } }
+  for(var i=0; i<cs.length; i++){ if(String(cs[i].id)===String(clientId)){ c=cs[i]; break; } }
   if(!c) return;
   var v = vby(c.vid);
 
   var guardar = Promise.resolve();
   if(sbClient){
     var ci = null;
-    for(var j=0; j<cs.length; j++){ if(cs[j].id==clientId){ ci=cs[j]; break; } }
+    for(var j=0; j<cs.length; j++){ if(String(cs[j].id)===String(clientId)){ ci=cs[j]; break; } }
     if(ci){
       var notasActuales = [];
       try{ notasActuales = ci.mora_json ? JSON.parse(ci.mora_json) : (ci.mora||[]); }catch(e){ notasActuales = []; }
@@ -2547,7 +2596,7 @@ function renderEquipoDash(){
 
   // ── Per-vendor data ──
   var vData=vs.map(function(v){
-    var vc=cs.filter(function(c){return c.vid===v.id;});
+    var vc=cs.filter(function(c){return String(c.vid)===String(v.user_id)||String(c.vid)===String(v.id);});
     var rec=vc.reduce(function(s,c){return s+(parseInt(c.cuotas_pagadas)||0)*(parseFloat(c.monto_cuota)||0);},0);
     var cm=calcComision(v,cs);
     var atV=vc.filter(function(c){return c.estado==='atraso'||c.estado==='atraso_gestion';}).length;
@@ -2854,6 +2903,94 @@ function saveObjetivos(){
 }
 
 // ══════════════════════════════════════════════════════
+// MI LEGAJO — Tab Datos Personales del Gerente
+// ══════════════════════════════════════════════════════
+function renderMiLegajo(){
+  var el = document.getElementById('miLegajoContent');
+  if(!el) return;
+
+  var yo   = window._gerenteProfile || null;
+  var rids = window._gerenteRegionIds || [];
+  var regs = _memCache['luazul_regiones'] || [];
+
+  if(!yo){
+    el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted);">Sin perfil cargado. Recargá la página.</div>';
+    return;
+  }
+
+  // Regiones asignadas — cruzar con tabla regiones
+  var regionesAsignadas = regs.filter(function(r){
+    return rids.some(function(rid){ return String(r.id)===String(rid); });
+  });
+
+  var nombre   = (yo.nombre||'') + (yo.apellido ? ' '+yo.apellido : '');
+  var email    = yo.badge || yo.email || '—';
+  var tel1     = yo.telefono1 || '—';
+  var tel2     = yo.telefono2 || null;
+  var domicilio= yo.domicilio || null;
+  var cbu      = yo.cbu || null;
+  var ciudad   = yo.ciudad || null;
+  var fechaAlta= yo.fecha_alta ? yo.fecha_alta.slice(0,10) : null;
+
+  var zonaHTML = regionesAsignadas.length
+    ? regionesAsignadas.map(function(r){
+        return '<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-left:3px solid '+(r.color||'#f59e0b')+';border-radius:10px;">'
+          + '<span style="font-size:1.4rem;">'+(r.bandera||'🌎')+'</span>'
+          + '<div>'
+          + '<div style="font-weight:700;font-size:.88rem;">'+r.nombre+'</div>'
+          + '<div style="font-size:.68rem;color:var(--muted);">'+r.pais+' · ID: '+r.id+'</div>'
+          + '</div></div>';
+      }).join('')
+    : '<div style="padding:14px;background:rgba(255,255,255,.03);border:1px dashed rgba(255,255,255,.1);border-radius:10px;color:var(--muted);font-size:.82rem;">Sin regiones asignadas. Pedile al CEO que configure las zonas en tu perfil.</div>';
+
+  function fila(label, valor, mono){
+    return '<div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:10px;padding:12px 16px;">'
+      + '<div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);margin-bottom:4px;">'+label+'</div>'
+      + '<div style="font-size:.9rem;font-weight:600;color:var(--text);'+(mono?'font-family:monospace;':'')+'">'+valor+'</div>'
+      + '</div>';
+  }
+
+  el.innerHTML =
+    // Header card
+    '<div style="display:flex;align-items:center;gap:18px;padding:20px 24px;background:rgba(255,255,255,.03);border:1px solid rgba(52,211,153,.2);border-radius:16px;margin-bottom:24px;">'
+    + '<div style="width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,#059669,#34d399);display:flex;align-items:center;justify-content:center;font-family:Syne,sans-serif;font-size:1.3rem;font-weight:900;flex-shrink:0;color:white;">'+(nombre[0]||'G').toUpperCase()+'</div>'
+    + '<div><div style="font-family:Syne,sans-serif;font-size:1.1rem;font-weight:800;">'+nombre+'</div>'
+    + '<div style="font-size:.72rem;color:var(--muted);margin-top:2px;">Gerente Regional · Luazul Smart Travel</div>'
+    + (fechaAlta ? '<div style="font-size:.68rem;color:rgba(52,211,153,.7);margin-top:4px;">Alta: '+fechaAlta+'</div>' : '')
+    + '</div></div>'
+
+    // Datos personales
+    + '<div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--gold);margin-bottom:12px;">👤 Datos de Contacto</div>'
+    + '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin-bottom:24px;">'
+    + fila('Nombre completo', nombre)
+    + fila('Email', email)
+    + fila('Teléfono principal', tel1)
+    + (tel2 ? fila('Teléfono referencia', tel2) : '')
+    + (ciudad ? fila('Ciudad', ciudad) : '')
+    + (domicilio ? '<div style="grid-column:span 2;">'+fila('Domicilio', domicilio)+'</div>' : '')
+    + (cbu ? '<div style="grid-column:1/-1;background:rgba(74,222,128,.07);border:1px solid rgba(74,222,128,.2);border-radius:10px;padding:12px 16px;">'
+        + '<div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#34d399;margin-bottom:4px;">💰 CBU / Alias Bancario</div>'
+        + '<div style="font-family:monospace;font-size:.9rem;font-weight:700;color:#4ade80;">'+cbu+'</div>'
+        + '</div>' : '')
+    + '</div>'
+
+    // Zonas a cargo
+    + '<div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--gold);margin-bottom:12px;">🌎 Zonas a Cargo ('+regionesAsignadas.length+')</div>'
+    + '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;margin-bottom:24px;">'
+    + zonaHTML
+    + '</div>'
+
+    // Info técnica
+    + '<div style="padding:12px 16px;background:rgba(255,255,255,.02);border:1px dashed rgba(255,255,255,.08);border-radius:10px;">'
+    + '<div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);margin-bottom:6px;">🔧 Datos Técnicos</div>'
+    + '<div style="font-size:.72rem;color:rgba(180,200,240,.4);line-height:1.8;">'
+    + 'UUID Auth: <span style="font-family:monospace;color:rgba(180,200,240,.6);">'+(yo.user_id||'—')+'</span><br>'
+    + 'DB ID: <span style="font-family:monospace;color:rgba(180,200,240,.6);">'+(yo.id||'—')+'</span><br>'
+    + 'Role ID: <span style="font-family:monospace;color:rgba(180,200,240,.6);">'+yo.role_id+'</span>'
+    + '</div></div>';
+}
+
+// ══════════════════════════════════════════════════════
 // CONTRASEÑAS — Tab 7
 // ══════════════════════════════════════════════════════
 function renderPasswords(){
@@ -2869,8 +3006,8 @@ function renderPasswords(){
         html += '<div style="font-size:.72rem;color:var(--gold);font-weight:700;margin-bottom:6px;">' + v.nombre + '</div>';
         html += '<div class="mitem"><div class="ml">Email / Badge</div>';
         html += '<div style="display:flex;gap:6px;">';
-        html += '<input class="medit" id="vpu-' + i + '" data-vid="' + v.id + '" value="' + v.email + '" style="flex:1;" />';
-        html += '<button data-vid="' + v.id + '" data-idx="' + i + '" class="pw-save-btn" style="padding:7px 12px;background:linear-gradient(135deg,#d97706,#f59e0b);border:none;color:white;border-radius:8px;font-size:.75rem;font-weight:700;cursor:pointer;">💾</button>';
+        html += '<input class="medit" id="vpu-' + i + '" data-vid="' + v.user_id + '" value="' + v.email + '" style="flex:1;" />';
+        html += '<button data-vid="' + v.user_id + '" data-idx="' + i + '" class="pw-save-btn" style="padding:7px 12px;background:linear-gradient(135deg,#d97706,#f59e0b);border:none;color:white;border-radius:8px;font-size:.75rem;font-weight:700;cursor:pointer;">💾</button>';
         html += '</div></div>';
         html += '<div style="font-size:.67rem;color:var(--muted);margin-top:6px;">⚠️ Contraseña: el asesor usa Forgot Password o el CEO desde panel Admin</div>';
         html += '</div>';
@@ -2911,14 +3048,16 @@ function saveGerPass(){
 
 function saveVendorPass(vid,idx){
   var email=(document.getElementById('vpu-'+idx)||{}).value||'';
-  // Nota: contraseñas de Supabase Auth NO se pueden cambiar desde frontend con anon key
-  // Solo se puede actualizar el badge (email de display) en staff_profiles
   if(!email){showToast('⚠️ El email no puede estar vacío');return;}
-  _sbUpdateVendor(vid, { badge: email }).then(function(){
-    var vs = (_memCache[VK]||[]).map(function(v){ if(v.id===vid){ v.email=email; } return v; });
-    _memCache[VK] = vs;
+  var vObj = (_memCache[VK]||[]).find(function(v){ return String(v.user_id)===String(vid)||String(v.id)===String(vid); });
+  var dbId = vObj ? vObj._sbId || vObj.id : vid;
+  _sbUpdateVendor(dbId, { badge: email }).then(function(){
+    _memCache[VK] = (_memCache[VK]||[]).map(function(v){
+      if(String(v.user_id)===String(vid)||String(v.id)===String(vid)){ v.email=email; }
+      return v;
+    });
     renderAll();
-    showToast('✅ Email del asesor actualizado en Supabase. Para cambiar contraseña, usar "Forgot Password" o el panel Admin.');
+    showToast('✅ Email del asesor actualizado. Para cambiar contraseña, usar "Forgot Password" o el panel Admin.');
   });
 }
 
@@ -2938,7 +3077,7 @@ function showTab(id){
   if(id==='equipo'){renderEquipoDash();}
   if(id==='passwords'){renderPasswords();}
   if(id==='miscomisiones'){renderMisComisionesGerente();}
-
+  if(id==='milegajo'){renderMiLegajo();}
   if(id==='mensual'){renderMensual();}
 }
 
@@ -2997,7 +3136,7 @@ function renderMensual(){
   var trendC=trend>=0?'var(--green)':'var(--red)';
 
   var vs=(_memCache[VK]||[])||[];
-  function vName(vid){var v=vs.find(function(x){return x.id===vid;});return v?v.nombre:'Desconocido';}
+  function vName(vid){var v=vs.find(function(x){return String(x.user_id)===String(vid)||String(x.id)===String(vid);});return v?v.nombre:'Desconocido';}
   var VCOL=['#3b82f6','#a78bfa','#22c55e','#f59e0b','#ef4444','#06b6d4','#ec4899','#f97316'];
 
   el.innerHTML=
