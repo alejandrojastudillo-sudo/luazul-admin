@@ -456,7 +456,7 @@
           Acceso exclusivo para <strong>personal autorizado</strong>.<br/>
           Sistema interno LUAZUL Smart Travel.
         </div>
-        <div class="fver">Supabase Auth &middot; ES5 Canon &middot; v3.32</div>
+        <div class="fver">Supabase Auth &middot; profiles &middot; ES5 Canon &middot; v3.32.1</div>
       </div>
 
     </div><!-- /.card -->
@@ -595,7 +595,7 @@
   /* ────────────────────────────────────────────────────
      6. MAIN LOGIN HANDLER (FIX C1, A2, P1, ES5)
      — Only Supabase Auth; no local fallback in production.
-     — Queries vendedores for role_id.
+     — Queries profiles for role_id (Integer 1/2/3).
      — All UUID comparisons use String().
   ──────────────────────────────────────────────────── */
   function handleLogin() {
@@ -634,15 +634,15 @@
 
         var userId = String(res.data.user.id);   /* UUID always as String — FIX UUID */
 
-        /* ── STEP 2: Fetch role from vendedores ── */
+        /* ── STEP 2: Fetch role from profiles ── */
         sbClient
-          .from('vendedores')
+          .from('profiles')
           .select('id, nombre, apellido, role_id, email')
           .eq('user_id', userId)                 /* String UUID — no parseInt — FIX UUID */
           .single()
           .then(function (vRes) {
             if (vRes.error || !vRes.data) {
-              /* Vendor record not found — access denied */
+              /* Profile record not found — access denied */
               showErr('Perfil no encontrado. Contact\u00e1 al administrador.');
               setLoading(false);
               sbClient.auth.signOut();
@@ -650,20 +650,30 @@
             }
 
             var v      = vRes.data;
-            var roleId = v.role_id || 3;
+            var roleId = parseInt(String(v.role_id || 3), 10); /* role_id is Integer — safe parseInt */
             var nombre = ((v.nombre || '') + ' ' + (v.apellido || '')).trim()
                          || email.split('@')[0];
 
-            /* ── STEP 3: Persist session ── */
+            /* ── STEP 3: Persist session (ROUTING MATRIX) ──
+               Role 1 CEO     → lz_auth: 'true'      → ceo_luazul.html
+               Role 2 Gerente → luazul_gerente: '1'   → gerente_luazul.html
+               Role 3 Vendor  → lz_auth: 'true'      → admin_luazul.html
+            ──────────────────────────────────────────────── */
             /* Sensitive fields obfuscated (FIX P8) */
-            lzSet('lz_user_id',  userId);        /* btoa-encoded UUID */
-            lzSet('lz_role_id',  String(roleId));/* btoa-encoded role_id */
-            /* Plain fields for backward-compat with existing panels */
+            lzSet('lz_user_id',  userId);         /* btoa-encoded UUID */
+            lzSet('lz_role_id',  String(roleId)); /* btoa-encoded role_id */
+
+            /* Universal plain keys — required by existing panel guards */
             lzSetPlain('lz_auth',     'true');
             lzSetPlain('lz_role',     getRoleName(roleId));
             lzSetPlain('lz_nombre',   nombre);
             lzSetPlain('lz_email',    email);
             lzSetPlain('lz_supabase', 'true');
+
+            /* Role-specific key — gerente_luazul.html reads luazul_gerente */
+            if (roleId === 2) {
+              lzSetPlain('luazul_gerente', '1');
+            }
 
             resetAttempts();
 

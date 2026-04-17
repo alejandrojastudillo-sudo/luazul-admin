@@ -440,6 +440,42 @@ var _cacheGerentes=null, _cacheVendedores=null, _cacheClientes=null, _cachePagos
 // UUID del CEO autenticado — se setea en cLogin / DOMContentLoaded
 // Necesario para RPC resolver_mora(p_aprobado_por)
 var _ceoUid = null;
+
+// ── SEGURIDAD: esc() — Auditoría v3.31 XSS-A2 ────────
+// Escapa HTML para uso en innerHTML. ES5 puro.
+// Aplicar a TODOS los campos de usuario antes de inyectar en DOM.
+function esc(s) {
+  if (s === null || s === undefined) return '';
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;');
+}
+
+// ── SEGURIDAD: safeViewComp() — Auditoría v3.31 XSS-A4 ─
+// Reemplaza document.write en visualizadores de comprobantes.
+// Usa DOM API segura en lugar de inyección directa.
+function safeViewComp(dataUrl, tipoMime) {
+  var w = window.open('', '_blank');
+  if (!w) { showToast('\u26A0\uFE0F Habilitá las ventanas emergentes'); return; }
+  var doc = w.document;
+  doc.open();
+  doc.close();
+  if (tipoMime && tipoMime.indexOf('image') === 0) {
+    var img = doc.createElement('img');
+    img.src = dataUrl;
+    img.style.cssText = 'max-width:100%;display:block;margin:0 auto;';
+    doc.body.appendChild(img);
+  } else {
+    var frame = doc.createElement('iframe');
+    frame.src = dataUrl;
+    frame.style.cssText = 'width:100%;height:100vh;border:0;';
+    doc.body.style.margin = '0';
+    doc.body.appendChild(frame);
+  }
+}
 var _regFiltMode = 'activo'; // 'activo' = solo con datos | 'todas' = las 26
 
 function dbg(k){try{var r=localStorage.getItem(k);return r?JSON.parse(r):null;}catch(e){return null;}}
@@ -765,7 +801,8 @@ function buildRegionCheckboxes(selectedIds){
 }
 function getSelectedRegionIds(){
   var ids=[];
-  document.querySelectorAll('#modal input[type="checkbox"]').forEach(function(c){ if(c.checked) ids.push(c.value); });
+  var nodes = document.querySelectorAll('#modal input[type="checkbox"]');
+  for(var _i=0;_i<nodes.length;_i++){ if(nodes[_i].checked) ids.push(nodes[_i].value); }
   return ids;
 }
 
@@ -892,8 +929,10 @@ function calcComisionGerente(g, allVendedores, allClients){
 
 // ── TABS ─────────────────────────────────────────────
 function showTab(id){
-  document.querySelectorAll('.tabpg').forEach(function(el){el.classList.remove('active');});
-  document.querySelectorAll('.tab').forEach(function(el){el.classList.remove('active');});
+  var _tpgs = document.querySelectorAll('.tabpg');
+  for(var _i=0;_i<_tpgs.length;_i++){ _tpgs[_i].classList.remove('active'); }
+  var _tabs = document.querySelectorAll('.tab');
+  for(var _j=0;_j<_tabs.length;_j++){ _tabs[_j].classList.remove('active'); }
   var pg=document.getElementById('tabpg-'+id);
   var tb=document.getElementById('tab-'+id);
   if(pg) pg.classList.add('active');
@@ -1108,14 +1147,15 @@ function setRegFiltMode(mode){
 
 function getRegionesConActividad(){
   var gs=ger(), vs=vend(), cs=cli();
-  var ids=new Set();
+  // ES5: objeto como lookup de IDs únicos (reemplaza new Set() ES6)
+  var idMap = {};
   gs.forEach(function(g){
-    if(g.rid) ids.add(g.rid);
-    if(g.region_ids) g.region_ids.forEach(function(id){ ids.add(id); });
+    if(g.rid) idMap[String(g.rid)] = true;
+    if(g.region_ids) g.region_ids.forEach(function(id){ idMap[String(id)] = true; });
   });
-  vs.forEach(function(v){ if(v.rid) ids.add(v.rid); });
-  cs.forEach(function(c){ if(c.rid) ids.add(c.rid); });
-  return reg().filter(function(r){ return ids.has(r.id); });
+  vs.forEach(function(v){ if(v.rid) idMap[String(v.rid)] = true; });
+  cs.forEach(function(c){ if(c.rid) idMap[String(c.rid)] = true; });
+  return reg().filter(function(r){ return idMap[String(r.id)] === true; });
 }
 
 function renderRegiones(){
@@ -1171,10 +1211,11 @@ function renderRegiones(){
       +'</div></div>';
   }).join('');
   document.getElementById('rGrid').innerHTML=html;
-  document.getElementById('rGrid').querySelectorAll('.rcard').forEach(function(el){
-    el.style.cursor='pointer';
-    el.addEventListener('click',function(){ openRegionDetail(this.dataset.rid); });
-  });
+  var _rcards = document.getElementById('rGrid').querySelectorAll('.rcard');
+  for(var _ri=0;_ri<_rcards.length;_ri++){
+    _rcards[_ri].style.cursor='pointer';
+    (function(el){ el.addEventListener('click',function(){ openRegionDetail(el.dataset.rid); }); })(_rcards[_ri]);
+  }
 }
 
 function openRegionDetail(rid){
@@ -1870,12 +1911,7 @@ function verCompVendCeo(vid, idx){
   var v = vend().find(function(x){ return String(x.user_id)===String(vid); });
   if(!v||!v.comprobantes||!v.comprobantes[idx]) return;
   var c = v.comprobantes[idx];
-  var w = window.open('','_blank');
-  if(c.tipo && c.tipo.indexOf('image')===0){
-    w.document.write('<img src="'+c.data+'" style="max-width:100%;" />');
-  } else {
-    w.document.write('<iframe src="'+c.data+'" style="width:100%;height:100vh;border:0;"></iframe>');
-  }
+  safeViewComp(c.data, c.tipo);
 }
 
 function borrarCompVendCeo(vid, idx){
@@ -2115,12 +2151,7 @@ function verComprobante(gid, idx){
   var g = (_cacheGerentes||[]).find(function(x){ return String(x.user_id)===String(gid); });
   if(!g||!g.comprobantes||!g.comprobantes[idx]) return;
   var c = g.comprobantes[idx];
-  var w = window.open('','_blank');
-  if(c.tipo && c.tipo.indexOf('image')===0){
-    w.document.write('<img src="'+c.data+'" style="max-width:100%;" />');
-  } else {
-    w.document.write('<iframe src="'+c.data+'" style="width:100%;height:100vh;border:0;"></iframe>');
-  }
+  safeViewComp(c.data, c.tipo);
 }
 
 function borrarComprobante(gid, idx){
@@ -2809,12 +2840,7 @@ function verCompCentral(tipo, pid, idx){
   var persona = (cache||[]).find(function(x){ return String(x.user_id)===String(pid); });
   if(!persona||!persona.comprobantes||!persona.comprobantes[idx]) return;
   var comp = persona.comprobantes[idx];
-  var w = window.open('','_blank');
-  if(comp.tipo && comp.tipo.indexOf('image')===0){
-    w.document.write('<img src="'+comp.data+'" style="max-width:100%;" />');
-  } else {
-    w.document.write('<iframe src="'+comp.data+'" style="width:100%;height:100vh;border:0;"></iframe>');
-  }
+  safeViewComp(comp.data, comp.tipo);
 }
 
 function borrarCompCentral(tipo, pid, idx){
