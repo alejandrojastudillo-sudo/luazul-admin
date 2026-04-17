@@ -456,7 +456,7 @@
           Acceso exclusivo para <strong>personal autorizado</strong>.<br/>
           Sistema interno LUAZUL Smart Travel.
         </div>
-        <div class="fver">Supabase Auth &middot; profiles &middot; ES5 Canon &middot; v3.32.1</div>
+        <div class="fver">Supabase Auth &middot; profiles &middot; ES5 Canon &middot; v3.32.2</div>
       </div>
 
     </div><!-- /.card -->
@@ -638,7 +638,7 @@
         sbClient
           .from('profiles')
           .select('id, nombre, apellido, role_id, email')
-          .eq('user_id', userId)                 /* String UUID — no parseInt — FIX UUID */
+          .eq('id', userId)                      /* String UUID — columna PK 'id' — FIX UUID */
           .single()
           .then(function (vRes) {
             if (vRes.error || !vRes.data) {
