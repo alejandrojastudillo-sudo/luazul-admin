@@ -1400,10 +1400,15 @@ function saveVendor(){
   var btn = document.querySelector('#modal .mbtn.gold');
   if(btn){ btn.disabled=true; btn.textContent='⏳ Creando...'; }
 
-  // 1. Registrar en Supabase Auth
+  // Parsear nombre/apellido antes del signUp para alimentar el trigger de profiles
+  var nombresArr   = n.split(' ');
+  var primerNombre = nombresArr[0];
+  var apellidoStr  = nombresArr.slice(1).join(' ') || '';
+
+  // 1. Registrar en Supabase Auth (role_id:3 = Vendedor en la tabla profiles)
   sbClient.auth.signUp({
     email: e, password: p,
-    options:{ data:{ nombre: n, role: 'seller' } }
+    options:{ data:{ nombre: primerNombre, apellido: apellidoStr, role_id: 3 } }
   })
   .then(function(signUp){
     if(signUp.error) throw signUp.error;
@@ -1415,8 +1420,8 @@ function saveVendor(){
       regionId = window._gerenteRegionIds[0];
     }
 
-    // 3. Insertar en staff_profiles
-    var nombres = n.split(' ');
+    // 3. Insertar en staff_profiles (role_id:2 = mapeo legacy de vendedores en esta tabla)
+    var nombres = nombresArr;
     return sbClient.from('staff_profiles').insert({
       role_id:    2,
       nombre:     nombres[0],

@@ -1787,11 +1787,15 @@ function saveNewVendorCeo(){
   if(btn){btn.disabled=true; btn.textContent='⏳ Creando...';}
   function onDone(){ if(btn){btn.disabled=false; btn.textContent='✅ Crear Asesor';} }
 
-  sbClient.auth.signUp({ email: email, password: pass, options:{ data:{ nombre: nombre, role: 'seller' } } })
+  var nombresArr = nombre.split(' ');
+  var primerNombre = nombresArr[0];
+  var apellidoStr  = nombresArr.slice(1).join(' ') || '';
+
+  sbClient.auth.signUp({ email: email, password: pass, options:{ data:{ nombre: primerNombre, apellido: apellidoStr, role_id: 3 } } })
     .then(function(signUp){
       if(signUp.error) throw signUp.error;
       var uid = signUp.data.user ? signUp.data.user.id : null;
-      var nombres = nombre.split(' ');
+      var nombres = nombresArr;
       var profileData = {
         role_id:   ROLE_SELLER,
         nombre:    nombres[0],
@@ -2018,14 +2022,18 @@ function saveNewGerente(){
   if(btn){btn.disabled=true; btn.textContent='⏳ Creando...';}
   function onDone(){ if(btn){btn.disabled=false; btn.textContent='✅ Crear Gerente';} }
 
+  var nombresArr = nombre.split(' ');
+  var primerNombre = nombresArr[0];
+  var apellidoStr  = nombresArr.slice(1).join(' ') || '';
+
   sbClient.auth.signUp({ email: email, password: pass,
-    options:{ data:{ nombre: nombre, role: 'manager' } }
+    options:{ data:{ nombre: primerNombre, apellido: apellidoStr, role_id: 2 } }
   })
   .then(function(signUp){
     if(signUp.error) throw signUp.error;
     var uid = signUp.data.user ? signUp.data.user.id : null;
     if(!uid) showToast('⚠️ El email puede requerir confirmación. El gerente debe confirmar su email antes de ingresar.');
-    var nombres = nombre.split(' ');
+    var nombres = nombresArr;
     var profileData = {
       role_id:    ROLE_MANAGER,
       nombre:     nombres[0],
