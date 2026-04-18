@@ -961,7 +961,7 @@ function adminLogout() {
 function loadClients() {
   if (!sbClient) { showToast('\u274C Sin conexi\u00f3n a Supabase'); return Promise.resolve(); }
   showToast('\u23F3 Cargando clientes...');
-  var query = sbClient.from('clientes').select('*').order('nombre');
+  var query = sbClient.from('clientes').select('id,user_id,seller_id,nombre,email,telefono,documento,domicilio,estado,destino,paquete,fecha_viaje,monto_cuota,cuotas_total,cuotas_pagadas,total_usd,fecha_alta,notas,region_id,mora_json,comprobantes_json,created_at').order('nombre');
   if (_currentProfile) {
     // seller_id almacena UUID (user_id); vid puede contener el BIGINT id
     var _uid = String(_currentProfile.user_id || '');
@@ -1023,6 +1023,11 @@ function enrich(c) {
     (!c.seller_id || (String(c.seller_id) !== String(_currentProfile.user_id) && String(c.seller_id) !== String(_currentProfile.id)))
   );
 
+  // Parsear mora_json como array (necesario para el indicador de mora)
+  if (!c.mora) {
+    try { c.mora = c.mora_json ? JSON.parse(c.mora_json) : []; }
+    catch(e) { c.mora = []; }
+  }
   // Days to trip
   if (c.fecha_viaje) {
     c._dias = Math.ceil((new Date(c.fecha_viaje) - new Date()) / (1000*60*60*24));
@@ -1933,7 +1938,14 @@ function addClient() {
     auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
   });
 
-  sbTemp.auth.signUp({ email: email, password: pass })
+  // PASO 1 — Auth.signUp con role_id:4 explícito para el trigger
+  var nombresArr   = nombre.split(' ');
+  var primerNombre = nombresArr[0];
+  var apellidoStr  = nombresArr.slice(1).join(' ') || '';
+  sbTemp.auth.signUp({
+    email: email, password: pass,
+    options: { data: { nombre: primerNombre, apellido: apellidoStr, role_id: 4 } }
+  })
     .then(function(authResult) {
       if (authResult.error) {
         if (authResult.error.message.toLowerCase().indexOf('already registered') === -1) {
@@ -1941,7 +1953,9 @@ function addClient() {
         }
       }
       var authUserId = authResult.data && authResult.data.user ? authResult.data.user.id : null;
+      window.__ultimoClienteAuthId = authUserId;
 
+      // PASO 2 — Insert en clientes con seller_id UUID (regla maestra v3.1)
       var newClient = {
         nombre:         nombre,
         email:          email,
@@ -1971,6 +1985,20 @@ function addClient() {
       return crearContratoBorrador(inserted).then(function() { return inserted; });
     })
     .then(function(inserted) {
+      // PASO 3 — Upsert en profiles para que el cliente pueda hacer login en su panel
+      var clienteAuthId = window.__ultimoClienteAuthId;
+      if (clienteAuthId && sbClient) {
+        sbClient.from('profiles').upsert({
+          id:       String(clienteAuthId),
+          email:    email,
+          nombre:   primerNombre,
+          apellido: apellidoStr,
+          role_id:  4
+        }, { onConflict: 'id' }).then(function(res){
+          if (res.error) console.warn('[SB] profiles upsert:', res.error.message);
+          else console.log('[SB] profiles upsert OK para cliente:', email);
+        });
+      }
       closeModal();
       renderAll();
       showToast('\u2705 Cliente ' + nombre + ' creado \u2014 puede ingresar al panel con su email y contrase\u00f1a');

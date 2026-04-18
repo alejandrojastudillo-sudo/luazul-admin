@@ -520,6 +520,7 @@ function mapClientFromSB(c) {
     email:         c.email      || '',
     telefono:      c.telefono   || '',
     documento:     c.documento  || '',
+    domicilio:     c.domicilio  || '',
     estado:        c.estado     || 'activo',
     destino:       c.destino    || '',
     paquete:       c.paquete    || '',
@@ -661,7 +662,7 @@ function _sbLoad(){
     // 5. Cargar clientes
     var p5 = sbClient
       ? (function(){
-          var q = sbClient.from('clientes').select('*');
+          var q = sbClient.from('clientes').select('id,user_id,seller_id,nombre,email,telefono,documento,domicilio,estado,destino,paquete,fecha_viaje,monto_cuota,cuotas_total,cuotas_pagadas,total_usd,fecha_alta,notas,region_id,mora_json,comprobantes_json,created_at');
           if(regionIds.length > 0) q = q.in('region_id', regionIds);
           return q.order('created_at', {ascending:false}).limit(1000).then(function(res){
             if(!res.error && res.data) _memCache[DB_KEY] = res.data.map(mapClientFromSB);
@@ -1683,13 +1684,16 @@ function openClientDetail(id){
   var v=vby(c.vid),vs=(_memCache[VK]||[])||[];
   var pag=parseInt(c.cuotas_pagadas)||0,tot=parseInt(c.cuotas_total)||10,mnt=parseFloat(c.monto_cuota)||0;
   var tl='';for(var i=1;i<=tot;i++){var cls=i<=pag?'pagada':i===pag+1?'proxima':'futura';var comp=c.comprobantes&&c.comprobantes[i];var bg=cls==='pagada'?'rgba(34,197,94,.15)':cls==='proxima'?'rgba(234,179,8,.15)':'rgba(255,255,255,.04)';var brd=cls==='pagada'?'rgba(34,197,94,.4)':cls==='proxima'?'rgba(234,179,8,.4)':'var(--border)';var col=cls==='pagada'?'#22c55e':cls==='proxima'?'#eab308':'var(--muted)';tl+='<div style="width:32px;height:32px;border-radius:7px;background:'+bg+';border:1px solid '+brd+';display:flex;align-items:center;justify-content:center;font-size:.76rem;font-weight:700;color:'+col+';position:relative;" title="Cuota '+i+(comp?' · Con comprobante':'')+'">'+(comp?'<span style="position:absolute;top:-3px;right:-3px;width:9px;height:9px;background:var(--green);border-radius:50%;"></span>':'')+i+'</div>';}
-  document.getElementById('mbox').innerHTML='<div class="mhead"><div><h2>'+esc(c.nombre)+'</h2><p style="font-size:.76rem;color:var(--muted);">'+esc(c.email)+' · <span class="bdg '+c.estado+'">'+c.estado+'</span></p></div><button class="mclose" onclick="closeModal()">✕</button></div>'
+  document.getElementById('mbox').innerHTML='<div class="mhead"><div><h2>'+esc(c.nombre)+'</h2><p style="font-size:.76rem;color:var(--muted);">'+esc(c.email)+' · <span class="bdg '+c.estado+'">'+c.estado+'</span></p></div><button class="mclose" onclick="closeModal()">&#x2715;</button></div>'
     +'<div class="mbody"><div class="mgrid">'
-    +'<div class="mi"><div class="ml">Vendedor</div><div class="mv">👔 '+esc(v.nombre)+'</div></div>'
+    +'<div class="mi"><div class="ml">Telefono</div><div class="mv" style="font-weight:700;">'+(c.telefono||'<span style="color:var(--muted)">No cargado</span>')+'</div></div>'
+    +'<div class="mi"><div class="ml">DNI / Documento</div><div class="mv" style="font-weight:700;">'+(c.documento||'<span style="color:var(--muted)">No cargado</span>')+'</div></div>'
+    +'<div class="mi" style="grid-column:span 2;"><div class="ml">Domicilio</div><div class="mv">'+(c.domicilio||'<span style="color:var(--muted)">No cargado</span>')+'</div></div>'
+    +'<div class="mi"><div class="ml">Vendedor</div><div class="mv">&#x1F454; '+esc(v.nombre)+'</div></div>'
     +'<div class="mi"><div class="ml">Destino</div><div class="mv">'+c.destino+'</div></div>'
     +'<div class="mi"><div class="ml">Total plan</div><div class="mv">USD '+c.total_usd+'</div></div>'
     +'<div class="mi"><div class="ml">Abonado</div><div class="mv" style="color:var(--green);">USD '+(pag*mnt).toFixed(0)+'</div></div>'
-    +'<div class="mi"><div class="ml">Progreso</div><div class="mv" style="color:'+sc(c._s)+';">'+c._pct+'% — '+pag+'/'+tot+'</div></div>'
+    +'<div class="mi"><div class="ml">Progreso</div><div class="mv" style="color:'+sc(c._s)+';">'+c._pct+'% &mdash; '+pag+'/'+tot+'</div></div>'
     +'<div class="mi"><div class="ml">Fecha viaje</div><div class="mv">'+(c.fecha_viaje||'Por confirmar')+'</div></div>'
     +'</div>'
     +'<div style="font-size:.67rem;color:var(--gold);font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Cuotas — verde = con comprobante</div>'
