@@ -1704,6 +1704,26 @@ function verFichaCliente(clienteId){
   document.getElementById('modal').classList.add('open');
 }
 
+// ── getCeoUsers: construida desde CEO_ALLOWED_EMAILS + Supabase ──────────
+// Reemplaza el sistema legacy de localStorage. Los usuarios CEO se leen
+// desde la sesión activa de Supabase, no desde un array hardcodeado.
+var CEO_USERS_KEY = 'luazul_ceo_users';
+function getCeoUsers(){
+  // Intentar desde cache Supabase primero
+  var fromSB = (_cacheGerentes||[]).filter(function(g){
+    return CEO_ALLOWED_EMAILS.indexOf((g.email||'').toLowerCase()) !== -1;
+  });
+  if(fromSB.length > 0){
+    return fromSB.map(function(g){
+      return { id: g.user_id, nombre: g.nombre||'CEO', usuario: g.email||'', password: '' };
+    });
+  }
+  // Fallback: construir desde CEO_ALLOWED_EMAILS directamente
+  return CEO_ALLOWED_EMAILS.map(function(email, i){
+    return { id: 'ceo_'+i, nombre: i===0?'CEO Principal':'CEO Incognito', usuario: email, password: '' };
+  });
+}
+
 function renderPwCeoUsers(){
   var users=getCeoUsers();
   var el=document.getElementById('pwCeoUsers'); if(!el)return;
@@ -1860,11 +1880,11 @@ function saveNewVendorCeo(){
     })
     .then(function(ins){
       if(ins.error) throw ins.error;
-      _cacheVendedores = _cacheVendedores||[];
-      _cacheVendedores.push(mapVendedor(ins.data));
-      closeModal(); populateAllFilters();
       var rNombre = rid ? (reg().find(function(x){return String(x.id)===String(rid);})||{}).nombre||'' : '';
       showToast('✅ Asesor '+nombre+' creado'+(rNombre?' · '+rNombre:''));
+      closeModal();
+      // Recargar desde Supabase para evitar race condition
+      cargarDatosSupabase().then(function(){ renderAll(); populateAllFilters(); });
       onDone();
     })
     .catch(function(e){
@@ -2106,11 +2126,14 @@ function saveNewGerente(){
     return newGer;
   })
   .then(function(newGer){
-    _cacheGerentes = _cacheGerentes||[];
-    _cacheGerentes.push(newGer);
-    closeModal(); renderRegiones(); renderPasswords();
-    var rNombres = regionIds.map(function(rid){ var r=reg().find(function(x){return String(x.id)===String(rid);}); return r?r.nombre:''; }).filter(Boolean).join(', ');
+    var rNombres = regionIds.map(function(rid){
+      var r=reg().find(function(x){return String(x.id)===String(rid);});
+      return r?r.nombre:'';
+    }).filter(Boolean).join(', ');
     showToast('✅ Gerente '+nombre+' creado'+(rNombres?' · '+rNombres:''));
+    closeModal();
+    // Recargar desde Supabase para evitar race condition — no usar cache local
+    cargarDatosSupabase().then(function(){ renderAll(); renderPasswords(); });
     onDone();
   })
   .catch(function(e){
