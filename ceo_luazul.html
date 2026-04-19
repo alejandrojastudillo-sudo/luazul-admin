@@ -2267,7 +2267,13 @@ function saveNewGerente(){
     }
   })
   .catch(function(e){
-    console.error('saveNewGerente:', e);
+      console.error('saveNewGerente - Detalle Técnico del Error:', {
+        message: e.message,
+        details: e.details,
+        hint: e.hint,
+        status: e.status,
+        raw: e
+      });
     // Si el signUp falla, restaurar sesión CEO igual
     if (_ceoEmail && _ceoPass) {
       sbClient.auth.signInWithPassword({ email: _ceoEmail, password: _ceoPass }).catch(function(){});
