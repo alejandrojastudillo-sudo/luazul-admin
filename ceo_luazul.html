@@ -1919,6 +1919,12 @@ function saveNewVendorCeo(){
   var primerNombre = nombresArr[0];
   var apellidoStr  = nombresArr.slice(1).join(' ') || '';
 
+  // Buscar el gerente responsable de esta región para establecer la jerarquía
+  var gerente = (_cacheGerentes||[]).find(function(g){ 
+    return String(g.rid) === String(rid) || (g.region_ids && g.region_ids.indexOf(String(rid)) !== -1); 
+  });
+  var managerId = gerente ? gerente.id : null;
+
   // ── LIMPIEZA DE SESIÓN ANTES DEL SIGNUP (Vendedor desde CEO) ───────────────
   var _ceoEmailV = null;
   var _ceoPassV  = null;
@@ -1941,6 +1947,7 @@ function saveNewVendorCeo(){
         badge:     email,
         activo:    true,
         region_id: rid||null,
+        manager_id: managerId,
         telefono1: (document.getElementById('caVT1').value||'').trim()||null,
         telefono2: (document.getElementById('caVT2').value||'').trim()||null,
         domicilio: (document.getElementById('caVDom').value||'').trim()||null,
@@ -2112,11 +2119,19 @@ function saveEditVendCeo(vid){
   var v = (_cacheVendedores||[]).find(function(x){ return String(x.user_id)===String(vid); });
   if(!v){ showToast('⚠️ Asesor no encontrado'); return; }
   var nombres = ((document.getElementById('ceVN').value||'').trim()||v.nombre).split(' ');
+  
+  var rid = document.getElementById('ceVR').value||null;
+  // Al cambiar la región, recalculamos el manager para no romper la recaudación
+  var gerente = (_cacheGerentes||[]).find(function(g){ 
+    return String(g.rid) === String(rid) || (g.region_ids && g.region_ids.indexOf(String(rid)) !== -1); 
+  });
+
   var upd = {
     nombre:    nombres[0],
     apellido:  nombres.slice(1).join(' ')||'',
     badge:     (document.getElementById('ceVE').value||'').trim()||v.email,
-    region_id: document.getElementById('ceVR').value||null,
+    region_id: rid,
+    manager_id: gerente ? gerente.id : null,
     telefono1: (document.getElementById('ceVT1').value||'').trim()||null,
     telefono2: (document.getElementById('ceVT2').value||'').trim()||null,
     domicilio: (document.getElementById('ceVDom').value||'').trim()||null,
@@ -2203,10 +2218,10 @@ function saveNewGerente(){
       nombre:     nombres[0],
       apellido:   nombres.slice(1).join(' ')||'',
       badge:      email, activo: true,
-      region_id:  regionIds.length > 0 ? regionIds[0] : null,
       ciudad:     (document.getElementById('gCiudad').value||'').trim()||null,
       telefono1:  (document.getElementById('gTel1').value||'').trim()||null,
       telefono2:  (document.getElementById('gTel2').value||'').trim()||null,
+      fecha_alta: new Date().toISOString().slice(0,10),
       domicilio:  (document.getElementById('gDomicilio').value||'').trim()||null,
       cbu:        (document.getElementById('gCBU').value||'').trim()||null,
       com_pct: 0, comprobantes_json: '[]'
