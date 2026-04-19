@@ -1424,7 +1424,7 @@ function saveVendor(){
   var _gerEmail = (document.getElementById('gUser').value||'').trim().toLowerCase();
   var _gerPass  = (document.getElementById('gPass').value||'').trim();
   // Capturar gerente_id (BIGINT de staff_profiles) para el insert y para gerente_regiones
-  var _gerenteStaffId = window._gerenteProfile ? window._gerenteProfile.id : null;
+  // _gerenteUserId: UUID del gerente en auth.users — única clave jerárquica (manager_id)
   var _gerenteUserId  = window._gerenteProfile ? window._gerenteProfile.user_id : null;
 
   // 1. signOut para limpiar el contexto del Gerente antes de crear el Vendedor.
@@ -1448,9 +1448,8 @@ function saveVendor(){
       regionId = window._gerenteRegionIds[0];
     }
 
-    // 4. Insertar en staff_profiles con gerente_id y manager_id explícitos
-    //    gerente_id: BIGINT id de staff_profiles del gerente
-    //    manager_id: user_id (UUID) del gerente — clave de la Vista 360° y del filtro de panel
+    // 4. Insertar en staff_profiles — ADN v3: solo columnas del diccionario
+    //    manager_id (UUID del gerente) es la única clave jerárquica en staff_profiles
     var nombres = nombresArr;
     return sbClient.from('staff_profiles').insert({
       role_id:    2,
@@ -1459,7 +1458,6 @@ function saveVendor(){
       badge:      e,
       activo:     true,
       region_id:  regionId,
-      gerente_id: _gerenteStaffId,
       manager_id: _gerenteUserId,
       telefono1:  (document.getElementById('vT').value||'').trim() || null,
       telefono2:  (document.getElementById('vT2').value||'').trim() || null,
