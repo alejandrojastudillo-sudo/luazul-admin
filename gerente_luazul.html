@@ -496,8 +496,8 @@ function mapVendorFromSB(v) {
   return {
     id:          v.id,
     nombre:      (v.nombre||'') + (v.apellido ? ' '+v.apellido : ''),
-    email:       v.badge || '',   // badge almacena el email
-    password:    '',              // nunca exponer contraseñas en frontend
+    email:       v.badge || '',
+    password:    '',
     activo:      v.activo !== false,
     fechaAlta:   v.fecha_alta || '',
     telefono1:   v.telefono1  || '',
@@ -505,6 +505,7 @@ function mapVendorFromSB(v) {
     domicilio:   v.domicilio  || '',
     cbu:         v.cbu        || '',
     region_id:   v.region_id  || '',
+    manager_id:  v.manager_id || null,
     com_pct:     v.com_pct    || 0,
     comprobantes: comps,
     _sbId:       v.id
@@ -648,25 +649,34 @@ function _sbLoad(){
         })
       : Promise.resolve();
 
-    // 4. Cargar asesores role_id=2
+    // 4. Cargar asesores role_id=2 — filtro estricto por manager_id (Fase 3)
     var p4 = sbClient
       ? (function(){
-          var q = sbClient.from('staff_profiles').select('*').eq('role_id', 2);
-          if(regionIds.length > 0) q = q.in('region_id', regionIds);
-          return q.then(function(res){
-            if(!res.error && res.data) _memCache[VK] = res.data.map(mapVendorFromSB);
-          });
+          var gerenteUserId = window._gerenteProfile ? window._gerenteProfile.user_id : null;
+          if(!gerenteUserId) return Promise.resolve();
+          return sbClient.from('staff_profiles')
+            .select('*')
+            .eq('role_id', 2)
+            .eq('manager_id', gerenteUserId)
+            .then(function(res){
+              if(!res.error && res.data) _memCache[VK] = res.data.map(mapVendorFromSB);
+            });
         })()
       : Promise.resolve();
 
-    // 5. Cargar clientes
+    // 5. Cargar clientes — solo los de los vendedores del gerente (por seller_id)
     var p5 = sbClient
       ? (function(){
-          var q = sbClient.from('clientes').select('id,user_id,seller_id,nombre,email,telefono,documento,domicilio,estado,destino,paquete,fecha_viaje,monto_cuota,cuotas_total,cuotas_pagadas,total_usd,fecha_alta,notas,region_id,mora_json,comprobantes_json,created_at');
-          if(regionIds.length > 0) q = q.in('region_id', regionIds);
-          return q.order('created_at', {ascending:false}).limit(1000).then(function(res){
-            if(!res.error && res.data) _memCache[DB_KEY] = res.data.map(mapClientFromSB);
-          });
+          var sellerIds = (_memCache[VK]||[]).map(function(v){ return v._sbId || v.id; }).filter(Boolean);
+          if(sellerIds.length === 0){ _memCache[DB_KEY] = []; return Promise.resolve(); }
+          return sbClient.from('clientes')
+            .select('id,user_id,seller_id,nombre,email,telefono,documento,domicilio,estado,destino,paquete,fecha_viaje,monto_cuota,cuotas_total,cuotas_pagadas,total_usd,fecha_alta,notas,region_id,mora_json,comprobantes_json,created_at')
+            .in('seller_id', sellerIds)
+            .order('created_at', {ascending:false})
+            .limit(1000)
+            .then(function(res){
+              if(!res.error && res.data) _memCache[DB_KEY] = res.data.map(mapClientFromSB);
+            });
         })()
       : Promise.resolve();
 
@@ -1073,11 +1083,14 @@ function initApp(){
           .then(function(p){
             if(p.data && p.data.role_id === 3){
               window._gerenteProfile = p.data;
-            } else if(p.data && p.data.role_id !== 3){
-              // Bloqueo: sesión activa pero sin rol de gerente
+            } else {
+              // Bloqueo: sesión activa pero sin rol de gerente (rol cruzado)
+              // Limpiar TODO antes de mostrar el login
+              window._gerenteProfile = null;
               sbClient.auth.signOut();
+              try { sessionStorage.removeItem('luazul_gerente'); } catch(ex){}
               LZ_AUTH._showLogin('loginWrap','app');
-              return;
+              return Promise.resolve(); // cortar la cadena
             }
           });
       })
@@ -1406,22 +1419,38 @@ function saveVendor(){
   var primerNombre = nombresArr[0];
   var apellidoStr  = nombresArr.slice(1).join(' ') || '';
 
-  // 1. Registrar en Supabase Auth (role_id:3 = Vendedor en la tabla profiles)
-  sbClient.auth.signUp({
+  // ── CAPTURAR credenciales del Gerente ANTES del signOut ─────────────────────
+  // Necesitamos restaurar su sesión después del signUp del vendedor.
+  var _gerEmail = (document.getElementById('gUser').value||'').trim().toLowerCase();
+  var _gerPass  = (document.getElementById('gPass').value||'').trim();
+  // Capturar gerente_id (BIGINT de staff_profiles) para el insert y para gerente_regiones
+  var _gerenteStaffId = window._gerenteProfile ? window._gerenteProfile.id : null;
+  var _gerenteUserId  = window._gerenteProfile ? window._gerenteProfile.user_id : null;
+
+  // 1. signOut para limpiar el contexto del Gerente antes de crear el Vendedor.
+  //    Esto evita que Supabase herede metadatos de la sesión activa al nuevo usuario.
+  sbClient.auth.signOut().then(function() {
+
+  // 2. Registrar en Supabase Auth con role_id:2 fijo (Vendedor)
+  return sbClient.auth.signUp({
     email: e, password: p,
-    options:{ data:{ nombre: primerNombre, apellido: apellidoStr, role_id: 3 } }
+    options:{ data:{ nombre: primerNombre, apellido: apellidoStr, role_id: 2 } }
+  });
+
   })
   .then(function(signUp){
     if(signUp.error) throw signUp.error;
     var uid = signUp.data && signUp.data.user ? signUp.data.user.id : null;
 
-    // 2. Región del gerente
+    // 3. Región del gerente (desde variable local — no desde window que puede estar limpio)
     var regionId = null;
     if(window._gerenteRegionIds && window._gerenteRegionIds.length > 0){
       regionId = window._gerenteRegionIds[0];
     }
 
-    // 3. Insertar en staff_profiles (role_id:2 = mapeo legacy de vendedores en esta tabla)
+    // 4. Insertar en staff_profiles con gerente_id y manager_id explícitos
+    //    gerente_id: BIGINT id de staff_profiles del gerente
+    //    manager_id: user_id (UUID) del gerente — clave de la Vista 360° y del filtro de panel
     var nombres = nombresArr;
     return sbClient.from('staff_profiles').insert({
       role_id:    2,
@@ -1430,6 +1459,8 @@ function saveVendor(){
       badge:      e,
       activo:     true,
       region_id:  regionId,
+      gerente_id: _gerenteStaffId,
+      manager_id: _gerenteUserId,
       telefono1:  (document.getElementById('vT').value||'').trim() || null,
       telefono2:  (document.getElementById('vT2').value||'').trim() || null,
       domicilio:  (document.getElementById('vDom').value||'').trim() || null,
@@ -1441,16 +1472,40 @@ function saveVendor(){
   })
   .then(function(ins){
     if(ins.error) throw ins.error;
-    // 4. Agregar al cache local y re-renderizar
-    var newV = mapVendorFromSB(ins.data);
-    if(!_memCache[VK]) _memCache[VK] = [];
-    _memCache[VK].push(newV);
-    closeModal(); renderAll(); populateVFilt();
+    closeModal();
     showToast('✅ Asesor ' + n + ' creado en Supabase');
+    // ── RESTAURAR SESIÓN DEL GERENTE ─────────────────────────────────────────
+    // Después del signOut+signUp, re-autenticamos al Gerente para que el panel
+    // siga funcionando sin que tenga que hacer login nuevamente.
+    if(_gerEmail && _gerPass){
+      sbClient.auth.signInWithPassword({ email: _gerEmail, password: _gerPass })
+        .then(function(reAuth){
+          if(!reAuth.error && reAuth.data && reAuth.data.user){
+            // Restaurar _gerenteProfile desde Supabase (no desde caché potencialmente corrupto)
+            return sbClient.from('staff_profiles')
+              .select('*').eq('user_id', reAuth.data.user.id).single()
+              .then(function(prof){
+                if(prof.data && prof.data.role_id === 3){
+                  window._gerenteProfile = prof.data;
+                }
+                return _sbLoad();
+              });
+          }
+          return _sbLoad();
+        })
+        .then(function(){ renderAll(); populateVFilt(); populateVendDashSel(); })
+        .catch(function(){ _sbLoad().then(function(){ renderAll(); populateVFilt(); }); });
+    } else {
+      _sbLoad().then(function(){ renderAll(); populateVFilt(); populateVendDashSel(); });
+    }
   })
   .catch(function(err){
     console.error('[SB] saveVendor:', err);
     showToast('❌ Error al crear asesor: ' + (err.message || 'Verificá los datos'));
+    // Restaurar sesión del gerente aunque haya fallado
+    if(_gerEmail && _gerPass){
+      sbClient.auth.signInWithPassword({ email: _gerEmail, password: _gerPass }).catch(function(){});
+    }
   })
   .then(function(){
     if(btn){ btn.disabled=false; btn.textContent='✅ Crear Vendedor'; }

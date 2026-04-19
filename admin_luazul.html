@@ -699,14 +699,33 @@ function loadCurrentProfile() {
   return sbClient.auth.getSession()
     .then(function(_gsRes) {
       var session = _gsRes.data && _gsRes.data.session;
-      if (!session) return;
+      if (!session || !session.user) {
+        // Sin sesión válida — mostrar login limpio
+        LZ_AUTH._showLogin('loginWrap', 'app');
+        return;
+      }
       return sbClient
         .from('staff_profiles')
         .select('*')
         .eq('user_id', session.user.id)
         .single()
         .then(function(r) {
-          if (r.data) _currentProfile = r.data;
+          if (r.data && r.data.role_id === 2) {
+            // ✅ Perfil de Vendedor encontrado y validado
+            _currentProfile = r.data;
+          } else if (r.data && r.data.role_id !== 2) {
+            // ❌ Sesión cruzada — usuario no es Vendedor
+            console.warn('[SB] loadCurrentProfile: role_id incorrecto:', r.data.role_id);
+            sbClient.auth.signOut();
+            try { sessionStorage.removeItem('luazul_admin'); sessionStorage.removeItem('luazul_asesor_user'); } catch(ex){}
+            LZ_AUTH._showLogin('loginWrap', 'app');
+          } else {
+            // ❌ Perfil no encontrado en staff_profiles — user_id no registrado
+            console.warn('[SB] loadCurrentProfile: perfil no encontrado para este usuario.');
+            // No expulsar — puede ser un vendedor recién creado cuyo staff_profile aún está procesándose
+            // Mostrar toast informativo y dejar el panel cargado con datos vacíos
+            showToast('⚠️ Perfil no encontrado. Contactá al administrador si el problema persiste.');
+          }
         });
     })
     .catch(function(e) {
@@ -872,14 +891,32 @@ function adminLogin() {
   sbClient.auth.signInWithPassword({ email: u, password: p })
     .then(function(result) {
       if (result.error) throw result.error;
-      var meta   = result.data.user.user_metadata || {};
-      var nombre = meta.nombre || meta.full_name || u.split('@')[0];
-      LZ_AUTH.setPanelSession('luazul_admin');
-      try { sessionStorage.setItem('luazul_asesor_user', nombre); } catch(e2){}
-      LZ_AUTH._showApp('loginWrap', 'app');
-      return loadCurrentProfile()
-        .then(function() { return loadClients(); })
-        .then(function() { refreshAdminNotifBadge(); });
+      var uid = String(result.data.user.id);
+      // ── GUARDIA: verificar role_id=2 antes de abrir el panel ────────────────
+      return sbClient.from('staff_profiles')
+        .select('role_id, nombre, badge')
+        .eq('user_id', uid)
+        .single()
+        .then(function(profRes) {
+          if (profRes.error || !profRes.data) {
+            return sbClient.auth.signOut().then(function() {
+              throw new Error('Perfil de asesor no encontrado. Contactá al administrador.');
+            });
+          }
+          if (profRes.data.role_id !== 2) {
+            return sbClient.auth.signOut().then(function() {
+              throw new Error('Este acceso es exclusivo para asesores de ventas.');
+            });
+          }
+          // ✅ Vendedor confirmado
+          var nombre = profRes.data.nombre || profRes.data.badge || u.split('@')[0];
+          LZ_AUTH.setPanelSession('luazul_admin');
+          try { sessionStorage.setItem('luazul_asesor_user', nombre); } catch(e2){}
+          LZ_AUTH._showApp('loginWrap', 'app');
+          return loadCurrentProfile()
+            .then(function() { return loadClients(); })
+            .then(function() { refreshAdminNotifBadge(); });
+        });
     })
     .catch(function(err) {
       errEl.style.display = 'block';
@@ -899,14 +936,28 @@ document.addEventListener('DOMContentLoaded', function() {
       .then(function(result) {
         var session = result.data && result.data.session;
         if (session && session.user) {
-          var meta   = session.user.user_metadata || {};
-          var nombre = meta.nombre || meta.full_name || session.user.email.split('@')[0];
-          try { sessionStorage.setItem('luazul_asesor_user', nombre); } catch(e){}
-          LZ_AUTH.setPanelSession('luazul_admin');
-          LZ_AUTH._showApp('loginWrap', 'app');
-          return loadCurrentProfile()
-            .then(function() { return loadClients(); })
-            .then(function() { refreshAdminNotifBadge(); });
+          var uid = String(session.user.id);
+          // ── GUARDIA v3.2: validar role_id=2 en staff_profiles ───────────────
+          // No alcanza con que haya sesión activa; debe ser un Vendedor real.
+          return sbClient.from('staff_profiles')
+            .select('role_id, nombre, badge')
+            .eq('user_id', uid)
+            .single()
+            .then(function(profRes) {
+              if (profRes.error || !profRes.data || profRes.data.role_id !== 2) {
+                // Sesión activa pero NO es Vendedor — expulsar y limpiar
+                sbClient.auth.signOut();
+                try { sessionStorage.removeItem('luazul_admin'); sessionStorage.removeItem('luazul_asesor_user'); } catch(ex){}
+                return; // mostrar login
+              }
+              var nombre = profRes.data.nombre || profRes.data.badge || session.user.email.split('@')[0];
+              try { sessionStorage.setItem('luazul_asesor_user', nombre); } catch(e){}
+              LZ_AUTH.setPanelSession('luazul_admin');
+              LZ_AUTH._showApp('loginWrap', 'app');
+              return loadCurrentProfile()
+                .then(function() { return loadClients(); })
+                .then(function() { refreshAdminNotifBadge(); });
+            });
         }
         LZ_AUTH.guard({
           panelKey:    'luazul_admin',
@@ -961,15 +1012,13 @@ function adminLogout() {
 function loadClients() {
   if (!sbClient) { showToast('\u274C Sin conexi\u00f3n a Supabase'); return Promise.resolve(); }
   showToast('\u23F3 Cargando clientes...');
-  var query = sbClient.from('clientes').select('id,user_id,seller_id,nombre,email,telefono,documento,domicilio,estado,destino,paquete,fecha_viaje,monto_cuota,cuotas_total,cuotas_pagadas,total_usd,fecha_alta,notas,region_id,mora_json,comprobantes_json,created_at').order('nombre');
+  var query = sbClient
+    .from('clientes')
+    .select('id,user_id,seller_id,nombre,email,telefono,documento,domicilio,estado,destino,paquete,fecha_viaje,monto_cuota,cuotas_total,cuotas_pagadas,total_usd,fecha_alta,notas,region_id,mora_json,comprobantes_json,created_at')
+    .order('nombre');
   if (_currentProfile) {
-    // seller_id almacena UUID (user_id); vid puede contener el BIGINT id
-    var _uid = String(_currentProfile.user_id || '');
-    var _bid = String(_currentProfile.id || '');
-    var orClause = '';
-    if (_uid) orClause += 'seller_id.eq.' + _uid;
-    if (_bid) orClause += (orClause ? ',' : '') + 'vid.eq.' + _bid;
-    if (orClause) query = query.or(orClause);
+    // Filtro estricto: solo clientes donde seller_id = user_id del asesor (ADN v3 — Fase 3)
+    query = query.eq('seller_id', String(_currentProfile.user_id));
   }
   return query
     .then(function(r) {
@@ -1016,12 +1065,8 @@ function enrich(c) {
     c._semaforo = 'verde';
     c._prioridad = 5;
   }
-  // Origen: asignacion directa = el gerente lo asignó (vid set, seller_id diferente o null)
-  c._asignacion = (
-    c.vid && _currentProfile &&
-    (String(c.vid) === String(_currentProfile.user_id) || String(c.vid) === String(_currentProfile.id)) &&
-    (!c.seller_id || (String(c.seller_id) !== String(_currentProfile.user_id) && String(c.seller_id) !== String(_currentProfile.id)))
-  );
+  // Todos los clientes cargados pertenecen al asesor por seller_id — sin asignación ambigua
+  c._asignacion = false;
 
   // Parsear mora_json como array (necesario para el indicador de mora)
   if (!c.mora) {
@@ -1955,7 +2000,7 @@ function addClient() {
       var authUserId = authResult.data && authResult.data.user ? authResult.data.user.id : null;
       window.__ultimoClienteAuthId = authUserId;
 
-      // PASO 2 — Insert en clientes con seller_id UUID (regla maestra v3.1)
+      // PASO 2 — Insert en clientes con seller_id UUID y region_id del perfil (ADN v3 — Fase 3)
       var newClient = {
         nombre:         nombre,
         email:          email,
@@ -1970,7 +2015,9 @@ function addClient() {
         cuotas_pagadas: 0,
         monto_cuota:    total > 0 ? parseFloat((total / cuotas).toFixed(2)) : 0,
         estado:         'activo',
-        seller_id:      _currentProfile.user_id,  // UUID — regla maestra v3.1
+        fecha_alta:     new Date().toISOString().slice(0, 10),
+        seller_id:      String(_currentProfile.user_id),   // UUID — regla maestra ADN
+        region_id:      _currentProfile.region_id || null, // herencia de región del asesor
         notas:          ''
       };
 

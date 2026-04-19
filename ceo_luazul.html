@@ -518,7 +518,7 @@ function cargarDatosSupabase(){
         g.region_ids=grData.filter(function(x){return x.gerente_id===g.id;}).map(function(x){return x.region_id;});
       });
       return sbClient.from('staff_profiles')
-        .select('id,user_id,nombre,apellido,activo,badge,color,role_id,ciudad,telefono1,telefono2,domicilio,cbu,region_id,fecha_alta,comprobantes_json')
+        .select('id,user_id,nombre,apellido,activo,badge,color,role_id,ciudad,telefono1,telefono2,domicilio,cbu,region_id,manager_id,fecha_alta,comprobantes_json')
         .eq('role_id',ROLE_SELLER);
     })
     .then(function(vRes){
@@ -552,6 +552,7 @@ function mapGerente(r){
 }
 function mapVendedor(r){
   return{id:r.id,user_id:r.user_id,rid:r.region_id||'',
+    manager_id:r.manager_id||null,
     nombre:(r.nombre||'')+(r.apellido?' '+r.apellido:''),
     email:r.badge||'',activo:r.activo!==false,
     fechaAlta:r.fecha_alta?r.fecha_alta.slice(0,10):'',
@@ -720,29 +721,37 @@ document.addEventListener('DOMContentLoaded', function(){
       var session = result.data && result.data.session;
       if (session && session.user) {
         var email = session.user.email.toLowerCase();
+        var uid   = String(session.user.id);
+        // ── GUARDIA v3.2: email allowlist + role_id=1 en profiles ──────────
+        // No alcanza con el email; el perfil debe confirmar rol CEO.
         if (CEO_ALLOWED_EMAILS.indexOf(email) !== -1) {
-          var meta = session.user.user_metadata || {};
-          var nombre = meta.nombre || meta.full_name || email.split('@')[0];
-          _ceoUid = String(session.user.id); // persistir UUID para RPCs
-          try { sessionStorage.setItem('luazul_ceo','1'); sessionStorage.setItem('luazul_ceo_nombre', nombre); } catch(e){}
-          var lw = document.getElementById('loginWrap');
-          var ap = document.getElementById('app');
-          if (lw) lw.style.display = 'none';
-          if (ap) ap.style.display = 'block';
-          initApp();
+          sbClient.from('profiles')
+            .select('role_id, nombre')
+            .eq('id', uid)
+            .single()
+            .then(function(profRes) {
+              if (profRes.error || !profRes.data || String(profRes.data.role_id) !== '1') {
+                // Sesión activa pero NO es CEO — expulsar y limpiar
+                sbClient.auth.signOut();
+                try { sessionStorage.removeItem('luazul_ceo'); sessionStorage.removeItem('luazul_ceo_nombre'); } catch(e){}
+                return;
+              }
+              var nombre = profRes.data.nombre || email.split('@')[0];
+              _ceoUid = uid;
+              try { sessionStorage.setItem('luazul_ceo','1'); sessionStorage.setItem('luazul_ceo_nombre', nombre); } catch(e){}
+              var lw = document.getElementById('loginWrap');
+              var ap = document.getElementById('app');
+              if (lw) lw.style.display = 'none';
+              if (ap) ap.style.display = 'block';
+              initApp();
+            });
           return;
         }
+        // Email no está en allowlist — cerrar sesión sucia
+        sbClient.auth.signOut();
+        try { sessionStorage.removeItem('luazul_ceo'); sessionStorage.removeItem('luazul_ceo_nombre'); } catch(e){}
       }
-      // Fallback: verificar sesión local (compatibilidad hacia atrás)
-      var sesionActiva = false;
-      try { sesionActiva = sessionStorage.getItem('luazul_ceo') === '1'; } catch(e){}
-      if (sesionActiva) {
-        var lw = document.getElementById('loginWrap');
-        var ap = document.getElementById('app');
-        if (lw) lw.style.display = 'none';
-        if (ap) ap.style.display = 'block';
-        initApp();
-      }
+      // Sin sesión Supabase válida — mostrar login limpio (sin fallback sessionStorage)
     });
   } else {
     // Sin Supabase — mantener compatibilidad
@@ -1664,42 +1673,96 @@ function renderClientes(){
 function verFichaCliente(clienteId){
   var c = (_cacheClientes||[]).find(function(x){ return String(x.id)===String(clienteId); });
   if(!c){ showToast('Cliente no encontrado'); return; }
+
+  // ── VISTA 360° — Fase 3 · Bloque A ───────────────────────────────────────
+  // Resuelve la cadena jerárquica: Cliente → Vendedor → Gerente → Región
+  // Vendedor: lookup por seller_id (c.vid) en _cacheVendedores
+  var vendedor = vby(c.vid);
+  // Gerente: si el vendedor tiene manager_id, lo buscamos en _cacheGerentes por user_id
+  var gerente  = (vendedor && vendedor.manager_id)
+    ? ((_cacheGerentes||[]).find(function(g){ return String(g.user_id)===String(vendedor.manager_id); }) || null)
+    : null;
+  var region   = rby(c.rid);
+
+  // Colores de badge por nivel
+  var badgeStyle = {
+    cliente:  'background:rgba(59,130,246,.15);color:#93c5fd;border:1px solid rgba(59,130,246,.3);',
+    vendedor: 'background:rgba(34,197,94,.1);color:#4ade80;border:1px solid rgba(34,197,94,.3);',
+    gerente:  'background:rgba(167,139,250,.1);color:#a78bfa;border:1px solid rgba(167,139,250,.3);',
+    region:   'background:rgba(245,158,11,.1);color:#fbbf24;border:1px solid rgba(245,158,11,.3);'
+  };
+
+  function nivelHtml(icon, titulo, nombre, subtitulo, badgeKey){
+    return '<div style="display:flex;align-items:center;gap:12px;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:10px;padding:10px 14px;">'
+      + '<span style="font-size:1.3rem;flex-shrink:0;">' + icon + '</span>'
+      + '<div style="flex:1;min-width:0;">'
+      +   '<div style="font-size:.85rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + esc(nombre) + '</div>'
+      +   (subtitulo ? '<div style="font-size:.65rem;color:var(--muted);margin-top:2px;">' + esc(subtitulo) + '</div>' : '')
+      + '</div>'
+      + '<span style="font-size:.62rem;font-weight:700;padding:2px 9px;border-radius:12px;white-space:nowrap;' + badgeStyle[badgeKey] + '">' + titulo + '</span>'
+      + '</div>';
+  }
+
+  var jerarquiaHtml =
+    '<div style="background:rgba(6,182,212,.04);border:1px solid rgba(6,182,212,.2);border-radius:12px;padding:14px;margin-bottom:16px;">'
+    + '<div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:rgba(6,182,212,.7);margin-bottom:10px;">🔗 Trazabilidad Jerárquica</div>'
+    + '<div style="display:flex;flex-direction:column;gap:6px;">'
+    + nivelHtml('👤', 'Cliente',  c.nombre,                        c.email,                       'cliente')
+    + '<div style="text-align:center;color:rgba(6,182,212,.5);font-size:.8rem;line-height:1;">↑</div>'
+    + nivelHtml('💼', 'Asesor',   vendedor.nombre||'Sin asignar',  vendedor.email||'',             'vendedor')
+    + '<div style="text-align:center;color:rgba(6,182,212,.5);font-size:.8rem;line-height:1;">↑</div>'
+    + nivelHtml('👔', 'Gerente',  gerente ? gerente.nombre : 'Sin asignar', gerente ? (gerente.email||gerente.ciudad||'') : 'manager_id no vinculado', 'gerente')
+    + '<div style="text-align:center;color:rgba(6,182,212,.5);font-size:.8rem;line-height:1;">↑</div>'
+    + nivelHtml('📍', 'Región',   region.nombre||'Sin región',     region.pais||'',               'region')
+    + '</div>'
+    + (!gerente && vendedor && vendedor.user_id
+        ? '<div style="margin-top:10px;font-size:.68rem;color:rgba(245,158,11,.7);padding:6px 10px;background:rgba(245,158,11,.06);border-radius:7px;">⚠️ Este asesor aún no tiene <code>manager_id</code> asignado. Editá el perfil del asesor para vincularlo a un Gerente.</div>'
+        : '')
+    + '</div>';
+
+  // ── Datos del cliente ─────────────────────────────────────────────────────
   var mora = [];
   try{ mora = JSON.parse(c.mora_json && c.mora_json !== '[]' ? c.mora_json : '[]'); }catch(e){}
   var cuotasStr = (c.cuotas_pagadas||0) + '/' + (c.cuotas_total||10);
   var pct = Math.round((c.cuotas_pagadas||0)/(c.cuotas_total||10)*100);
   var noData = '<span style="color:var(--muted)">No cargado</span>';
-  var telHtml      = c.telefono  ? c.telefono  : noData;
-  var dniHtml      = c.documento ? c.documento : noData;
-  var domHtml      = c.domicilio ? c.domicilio : noData;
-  var destinoHtml  = c.destino   ? c.destino   : '&mdash;';
-  var paqueteHtml  = c.paquete   ? c.paquete   : '&mdash;';
-  var fechaHtml    = c.fechaAlta ? c.fechaAlta : '&mdash;';
-  var moraHtml;
-  if(mora.length){
-    var items = mora.map(function(m){ return '&bull; ' + (typeof m === 'object' ? JSON.stringify(m) : m); }).join('<br>');
-    moraHtml = '<div style="background:var(--red-bg);border:1px solid var(--red-bd);border-radius:8px;padding:10px;font-size:.78rem;color:#fca5a5;">' + items + '</div>';
-  } else {
-    moraHtml = '<div style="color:var(--green);font-size:.82rem;">Sin mora registrada</div>';
-  }
+  var moraHtml = mora.length
+    ? '<div style="background:var(--red-bg);border:1px solid var(--red-bd);border-radius:8px;padding:10px;font-size:.78rem;color:#fca5a5;">'
+        + mora.map(function(m){ return '&bull; ' + (typeof m === 'object' ? JSON.stringify(m) : m); }).join('<br>')
+        + '</div>'
+    : '<div style="color:var(--green);font-size:.82rem;">Sin mora registrada</div>';
+
+  // ── Barra de progreso de cuotas ───────────────────────────────────────────
+  var progColor = pct >= 80 ? 'var(--red)' : pct >= 50 ? 'var(--gold)' : 'var(--green)';
+  var progHtml =
+    '<div style="display:flex;justify-content:space-between;font-size:.68rem;color:var(--muted);margin-bottom:4px;">'
+    + '<span>Cuotas pagadas</span><span style="font-weight:700;color:var(--text);">' + cuotasStr + ' (' + pct + '%)</span>'
+    + '</div>'
+    + '<div style="height:7px;background:rgba(255,255,255,.07);border-radius:4px;overflow:hidden;">'
+    + '<div style="height:100%;width:' + pct + '%;background:' + progColor + ';border-radius:4px;transition:width .5s;"></div>'
+    + '</div>';
+
   var html = '<div class="mhead">'
-    + '<div><h2>Ficha de Cliente</h2>'
-    + '<p style="color:var(--muted);font-size:.75rem;">' + c.nombre + ' &middot; ' + c.email + '</p></div>'
+    + '<div><h2>📋 Ficha de Cliente</h2>'
+    + '<p style="color:var(--muted);font-size:.75rem;">' + esc(c.nombre) + ' &middot; ' + esc(c.email) + '</p></div>'
     + '<button class="mclose" onclick="closeModal()">&#x2715;</button></div>'
     + '<div class="mbody">'
-    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">'
-    + '<div><div class="ml">Telefono</div><div style="font-size:.9rem;font-weight:600;">' + telHtml + '</div></div>'
-    + '<div><div class="ml">DNI / Documento</div><div style="font-size:.9rem;font-weight:600;">' + dniHtml + '</div></div>'
-    + '<div style="grid-column:span 2;"><div class="ml">Domicilio</div><div style="font-size:.9rem;font-weight:600;">' + domHtml + '</div></div>'
-    + '<div><div class="ml">Destino</div><div style="font-size:.85rem;">' + destinoHtml + '</div></div>'
-    + '<div><div class="ml">Paquete</div><div style="font-size:.85rem;">' + paqueteHtml + '</div></div>'
-    + '<div><div class="ml">Total USD</div><div style="font-size:.85rem;font-weight:700;color:var(--gold);">USD ' + (c.total_usd||0) + '</div></div>'
-    + '<div><div class="ml">Cuotas</div><div style="font-size:.85rem;">' + cuotasStr + ' (' + pct + '%)</div></div>'
-    + '<div style="grid-column:span 2;"><div class="ml">Fecha de alta</div><div style="font-size:.85rem;">' + fechaHtml + '</div></div>'
+    + jerarquiaHtml
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">'
+    + '<div><div class="ml">Teléfono</div><div style="font-size:.88rem;font-weight:600;">' + (c.telefono||noData) + '</div></div>'
+    + '<div><div class="ml">DNI / Documento</div><div style="font-size:.88rem;font-weight:600;">' + (c.documento||noData) + '</div></div>'
+    + '<div style="grid-column:span 2;"><div class="ml">Domicilio</div><div style="font-size:.88rem;font-weight:600;">' + (c.domicilio||noData) + '</div></div>'
+    + '<div><div class="ml">Destino</div><div style="font-size:.85rem;">' + esc(c.destino||'—') + '</div></div>'
+    + '<div><div class="ml">Paquete</div><div style="font-size:.85rem;">' + esc(c.paquete||'—') + '</div></div>'
+    + '<div><div class="ml">Total USD</div><div style="font-size:.88rem;font-weight:700;color:var(--gold);">USD ' + (c.total_usd||0) + '</div></div>'
+    + '<div><div class="ml">Fecha de viaje</div><div style="font-size:.85rem;">' + (c.fecha_viaje||'—') + '</div></div>'
+    + '<div style="grid-column:span 2;"><div class="ml">Fecha de alta</div><div style="font-size:.85rem;">' + (c.fechaAlta||'—') + '</div></div>'
+    + '<div style="grid-column:span 2;">' + progHtml + '</div>'
     + '<div style="grid-column:span 2;"><div class="ml">Estado mora</div>' + moraHtml + '</div>'
     + '</div>'
     + '</div>'
     + '<div class="mact"><button class="mbtn ghost" onclick="closeModal()">Cerrar</button></div>';
+
   document.getElementById('mbox').innerHTML = html;
   document.getElementById('modal').classList.add('open');
 }
@@ -1856,7 +1919,17 @@ function saveNewVendorCeo(){
   var primerNombre = nombresArr[0];
   var apellidoStr  = nombresArr.slice(1).join(' ') || '';
 
-  sbClient.auth.signUp({ email: email, password: pass, options:{ data:{ nombre: primerNombre, apellido: apellidoStr, role_id: 3 } } })
+  // ── LIMPIEZA DE SESIÓN ANTES DEL SIGNUP (Vendedor desde CEO) ───────────────
+  var _ceoEmailV = null;
+  var _ceoPassV  = null;
+  try {
+    _ceoEmailV = document.getElementById('cUser') ? document.getElementById('cUser').value.trim().toLowerCase() : null;
+    _ceoPassV  = document.getElementById('cPass') ? document.getElementById('cPass').value.trim() : null;
+  } catch(e){}
+
+  sbClient.auth.signOut().then(function() {
+  return sbClient.auth.signUp({ email: email, password: pass, options:{ data:{ nombre: primerNombre, apellido: apellidoStr, role_id: 2 } } });
+  })
     .then(function(signUp){
       if(signUp.error) throw signUp.error;
       var uid = signUp.data.user ? signUp.data.user.id : null;
@@ -1883,12 +1956,26 @@ function saveNewVendorCeo(){
       var rNombre = rid ? (reg().find(function(x){return String(x.id)===String(rid);})||{}).nombre||'' : '';
       showToast('✅ Asesor '+nombre+' creado'+(rNombre?' · '+rNombre:''));
       closeModal();
-      // Recargar desde Supabase para evitar race condition
-      cargarDatosSupabase().then(function(){ renderAll(); populateAllFilters(); });
       onDone();
+      // ── RESTAURAR SESIÓN CEO ───────────────────────────────────────────────
+      if (_ceoEmailV && _ceoPassV) {
+        sbClient.auth.signInWithPassword({ email: _ceoEmailV, password: _ceoPassV })
+          .then(function(reAuth) {
+            if (!reAuth.error) _ceoUid = String(reAuth.data.user.id);
+            cargarDatosSupabase().then(function(){ renderAll(); populateAllFilters(); });
+          })
+          .catch(function() {
+            cargarDatosSupabase().then(function(){ renderAll(); populateAllFilters(); });
+          });
+      } else {
+        cargarDatosSupabase().then(function(){ renderAll(); populateAllFilters(); });
+      }
     })
     .catch(function(e){
       console.error('saveNewVendorCeo:', e);
+      if (_ceoEmailV && _ceoPassV) {
+        sbClient.auth.signInWithPassword({ email: _ceoEmailV, password: _ceoPassV }).catch(function(){});
+      }
       var msg = e.message || 'Verificá los datos';
       if(msg.indexOf('already registered') !== -1 || msg.indexOf('already been registered') !== -1)
         msg = 'Ese email ya existe en Supabase Auth. Usá otro email o borrá el usuario anterior.';
@@ -2091,8 +2178,20 @@ function saveNewGerente(){
   var primerNombre = nombresArr[0];
   var apellidoStr  = nombresArr.slice(1).join(' ') || '';
 
-  sbClient.auth.signUp({ email: email, password: pass,
+  // ── LIMPIEZA DE SESIÓN ANTES DEL SIGNUP ────────────────────────────────────
+  // Evita que metadatos de la sesión actual del CEO contaminen al nuevo Gerente.
+  // Re-autenticamos al CEO después del signUp para restaurar su sesión.
+  var _ceoEmail = null;
+  var _ceoPass  = null;
+  try {
+    _ceoEmail = document.getElementById('cUser') ? document.getElementById('cUser').value.trim().toLowerCase() : null;
+    _ceoPass  = document.getElementById('cPass') ? document.getElementById('cPass').value.trim() : null;
+  } catch(e){}
+
+  sbClient.auth.signOut().then(function() {
+  return sbClient.auth.signUp({ email: email, password: pass,
     options:{ data:{ nombre: primerNombre, apellido: apellidoStr, role_id: 2 } }
+  });
   })
   .then(function(signUp){
     if(signUp.error) throw signUp.error;
@@ -2132,12 +2231,32 @@ function saveNewGerente(){
     }).filter(Boolean).join(', ');
     showToast('✅ Gerente '+nombre+' creado'+(rNombres?' · '+rNombres:''));
     closeModal();
-    // Recargar desde Supabase para evitar race condition — no usar cache local
-    cargarDatosSupabase().then(function(){ renderAll(); renderPasswords(); });
     onDone();
+    // ── RESTAURAR SESIÓN CEO ─────────────────────────────────────────────────
+    // Después del signOut+signUp, re-autenticamos al CEO para que el panel
+    // siga funcionando sin que tenga que hacer login nuevamente.
+    if (_ceoEmail && _ceoPass) {
+      sbClient.auth.signInWithPassword({ email: _ceoEmail, password: _ceoPass })
+        .then(function(reAuth) {
+          if (!reAuth.error) {
+            _ceoUid = String(reAuth.data.user.id);
+          }
+          cargarDatosSupabase().then(function(){ renderAll(); renderPasswords(); });
+        })
+        .catch(function() {
+          // Si falla el re-auth, recargar igual — el CEO puede volver a loguearse
+          cargarDatosSupabase().then(function(){ renderAll(); renderPasswords(); });
+        });
+    } else {
+      cargarDatosSupabase().then(function(){ renderAll(); renderPasswords(); });
+    }
   })
   .catch(function(e){
     console.error('saveNewGerente:', e);
+    // Si el signUp falla, restaurar sesión CEO igual
+    if (_ceoEmail && _ceoPass) {
+      sbClient.auth.signInWithPassword({ email: _ceoEmail, password: _ceoPass }).catch(function(){});
+    }
     var msg = e.message || 'Verificá los datos';
     if(msg.indexOf('already registered') !== -1 || msg.indexOf('already been registered') !== -1)
       msg = 'Ese email ya existe en Supabase Auth. Usá otro email o borrá el usuario anterior desde el Dashboard.';
@@ -3268,359 +3387,6 @@ function escanearMora(){
       showToast('\u274C Error al escanear mora: ' + (e.message||'') + '. Verificar función detectar_mora() en Supabase.');
     });
 }
-</script>
-<script>
-/**
- * ============================================================
- *  LUAZUL SMART TRAVEL — admin-panel/js/auth.js
- *  Módulo centralizado de autenticación
- *
- *  Namespace global: LZ_AUTH
- *  Compatible con login local basado en sessionStorage.
- *  Preparado para migración futura a Supabase Auth (Fase 2).
- *
- *  Versión: 3.0.0 — 2026-03
- *  Arquitectura: SaaS · admin-panel separado de public-site
- * ============================================================
- *
- *  CLAVES DE SESIÓN (sessionStorage):
- *  ─────────────────────────────────────────────────────────
- *  lz_auth      → 'true' cuando el usuario ingresó via staff_login
- *  lz_username  → username del usuario logueado
- *  lz_nombre    → nombre para mostrar
- *  lz_role      → rol del usuario (owner, super_admin, etc.)
- *  lz_badge     → etiqueta visual del rol (ej: "👑 Owner")
- *  lz_color     → color del rol
- *  lz_access    → JSON con array de accesos permitidos
- *
- *  CLAVES ESPECÍFICAS POR PANEL (sesión propia):
- *  ─────────────────────────────────────────────────────────
- *  luazul_ceo      → '1' cuando el CEO hizo login en ceo_luazul.html
- *  luazul_gerente  → '1' cuando el Gerente hizo login en gerente_luazul.html
- *  luazul_admin    → set by admin_luazul.html login
- *
- * ============================================================
- *
- *  [SUPABASE PHASE 2] — MIGRACIÓN:
- *  ─────────────────────────────────────────────────────────
- *  Reemplazar los bloques [SUPABASE-PHASE2] por:
- *
- *    // En guard() / guardStrict():
- *    const { data: { session } } = await LZ_SUPABASE.auth.getSession()
- *    if (!session) return LZ_AUTH._deny(redirectUrl)
- *    const { data: profile } = await LZ_SUPABASE
- *      .from('staff_profiles').select('role,nombre,badge,color')
- *      .eq('id', session.user.id).single()
- *
- *    // En logout() / logoutStrict():
- *    await LZ_SUPABASE.auth.signOut()
- *
- *    // En setSession():
- *    await LZ_SUPABASE.auth.signInWithPassword({ email, password })
- *
- *  Tabla Supabase requerida: staff_profiles
- *    id        uuid (FK → auth.users.id)
- *    role      text
- *    nombre    text
- *    badge     text
- *    color     text
- *    created_at timestamptz
- *
- * ============================================================
- */
-
-;(function (global) {
-  'use strict';
-
-  /* ── Roles con acceso administrativo completo ── */
-  var ADMIN_ROLES = ['owner', 'super_admin'];
-
-  /* ──────────────────────────────────────────────────────────
-   *  LZ_AUTH  — namespace público
-   * ────────────────────────────────────────────────────────── */
-  var LZ_AUTH = {
-
-    /* ── Constantes de claves de sesión ── */
-    KEYS: {
-      auth:     'lz_auth',
-      username: 'lz_username',
-      nombre:   'lz_nombre',
-      role:     'lz_role',
-      badge:    'lz_badge',
-      color:    'lz_color',
-      access:   'lz_access'
-    },
-
-    /* ── Claves de sesión por panel ── */
-    PANEL_KEYS: {
-      ceo:     'luazul_ceo',
-      gerente: 'luazul_gerente'
-    },
-
-    /* ─────────────────────────────────────────────────────
-     *  guard(options)
-     *  Protege un panel. Verifica sesión de portal O sesión
-     *  propia del panel. Si no pasa → redirige o muestra login.
-     *
-     *  options = {
-     *    panelKey:     'luazul_ceo',      // clave sessionStorage del panel propio (opcional)
-     *    portalRoles:  ['owner','super_admin'], // roles permitidos por portal
-     *    loginWrapId:  'loginWrap',        // ID del overlay de login local
-     *    appId:        'app',              // ID del contenedor de la app
-     *    onSuccess:    function() {}       // callback si pasa la guarda
-     *  }
-     *
-     *  [SUPABASE-PHASE2] Agregar aquí la verificación de sesión Supabase
-     *  como primera condición antes de la verificación de sessionStorage.
-     * ───────────────────────────────────────────────────── */
-    guard: function (options) {
-      var opts = options || {};
-      var panelKey    = opts.panelKey    || null;
-      var portalRoles = opts.portalRoles || ADMIN_ROLES;
-      var loginWrapId = opts.loginWrapId || 'loginWrap';
-      var appId       = opts.appId       || 'app';
-      var onSuccess   = opts.onSuccess   || null;
-
-      /* 1. Verificar sesión propia del panel (login independiente) */
-      if (panelKey && sessionStorage.getItem(panelKey) === '1') {
-        LZ_AUTH._showApp(loginWrapId, appId);
-        if (onSuccess) onSuccess();
-        return true;
-      }
-
-      /* 2. Verificar sesión de portal staff_login */
-      var fromPortal = LZ_AUTH._checkPortal(portalRoles);
-      if (fromPortal) {
-        LZ_AUTH._showApp(loginWrapId, appId);
-        if (onSuccess) onSuccess();
-        return true;
-      }
-
-      /* 3. No autenticado — mostrar login local (no redirigir) */
-      return false;
-    },
-
-    /* ─────────────────────────────────────────────────────
-     *  guardStrict(redirectUrl, allowedRoles)
-     *  Guarda estricta: si no autenticado → redirige inmediatamente.
-     *  Usar en páginas que NO tienen login propio (admin_dashboard).
-     *
-     *  [SUPABASE-PHASE2] Reemplazar la lógica interna con:
-     *    supabase.auth.onAuthStateChange((event, session) => {
-     *      if (!session) window.location.href = redirectUrl
-     *    })
-     * ───────────────────────────────────────────────────── */
-    guardStrict: function (redirectUrl, allowedRoles) {
-      var url   = redirectUrl  || 'staff_login.html';
-      var roles = allowedRoles || ADMIN_ROLES;
-      if (!LZ_AUTH._checkPortal(roles)) {
-        window.location.href = url;
-        return false;
-      }
-      return true;
-    },
-
-    /* ─────────────────────────────────────────────────────
-     *  logout(options)
-     *  Cierra sesión del panel. Si venía del portal → vuelve al
-     *  dashboard. Si tenía sesión propia → muestra el login local.
-     *
-     *  options = {
-     *    panelKey:    'luazul_ceo',   // clave a limpiar en sessionStorage
-     *    loginWrapId: 'loginWrap',
-     *    appId:       'app',
-     *    portalDashboard: 'admin_dashboard.html',
-     *    clearInputIds: ['cUser','cPass']  // campos a limpiar (opcional)
-     *  }
-     *
-     *  [SUPABASE-PHASE2] Agregar antes del sessionStorage.removeItem:
-     *    await supabase.auth.signOut()
-     * ───────────────────────────────────────────────────── */
-    logout: function (options) {
-      var opts = options || {};
-      var panelKey    = opts.panelKey    || null;
-      var loginWrapId = opts.loginWrapId || 'loginWrap';
-      var appId       = opts.appId       || 'app';
-      var portalDash  = opts.portalDashboard || 'admin_dashboard.html';
-      var clearInputs = opts.clearInputIds  || [];
-      var confirm     = opts.confirmMsg;
-
-      if (confirm && !window.confirm(confirm)) return;
-
-      /* Si venía del portal → volver al dashboard */
-      if (LZ_AUTH._checkPortal(ADMIN_ROLES)) {
-        if (panelKey) sessionStorage.removeItem(panelKey);
-        window.location.href = portalDash;
-        return;
-      }
-
-      /* Sesión propia → mostrar login local */
-      if (panelKey) sessionStorage.removeItem(panelKey);
-
-      clearInputs.forEach(function (id) {
-        var el = document.getElementById(id);
-        if (el) el.value = '';
-      });
-
-      LZ_AUTH._showLogin(loginWrapId, appId);
-    },
-
-    /* ─────────────────────────────────────────────────────
-     *  logoutStrict(redirectUrl)
-     *  Logout para paneles sin login propio (admin_dashboard).
-     *  Limpia TODA la sesión y redirige.
-     *
-     *  [SUPABASE-PHASE2] Usar supabase.auth.signOut() antes del clear.
-     * ───────────────────────────────────────────────────── */
-    logoutStrict: function (redirectUrl, confirmMsg) {
-      var url = redirectUrl || 'staff_login.html';
-      if (confirmMsg && !window.confirm(confirmMsg)) return;
-      sessionStorage.clear();
-      window.location.href = url;
-    },
-
-    /* ─────────────────────────────────────────────────────
-     *  getUser()
-     *  Retorna objeto con datos del usuario de sesión.
-     *
-     *  [SUPABASE-PHASE2] Complementar con datos del perfil Supabase.
-     * ───────────────────────────────────────────────────── */
-    getUser: function () {
-      return {
-        username : sessionStorage.getItem(LZ_AUTH.KEYS.username) || '',
-        nombre   : sessionStorage.getItem(LZ_AUTH.KEYS.nombre)   || '',
-        badge    : sessionStorage.getItem(LZ_AUTH.KEYS.badge)    || '',
-        color    : sessionStorage.getItem(LZ_AUTH.KEYS.color)    || '#06b6d4',
-        access   : LZ_AUTH._getAccess(),
-        isAuth   : sessionStorage.getItem(LZ_AUTH.KEYS.auth) === 'true'
-      };
-    },
-
-    /* ─────────────────────────────────────────────────────
-     *  getRole()
-     *  Retorna el rol actual del usuario.
-     *
-     *  [SUPABASE-PHASE2] Leer desde el perfil Supabase en lugar de
-     *  sessionStorage para evitar manipulación del cliente.
-     * ───────────────────────────────────────────────────── */
-    getRole: function () {
-      return sessionStorage.getItem(LZ_AUTH.KEYS.role) || '';
-    },
-
-    /* ─────────────────────────────────────────────────────
-     *  isAdminRole()
-     *  Verifica si el rol actual es administrativo completo.
-     * ───────────────────────────────────────────────────── */
-    isAdminRole: function () {
-      return ADMIN_ROLES.indexOf(LZ_AUTH.getRole()) !== -1;
-    },
-
-    /* ─────────────────────────────────────────────────────
-     *  setSession(data)
-     *  Guarda datos de sesión en sessionStorage.
-     *  Usar en staff_login.html después de autenticar.
-     *
-     *  data = { auth, username, nombre, role, badge, color, access }
-     *
-     *  [SUPABASE-PHASE2] Conservar este método para backward compat,
-     *  pero también iniciar sesión Supabase con:
-     *    await supabase.auth.signInWithPassword({ email, password })
-     * ───────────────────────────────────────────────────── */
-    setSession: function (data) {
-      var d = data || {};
-      if (d.auth !== undefined)    sessionStorage.setItem(LZ_AUTH.KEYS.auth,     String(d.auth));
-      if (d.username)              sessionStorage.setItem(LZ_AUTH.KEYS.username, d.username);
-      if (d.nombre)                sessionStorage.setItem(LZ_AUTH.KEYS.nombre,   d.nombre);
-      if (d.role)                  sessionStorage.setItem(LZ_AUTH.KEYS.role,     d.role);
-      if (d.badge)                 sessionStorage.setItem(LZ_AUTH.KEYS.badge,    d.badge);
-      if (d.color)                 sessionStorage.setItem(LZ_AUTH.KEYS.color,    d.color);
-      if (d.access !== undefined)  sessionStorage.setItem(LZ_AUTH.KEYS.access,   JSON.stringify(d.access));
-    },
-
-    /* ─────────────────────────────────────────────────────
-     *  setPanelSession(panelKey)
-     *  Marca la sesión propia de un panel (login independiente).
-     * ───────────────────────────────────────────────────── */
-    setPanelSession: function (panelKey, extraKey, extraVal) {
-      sessionStorage.setItem(panelKey, '1');
-      if (extraKey) sessionStorage.setItem(extraKey, extraVal || '');
-    },
-
-    /* ─────────────────────────────────────────────────────
-     *  togglePassword(inputId, btn)
-     *  Muestra/oculta contraseña en un campo <input>.
-     *  Reemplaza la función lzToggle() duplicada en cada panel.
-     * ───────────────────────────────────────────────────── */
-    togglePassword: function (inputId, btn) {
-      var inp = document.getElementById(inputId);
-      var svg = btn ? btn.querySelector('svg') : null;
-      if (!inp || !svg) return;
-
-      var show = inp.type === 'password';
-      inp.type = show ? 'text' : 'password';
-
-      /* Ícono "ojo cerrado" cuando se muestra el texto */
-      svg.innerHTML = show
-        ? '<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>'
-        : '<path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>';
-    },
-
-    /* ──────────────────────────────────────────────────────
-     *  MÉTODOS PRIVADOS (prefijo _)
-     * ────────────────────────────────────────────────────── */
-
-    /* Verifica si hay sesión de portal con al menos uno de los roles */
-    _checkPortal: function (roles) {
-      var isAuth = sessionStorage.getItem(LZ_AUTH.KEYS.auth) === 'true';
-      var role   = LZ_AUTH.getRole();
-      return isAuth && roles.indexOf(role) !== -1;
-    },
-
-    /* Oculta login, muestra app */
-    _showApp: function (loginWrapId, appId) {
-      var lw = document.getElementById(loginWrapId);
-      var ap = document.getElementById(appId);
-      if (lw) lw.style.display = 'none';
-      if (ap) ap.style.display = 'block';
-    },
-
-    /* Muestra login, oculta app */
-    _showLogin: function (loginWrapId, appId) {
-      var lw = document.getElementById(loginWrapId);
-      var ap = document.getElementById(appId);
-      if (lw) lw.style.display = 'flex';
-      if (ap) ap.style.display = 'none';
-    },
-
-    /* Redirige a login */
-    _deny: function (redirectUrl) {
-      window.location.href = redirectUrl || 'staff_login.html';
-    },
-
-    /* Obtiene el array de accesos */
-    _getAccess: function () {
-      try {
-        return JSON.parse(sessionStorage.getItem(LZ_AUTH.KEYS.access) || '[]');
-      } catch (e) {
-        return [];
-      }
-    }
-  };
-
-  /* ── Alias de compatibilidad ──────────────────────────────
-   *  Expone lzToggle() como alias global para no romper
-   *  el HTML inline (onclick="lzToggle(...)") que aún exista
-   *  en páginas no migradas.
-   * ──────────────────────────────────────────────────────── */
-  global.lzToggle = function (inputId, btn) {
-    LZ_AUTH.togglePassword(inputId, btn);
-  };
-
-  /* ── Exportar al scope global ─────────────────────────── */
-  global.LZ_AUTH = LZ_AUTH;
-
-})(window);
-
 </script>
 <!-- lzToggle() ya está definido como alias en auth.js — no se duplica aquí -->
 </body>
