@@ -1423,9 +1423,8 @@ function saveVendor(){
   // Necesitamos restaurar su sesión después del signUp del vendedor.
   var _gerEmail = (document.getElementById('gUser').value||'').trim().toLowerCase();
   var _gerPass  = (document.getElementById('gPass').value||'').trim();
-  // Capturar gerente_id (BIGINT de staff_profiles) para el insert y para gerente_regiones
-  // _gerenteUserId: UUID del gerente en auth.users — única clave jerárquica (manager_id)
-  var _gerenteUserId  = window._gerenteProfile ? window._gerenteProfile.user_id : null;
+  // Capturar manager_id (BIGINT de staff_profiles) para el insert
+  var _gerenteId  = window._gerenteProfile ? window._gerenteProfile.id : null;
 
   // 1. signOut para limpiar el contexto del Gerente antes de crear el Vendedor.
   //    Esto evita que Supabase herede metadatos de la sesión activa al nuevo usuario.
@@ -1458,7 +1457,7 @@ function saveVendor(){
       badge:      e,
       activo:     true,
       region_id:  regionId,
-      manager_id: _gerenteUserId,
+      manager_id: _gerenteId,
       telefono1:  (document.getElementById('vT').value||'').trim() || null,
       telefono2:  (document.getElementById('vT2').value||'').trim() || null,
       domicilio:  (document.getElementById('vDom').value||'').trim() || null,
