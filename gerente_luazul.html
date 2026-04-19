@@ -629,10 +629,10 @@ function _sbLoad(){
 
   return step1.then(function(){
     // 2. Regiones del gerente
-    var gerenteId = window._gerenteProfile ? window._gerenteProfile.id : null;
-    if(!gerenteId || !sbClient) return Promise.resolve([]);
+    var gerenteUserId = window._gerenteProfile ? window._gerenteProfile.user_id : null;
+    if(!gerenteUserId || !sbClient) return Promise.resolve([]);
     return sbClient.from('gerente_regiones')
-      .select('region_id').eq('gerente_id', gerenteId)
+      .select('region_id').eq('gerente_id', gerenteUserId)
       .then(function(res){
         var regionIds = [];
         if(res.data) regionIds = res.data.map(function(r){ return r.region_id; });
@@ -652,12 +652,12 @@ function _sbLoad(){
     // 4. Cargar asesores role_id=2 — filtro estricto por manager_id (Fase 3)
     var p4 = sbClient
       ? (function(){
-          var gerenteUserId = window._gerenteProfile ? window._gerenteProfile.user_id : null;
-          if(!gerenteUserId) return Promise.resolve();
+          var gerenteId = window._gerenteProfile ? window._gerenteProfile.id : null;
+          if(!gerenteId) return Promise.resolve();
           return sbClient.from('staff_profiles')
             .select('*')
             .eq('role_id', 2)
-            .eq('manager_id', gerenteUserId)
+            .eq('manager_id', gerenteId)
             .then(function(res){
               if(!res.error && res.data) _memCache[VK] = res.data.map(mapVendorFromSB);
             });

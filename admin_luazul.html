@@ -1017,8 +1017,8 @@ function loadClients() {
     .select('id,user_id,seller_id,nombre,email,telefono,documento,domicilio,estado,destino,paquete,fecha_viaje,monto_cuota,cuotas_total,cuotas_pagadas,total_usd,fecha_alta,notas,region_id,mora_json,comprobantes_json,created_at')
     .order('nombre');
   if (_currentProfile) {
-    // Filtro estricto: solo clientes donde seller_id = user_id del asesor (ADN v3 — Fase 3)
-    query = query.eq('seller_id', String(_currentProfile.user_id));
+    // Filtro estricto: solo clientes donde seller_id = ID numérico del asesor (ADN v4)
+    query = query.eq('seller_id', _currentProfile.id);
   }
   return query
     .then(function(r) {
@@ -2000,7 +2000,7 @@ function addClient() {
       var authUserId = authResult.data && authResult.data.user ? authResult.data.user.id : null;
       window.__ultimoClienteAuthId = authUserId;
 
-      // PASO 2 — Insert en clientes con seller_id UUID y region_id del perfil (ADN v3 — Fase 3)
+      // PASO 2 — Insert en clientes con seller_id BIGINT y region_id UUID (ADN v4)
       var newClient = {
         nombre:         nombre,
         email:          email,
@@ -2016,7 +2016,7 @@ function addClient() {
         monto_cuota:    total > 0 ? parseFloat((total / cuotas).toFixed(2)) : 0,
         estado:         'activo',
         fecha_alta:     new Date().toISOString().slice(0, 10),
-        seller_id:      String(_currentProfile.user_id),   // UUID — regla maestra ADN
+        seller_id:      _currentProfile.id,                // BIGINT — identificación jerárquica
         region_id:      _currentProfile.region_id || null, // herencia de región del asesor
         notas:          ''
       };
@@ -2087,7 +2087,7 @@ function crearContratoBorrador(cliente) {
     .from('contratos')
     .insert([{
       cliente_id:     cliente.id,
-      vendedor_id:    String(_currentProfile.user_id || ''),
+      vendedor_id:    _currentProfile.id,
       contenido_json: contenido,
       estado:         'borrador'
     }])

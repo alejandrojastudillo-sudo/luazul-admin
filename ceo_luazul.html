@@ -515,7 +515,7 @@ function cargarDatosSupabase(){
       if(grRes.error) throw grRes.error;
       var grData=grRes.data||[];
       _cacheGerentes.forEach(function(g){
-        g.region_ids=grData.filter(function(x){return x.gerente_id===g.id;}).map(function(x){return x.region_id;});
+        g.region_ids=grData.filter(function(x){return String(x.gerente_id)===String(g.user_id);}).map(function(x){return x.region_id;});
       });
       return sbClient.from('staff_profiles')
         .select('id,user_id,nombre,apellido,activo,badge,color,role_id,ciudad,telefono1,telefono2,domicilio,cbu,region_id,manager_id,fecha_alta,comprobantes_json')
@@ -2234,7 +2234,7 @@ function saveNewGerente(){
     var newGer = mapGerente(ins.data);
     newGer.region_ids = regionIds;
     if(regionIds.length > 0){
-      var rels = regionIds.map(function(rid){ return{gerente_id:ins.data.id, region_id:rid}; });
+      var rels = regionIds.map(function(rid){ return{gerente_id:ins.data.user_id, region_id:rid}; });
       return sbClient.from('gerente_regiones').insert(rels).then(function(){ return newGer; });
     }
     return newGer;
@@ -2420,10 +2420,10 @@ function saveEditGerente(gid){
     .then(function(res){
       if(res.error) throw res.error;
       var updatedData = res.data;
-      return sbClient.from('gerente_regiones').delete().eq('gerente_id', g.id)
+      return sbClient.from('gerente_regiones').delete().eq('gerente_id', g.user_id)
         .then(function(){
           if(newRegionIds.length > 0){
-            var rels = newRegionIds.map(function(rid){ return{gerente_id:g.id, region_id:rid}; });
+            var rels = newRegionIds.map(function(rid){ return{gerente_id:g.user_id, region_id:rid}; });
             return sbClient.from('gerente_regiones').insert(rels);
           }
         })
