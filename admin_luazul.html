@@ -2415,16 +2415,16 @@ function abrirCargaReferido(clientId) {
 }
 
 function confirmarCargaReferido(clientId) {
-  var nombre = (document.getElementById('rNombre') || {}).value.trim();
+  var nombre = (document.getElementById('rNombre') || {}).value.trim().toUpperCase();
   if (!nombre) { showToast('\u26A0\uFE0F El nombre del referido es obligatorio'); return; }
   var c = allClients.find(function(x){ return x.id == clientId; });
   if (!c || !sbClient || !_currentProfile) return;
 
   sbClient.from('referidos').insert([{
     vendedor_id:     parseInt(_currentProfile.id),
-    cliente_id:      parseInt(c.id),
+    cliente_id:      parseInt(c.id, 10),
     referido_nombre: nombre,
-    referido_email:  (document.getElementById('rEmail') || {}).value.trim() || null,
+    referido_email:  (document.getElementById('rEmail') || {}).value.trim().toLowerCase() || null,
     referido_tel:    (document.getElementById('rTel') || {}).value.trim() || null,
     notas:           (document.getElementById('rNotas') || {}).value.trim() || null,
     estado:          'pendiente'
@@ -2580,10 +2580,10 @@ function eliminarReferido(id) {
 // Esta sección muestra su CBU/alias y permite cargarlo si no está.
 
 function guardarCuenta() {
-  var alias   = (document.getElementById('ctaAlias')   || {}).value || '';
-  var cbu     = (document.getElementById('ctaCbu')     || {}).value || '';
-  var titular = (document.getElementById('ctaTitular') || {}).value || '';
-  var banco   = (document.getElementById('ctaBanco')   || {}).value || '';
+  var alias   = (document.getElementById('ctaAlias')   || {}).value.trim();
+  var cbu     = (document.getElementById('ctaCbu')     || {}).value.trim();
+  var titular = (document.getElementById('ctaTitular') || {}).value.trim().toUpperCase();
+  var banco   = (document.getElementById('ctaBanco')   || {}).value.trim().toUpperCase();
 
   if (!alias && !cbu) { alert('Complet\u00e1 al menos el Alias o el CBU/CVU.'); return; }
   if (!sbClient || !_currentProfile) { showToast('\u274C Sin sesi\u00f3n activa'); return; }

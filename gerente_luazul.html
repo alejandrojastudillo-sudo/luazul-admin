@@ -575,7 +575,7 @@ function _sbUpdateClient(id, fields){
   if(!sbClient) return Promise.resolve();
   // Lock optimista (E1): agrega updated_at para detectar colisiones
   fields.updated_at = new Date().toISOString();
-  return sbClient.from('clientes').update(fields).eq('id', id)
+  return sbClient.from('clientes').update(fields).eq('id', parseInt(id, 10) || null)
     .then(function(res){
       if(res.error) console.warn('Supabase update clientes:', res.error.message);
     })
@@ -587,7 +587,7 @@ function _sbUpdateVendor(id, fields){
   if(!sbClient) return Promise.resolve();
   // Lock optimista (E1): agrega updated_at para detectar colisiones
   fields.updated_at = new Date().toISOString();
-  return sbClient.from('staff_profiles').update(fields).eq('id', id)
+  return sbClient.from('staff_profiles').update(fields).eq('id', parseInt(id, 10) || null)
     .then(function(res){
       if(res.error) console.warn('Supabase update staff_profiles:', res.error.message);
     })
@@ -1554,7 +1554,7 @@ function editVendor(vid){
 }
 
 function saveEditV(vid){
-  var nombre = (document.getElementById('evN')||{}).value||'';
+  var nombre = (document.getElementById('evN')||{}).value.trim().toUpperCase();
   var email  = (document.getElementById('evE')||{}).value||'';
   if(!nombre||!email){showToast('⚠️ Nombre y email son requeridos');return;}
 

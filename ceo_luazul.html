@@ -2129,7 +2129,7 @@ function openEditVendCeo(vid){
 function saveEditVendCeo(vid){
   var v = (_cacheVendedores||[]).find(function(x){ return String(x.user_id)===String(vid); });
   if(!v){ showToast('⚠️ Asesor no encontrado'); return; }
-  var nombres = ((document.getElementById('ceVN').value||'').trim()||v.nombre).split(' ');
+  var nombres = ((document.getElementById('ceVN').value||'').trim().toUpperCase()||v.nombre).split(' ');
   
   var rid = document.getElementById('ceVR').value||null;
   // Al cambiar la región, recalculamos el manager para no romper la recaudación
@@ -2427,7 +2427,7 @@ function openEditGerente(gid){
 function saveEditGerente(gid){
   var g = (_cacheGerentes||[]).find(function(x){ return String(x.user_id)===String(gid); });
   if(!g){ showToast('⚠️ Gerente no encontrado'); return; }
-  var nombres = ((document.getElementById('egNombre').value||'').trim()||g.nombre).split(' ');
+  var nombres = ((document.getElementById('egNombre').value||'').trim().toUpperCase()||g.nombre).split(' ');
   var newRegionIds = getSelectedRegionIds();
   var upd = {
     nombre:    nombres[0],
