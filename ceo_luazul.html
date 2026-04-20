@@ -531,7 +531,7 @@ function cargarDatosSupabase(){
       if(cRes.error) throw cRes.error;
       _cacheClientes=(cRes.data||[]).map(mapCliente);
       return sbClient.from('pagos')
-        .select('id,reserva_id,numero_cuota,monto_usd,estado,fecha_pago,comprobante_url,cliente_id,aprobado_por,vendedor_nombre,cliente_nombre,created_at')
+        .select('*, cliente:clientes(region_id)')
         .order('created_at',{ascending:false}).limit(500);
     })
     .then(function(pRes){
@@ -725,7 +725,7 @@ document.addEventListener('DOMContentLoaded', function(){
         // ── GUARDIA v3.2: email allowlist + role_id=1 en profiles ──────────
         // No alcanza con el email; el perfil debe confirmar rol CEO.
         if (CEO_ALLOWED_EMAILS.indexOf(email) !== -1) {
-          sbClient.from('profiles')
+        sbClient.from('staff_profiles')
             .select('role_id, nombre')
             .eq('id', uid)
             .single()
@@ -1026,7 +1026,9 @@ function populatePagoFiltros(){
 function renderOverview(){
   var cs=cli(), vs=vend(), rs=reg(), gs=ger();
   var ns=_cachePagos||[];
-  var totalRec=cs.reduce(function(s,c){return s+(parseInt(c.cuotas_pagadas)||0)*(parseFloat(c.monto_cuota)||0);},0);
+  // Recaudación Real basada en Pagos Aprobados (Fase 3 Fix)
+  var pagosAprobados = ns.filter(function(p){ return p.estado === 'aprobado'; });
+  var totalRec = pagosAprobados.reduce(function(s,p){ return s + (parseFloat(p.monto_usd)||0); }, 0);
   var activos=cs.filter(function(c){return c.estado==='activo';}).length;
   var atraso=cs.filter(function(c){return c.estado==='atraso'||c.estado==='atraso_gestion';}).length;
   var completos=cs.filter(function(c){return c.estado==='completo';}).length;
@@ -1047,9 +1049,12 @@ function renderOverview(){
   }).join('');
 
   var regData=rs.map(function(r){
-    var rc=cs.filter(function(c){return c.rid===r.id;});
-    var rec=rc.reduce(function(s,c){return s+(parseInt(c.cuotas_pagadas)||0)*(parseFloat(c.monto_cuota)||0);},0);
-    var at=rc.filter(function(c){return c.estado==='atraso'||c.estado==='atraso_gestion';}).length;
+    var pagosRegion = pagosAprobados.filter(function(p){ 
+        return p.cliente && String(p.cliente.region_id) === String(r.id); 
+    });
+    var rec = pagosRegion.reduce(function(s,p){ return s + (parseFloat(p.monto_usd)||0); }, 0);
+    var rc = cs.filter(function(c){ return String(c.rid) === String(r.id); });
+    var at = rc.filter(function(c){return c.estado==='atraso'||c.estado==='atraso_gestion';}).length;
     return{r:r,n:rc.length,rec:rec,at:at};
   }).sort(function(a,b){return b.rec-a.rec;});
   var maxRec=regData[0]?regData[0].rec:1;
@@ -1406,11 +1411,11 @@ function renderPagos(){
 }
 
 function aprobarPagoSb(pagoId){
-  sbClient.from('pagos').update({estado:'aprobado',aprobado_por:'CEO',fecha_pago:new Date().toISOString()}).eq('id',pagoId).select().single()
+  sbClient.from('pagos').update({estado:'aprobado',aprobado_por:'CEO',fecha_pago:new Date().toISOString()}).eq('id',parseInt(pagoId) || null).select().single()
     .then(function(res){
       if(res.error) throw res.error;
       var idx = (_cachePagos||[]).findIndex(function(x){ return String(x.id)===String(pagoId); });
-      if(idx>=0) _cachePagos[idx] = Object.assign(_cachePagos[idx], res.data);
+      if(idx >= 0) _cachePagos[idx] = Object.assign(_cachePagos[idx], res.data);
       renderPagos();
       showToast('✅ Pago aprobado por CEO');
     })
@@ -1616,8 +1621,8 @@ function saveNewClienteCeo(){
     cuotas_pagadas: 0,
     monto_cuota:    total>0 ? parseFloat((total/cuotas).toFixed(2)) : 0,
     estado:         'activo',
-    seller_id:      vendId,
-    region_id:      regionId,
+    seller_id:      vendId ? parseInt(vendId) : null,
+    region_id:      regionId ? parseInt(regionId) : null,
     fecha_alta:     new Date().toISOString().slice(0,10),
     mora_json:      '[]',
     notas:          ''
@@ -1916,14 +1921,14 @@ function saveNewVendorCeo(){
   function onDone(){ if(btn){btn.disabled=false; btn.textContent='✅ Crear Asesor';} }
 
   var nombresArr = nombre.split(' ');
-  var primerNombre = nombresArr[0];
+  var primerNombre = nombresArr[0]; 
   var apellidoStr  = nombresArr.slice(1).join(' ') || '';
 
   // Buscar el gerente responsable de esta región para establecer la jerarquía
-  var gerente = (_cacheGerentes||[]).find(function(g){ 
+  var gerente = (_cacheGerentes||[]).find(function(g){
     return String(g.rid) === String(rid) || (g.region_ids && g.region_ids.indexOf(String(rid)) !== -1); 
   });
-  var managerId = gerente ? gerente.id : null;
+  var managerId = gerente ? (parseInt(gerente.id) || null) : null;
 
   // ── LIMPIEZA DE SESIÓN ANTES DEL SIGNUP (Vendedor desde CEO) ───────────────
   var _ceoEmailV = null;
@@ -1933,6 +1938,12 @@ function saveNewVendorCeo(){
     _ceoPassV  = document.getElementById('cPass') ? document.getElementById('cPass').value.trim() : null;
   } catch(e){}
 
+  // Guardia de Seguridad: Evitar pérdida de sesión (Session Stress Test)
+  if(!_ceoEmailV || !_ceoPassV){
+    showToast('⚠️ Por seguridad, ingresá tus credenciales en el login para validar la creación de Asesores.');
+    return;
+  }
+
   sbClient.auth.signOut().then(function() {
   return sbClient.auth.signUp({ email: email, password: pass, options:{ data:{ nombre: primerNombre, apellido: apellidoStr, role_id: 2 } } });
   })
@@ -1941,13 +1952,13 @@ function saveNewVendorCeo(){
       var uid = signUp.data.user ? signUp.data.user.id : null;
       var nombres = nombresArr;
       var profileData = {
-        role_id:   ROLE_SELLER,
+        role_id:   parseInt(ROLE_SELLER) || 2,
         nombre:    nombres[0],
         apellido:  nombres.slice(1).join(' ')||'',
         badge:     email,
         activo:    true,
-        region_id: rid||null,
-        manager_id: managerId,
+        region_id: rid ? parseInt(rid) : null,
+        manager_id: managerId ? parseInt(managerId) : null,
         telefono1: (document.getElementById('caVT1').value||'').trim()||null,
         telefono2: (document.getElementById('caVT2').value||'').trim()||null,
         domicilio: (document.getElementById('caVDom').value||'').trim()||null,
@@ -1968,14 +1979,14 @@ function saveNewVendorCeo(){
       if (_ceoEmailV && _ceoPassV) {
         sbClient.auth.signInWithPassword({ email: _ceoEmailV, password: _ceoPassV })
           .then(function(reAuth) {
-            if (!reAuth.error) _ceoUid = String(reAuth.data.user.id);
+            if (!reAuth.error) _ceoUid = String(reAuth.data.user.id); 
             cargarDatosSupabase().then(function(){ renderAll(); populateAllFilters(); });
           })
           .catch(function() {
             cargarDatosSupabase().then(function(){ renderAll(); populateAllFilters(); });
           });
       } else {
-        cargarDatosSupabase().then(function(){ renderAll(); populateAllFilters(); });
+        cargarDatosSupabase().then(function(){ renderAll(); populateAllFilters(); }); 
       }
     })
     .catch(function(e){
@@ -2130,8 +2141,8 @@ function saveEditVendCeo(vid){
     nombre:    nombres[0],
     apellido:  nombres.slice(1).join(' ')||'',
     badge:     (document.getElementById('ceVE').value||'').trim()||v.email,
-    region_id: rid,
-    manager_id: gerente ? gerente.id : null,
+    region_id: rid ? parseInt(rid) : null,
+    manager_id: gerente ? parseInt(gerente.id) : null,
     telefono1: (document.getElementById('ceVT1').value||'').trim()||null,
     telefono2: (document.getElementById('ceVT2').value||'').trim()||null,
     domicilio: (document.getElementById('ceVDom').value||'').trim()||null,
@@ -2203,9 +2214,15 @@ function saveNewGerente(){
     _ceoPass  = document.getElementById('cPass') ? document.getElementById('cPass').value.trim() : null;
   } catch(e){}
 
+  // Guardia de Seguridad: Evitar pérdida de sesión (Session Stress Test)
+  if(!_ceoEmail || !_ceoPass){
+    showToast('⚠️ Por seguridad, ingresá tus credenciales en el login para validar la creación de Gerentes.');
+    return;
+  }
+
   sbClient.auth.signOut().then(function() {
   return sbClient.auth.signUp({ email: email, password: pass,
-    options:{ data:{ nombre: primerNombre, apellido: apellidoStr, role_id: 2 } }
+    options:{ data:{ nombre: primerNombre, apellido: apellidoStr, role_id: parseInt(2) } }
   });
   })
   .then(function(signUp){
@@ -2214,7 +2231,7 @@ function saveNewGerente(){
     if(!uid) showToast('⚠️ El email puede requerir confirmación. El gerente debe confirmar su email antes de ingresar.');
     var nombres = nombresArr;
     var profileData = {
-      role_id:    ROLE_MANAGER,
+      role_id:    parseInt(ROLE_MANAGER),
       nombre:     nombres[0],
       apellido:   nombres.slice(1).join(' ')||'',
       badge:      email, activo: true,
@@ -2234,7 +2251,7 @@ function saveNewGerente(){
     var newGer = mapGerente(ins.data);
     newGer.region_ids = regionIds;
     if(regionIds.length > 0){
-      var rels = regionIds.map(function(rid){ return{gerente_id:ins.data.user_id, region_id:rid}; });
+      var rels = regionIds.map(function(rid){ return{gerente_id:ins.data.user_id, region_id:parseInt(rid)}; });
       return sbClient.from('gerente_regiones').insert(rels).then(function(){ return newGer; });
     }
     return newGer;
@@ -2429,7 +2446,7 @@ function saveEditGerente(gid){
       return sbClient.from('gerente_regiones').delete().eq('gerente_id', g.user_id)
         .then(function(){
           if(newRegionIds.length > 0){
-            var rels = newRegionIds.map(function(rid){ return{gerente_id:g.user_id, region_id:rid}; });
+            var rels = newRegionIds.map(function(rid){ return{gerente_id:g.user_id, region_id:parseInt(rid)}; });
             return sbClient.from('gerente_regiones').insert(rels);
           }
         })
@@ -2476,24 +2493,23 @@ function saveVendPass(vid){
 function renderMensual(){
   var rf=(document.getElementById('recRegFilt')||{}).value||'';
   var nMeses=parseInt((document.getElementById('recMeses')||{}).value||12);
-  var cs=cli();
-  if(rf) cs=cs.filter(function(c){return String(c.rid)===String(rf);});
+  var ns=(_cachePagos||[]).filter(function(p){ 
+      return p.estado === 'aprobado' && (!rf || (p.cliente && String(p.cliente.region_id) === String(rf)));
+  });
   var rs=reg();
   var monthly={};
-  cs.forEach(function(c){
-    var pag=parseInt(c.cuotas_pagadas)||0;
-    var mc=parseFloat(c.monto_cuota)||0;
-    if(!c.fechaAlta||!pag) return;
+  ns.forEach(function(p){
+    var mc=parseFloat(p.monto_usd)||0;
+    var fechaRef = p.fecha_pago || p.created_at;
+    if(!mc || !fechaRef) return;
     try{
-      var fa=new Date(c.fechaAlta+'T00:00:00');
-      for(var q=0;q<pag;q++){
-        var pd=new Date(fa.getTime()+q*30.4*24*60*60*1000);
-        var key=pd.getFullYear()+'-'+(pd.getMonth()+1<10?'0':'')+(pd.getMonth()+1);
-        if(!monthly[key]) monthly[key]={total:0,byRegion:{}};
-        monthly[key].total+=mc;
-        if(!monthly[key].byRegion[String(c.rid)]) monthly[key].byRegion[String(c.rid)]=0;
-        monthly[key].byRegion[String(c.rid)]+=mc;
-      }
+      var d = new Date(fechaRef);
+      var key = d.getFullYear() + '-' + (d.getMonth() + 1 < 10 ? '0' : '') + (d.getMonth() + 1);
+      if(!monthly[key]) monthly[key]={total:0,byRegion:{}};
+      monthly[key].total += mc;
+      var rid = p.cliente ? String(p.cliente.region_id) : 'sin_region';
+      if(!monthly[key].byRegion[rid]) monthly[key].byRegion[rid]=0;
+      monthly[key].byRegion[rid] += mc;
     }catch(e){}
   });
   var now=new Date();
@@ -3042,7 +3058,7 @@ function adjuntarCompCentral(tipo, pid){
     persona.comprobantes.push({nombre:nombre,monto:monto,fecha:new Date().toLocaleDateString('es-AR'),data:e.target.result,tipo:file.type});
     sbClient.from('staff_profiles').update({comprobantes_json:JSON.stringify(persona.comprobantes)}).eq('user_id',pid)
       .then(function(res){
-        if(res.error) throw res.error;
+        if(res.error) throw res.error; 
         showToast('✅ Comprobante guardado para ' + persona.nombre);
       })
       .catch(function(err){ showToast('❌ Error: '+(err.message||'')); });
@@ -3138,22 +3154,22 @@ function renderPagosAprobacion() {
 function aprobarPago(clientId, cuotaKey, dbKey){
   // ── Checkpoint v3.1 v3.3: IDs son UUID (strings) — sin parseInt() ────
   // clientId = UUID string del cliente
-  // cuotaKey = string del número de cuota
+  // cuotaKey = string del número de cuota 
   var pago = (_cachePagos||[]).find(function(p){
     return String(p.cliente_id) === String(clientId)
         && String(p.numero_cuota) === String(cuotaKey)
         && p.estado === 'pendiente';
   });
   if(!pago){ showToast('⚠️ Pago no encontrado en el cache'); return; }
-
+  
   var _pagoId    = String(pago.id);
-  var _clientId  = String(clientId);
+  var _clientId  = parseInt(clientId) || null;
   var _ceoUidNow = _ceoUid || '';
 
   // PASO 1 — Aprobar el pago en tabla `pagos`
   sbClient.from('pagos')
     .update({ estado: 'aprobado', aprobado_por: 'CEO', fecha_pago: new Date().toISOString() })
-    .eq('id', _pagoId)
+    .eq('id', parseInt(_pagoId) || null)
     .select().single()
     .then(function(res){
       if(res.error) throw res.error;
@@ -3298,8 +3314,8 @@ function renderContratosPendientes(){
 function firmarContratoCEO(contratoId, clienteId){
   if(!confirm('\u00bFFirmar este contrato? El cliente recibirá una notificación.')) return;
   sbClient.from('contratos')
-    .update({ estado: 'firmado', fecha_firma: new Date().toISOString() })
-    .eq('id', String(contratoId))
+    .update({ estado: 'firmado', fecha_firma: new Date().toISOString() }) 
+    .eq('id', parseInt(contratoId) || null)
     .then(function(res){
       if(res.error) throw res.error;
       showToast('\u2705 Contrato firmado correctamente');
@@ -3311,7 +3327,7 @@ function firmarContratoCEO(contratoId, clienteId){
 function marcarRevisadoCEO(contratoId){
   sbClient.from('contratos')
     .update({ estado: 'revisado' })
-    .eq('id', String(contratoId))
+    .eq('id', parseInt(contratoId) || null)
     .eq('estado', 'borrador')
     .then(function(res){
       if(res.error) throw res.error;

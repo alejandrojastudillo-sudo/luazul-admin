@@ -1976,6 +1976,14 @@ function addClient() {
   if (!_currentProfile) { showToast('\u26A0\uFE0F Sesi\u00f3n no cargada. Recargu\u00e1 la p\u00e1gina.'); return; }
   if (!sbClient) { showToast('\u274C Sin conexi\u00f3n a Supabase'); return; }
 
+  // Guardia de Seguridad: Evitar pérdida de sesión (Session Stress Test)
+  var _adEmail = (document.getElementById('adUser').value || '').trim();
+  var _adPass  = (document.getElementById('adPass').value || '').trim();
+  if(!_adEmail || !_adPass){
+    showToast('⚠️ Por seguridad, ingresá tu email y contraseña en el login para validar la creación de Clientes.');
+    return;
+  }
+
   var btnGuardar = document.querySelector('#modal .m-btn.primary');
   if (btnGuardar) { btnGuardar.disabled = true; btnGuardar.textContent = '\u23F3 Creando...'; }
 
@@ -1989,7 +1997,7 @@ function addClient() {
   var apellidoStr  = nombresArr.slice(1).join(' ') || '';
   sbTemp.auth.signUp({
     email: email, password: pass,
-    options: { data: { nombre: primerNombre, apellido: apellidoStr, role_id: 4 } }
+    options: { data: { nombre: primerNombre, apellido: apellidoStr, role_id: parseInt(4) } }
   })
     .then(function(authResult) {
       if (authResult.error) {
@@ -2016,19 +2024,18 @@ function addClient() {
         monto_cuota:    total > 0 ? parseFloat((total / cuotas).toFixed(2)) : 0,
         estado:         'activo',
         fecha_alta:     new Date().toISOString().slice(0, 10),
-        seller_id:      _currentProfile.id,                // BIGINT — identificación jerárquica
-        region_id:      _currentProfile.region_id || null, // herencia de región del asesor
+        seller_id:      parseInt(_currentProfile.id) || null,
+        region_id:      _currentProfile.region_id ? (parseInt(_currentProfile.region_id) || null) : null,
         notas:          ''
       };
 
-      return sbClient.from('clientes').insert([newClient]).select().single();
+      return sbClient.from('clientes').insert([newClient]).select().single()
+        .then(function(r) { if(r.error) throw r.error; return r.data; });
     })
-    .then(function(r) {
-      if (r.error) throw new Error('DB: ' + r.error.message);
-      var inserted = enrich(r.data);
+    .then(function(data) {
+      var inserted = enrich(data);
       allClients.push(inserted);
       procesarReferidoNuevoCliente(inserted);
-      // Generar contrato borrador automáticamente (Checkpoint v3.1 §3)
       return crearContratoBorrador(inserted).then(function() { return inserted; });
     })
     .then(function(inserted) {
@@ -2040,7 +2047,7 @@ function addClient() {
           email:    email,
           nombre:   primerNombre,
           apellido: apellidoStr,
-          role_id:  4
+          role_id:  parseInt(4)
         }, { onConflict: 'id' }).then(function(res){
           if (res.error) console.warn('[SB] profiles upsert:', res.error.message);
           else console.log('[SB] profiles upsert OK para cliente:', email);
@@ -2071,8 +2078,8 @@ function crearContratoBorrador(cliente) {
   var asesorNombre = ((_currentProfile.nombre || '') + ' ' + (_currentProfile.apellido || '')).trim();
   var contenido = JSON.stringify({
     cliente_nombre:    cliente.nombre,
-    cliente_email:     cliente.email,
-    cliente_doc:       cliente.documento || '',
+    cliente_id:        parseInt(cliente.id),
+    vendedor_id:       parseInt(_currentProfile.id),
     cliente_tel:       cliente.telefono  || '',
     destino:           cliente.destino   || '',
     paquete:           cliente.paquete   || '',
@@ -2086,8 +2093,8 @@ function crearContratoBorrador(cliente) {
   return sbClient
     .from('contratos')
     .insert([{
-      cliente_id:     cliente.id,
-      vendedor_id:    _currentProfile.id,
+      cliente_id:     parseInt(cliente.id),
+      vendedor_id:    parseInt(_currentProfile.id),
       contenido_json: contenido,
       estado:         'borrador'
     }])
@@ -2414,8 +2421,8 @@ function confirmarCargaReferido(clientId) {
   if (!c || !sbClient || !_currentProfile) return;
 
   sbClient.from('referidos').insert([{
-    vendedor_id:     _currentProfile.id,
-    cliente_id:      c.id,
+    vendedor_id:     parseInt(_currentProfile.id),
+    cliente_id:      parseInt(c.id),
     referido_nombre: nombre,
     referido_email:  (document.getElementById('rEmail') || {}).value.trim() || null,
     referido_tel:    (document.getElementById('rTel') || {}).value.trim() || null,
@@ -2443,7 +2450,7 @@ function guardarReferidoDesdeAdmin(clientId) {
   var nuevoCliente = allClients.find(function(x){ return x.email.toLowerCase() === nuevoEmail.toLowerCase(); });
 
   sbClient.from('referidos').insert([{
-    vendedor_id:     _currentProfile.id,
+    vendedor_id:     parseInt(_currentProfile.id),
     cliente_id:      c.id,
     referido_nombre: nuevoCliente ? nuevoCliente.nombre : nuevoEmail,
     referido_email:  nuevoEmail,
@@ -2469,7 +2476,7 @@ function procesarReferidoNuevoCliente(nuevoCliente) {
   });
   if (!referidor) return;
   sbClient.from('referidos').insert([{
-    vendedor_id:     _currentProfile.id,
+    vendedor_id:     parseInt(_currentProfile.id),
     cliente_id:      referidor.id,
     referido_nombre: nuevoCliente.nombre,
     referido_email:  nuevoCliente.email,
@@ -2508,8 +2515,8 @@ function guardarReferido() {
   if (!referidor) { showToast('\u26A0\uFE0F No se encontr\u00f3 un cliente con ese email en tu cartera'); return; }
 
   sbClient.from('referidos').insert([{
-    vendedor_id:     _currentProfile.id,
-    cliente_id:      referidor.id,
+    vendedor_id:     parseInt(_currentProfile.id),
+    cliente_id:      parseInt(referidor.id),
     referido_nombre: nombre,
     referido_email:  email || null,
     referido_tel:    tel || null,
@@ -2563,7 +2570,7 @@ function renderRefList() {
 
 function eliminarReferido(id) {
   if (!sbClient) return;
-  sbClient.from('referidos').delete().eq('id', id)
+  sbClient.from('referidos').delete().eq('id', parseInt(id))
     .then(function() { renderRefList(); })
     .catch(function(e) { console.warn('[SB] eliminarReferido:', e.message); });
 }
@@ -2585,7 +2592,7 @@ function guardarCuenta() {
 
   sbClient.from('staff_profiles')
     .update({ cbu: cbuStr })
-    .eq('id', _currentProfile.id)
+    .eq('id', parseInt(_currentProfile.id))
     .then(function(r) {
       if (r.error) throw r.error;
       _currentProfile.cbu = cbuStr;
@@ -2604,7 +2611,7 @@ function guardarCuenta() {
 function eliminarCuenta() {
   if (!sbClient || !_currentProfile) return;
   if (!confirm('¿Eliminar tu CBU/alias registrado?')) return;
-  sbClient.from('staff_profiles').update({ cbu: null }).eq('id', _currentProfile.id)
+  sbClient.from('staff_profiles').update({ cbu: null }).eq('id', parseInt(_currentProfile.id))
     .then(function(r) {
       if (r.error) { showToast('⚠️ Error al eliminar'); return; }
       _currentProfile.cbu = null;
@@ -2838,7 +2845,7 @@ function verComprobantes(clientId) {
 
   sbClient.from('pagos')
     .select('*')
-    .eq('cliente_id', clientId)
+    .eq('cliente_id', parseInt(clientId))
     .order('numero_cuota')
     .then(function(r) {
       var items = r.data || [];

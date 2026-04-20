@@ -529,7 +529,7 @@
        3 → admin_luazul.html
   ──────────────────────────────────────────────────── */
   function getRedirectByRoleId(roleId) {
-    var id = parseInt(String(roleId), 10);  /* parseInt only on role_id int, NOT on UUID */
+    var id = parseInt(String(roleId), 10) || 3;
     if (id === 1) { return 'ceo_luazul.html';     }
     if (id === 2) { return 'gerente_luazul.html';  }
     if (id === 3) { return 'admin_luazul.html';    }
@@ -538,7 +538,7 @@
 
   /* Role name string — for lz_role key (panels read this) */
   function getRoleName(roleId) {
-    var id = parseInt(String(roleId), 10);
+    var id = parseInt(String(roleId), 10) || 3;
     if (id === 1) { return 'owner';   }
     if (id === 2) { return 'manager'; }
     if (id === 3) { return 'admin';   }
@@ -636,7 +636,7 @@
 
         /* ── STEP 2: Fetch role from profiles ── */
         sbClient
-          .from('profiles')
+          .from('staff_profiles')
           .select('id, nombre, apellido, role_id, email')
           .eq('id', userId)                      /* String UUID — columna PK 'id' — FIX UUID */
           .single()
@@ -650,7 +650,7 @@
             }
 
             var v      = vRes.data;
-            var roleId = parseInt(String(v.role_id || 3), 10); /* role_id is Integer — safe parseInt */
+            var roleId = parseInt(String(v.role_id || 3), 10) || 3;
             var nombre = ((v.nombre || '') + ' ' + (v.apellido || '')).trim()
                          || email.split('@')[0];
 
