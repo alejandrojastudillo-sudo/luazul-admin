@@ -1447,8 +1447,8 @@ function saveVendor(){
       regionId = window._gerenteRegionIds[0];
     }
 
-    // 4. Insertar en staff_profiles — ADN v3: solo columnas del diccionario
-    //    manager_id (UUID del gerente) es la única clave jerárquica en staff_profiles
+    // 4. Insertar en staff_profiles — ADN v4: solo columnas del diccionario
+    //    manager_id (BIGINT del gerente) es la clave jerárquica en staff_profiles
     var nombres = nombresArr;
     return sbClient.from('staff_profiles').insert({
       role_id:    2,
