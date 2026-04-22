@@ -10,13 +10,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="manifest" href="manifest_ceo.json">
   <meta name="theme-color" content="#0B3D91">
-<title>Luazul Smart Travel · CEO v2 — 9 Regiones</title>
+<link rel="stylesheet" href="styles.css">
+<title>Luazul Smart Travel · CEO Suite</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Mulish:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 :root{
   --cyan:#06b6d4;
-  --bg:#03060f;--surface:#070d1c;--card:rgba(255,255,255,.04);
+  --bg:#03060f;--surface:#070d1c;--card:rgba(255,255,255,.04);--border:rgba(255,255,255,.07);--border2:rgba(255,255,255,.13);
   --border:rgba(255,255,255,.07);--border2:rgba(255,255,255,.13);
   --text:#e8eeff;--muted:rgba(180,200,240,.55);
   --gold:#f59e0b;--gold-bg:rgba(245,158,11,.12);--gold-bd:rgba(245,158,11,.3);
@@ -534,8 +535,8 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
 // ══════════════════════════════════════════════════════
 //  LUAZUL CEO — CAPA DE DATOS: SUPABASE (migración v3)
 // ══════════════════════════════════════════════════════
-var ROLE_SELLER  = 2;
-var ROLE_MANAGER = 3;
+var ROLE_MANAGER = 2; // Corregido: Gerente es 2 según auth.js
+var ROLE_SELLER  = 3; // Corregido: Vendedor/Admin es 3
 var ROLE_CEO     = 1;
 var RK = 'luazul_ceo_regiones';
 var _cacheGerentes=null, _cacheVendedores=null, _cacheClientes=null, _cachePagos=null, _cacheRegiones=null;
@@ -895,14 +896,13 @@ function reg(){return _cacheRegiones||dbg(RK)||[];}
 function ger(){return _cacheGerentes||[];}
 function vend(){return _cacheVendedores||[];}
 function cli(){return (_cacheClientes||[]).map(enrich);}
-function rby(id){return reg().find(function(r){return String(r.id)===String(id);})||{nombre:'—',bandera:''};}
 
 /** 
  * Recorre los datos de regiones e inserta las opciones en el select indicado
  */
-async function poblarSelectorRegiones(containerId, selectedIds) {
-  var container = document.getElementById(containerId);
-  if (!container) return;
+async function poblarSelectorRegiones(selectId, selectedIds) {
+  var sel = document.getElementById(selectId);
+  if (!sel) return;
   var rs = reg();
 
   // Si reg() está vacío, realizamos consulta directa a Supabase (Checkpoint v3.2)
@@ -918,52 +918,12 @@ async function poblarSelectorRegiones(containerId, selectedIds) {
     }
   }
 
-  var html = '';
+  var html = '<option value="">— Seleccionar regiones —</option>';
   (rs || []).forEach(function(r) {
     var isSelected = (selectedIds && selectedIds.length > 0 && selectedIds.map(String).indexOf(String(r.id)) !== -1) ? 'selected' : '';
-    html += '<label class="region-checkbox-item ' + isSelected + '" data-region-id="' + r.id + '">'
-      + '<input type="checkbox" value="' + r.id + '" ' + isSelected + ' />'
-      + '<span>' + r.bandera + ' ' + r.nombre + '</span>'
-      + '</label>';
+    html += '<option value="' + r.id + '" ' + isSelected + '>' + r.bandera + ' ' + r.nombre + '</option>';
   });
-  container.innerHTML = html;
-
-  // Attach event listeners to the new checkboxes
-  var checkboxes = container.querySelectorAll('input[type="checkbox"]');
-  checkboxes.forEach(function(checkbox) {
-    checkbox.addEventListener('change', function() {
-      toggleRegionSelection(this, containerId);
-    });
-  });
-
-  updateSelectedRegionsDisplay(containerId);
-}
-
-function toggleRegionSelection(checkbox, containerId) {
-  var label = checkbox.closest('.region-checkbox-item');
-  if (checkbox.checked) {
-    label.classList.add('selected');
-  } else {
-    label.classList.remove('selected');
-  }
-  updateSelectedRegionsDisplay(containerId);
-}
-
-function updateSelectedRegionsDisplay(containerId) {
-  var container = document.getElementById(containerId);
-  var displayEl = document.getElementById(containerId.replace('Container', 'Display'));
-  if (!container || !displayEl) return;
-
-  var selectedRegions = [];
-  container.querySelectorAll('input[type="checkbox"]:checked').forEach(function(checkbox) {
-    var regionId = checkbox.value;
-    var region = rby(regionId);
-    if (region && region.nombre) selectedRegions.push(region.bandera + ' ' + region.nombre);
-  });
-
-  displayEl.innerHTML = selectedRegions.length > 0
-    ? 'Regiones seleccionadas: ' + selectedRegions.map(function(name){ return '<span class="selected-tag">' + name + '</span>'; }).join('')
-    : 'Regiones seleccionadas: <span style="font-style:italic;color:var(--faint);">Ninguna</span>';
+  sel.innerHTML = html;
 }
 
 // ── SELECTOR DE REGIONES con checkboxes por país ───────
@@ -2388,8 +2348,7 @@ async function openAddGerente(){
       '<input class="medit" id="gCBU" placeholder="CBU o Alias" style="font-family:monospace;" /></div>'+
     '<div class="mitem" style="grid-column:span 2;">'+
       '<div class="ml" style="margin-bottom:8px;">🌎 Regiones a cargo <span style="color:var(--muted);font-weight:400;">(puede seleccionar varias)</span></div>'+
-      '<div id="gRegionesContainer" class="region-checkbox-list"></div>'+
-      '<div id="gRegionesDisplay" class="selected-regions-display"></div>'+
+      '<select class="msel" id="gRegiones" multiple style="width:100%; min-height:100px; background:rgba(3,6,15,1); border:1px solid var(--border2); color:white; border-radius:8px;"></select>'+
     '</div>'+
     '</div>'+
     '</div>'+
@@ -2397,61 +2356,60 @@ async function openAddGerente(){
     '<button class="mbtn purple" onclick="saveNewGerente()">✅ Crear Gerente</button>'+
     '<button class="mbtn ghost" onclick="closeModal()">Cancelar</button></div>';
   document.getElementById('modal').classList.add('open');
-  await poblarSelectorRegiones('gRegionesContainer', []);
+  await poblarSelectorRegiones('gRegiones', []);
 }
 
-function saveNewGerente(){
-  var nombre = (document.getElementById('gNombre').value||'').trim();
-  var email  = (document.getElementById('gEmail').value||'').trim().toLowerCase();
-  var pass   = (document.getElementById('gPass').value||'').trim();
-  var regionIds = [];
-  var container = document.getElementById('gRegionesContainer');
-  if (container) {
-    container.querySelectorAll('input[type="checkbox"]:checked').forEach(function(checkbox) {
-      regionIds.push(parseInt(checkbox.value));
-    });
-  }
-
-  if(!nombre||!email||!pass){ showToast('⚠️ Nombre, email y contraseña son obligatorios'); return; }
-
+async function saveNewGerente(){
   var btn = document.querySelector('#modal .mbtn.purple');
-  if(btn){btn.disabled=true; btn.textContent='⏳ Creando...';}
-  function onDone(){ if(btn){btn.disabled=false; btn.textContent='✅ Crear Gerente';} }
-
-  var nombresArr = nombre.split(' ');
-  var primerNombre = nombresArr[0];
-  var apellidoStr  = nombresArr.slice(1).join(' ') || '';
-
-  // ── LIMPIEZA DE SESIÓN ANTES DEL SIGNUP ────────────────────────────────────
-  // Evita que metadatos de la sesión actual del CEO contaminen al nuevo Gerente.
-  // Re-autenticamos al CEO después del signUp para restaurar su sesión.
-  var _ceoEmail = null;
-  var _ceoPass  = null;
   try {
-    _ceoEmail = document.getElementById('cUser') ? document.getElementById('cUser').value.trim().toLowerCase() : null;
-    _ceoPass  = document.getElementById('cPass') ? document.getElementById('cPass').value.trim() : null;
-  } catch(e){}
+    var nombre = (document.getElementById('gNombre').value||'').trim();
+    var email  = (document.getElementById('gEmail').value||'').trim().toLowerCase();
+    var pass   = (document.getElementById('gPass').value||'').trim();
 
-  // Guardia de Seguridad: Evitar pérdida de sesión (Session Stress Test)
-  if(!_ceoEmail || !_ceoPass){
-    showToast('⚠️ Por seguridad, ingresá tus credenciales en el login para validar la creación de Gerentes.');
-    return;
-  }
+    // Obtener IDs seleccionados como un Arreglo de enteros
+    var sel = document.getElementById('gRegiones');
+    var regionIds = [];
+    if (sel) {
+      for (var i = 0; i < sel.selectedOptions.length; i++) {
+        if (sel.selectedOptions[i].value) regionIds.push(parseInt(sel.selectedOptions[i].value));
+      }
+    }
 
-  sbClient.auth.signOut().then(function() {
-  return sbClient.auth.signUp({ email: email, password: pass,
-    options:{ data:{ nombre: primerNombre, apellido: apellidoStr, role_id: parseInt(2) } }
-  });
-  })
-  .then(function(signUp){
-    if(signUp.error) throw signUp.error;
-    var uid = signUp.data.user ? signUp.data.user.id : null;
-    if(!uid) showToast('⚠️ El email puede requerir confirmación. El gerente debe confirmar su email antes de ingresar.');
-    var nombres = nombresArr;
+    if(btn){btn.disabled=true; btn.textContent='⏳ Creando...';}
+
+    var nombresArr = nombre.split(' ');
+    var primerNombre = nombresArr[0];
+    var apellidoStr  = nombresArr.slice(1).join(' ') || '';
+
+    // Capturar credenciales del CEO para restaurar sesión
+    var cUserEl = document.getElementById('cUser');
+    var cPassEl = document.getElementById('cPass');
+    var _ceoEmail = (cUserEl ? cUserEl.value : '').trim().toLowerCase();
+    var _ceoPass  = (cPassEl ? cPassEl.value : '').trim();
+
+    if(!_ceoEmail || !_ceoPass){
+      showToast('⚠️ Por seguridad, ingresá tus credenciales en el login para validar la creación de Gerentes.');
+      if(btn){btn.disabled=false; btn.textContent='✅ Crear Gerente';}
+      return;
+    }
+
+    // 1. Cerrar sesión del CEO temporalmente para el signUp
+    await sbClient.auth.signOut();
+
+    // 2. Registrar en Supabase Auth
+    const { data: signUpData, error: signUpErr } = await sbClient.auth.signUp({
+      email: email, password: pass,
+      options:{ data:{ nombre: primerNombre, apellido: apellidoStr, role_id: ROLE_MANAGER } }
+    });
+    if(signUpErr) throw signUpErr;
+
+    var uid = signUpData.user ? signUpData.user.id : null;
+
+    // 3. Insertar en staff_profiles (con la columna region_ids como array)
     var profileData = {
-      role_id:    parseInt(ROLE_MANAGER),
-      nombre:     nombres[0],
-      apellido:   nombres.slice(1).join(' ')||'',
+      role_id:    ROLE_MANAGER,
+      nombre:     primerNombre,
+      apellido:   apellidoStr,
       badge:      email, activo: true,
       ciudad:     (document.getElementById('gCiudad').value||'').trim()||null,
       telefono1:  (document.getElementById('gTel1').value||'').trim()||null,
@@ -2459,68 +2417,39 @@ function saveNewGerente(){
       fecha_alta: new Date().toISOString().slice(0,10),
       domicilio:  (document.getElementById('gDomicilio').value||'').trim()||null,
       cbu:        (document.getElementById('gCBU').value||'').trim()||null,
-      com_pct: 0, comprobantes_json: '[]'
+      com_pct: 0, comprobantes_json: '[]',
+      region_ids: regionIds, // Guardado como Array (Checkpoint v3.3)
+      user_id:    uid || undefined
     };
-    if(uid) profileData.user_id = uid;
-    return sbClient.from('staff_profiles').insert(profileData).select().single();
-  })
-  .then(function(ins){
-    if(ins.error) throw ins.error;
-    var newGer = mapGerente(ins.data);
-    newGer.region_ids = regionIds;
+
+    const { data: insData, error: insErr } = await sbClient.from('staff_profiles').insert(profileData).select().single();
+    if(insErr) throw insErr;
+
+    // 4. Insertar relaciones en gerente_regiones para compatibilidad SQL
     if(regionIds.length > 0){
-      var rels = regionIds.map(function(rid){ return{gerente_id:ins.data.user_id, region_id:parseInt(rid)}; });
-      return sbClient.from('gerente_regiones').insert(rels).then(function(){ return newGer; });
+      var rels = regionIds.map(function(rid){ return{gerente_id:uid, region_id:parseInt(rid)}; });
+      await sbClient.from('gerente_regiones').insert(rels);
     }
-    return newGer;
-  })
-  .then(function(newGer){
-    var rNombres = regionIds.map(function(rid){
-      var r=reg().find(function(x){return String(x.id)===String(rid);});
-      return r?r.nombre:'';
-    }).filter(Boolean).join(', ');
-    showToast('✅ Gerente '+nombre+' creado'+(rNombres?' · '+rNombres:''));
+
+    // 5. Restaurar sesión del CEO
+    await sbClient.auth.signInWithPassword({ email: _ceoEmail, password: _ceoPass });
+    
+    showToast('✅ Gerente '+nombre+' creado con éxito');
     closeModal();
-    onDone();
-    // ── RESTAURAR SESIÓN CEO ─────────────────────────────────────────────────
-    // Después del signOut+signUp, re-autenticamos al CEO para que el panel
-    // siga funcionando sin que tenga que hacer login nuevamente.
-    if (_ceoEmail && _ceoPass) {
-      sbClient.auth.signInWithPassword({ email: _ceoEmail, password: _ceoPass })
-        .then(function(reAuth) {
-          if (!reAuth.error) {
-            _ceoUid = String(reAuth.data.user.id);
-          }
-          cargarDatosSupabase().then(function(){ renderAll(); renderPasswords(); });
-        })
-        .catch(function() {
-          // Si falla el re-auth, recargar igual — el CEO puede volver a loguearse
-          cargarDatosSupabase().then(function(){ renderAll(); renderPasswords(); });
-        });
-    } else {
-      cargarDatosSupabase().then(function(){ renderAll(); renderPasswords(); });
-    }
-  })
-  .catch(function(e){
-      console.error('saveNewGerente - Detalle Técnico del Error:', {
-        message: e.message,
-        details: e.details,
-        hint: e.hint,
-        status: e.status,
-        raw: e
-      });
-    // Si el signUp falla, restaurar sesión CEO igual
+    cargarDatosSupabase().then(function(){ renderAll(); renderPasswords(); });
+
+  } catch (error) {
+    console.error('Error al crear gerente:', error);
+    alert('❌ Error de Supabase: ' + (error.message || 'Ocurrió un error inesperado'));
+    if(btn){btn.disabled=false; btn.textContent='✅ Crear Gerente';}
+
+    // Intentar restaurar sesión CEO aunque falle el registro
+    var _ceoEmail = (document.getElementById('cUser').value||'').trim().toLowerCase();
+    var _ceoPass  = (document.getElementById('cPass').value||'').trim();
     if (_ceoEmail && _ceoPass) {
       sbClient.auth.signInWithPassword({ email: _ceoEmail, password: _ceoPass }).catch(function(){});
     }
-    var msg = e.message || 'Verificá los datos';
-    if(msg.indexOf('already registered') !== -1 || msg.indexOf('already been registered') !== -1)
-      msg = 'Ese email ya existe en Supabase Auth. Usá otro email o borrá el usuario anterior desde el Dashboard.';
-    else if(msg.indexOf('duplicate') !== -1 || msg.indexOf('unique') !== -1)
-      msg = 'Ya existe un perfil con esos datos. Verificá email o usuario.';
-    showToast('❌ Error al crear gerente: ' + msg);
-    onDone();
-  });
+  }
 }
 
 function openGerDetail(gid){
