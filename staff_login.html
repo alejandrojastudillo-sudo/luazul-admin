@@ -390,7 +390,7 @@
       <div class="divider"></div>
 
       <!-- Login Form — ES5: no onsubmit inline, wired in JS -->
-      <div .eq('user_id', userId), userId)="loginForm">
+      <div id="loginForm">
 
         <!-- Email -->
         <div class="fgroup">
@@ -637,8 +637,8 @@
         /* ── STEP 2: Fetch role from profiles ── */
         sbClient
           .from('staff_profiles')
-          .select('id, nombre, apellido, role_id, email')
-          .eq('id', userId)                      /* String UUID — columna PK 'id' — FIX UUID */
+          .select('user_id, nombre, apellido, role_id, email')
+          .eq('user_id', userId)                      /* Mapeo UUID: se usa 'user_id' en lugar de 'id' (BigInt) - FIX BUG 400 */
           .single()
           .then(function (vRes) {
             if (vRes.error || !vRes.data) {
