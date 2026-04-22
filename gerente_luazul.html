@@ -6,6 +6,7 @@
   <link rel="manifest" href="manifest_gerente.json">
   <meta name="theme-color" content="#0B3D91">
 <title>Luazul Smart Travel · Gerencia</title>
+<!-- Mirror-Clean v1.0 — Auditoría 2026-04 · Correcciones: role_id String(), approvePayment/_sbLoad reload, aprobarTodos reload, p4→p5 encadenado (bug crítico carga clientes) -->
   <script>
   /* Verificación de sesión en <head> — previene flash de UI sin autenticar (Bloque 2.2) */
   (function() {
@@ -221,7 +222,6 @@ function validarSesionActiva(callback) {
     }
     if (callback) callback(user);
   }).catch(function(e) {
-    console.warn('validarSesionActiva:', e);
     showToast('❌ Error de verificación de sesión');
   });
 }
@@ -649,38 +649,35 @@ function _sbLoad(){
         })
       : Promise.resolve();
 
-    // 4. Cargar asesores role_id=2 — filtro estricto por manager_id (Fase 3)
-    var p4 = sbClient
+    // 4+5. Cargar asesores y luego clientes (Mirror-Clean v1: encadenados — p5 depende de p4)
+    // BUG FIX: antes se ejecutaban en paralelo via Promise.all, pero p5 lee _memCache[VK]
+    // que p4 aún no terminó de escribir → sellerIds siempre vacío en la primera carga.
+    var p4p5 = sbClient
       ? (function(){
           var gerenteId = window._gerenteProfile ? window._gerenteProfile.id : null;
-          if(!gerenteId) return Promise.resolve();
+          if(!gerenteId){ _memCache[VK] = []; _memCache[DB_KEY] = []; return Promise.resolve(); }
           return sbClient.from('staff_profiles')
             .select('*')
             .eq('role_id', 2)
             .eq('manager_id', gerenteId)
             .then(function(res){
               if(!res.error && res.data) _memCache[VK] = res.data.map(mapVendorFromSB);
+              // Paso 5 encadenado: ahora VK ya está disponible
+              var sellerIds = (_memCache[VK]||[]).map(function(v){ return v._sbId || v.id; }).filter(Boolean);
+              if(sellerIds.length === 0){ _memCache[DB_KEY] = []; return Promise.resolve(); }
+              return sbClient.from('clientes')
+                .select('id,user_id,seller_id,nombre,email,telefono,documento,domicilio,estado,destino,paquete,fecha_viaje,monto_cuota,cuotas_total,cuotas_pagadas,total_usd,fecha_alta,notas,region_id,mora_json,comprobantes_json,created_at')
+                .in('seller_id', sellerIds)
+                .order('created_at', {ascending:false})
+                .limit(1000)
+                .then(function(res){
+                  if(!res.error && res.data) _memCache[DB_KEY] = res.data.map(mapClientFromSB);
+                });
             });
         })()
       : Promise.resolve();
 
-    // 5. Cargar clientes — solo los de los vendedores del gerente (por seller_id)
-    var p5 = sbClient
-      ? (function(){
-          var sellerIds = (_memCache[VK]||[]).map(function(v){ return v._sbId || v.id; }).filter(Boolean);
-          if(sellerIds.length === 0){ _memCache[DB_KEY] = []; return Promise.resolve(); }
-          return sbClient.from('clientes')
-            .select('id,user_id,seller_id,nombre,email,telefono,documento,domicilio,estado,destino,paquete,fecha_viaje,monto_cuota,cuotas_total,cuotas_pagadas,total_usd,fecha_alta,notas,region_id,mora_json,comprobantes_json,created_at')
-            .in('seller_id', sellerIds)
-            .order('created_at', {ascending:false})
-            .limit(1000)
-            .then(function(res){
-              if(!res.error && res.data) _memCache[DB_KEY] = res.data.map(mapClientFromSB);
-            });
-        })()
-      : Promise.resolve();
-
-    return Promise.all([p3, p4, p5]);
+    return Promise.all([p3, p4p5]);
   })
   .then(function(){
     // 6. Cargar pagos
@@ -858,7 +855,7 @@ function gLogin(){
     })
     .then(function(p){
       if(p.error || !p.data) throw new Error('Perfil de gerente no encontrado. Contactá al administrador.');
-      if(p.data.role_id !== 3) throw new Error('Este acceso es exclusivo para gerentes (role_id=3).');
+      if(String(p.data.role_id) !== '3') throw new Error('Este acceso es exclusivo para gerentes (role_id=3).');
       window._gerenteProfile = p.data;
       LZ_AUTH.setPanelSession(LZ_AUTH.PANEL_KEYS.gerente);
       LZ_AUTH._showApp('loginWrap','app');
@@ -1041,15 +1038,24 @@ function verCompGerente(idx){
 function gLogout(){
   // Cancelar suscripción Realtime antes de cerrar sesión (M4)
   if(window._rtChannel){ window._rtChannel.unsubscribe(); window._rtChannel = null; }
+
   if(sbClient){ sbClient.auth.signOut().catch(function(e){ console.warn('signOut:', e); }); }
+  
+  // Limpieza total de memoria (Evita fugas de datos en la sesión siguiente)
   window._gerenteProfile   = null;
   window._gerenteRegionIds = [];
-  LZ_AUTH.logout({
-    panelKey:    LZ_AUTH.PANEL_KEYS.gerente,
-    loginWrapId: 'loginWrap',
-    appId:       'app',
-    clearInputIds: ['gUser','gPass']
-  });
+  
+  showToast('Cerrando sesión...', 1000);
+
+  // Redirección limpia al login tras un breve delay para mostrar el toast
+  setTimeout(function() {
+    LZ_AUTH.logout({
+      panelKey:    LZ_AUTH.PANEL_KEYS.gerente,
+      loginWrapId: 'loginWrap',
+      appId:       'app',
+      clearInputIds: ['gUser','gPass']
+    });
+  }, 1000);
 }
 document.addEventListener('DOMContentLoaded',function(){
   document.getElementById('gPass').addEventListener('keypress',function(e){if(e.key==='Enter')gLogin();});
@@ -1081,7 +1087,7 @@ function initApp(){
         return sbClient.from('staff_profiles')
           .select('*').eq('user_id', session.user.id).single()
           .then(function(p){
-            if(p.data && p.data.role_id === 3){
+            if(p.data && String(p.data.role_id) === '3'){
               window._gerenteProfile = p.data;
             } else {
               // Bloqueo: sesión activa pero sin rol de gerente (rol cruzado)
@@ -1373,11 +1379,18 @@ function openVendorDetail(vid){
 }
 
 function openAddVendor(){
+  var rs = _memCache['luazul_regiones'] || [];
+  var myRegIds = window._gerenteRegionIds || [];
+  var regOptions = rs.filter(function(r){ return myRegIds.indexOf(r.id) !== -1; }).map(function(r){
+    return '<option value="'+r.id+'">'+r.bandera+' '+r.nombre+'</option>';
+  }).join('');
+
   document.getElementById('mbox').innerHTML='<div class="mhead"><div><h2>➕ Nuevo Vendedor</h2></div><button class="mclose" onclick="closeModal()">✕</button></div>'
     +'<div class="mbody">'
     +'<div class="mgrid">'
     +'<div class="mi"><div class="ml">Nombre completo</div><input class="min" id="vN" placeholder="Ej: Laura Mendoza"/></div>'
     +'<div class="mi"><div class="ml">Email</div><input class="min" id="vE" placeholder="laura@luazul.com"/></div>'
+    +'<div class="mi"><div class="ml">Región asignada</div><select class="msel" id="vReg">'+regOptions+'</select></div>'
     +'<div class="mi"><div class="ml">Contraseña (panel admin)</div><input class="min" id="vP" placeholder="Contraseña segura"/></div>'
     +'<div class="mi"><div class="ml">Teléfono principal</div><input class="min" id="vT" placeholder="+54 9 11 1234-5678"/></div>'
     +'<div class="mi"><div class="ml">Teléfono de referencia</div><input class="min" id="vT2" placeholder="+54 9 351 9876-5432"/></div>'
@@ -1447,11 +1460,8 @@ function saveVendor(){
     if(signUp.error) throw signUp.error;
     var uid = signUp.data && signUp.data.user ? signUp.data.user.id : null;
 
-    // 3. Región del gerente (desde variable local — no desde window que puede estar limpio)
-    var regionId = null;
-    if(window._gerenteRegionIds && window._gerenteRegionIds.length > 0){
-      regionId = parseInt(window._gerenteRegionIds[0]) || null;
-    }
+      // 3. Región seleccionada en el modal
+      var regionId = parseInt(document.getElementById('vReg').value) || null;
 
     // 4. Insertar en staff_profiles — ADN v4: solo columnas del diccionario
     //    manager_id (BIGINT del gerente) es la clave jerárquica en staff_profiles
@@ -1488,7 +1498,7 @@ function saveVendor(){
             return sbClient.from('staff_profiles')
               .select('*').eq('user_id', reAuth.data.user.id).single()
               .then(function(prof){
-                if(prof.data && prof.data.role_id === 3){
+                if(prof.data && String(prof.data.role_id) === '3'){
                   window._gerenteProfile = prof.data;
                 }
                 return _sbLoad();
@@ -1700,6 +1710,84 @@ function toggleVendor(vid){
   });
 }
 
+function openReasignarCobro(clientId) {
+  var cs = _memCache[DB_KEY] || [];
+  var c = cs.find(function(x){ return String(x.id) === String(clientId); });
+  if(!c) return;
+  
+  var vs = _memCache[VK] || [];
+  var currentSeller = vby(c.vid);
+  
+  var options = vs.map(function(v){
+    return '<option value="'+v.id+'"'+(String(v.id)===String(c.vid)?' selected':'')+'>'+esc(v.nombre)+'</option>';
+  }).join('');
+
+  document.getElementById('mbox').innerHTML = 
+    '<div class="mhead"><div><h2>🔄 Re-asignar Cobro</h2>'
+    +'<p>Cliente: '+esc(c.nombre)+'</p></div>'
+    +'<button class="mclose" onclick="closeModal()">✕</button></div>'
+    +'<div class="mbody">'
+    +'<div style="background:var(--purple-bg);border:1px solid var(--purple-bd);border-radius:12px;padding:14px;margin-bottom:18px;">'
+    +'<div style="font-size:.75rem;color:var(--purple);font-weight:700;margin-bottom:6px;">ℹ️ GESTIÓN DE RE-ASIGNACIÓN</div>'
+    +'<div style="font-size:.82rem;color:var(--muted);line-height:1.5;">Al re-asignar el cobro, el nuevo asesor será el responsable de gestionar el pago y recibirá las notificaciones de este cliente.</div>'
+    +'</div>'
+    +'<div class="mitem"><div class="ml">Asesor actual</div><div style="font-size:.9rem;font-weight:700;">'+esc(currentSeller.nombre)+'</div></div>'
+    +'<div class="mitem" style="margin-top:14px;"><div class="ml">Nuevo asesor responsable</div>'
+    +'<select class="msel" id="newCobroSeller" style="width:100%;">'+options+'</select></div>'
+    +'</div>'
+    +'<div class="mact">'
+    +'<button class="mbtn purple" onclick="confirmarReasignacion('+clientId+')">💾 Confirmar Re-asignación</button>'
+    +'<button class="mbtn ghost" onclick="closeModal()">Cancelar</button>'
+    +'</div>';
+  document.getElementById('modal').classList.add('open');
+}
+
+function confirmarReasignacion(clientId) {
+  var newVid = document.getElementById('newCobroSeller').value;
+  if(!newVid) return;
+  
+  var cs = _memCache[DB_KEY] || [];
+  var c = cs.find(function(x){ return String(x.id) === String(clientId); });
+  if(!c) return;
+
+  var oldSeller = vby(c.vid);
+  var v = vby(newVid);
+  var now = new Date();
+  var fecha = now.getDate()+'/'+(now.getMonth()+1)+'/'+now.getFullYear()+' '+now.getHours()+':'+String(now.getMinutes()).padStart(2,'0');
+  
+  // Registrar el cambio en el historial para trazabilidad de comisiones (A2/C1)
+  if(!c.mora) c.mora = [];
+  c.mora.push({ 
+    fecha: fecha, 
+    motivo: '🔄 RE-ASIGNACIÓN DE COBRO', 
+    compromiso: 'Asesor anterior: ' + (oldSeller.nombre || 'Sin asignar') + '. Nuevo asesor: ' + v.nombre, 
+    contacto: 'Gerencia', 
+    resuelta: true, 
+    vendedorNombre: 'Sistema' 
+  });
+
+  _sbUpdateClient(clientId, { seller_id: parseInt(newVid), mora_json: JSON.stringify(c.mora) }).then(function(){
+    c.vid = newVid; // Sincronizar cache local
+
+    var v = vby(newVid);
+    if(sbClient && c && v && v.user_id) {
+       sbClient.from('notificaciones').insert([{
+          tipo: 'comunicado',
+          mensaje: '🚚 Gestión RE-ASIGNADA: Se te ha asignado el cobro del cliente ' + c.nombre + ' por parte del Gerente.',
+          destinatario_id: v.user_id,
+          destinatario_rol: 'seller',
+          remitente_id: window._gerenteProfile ? window._gerenteProfile.user_id : null,
+          cliente_id: parseInt(clientId),
+          leida: false
+       }]);
+    }
+
+    closeModal();
+    renderAll();
+    showToast('✅ Cobro re-asignado a ' + v.nombre);
+  });
+}
+
 // ── CLIENTS ───────────────────────────────────────────
 function populateVFilt(){
   var sel=document.getElementById('vFilt'),vs=(_memCache[VK]||[])||[],cur=sel.value;
@@ -1849,26 +1937,11 @@ function refreshBadge(){
 function approvePayment(nid){
   _sbApprovePayment(nid).then(function(ok){
     if(!ok){ showToast('❌ Error al aprobar el pago'); return; }
-
-    var ns = (_memCache[NK]||[]).map(function(n){
-      if(safeUUID(n.id)===safeUUID(nid)){ n.aprobada=true; n.leida=true; n.aprobadoPor='Gerencia'; }
-      return n;
+    // Mirror-Clean v1: recargar desde Supabase para consistencia real
+    return _sbLoad().then(function(){
+      renderAll();
+      showToast('✅ Pago aprobado en Supabase');
     });
-    _memCache[NK] = ns;
-
-    var notif = null;
-    for(var i=0; i<ns.length; i++){ if(safeUUID(ns[i].id)===safeUUID(nid)){ notif=ns[i]; break; } }
-    if(notif && notif.cid){
-      var cs = (_memCache[DB_KEY]||[]).map(function(c){
-        if(c.id==notif.cid && notif.cuota>(parseInt(c.cuotas_pagadas)||0)){
-          c.cuotas_pagadas = notif.cuota;
-          _sbUpdateClient(notif.cid, { cuotas_pagadas: notif.cuota });
-        }
-        return c;
-      });
-      _memCache[DB_KEY] = cs;
-    }
-    renderAll(); showToast('✅ Pago aprobado en Supabase');
   });
 }
 
@@ -2394,13 +2467,11 @@ function viewPagoComp(nid){
 function aprobarPago(nid){
   _sbApprovePayment(nid).then(function(ok){
     if(!ok){ showToast('❌ Error al aprobar el pago'); return; }
-    var ns=(_memCache[NK]||[]).map(function(n){
-      if(safeUUID(n.id)===safeUUID(nid)){n.aprobada=true;n.aprobadoPor='Gerencia';n.tsAprobado=Date.now();}
-      return n;
+    // Mirror-Clean v1: recargar desde Supabase para consistencia real
+    return _sbLoad().then(function(){
+      renderAll(); renderPagos();
+      showToast('✅ Pago aprobado en Supabase');
     });
-    _memCache[NK]=ns;
-    renderAll(); renderPagos();
-    showToast('✅ Pago aprobado en Supabase');
   });
 }
 
@@ -2409,6 +2480,7 @@ function aprobarTodos(){
   var pendientes = ns.filter(function(n){return n.tipo==='payment'&&!n.aprobada;});
   if(!pendientes.length){ showToast('✅ No hay pagos pendientes'); return; }
 
+  showToast('⏳ Aprobando ' + pendientes.length + ' pagos...');
   // Ejecutar aprobaciones secuencialmente con cadena de Promises
   var count = 0;
   var cadena = Promise.resolve();
@@ -2420,12 +2492,10 @@ function aprobarTodos(){
     });
   });
 
+  // Mirror-Clean v1: recargar desde Supabase al final para consistencia real
   cadena.then(function(){
-    var nsActualizado = (_memCache[NK]||[]).map(function(n){
-      if(n.tipo==='payment'&&!n.aprobada){n.aprobada=true;n.aprobadoPor='Gerencia';n.tsAprobado=Date.now();}
-      return n;
-    });
-    _memCache[NK] = nsActualizado;
+    return _sbLoad();
+  }).then(function(){
     renderAll(); renderPagos();
     showToast('✅ '+count+' pagos aprobados en Supabase');
   });
@@ -2463,6 +2533,7 @@ function renderMoraTab(){
         +(moraCount>0?'<div style="font-size:.72rem;color:#f97316;margin-bottom:8px;">⚠️ '+moraCount+' gestión(es) sin resolver</div>':'')
         +'<div style="display:flex;gap:6px;">'
         +'<button onclick="notificarAsesorMora('+c.id+')" style="padding:6px 12px;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.3);color:var(--gold);border-radius:8px;font-size:.75rem;cursor:pointer;">📨 Notificar asesor</button>'
+        +'<button onclick="openReasignarCobro('+c.id+')" style="padding:6px 12px;background:rgba(167,139,250,.12);border:1px solid var(--purple-bd);color:var(--purple);border-radius:8px;font-size:.75rem;cursor:pointer;">🔄 Re-asignar Cobro</button>'
         +'<button onclick="gerenteMora('+c.id+')" style="padding:6px 12px;background:rgba(59,130,246,.1);border:1px solid var(--blue-bd);color:#93c5fd;border-radius:8px;font-size:.75rem;cursor:pointer;">📋 Ver/Gestionar</button>'
         +'</div></div>';
     }).join('');
@@ -2506,6 +2577,7 @@ function renderMoraTab(){
         +(moraHist.length?'<div style="font-size:.7rem;color:var(--muted);margin-bottom:8px;">Último contacto: '+moraHist[moraHist.length-1].fecha+'</div>':'')
         +'<div style="display:flex;gap:6px;">'
         +'<button onclick="gerenteMora('+c.id+')" style="padding:6px 14px;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);color:#fca5a5;border-radius:8px;font-size:.75rem;font-weight:700;cursor:pointer;">📋 Gestionar mora</button>'
+        +'<button onclick="openReasignarCobro('+c.id+')" style="padding:6px 14px;background:rgba(167,139,250,.12);border:1px solid var(--purple-bd);color:var(--purple);border-radius:8px;font-size:.75rem;font-weight:700;cursor:pointer;">🔄 Re-asignar Cobro</button>'
         +'<button onclick="openClientDetail('+c.id+')" style="padding:6px 10px;background:var(--card);border:1px solid var(--border2);color:var(--muted);border-radius:8px;font-size:.75rem;cursor:pointer;">👤 Ver cliente</button>'
         +'</div></div>';
     }).join('');

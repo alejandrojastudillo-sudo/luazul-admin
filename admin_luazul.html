@@ -481,8 +481,8 @@ body::after {
         <span id="adminNotifDot" style="position:absolute;top:-4px;right:-4px;width:18px;height:18px;background:#ef4444;border-radius:50%;font-size:.62rem;font-weight:800;display:none;align-items:center;justify-content:center;color:white;animation:pulse-dot 1.5s infinite;">0</span>
       </div>
       <button class="add-btn" onclick="openAddModal()">＋ Nuevo cliente</button>
-      <button class="tb-btn" onclick="mostrarPanelAlertas()" title="Alertas" style="color:#f87171;border-color:rgba(248,113,113,.22);" id="alertBtn">🔔 Alertas</button>
-      <button class="tb-btn" onclick="syncData()">⟳ Sincronizar</button>      <button class="tb-btn danger" onclick="adminLogout()">Salir</button>
+      <button class="tb-btn" onclick="syncData()">⟳ Sincronizar</button>
+      <button class="tb-btn danger" onclick="adminLogout()">Salir</button>
     </div>
   </header>
 
@@ -517,7 +517,6 @@ body::after {
         <div class="ftab" data-f="miscomisiones" onclick="activarTab('miscomisiones')" style="color:#4ade80;border-color:rgba(74,222,128,.3);">💰 Mis Comisiones</div>
         <div class="ftab" data-f="legajo" onclick="activarTab('legajo')" style="color:#a78bfa;border-color:rgba(167,139,250,.3);">🪪 Mi Legajo</div>
       </div>
-      <button onclick="mostrarPanelAlertas()" title="Ver alertas del sistema" style="display:flex;align-items:center;gap:6px;background:rgba(248,113,113,.12);border:1px solid rgba(248,113,113,.25);border-radius:10px;padding:7px 12px;font-family:'Mulish',sans-serif;font-size:.72rem;font-weight:700;color:#f87171;cursor:pointer;transition:all .2s;" onmouseover="this.style.background='rgba(248,113,113,.2)'" onmouseout="this.style.background='rgba(248,113,113,.12)'">🔔 Alertas</button>
       <select class="sort-select" id="sortSelect" onchange="renderTable()">
         <option value="prioridad">Ordenar: Prioridad</option>
         <option value="nombre">Ordenar: Nombre</option>
@@ -570,7 +569,8 @@ body::after {
 
     <div id="refSection" style="display:none;margin-top:8px;">
       <div class="glass" style="padding:24px;margin-bottom:18px;">
-        <div style="font-size:.7rem;font-weight:800;text-transform:uppercase;letter-spacing:1.2px;color:#fbbf24;margin-bottom:16px;">🎁 Cargar cliente referido</div>
+        <div style="font-size:.7rem;font-weight:800;text-transform:uppercase;letter-spacing:1.2px;color:#fbbf24;margin-bottom:16px;">🎯 Registrar nuevo Lead / Prospecto</div>
+        <p style="font-size:.74rem;color:rgba(200,220,255,.5);margin-bottom:14px;">El lead quedará vinculado a tu cartera. Si fue referido por un cliente existente, ingresá su email en el campo correspondiente.</p>
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr auto;gap:12px;align-items:end;flex-wrap:wrap;">
           <div>
             <label style="font-size:.72rem;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.8px;display:block;margin-bottom:6px;">Nombre del referido *</label>
@@ -595,7 +595,14 @@ body::after {
         </div>
       </div>
 
-    <!-- ═══ CUENTAS DE PAGO SECTION ═══ -->
+      <!-- Lista de leads / referidos -->
+      <div class="glass" style="padding:24px;">
+        <div style="font-size:.7rem;font-weight:800;text-transform:uppercase;letter-spacing:1.2px;color:var(--muted);margin-bottom:14px;">📋 Leads registrados</div>
+        <div id="refListAdmin" style="display:flex;flex-direction:column;gap:8px;"></div>
+      </div>
+    </div>
+
+    <!-- ═══ CUENTAS DE PAGO SECTION ═══ (hermano de refSection, NO hijo) -->
     <div id="cuentasSection" style="display:none;margin-top:8px;">
       <div class="glass" style="padding:24px;margin-bottom:18px;">
         <div style="font-size:.7rem;font-weight:800;text-transform:uppercase;letter-spacing:1.2px;color:var(--muted);margin-bottom:16px;">🏦 Cuentas habilitadas para pago de cuotas</div>
@@ -627,13 +634,6 @@ body::after {
 
         <!-- Lista de cuentas cargadas -->
         <div id="cuentasList"></div>
-      </div>
-    </div>
-
-      <!-- Referidos list -->
-      <div class="glass" style="padding:24px;">
-        <div style="font-size:.7rem;font-weight:800;text-transform:uppercase;letter-spacing:1.2px;color:var(--muted);margin-bottom:14px;">Lista de referidos cargados</div>
-        <div id="refListAdmin" style="display:flex;flex-direction:column;gap:8px;"></div>
       </div>
     </div>
 
@@ -997,16 +997,22 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 function adminLogout() {
-  var p = sbClient ? sbClient.auth.signOut() : Promise.resolve();
-  p.catch(function(){}).then(function() {
-    try { sessionStorage.removeItem('luazul_asesor_user'); } catch(e){}
+  if(sbClient){ sbClient.auth.signOut().catch(function(e){ console.warn('signOut:', e); }); }
+
+  // Limpieza total de memoria
+  window._currentProfile = null;
+  try { sessionStorage.removeItem('luazul_asesor_user'); } catch(e){}
+
+  showToast('Cerrando sesión...', 1000);
+
+  setTimeout(function() {
     LZ_AUTH.logout({
       panelKey:      'luazul_admin',
       loginWrapId:   'loginWrap',
       appId:         'app',
       clearInputIds: ['adUser','adPass']
     });
-  });
+  }, 1000);
 }
 
 function loadClients() {
@@ -1043,28 +1049,23 @@ function enrich(c) {
   c._pct      = pct;
   c._pendientes = total - pagadas;
   // Semáforo
-  if (c.estado === 'baja') {
-    c._semaforo = 'baja';
-    c._prioridad = 99;
-  } else if (c.estado === 'completo') {
-    c._semaforo = 'verde';
-    c._prioridad = 50;
-  } else if (c.estado === 'atraso') {
-    c._semaforo = 'rojo';
-    c._prioridad = 1;
-  } else if (pct >= 80) {
-    c._semaforo = 'rojo';
-    c._prioridad = 2;
-  } else if (pct >= 60) {
-    c._semaforo = 'naranja';
-    c._prioridad = 3;
-  } else if (pct >= 40) {
-    c._semaforo = 'amarillo';
-    c._prioridad = 4;
+  // Unificado con lógica CEO v2.1
+  if(c.estado==='baja'){
+    c._semaforo='baja'; c._prioridad=99;
+  } else if(c.estado==='completo'){
+    c._semaforo='verde'; c._prioridad=50;
+  } else if(c.estado==='atraso' || c.estado==='atraso_gestion'){
+    c._semaforo='rojo'; c._prioridad=1;
+  } else if(c._pct>=80){
+    c._semaforo='rojo'; c._prioridad=2;
+  } else if(c._pct>=60){
+    c._semaforo='naranja'; c._prioridad=3;
+  } else if(c._pct>=40){
+    c._semaforo='amarillo'; c._prioridad=4;
   } else {
-    c._semaforo = 'verde';
-    c._prioridad = 5;
+    c._semaforo='verde'; c._prioridad=5;
   }
+
   // Todos los clientes cargados pertenecen al asesor por seller_id — sin asignación ambigua
   c._asignacion = false;
 
@@ -1090,10 +1091,6 @@ function renderAll() {
   renderPriorityBanner();
   renderTable();
   checkNuevasAsignaciones();
-  // Check alerts on load
-  var _alertas = detectarAlertas ? detectarAlertas() : [];
-  var dot = document.getElementById("alertDot");
-  if(dot && _alertas.filter(function(a){return a.nivel!=="info";}).length > 0) dot.style.display="block";
   document.getElementById('tbTotal').textContent = allClients.length + ' clientes';
 }
 
@@ -1131,7 +1128,7 @@ function checkNuevasAsignaciones() {
       + '<span style="font-size:1rem;">🔔</span>'
       + '<div>'
       + '<div style="font-weight:700;font-size:.88rem;color:#7eb8ff;">Nueva Asignación</div>'
-      + '<div style="font-size:.82rem;color:rgba(200,220,255,.85);">' + c.nombre + '</div>'
+      + '<div style="font-size:.82rem;color:rgba(200,220,255,.85);">' + esc(c.nombre) + '</div>'
       + '<div style="font-size:.72rem;color:rgba(180,200,255,.5);">' + (c.destino || 'Sin destino') + '</div>'
       + '</div></div>';
   }).join('');
@@ -1319,9 +1316,11 @@ function renderStats() {
     }).join('');
 
     cPanel.innerHTML =
-      // ── HEADER ──────────────────────────────────────────────────────────
       '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">'
+        +'<div style="display:flex;align-items:center;gap:10px;">'
         +'<div style="font-size:.7rem;font-weight:800;text-transform:uppercase;letter-spacing:1.2px;color:var(--accent,#60a5fa);">💰 Mi comisión del mes</div>'
+        +'<span style="font-size:.6rem;font-weight:700;padding:2px 8px;border-radius:20px;background:rgba(107,114,128,.15);color:#9ca3af;border:1px solid rgba(107,114,128,.25);">🔒 Solo lectura · calculado por triggers DB</span>'
+        +'</div>'
         +'<span style="font-size:.78rem;font-weight:800;padding:4px 13px;border-radius:20px;background:'+tasaBg+';color:'+tasaCol+';border:1px solid '+tasaBd+';">'
           +cm.tasaActual+'% · '+cm.ventasMes+' ventas este mes'
         +'</span>'
@@ -1412,7 +1411,7 @@ function renderPriorityBanner() {
       + '<div class="priority-list">'
       + moraTemp.map(function(c){
           return '<div class="pri-chip rojo" onclick="openModal(\'' + c.id + '\')">'
-            + c.nombre + ' · ' + c._pendientes + ' cuotas pendientes</div>';
+            + esc(c.nombre) + ' · ' + c._pendientes + ' cuotas pendientes</div>';
         }).join('')
       + '</div></div>';
   }
@@ -1422,7 +1421,7 @@ function renderPriorityBanner() {
       + '<div class="priority-list">'
       + sinPagar.map(function(c){
           return '<div class="pri-chip naranja" onclick="openModal(\'' + c.id + '\')">'
-            + c.nombre + ' — Sin primer pago</div>';
+            + esc(c.nombre) + ' — Sin primer pago</div>';
         }).join('')
       + '</div></div>';
   }
@@ -1510,8 +1509,8 @@ function renderTable() {
       + '<div class="tbl-cell" style="display:flex;align-items:center;"><div class="sem ' + c._semaforo + '"></div></div>'
       // Nombre
       + '<div class="tbl-cell">'
-      +   '<div class="cli-name">' + c.nombre + ((parseInt(c.cuotas_pagadas)||0) <= 3 && c.estado !== 'baja' && c.estado !== 'completo' ? ' <span style="font-size:.62rem;background:rgba(245,158,11,.2);color:#f59e0b;border:1px solid rgba(245,158,11,.3);border-radius:10px;padding:1px 7px;font-weight:700;vertical-align:middle;">&#127919; seguimiento</span>' : '') + (c._asignacion ? ' <span title="Asignación Directa — cliente enviado por el Gerente" style="font-size:.62rem;background:rgba(99,179,255,.15);color:#7eb8ff;border:1px solid rgba(99,179,255,.3);border-radius:10px;padding:1px 7px;font-weight:700;vertical-align:middle;cursor:default;">&#128105;&#8203;&#128188; asignado</span>' : '') + '</div>'
-      +   '<div class="cli-email">' + c.email + '</div>'
+      +   '<div class="cli-name">' + esc(c.nombre) + ((parseInt(c.cuotas_pagadas)||0) <= 3 && c.estado !== 'baja' && c.estado !== 'completo' ? ' <span style="font-size:.62rem;background:rgba(245,158,11,.2);color:#f59e0b;border:1px solid rgba(245,158,11,.3);border-radius:10px;padding:1px 7px;font-weight:700;vertical-align:middle;">&#127919; seguimiento</span>' : '') + (c._asignacion ? ' <span title="Asignación Directa — cliente enviado por el Gerente" style="font-size:.62rem;background:rgba(99,179,255,.15);color:#7eb8ff;border:1px solid rgba(99,179,255,.3);border-radius:10px;padding:1px 7px;font-weight:700;vertical-align:middle;cursor:default;">&#128105;&#8203;&#128188; asignado</span>' : '') + '</div>'
+      +   '<div class="cli-email">' + esc(c.email) + '</div>'
       + '</div>'
       // Destino
       + '<div class="tbl-cell tc-dest">'
@@ -1573,8 +1572,8 @@ function openModal(id) {
   document.getElementById('modalBox').innerHTML =
     '<div class="modal-head">'
     + '<div>'
-    +   '<h2>' + c.nombre + '</h2>'
-    +   '<p>' + c.email + ' \u00b7 ' + (c.documento || '\u2014') + ' \u00b7 ' + (c.domicilio || '\u2014') + '</p>'
+    +   '<h2>' + esc(c.nombre) + '</h2>'
+    +   '<p>' + esc(c.email) + ' \u00b7 ' + esc(c.documento || '\u2014') + ' \u00b7 ' + esc(c.domicilio || '\u2014') + '</p>'
     + '</div>'
     + '<div style="display:flex;align-items:center;gap:10px;">'
     +   '<span class="badge ' + c.estado + '">' + c.estado.toUpperCase() + '</span>'
@@ -1707,7 +1706,7 @@ function openMoraModal(id) {
 
   document.getElementById('modalBox').innerHTML = '<div class="modal-head">'
     + '<div><h2>' + (hasMora ? '⚠️' : '📋') + ' Gestión de Mora</h2>'
-    + '<p style="font-size:.78rem;color:var(--muted);">' + c.nombre + ' · ' + c.email + '</p></div>'
+    + '<p style="font-size:.78rem;color:var(--muted);">' + esc(c.nombre) + ' · ' + esc(c.email) + '</p></div>'
     + '<button class="modal-close" onclick="closeModal()">✕</button>'
     + '</div>'
     + '<div class="modal-body">'
@@ -2000,6 +1999,8 @@ function addClient() {
     options: { data: { nombre: primerNombre, apellido: apellidoStr, role_id: parseInt(4) } }
   })
     .then(function(authResult) {
+      // Limpiamos cualquier rastro previo para evitar colisiones
+      window.__ultimoClienteAuthId = null;
       if (authResult.error) {
         if (authResult.error.message.toLowerCase().indexOf('already registered') === -1) {
           throw new Error('Auth: ' + authResult.error.message);
@@ -2172,7 +2173,10 @@ function renderMisComisionesAdmin(){
   }
 
   el.innerHTML = '<div style="max-width:700px;">'
-    + '<div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:rgba(74,222,128,.7);margin-bottom:14px;">💰 Estado de tus comisiones</div>'
+    + '<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">'
+    + '<div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:rgba(74,222,128,.7);">💰 Estado de tus comisiones</div>'
+    + '<span style="font-size:.6rem;font-weight:700;padding:2px 8px;border-radius:20px;background:rgba(107,114,128,.15);color:#9ca3af;border:1px solid rgba(107,114,128,.25);">🔒 Solo lectura · procesado por el sistema</span>'
+    + '</div>'
     + cbuBlock
     + '<div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:rgba(74,222,128,.7);margin-bottom:12px;">📋 Historial de pagos</div>'
     + compsHTML
@@ -2387,7 +2391,7 @@ function abrirCargaReferido(clientId) {
 
   document.getElementById('modalBox').innerHTML =
     '<div class="modal-head">'
-    + '<div><h2>🎁 Cargar Referido</h2><p style="font-size:.8rem;color:rgba(180,200,240,.6);">' + c.nombre + ' · ' + c.email + '</p></div>'
+    + '<div><h2>🎁 Cargar Referido</h2><p style="font-size:.8rem;color:rgba(180,200,240,.6);">' + esc(c.nombre) + ' · ' + c.email + '</p></div>'
     + '<button class="modal-close" onclick="closeModal()">✕</button></div>'
     + '<div class="modal-body">'
     + '<div style="background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.2);border-radius:12px;padding:14px;margin-bottom:16px;">'
@@ -2440,32 +2444,7 @@ function confirmarCargaReferido(clientId) {
     });
 }
 
-function guardarReferidoDesdeAdmin(clientId) {
-  var c = allClients.find(function(x){ return x.id == clientId; });
-  if (!c) return;
-  var nuevoEmail = (document.getElementById('refNuevoEmail') || {}).value.trim();
-  if (!nuevoEmail) { showToast('\u26A0\uFE0F Ingres\u00e1 el email del nuevo cliente'); return; }
-  if (!sbClient || !_currentProfile) return;
-
-  var nuevoCliente = allClients.find(function(x){ return x.email.toLowerCase() === nuevoEmail.toLowerCase(); });
-
-  sbClient.from('referidos').insert([{
-    vendedor_id:     parseInt(_currentProfile.id),
-    cliente_id:      c.id,
-    referido_nombre: nuevoCliente ? nuevoCliente.nombre : nuevoEmail,
-    referido_email:  nuevoEmail,
-    estado:          'pendiente'
-  }])
-    .then(function(r) {
-      if (r.error) throw r.error;
-      closeModal();
-      showToast('\u2705 Referido registrado \u2014 visible en panel de ' + c.nombre);
-    })
-    .catch(function(e) {
-      console.warn('[SB] guardarReferidoDesdeAdmin:', e.message);
-      showToast('\u26A0\uFE0F Error al registrar referido: ' + e.message);
-    });
-}
+// guardarReferidoDesdeAdmin() — eliminado en Mirror-Clean v1.0 (código muerto, no referenciado)
 
 function procesarReferidoNuevoCliente(nuevoCliente) {
   var codigoRef = (document.getElementById('nRefCodigo') || {}).value.trim();
@@ -2502,40 +2481,44 @@ function buscarReferidor(codigo) {
   }
 }
 
-// Guardar referido desde el formulario manual de la sección Referidos
-function guardarReferido() {
-  var nombre  = (document.getElementById('refNombre').value  || '').trim();
-  var email   = (document.getElementById('refEmail').value   || '').trim().toLowerCase();
-  var por     = (document.getElementById('refPor').value     || '').trim().toLowerCase();
-  var tel     = (document.getElementById('refTel')  ? document.getElementById('refTel').value.trim() : '');
-  if (!nombre || !por) { alert('Nombre del referido y email del cliente que refiri\u00f3 son obligatorios.'); return; }
-  if (!sbClient || !_currentProfile) { showToast('\u274C Sin sesi\u00f3n activa'); return; }
+// ─── LEADS — RPC crear_lead (Mirror-Clean v1.0 §3) ──────────────────────
+// Toda carga de nuevos prospectos usa el RPC crear_lead de Supabase.
+// Elimina la lógica vieja de insert directo en referidos.
+function crearLead() {
+  var nombre  = (document.getElementById('refNombre').value || '').trim();
+  var email   = (document.getElementById('refEmail').value  || '').trim().toLowerCase();
+  var tel     = (document.getElementById('refTel')   ? document.getElementById('refTel').value.trim()  : '');
+  var por     = (document.getElementById('refPor').value    || '').trim().toLowerCase();
 
-  var referidor = allClients.find(function(c){ return c.email.toLowerCase() === por; });
-  if (!referidor) { showToast('\u26A0\uFE0F No se encontr\u00f3 un cliente con ese email en tu cartera'); return; }
+  if (!nombre) { showToast('\u26A0\uFE0F El nombre del lead es obligatorio'); return; }
+  if (!_currentProfile) { showToast('\u274C Sin sesi\u00f3n activa'); return; }
+  if (!sbClient) { showToast('\u274C Sin conexi\u00f3n a Supabase'); return; }
 
-  sbClient.from('referidos').insert([{
-    vendedor_id:     parseInt(_currentProfile.id),
-    cliente_id:      parseInt(referidor.id),
-    referido_nombre: nombre,
-    referido_email:  email || null,
-    referido_tel:    tel || null,
-    estado:          'pendiente'
-  }])
+  var referidor = por ? allClients.find(function(c){ return c.email.toLowerCase() === por; }) : null;
+
+  sbClient.rpc('crear_lead', {
+    p_nombre:      nombre,
+    p_email:       email   || null,
+    p_telefono:    tel     || null,
+    p_vendedor_id: parseInt(_currentProfile.id),
+    p_cliente_id:  referidor ? parseInt(referidor.id) : null
+  })
     .then(function(r) {
       if (r.error) throw r.error;
-      document.getElementById('refNombre').value = '';
-      document.getElementById('refEmail').value  = '';
-      document.getElementById('refPor').value    = '';
-      if (document.getElementById('refTel')) document.getElementById('refTel').value = '';
-      showToast('\u2705 Referido guardado');
+      ['refNombre','refEmail','refTel','refPor'].forEach(function(id){
+        var el = document.getElementById(id); if(el) el.value = '';
+      });
+      showToast('\u2705 Lead registrado exitosamente');
       renderRefList();
     })
     .catch(function(e) {
-      console.warn('[SB] guardarReferido:', e.message);
-      showToast('\u26A0\uFE0F Error al guardar referido: ' + e.message);
+      console.warn('[SB] crearLead RPC:', e.message);
+      showToast('\u26A0\uFE0F Error al registrar lead: ' + e.message);
     });
 }
+
+// Alias de compatibilidad — botón existente en HTML
+function guardarReferido() { crearLead(); }
 
 function renderRefList() {
   var el = document.getElementById('refListAdmin');
@@ -2569,6 +2552,7 @@ function renderRefList() {
 }
 
 function eliminarReferido(id) {
+  if (!confirm('¿Estás seguro de eliminar este referido? Esta acción no se puede deshacer.')) return;
   if (!sbClient) return;
   sbClient.from('referidos').delete().eq('id', parseInt(id))
     .then(function() { renderRefList(); })
@@ -2709,12 +2693,16 @@ function generarContratoPDF(clientId) {
     + '<div class="footer">LUAZUL Smart Travel \u00b7 @luazul.travel \u00b7 Comodoro Rivadavia, Argentina \u00b7 Contrato generado autom\u00e1ticamente el ' + esc(fechaStr) + '</div>'
     + '<\/body><\/html>';
 
-  var w = window.open('', '_blank', 'width=900,height=700');
+  // Usar Blob URL en lugar de document.write — Auditoría v3.31 XSS-C2
+  var blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+  var url  = URL.createObjectURL(blob);
+  var w    = window.open(url, '_blank', 'width=900,height=700');
   if (w) {
-    w.document.write(html);
-    w.document.close();
     showToast('\uD83D\uDCC4 Contrato generado \u2014 imprim\u00ed o guard\u00e1 como PDF');
+    // Liberar el objeto URL cuando la ventana se cierre
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 60000);
   } else {
+    URL.revokeObjectURL(url);
     showToast('\u26A0\uFE0F Habilit\u00e1 las ventanas emergentes para generar el contrato');
   }
 }
@@ -2735,7 +2723,7 @@ function abrirRegistroPago(clientId) {
   modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(8px);';
   modal.innerHTML = '<div style="background:linear-gradient(160deg,rgba(5,20,65,.98),rgba(2,10,30,.99));border:1px solid rgba(100,160,255,.25);border-radius:20px;padding:32px;width:100%;max-width:480px;">'
     + '<h3 style="font-size:1rem;font-weight:900;margin-bottom:6px;">📤 Enviar Comprobante de Pago</h3>'
-    + '<div style="font-size:.78rem;color:rgba(200,220,255,.7);margin-bottom:22px;">'+ c.nombre +' · Cuota '+ proximaCuota +' de '+ c.cuotas_total +'</div>'
+    + '<div style="font-size:.78rem;color:rgba(200,220,255,.7);margin-bottom:22px;">'+ esc(c.nombre) +' · Cuota '+ proximaCuota +' de '+ c.cuotas_total +'</div>'
 
     + '<div style="margin-bottom:14px;">'
     + '<label style="display:block;font-size:.65rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:rgba(150,190,255,.5);margin-bottom:7px;">Número de cuota *</label>'
@@ -2799,7 +2787,9 @@ function enviarComprobante(clientId) {
       monto_usd:        monto,
       estado:           'pendiente',
       fecha_pago:       fecha || new Date().toISOString().slice(0,10),
-      comprobante_url:  comprobanteUrl || null
+      comprobante_url:  comprobanteUrl || null,
+      seller_id:        _currentProfile ? (parseInt(_currentProfile.id) || null) : null,
+      region_id:        _currentProfile && _currentProfile.region_id ? (parseInt(_currentProfile.region_id) || null) : null
     }])
       .then(function(r) {
         if (r.error) throw r.error;
@@ -2838,7 +2828,7 @@ function verComprobantes(clientId) {
   if (!c) return;
 
   document.getElementById('modalBox').innerHTML =
-    '<div class="modal-head"><div><h2>\uD83D\uDCCE Comprobantes \u00b7 ' + c.nombre + '</h2></div>'
+    '<div class="modal-head"><div><h2>\uD83D\uDCCE Comprobantes \u00b7 ' + esc(c.nombre) + '</h2></div>'
     + '<button class="modal-close" onclick="closeModal()">\u2715</button></div>'
     + '<div class="modal-body"><p style="text-align:center;padding:20px;">\u23F3 Cargando...</p></div>';
   document.getElementById('modal').classList.add('open');
@@ -2956,11 +2946,8 @@ function mostrarPanelAlertas() {
     + '<button class="mbtn" onclick="closeModal()">Cerrar</button>'
     + '</div>';
 
-  var mbox = document.getElementById('mbox');
-  if (mbox) {
-    mbox.innerHTML = html;
-    document.getElementById('modal').classList.add('open');
-  }
+  document.getElementById('modalBox').innerHTML = html;
+  document.getElementById('modal').classList.add('open');
 }
 
 function enviarAlertaWhatsApp(clientId) {
