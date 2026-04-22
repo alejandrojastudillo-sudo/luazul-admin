@@ -901,7 +901,8 @@ function rby(id){return reg().find(function(r){return String(r.id)===String(id);
  * Recorre los datos de regiones e inserta las opciones en el select indicado
  */
 async function poblarSelectorRegiones(containerId, selectedIds) {
-  if (!sel) return;
+  var container = document.getElementById(containerId);
+  if (!container) return;
   var rs = reg();
 
   // Si reg() está vacío, realizamos consulta directa a Supabase (Checkpoint v3.2)
@@ -925,8 +926,7 @@ async function poblarSelectorRegiones(containerId, selectedIds) {
       + '<span>' + r.bandera + ' ' + r.nombre + '</span>'
       + '</label>';
   });
-  var container = document.getElementById(containerId);
-  if(container) container.innerHTML = html;
+  container.innerHTML = html;
 
   // Attach event listeners to the new checkboxes
   var checkboxes = container.querySelectorAll('input[type="checkbox"]');
@@ -2398,7 +2398,6 @@ async function openAddGerente(){
     '<button class="mbtn ghost" onclick="closeModal()">Cancelar</button></div>';
   document.getElementById('modal').classList.add('open');
   await poblarSelectorRegiones('gRegionesContainer', []);
-  updateSelectedRegionsDisplay('gRegionesContainer');
 }
 
 function saveNewGerente(){
