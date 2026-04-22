@@ -632,7 +632,8 @@ function _sbLoad(){
     var gerenteUserId = window._gerenteProfile ? window._gerenteProfile.user_id : null;
     if(!gerenteUserId || !sbClient) return Promise.resolve([]);
     return sbClient.from('gerente_regiones')
-      .select('region_id').eq('gerente_id', gerenteUserId)
+      .select('region_id')
+      .eq('gerente_id', window._gerenteProfile.id) // FIX: Se usa ID numérico (BigInt) en lugar de UUID
       .then(function(res){
         var regionIds = [];
         if(res.data) regionIds = res.data.map(function(r){ return r.region_id; });
