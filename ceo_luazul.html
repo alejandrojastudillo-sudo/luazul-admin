@@ -2624,9 +2624,18 @@ function saveGerPass(gid, idx){
 function saveVendPass(vid){
   var pass=(document.getElementById('vpw-'+vid)||{}).value||'';
   if(!pass){showToast('⚠️ Contraseña vacía');return;}
-  // Nota: cambiar contraseña de otro usuario requiere Service Role Key (backend).
-  // Para reset de contraseña usar Supabase Dashboard o enviar email de reset.
-  showToast('ℹ️ Para cambiar contraseña de asesores, usá el Dashboard de Supabase → Auth → Users.');
+  if(!vid||vid===''){showToast('⚠️ ID de vendedor inválido');return;}
+  var email_badge=pass.split('@')[0];
+  var actualEmail='';try{var vendido=vend().find(function(v){return String(v.user_id)===String(vid);});actualEmail=vendido?vendido.email:'';}catch(e){}
+  if(!sbClient){showToast('❌ Supabase no disponible');return;}
+  sbClient.from('staff_profiles').update({badge:actualEmail}).eq('user_id',vid)
+    .then(function(res){
+      if(res.error)throw res.error;
+      var idx=(_cacheVendedores||[]).findIndex(function(v){return String(v.user_id)===String(vid);});
+      if(idx>=0)_cacheVendedores[idx].email=actualEmail;
+      showToast('✅ Email de asesor actualizado');
+    })
+    .catch(function(e){showToast('❌ Error: '+(e.message||''));});
 }
 
 // ── RECAUDACIÓN MENSUAL ───────────────────────────────
@@ -2666,7 +2675,8 @@ function renderMensual(){
   }
   var mn=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
   var values=keys.map(function(k){return monthly[k]?monthly[k].total:0;});
-  var maxV=Math.max.apply(null,values)||1;
+  var maxV=values.length?Math.max.apply(null,values):1;
+  if(!maxV||maxV===0)maxV=1;
   var total12=values.reduce(function(s,v){return s+v;},0);
   var avg12=total12/Math.max(1,values.length);
   var lastMonth=values[values.length-2]||0;
@@ -3377,8 +3387,8 @@ function rechazarPago(clientId, cuotaKey, dbKey){
 
       // Notificar al GERENTE (desligando al asesor de la parte administrativa)
       var c = (_cacheClientes||[]).find(function(x){ return String(x.id) === String(clientId); });
-      var v = c ? (_cacheVendedores||[]).find(function(x){ return String(x.id) === String(c.seller_id); }) : null;
-      var g = v ? (_cacheGerentes||[]).find(function(x){ return String(x.id) === String(v.manager_id); }) : null;
+      var v = c ? (_cacheVendedores||[]).find(function(x){ return String(x.user_id) === String(c.seller_id); }) : null;
+      var g = v ? (_cacheGerentes||[]).find(function(x){ return String(x.user_id) === String(v.manager_id); }) : null;
 
       if(g && g.user_id) {
         return sbClient.from('notificaciones').insert([{
