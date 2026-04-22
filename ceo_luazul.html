@@ -896,6 +896,21 @@ function ger(){return _cacheGerentes||[];}
 function vend(){return _cacheVendedores||[];}
 function cli(){return (_cacheClientes||[]).map(enrich);}
 
+/** 
+ * Recorre los datos de regiones e inserta las opciones en el select indicado
+ */
+function poblarSelectorRegiones(selectId, selectedIds) {
+  var sel = document.getElementById(selectId);
+  if (!sel) return;
+  var rs = reg();
+  var html = '<option value="">— Seleccionar regiones —</option>';
+  rs.forEach(function(r) {
+    var isSelected = (selectedIds && selectedIds.map(String).indexOf(String(r.id)) !== -1) ? 'selected' : '';
+    html += '<option value="' + r.id + '" ' + isSelected + '>' + esc(r.bandera) + ' ' + esc(r.nombre) + '</option>';
+  });
+  sel.innerHTML = html;
+}
+
 // ── SELECTOR DE REGIONES con checkboxes por país ───────
 function buildRegionCheckboxes(selectedIds){
   selectedIds=selectedIds||[];
@@ -2319,7 +2334,7 @@ function openAddGerente(){
       '<input class="medit" id="gCBU" placeholder="CBU o Alias" style="font-family:monospace;" /></div>'+
     '<div class="mitem" style="grid-column:span 2;">'+
       '<div class="ml" style="margin-bottom:8px;">🌎 Regiones a cargo <span style="color:var(--muted);font-weight:400;">(puede seleccionar varias)</span></div>'+
-      buildRegionCheckboxes([])+
+      '<select class="msel" id="gRegiones" multiple style="width:100%; min-height:100px; background:rgba(3,6,15,1); border:1px solid var(--border2); color:white; border-radius:8px;"></select>'+
     '</div>'+
     '</div>'+
     '</div>'+
@@ -2327,13 +2342,23 @@ function openAddGerente(){
     '<button class="mbtn purple" onclick="saveNewGerente()">✅ Crear Gerente</button>'+
     '<button class="mbtn ghost" onclick="closeModal()">Cancelar</button></div>';
   document.getElementById('modal').classList.add('open');
+  poblarSelectorRegiones('gRegiones', []);
 }
 
 function saveNewGerente(){
   var nombre = (document.getElementById('gNombre').value||'').trim();
   var email  = (document.getElementById('gEmail').value||'').trim().toLowerCase();
   var pass   = (document.getElementById('gPass').value||'').trim();
-  var regionIds = getSelectedRegionIds();
+
+  // Obtener IDs seleccionados del nuevo selector múltiple
+  var sel = document.getElementById('gRegiones');
+  var regionIds = [];
+  if (sel) {
+    for (var i = 0; i < sel.selectedOptions.length; i++) {
+      if (sel.selectedOptions[i].value) regionIds.push(sel.selectedOptions[i].value);
+    }
+  }
+
   if(!nombre||!email||!pass){ showToast('⚠️ Nombre, email y contraseña son obligatorios'); return; }
 
   var btn = document.querySelector('#modal .mbtn.purple');
@@ -2555,20 +2580,29 @@ function openEditGerente(gid){
     '<div class="mitem" style="grid-column:span 2;"><div class="ml">💰 CBU / Alias bancario</div><input class="medit" id="egCBU" value="'+(g.cbu||'')+'" style="font-family:monospace;" /></div>'+
     '<div class="mitem" style="grid-column:span 2;">'+
       '<div class="ml" style="margin-bottom:8px;">🌎 Regiones a cargo <span style="color:var(--muted);font-weight:400;">(puede seleccionar varias)</span></div>'+
-      buildRegionCheckboxes(g.region_ids||[])+
+      '<select class="msel" id="egRegiones" multiple style="width:100%; min-height:100px; background:rgba(3,6,15,1); border:1px solid var(--border2); color:white; border-radius:8px;"></select>'+
     '</div>'+
     '</div></div>'+
     '<div class="mact">'+
     '<button class="mbtn purple" onclick="saveEditGerente(\''+gid+'\')">💾 Guardar cambios</button>'+
     '<button class="mbtn ghost" onclick="openGerDetail(\''+gid+'\')">← Volver</button></div>';
   document.getElementById('modal').classList.add('open');
+  poblarSelectorRegiones('egRegiones', g.region_ids || []);
 }
 
 function saveEditGerente(gid){
   var g = (_cacheGerentes||[]).find(function(x){ return String(x.user_id)===String(gid); });
   if(!g){ showToast('⚠️ Gerente no encontrado'); return; }
   var nombres = ((document.getElementById('egNombre').value||'').trim().toUpperCase()||g.nombre).split(' ');
-  var newRegionIds = getSelectedRegionIds();
+
+  var sel = document.getElementById('egRegiones');
+  var newRegionIds = [];
+  if (sel) {
+    for (var i = 0; i < sel.selectedOptions.length; i++) {
+      if (sel.selectedOptions[i].value) newRegionIds.push(sel.selectedOptions[i].value);
+    }
+  }
+
   var upd = {
     nombre:    nombres[0],
     apellido:  nombres.slice(1).join(' ')||'',
