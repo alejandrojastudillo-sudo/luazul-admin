@@ -904,13 +904,14 @@ async function poblarSelectorRegiones(selectId, selectedIds) {
   if (!sel) return;
   var rs = reg();
 
-  // Si reg() está vacío, forzamos la carga desde Supabase para garantizar los datos (Checkpoint v3.1)
+  // Si reg() está vacío, realizamos consulta directa a Supabase (Checkpoint v3.2)
   if (!rs || rs.length === 0) {
-    const { data, error } = await sbClient.from('regiones').select('*').eq('activo', true);
+    const { data, error } = await sbClient.from('regiones').select('*');
     if (!error && data) {
       _cacheRegiones = data.map(function(r) {
-        return { id: r.id, nombre: r.nombre, bandera: r.bandera || '🌎', pais: r.pais || '', color: r.color || '#a78bfa', activo: r.activo };
+        return { id: r.id, nombre: r.nombre, bandera: r.bandera || '🌎', pais: r.pais || '', color: r.color || '#a78bfa' };
       });
+      // Actualizamos el almacenamiento local para persistencia
       dbs(RK, _cacheRegiones);
       rs = _cacheRegiones;
     }
@@ -918,8 +919,8 @@ async function poblarSelectorRegiones(selectId, selectedIds) {
 
   var html = '<option value="">— Seleccionar regiones —</option>';
   (rs || []).forEach(function(r) {
-    var isSelected = (selectedIds && selectedIds.map(String).indexOf(String(r.id)) !== -1) ? 'selected' : '';
-    html += '<option value="' + r.id + '" ' + isSelected + '>' + esc(r.bandera) + ' ' + esc(r.nombre) + '</option>';
+    var isSelected = (selectedIds && selectedIds.length > 0 && selectedIds.map(String).indexOf(String(r.id)) !== -1) ? 'selected' : '';
+    html += '<option value="' + r.id + '" ' + isSelected + '>' + r.bandera + ' ' + r.nombre + '</option>';
   });
   sel.innerHTML = html;
 }
@@ -2357,60 +2358,57 @@ async function openAddGerente(){
   await poblarSelectorRegiones('gRegiones', []);
 }
 
-function saveNewGerente(){
-  var nombre = (document.getElementById('gNombre').value||'').trim();
-  var email  = (document.getElementById('gEmail').value||'').trim().toLowerCase();
-  var pass   = (document.getElementById('gPass').value||'').trim();
-
-  // Obtener IDs seleccionados del nuevo selector múltiple
-  var sel = document.getElementById('gRegiones');
-  var regionIds = [];
-  if (sel) {
-    for (var i = 0; i < sel.selectedOptions.length; i++) {
-      if (sel.selectedOptions[i].value) regionIds.push(sel.selectedOptions[i].value);
-    }
-  }
-
-  if(!nombre||!email||!pass){ showToast('⚠️ Nombre, email y contraseña son obligatorios'); return; }
-
+async function saveNewGerente(){
   var btn = document.querySelector('#modal .mbtn.purple');
-  if(btn){btn.disabled=true; btn.textContent='⏳ Creando...';}
-  function onDone(){ if(btn){btn.disabled=false; btn.textContent='✅ Crear Gerente';} }
-
-  var nombresArr = nombre.split(' ');
-  var primerNombre = nombresArr[0];
-  var apellidoStr  = nombresArr.slice(1).join(' ') || '';
-
-  // ── LIMPIEZA DE SESIÓN ANTES DEL SIGNUP ────────────────────────────────────
-  // Evita que metadatos de la sesión actual del CEO contaminen al nuevo Gerente.
-  // Re-autenticamos al CEO después del signUp para restaurar su sesión.
-  var _ceoEmail = null;
-  var _ceoPass  = null;
   try {
-    _ceoEmail = document.getElementById('cUser') ? document.getElementById('cUser').value.trim().toLowerCase() : null;
-    _ceoPass  = document.getElementById('cPass') ? document.getElementById('cPass').value.trim() : null;
-  } catch(e){}
+    var nombre = (document.getElementById('gNombre').value||'').trim();
+    var email  = (document.getElementById('gEmail').value||'').trim().toLowerCase();
+    var pass   = (document.getElementById('gPass').value||'').trim();
 
-  // Guardia de Seguridad: Evitar pérdida de sesión (Session Stress Test)
-  if(!_ceoEmail || !_ceoPass){
-    showToast('⚠️ Por seguridad, ingresá tus credenciales en el login para validar la creación de Gerentes.');
-    return;
-  }
+    // Obtener IDs seleccionados como un Arreglo de enteros
+    var sel = document.getElementById('gRegiones');
+    var regionIds = [];
+    if (sel) {
+      for (var i = 0; i < sel.selectedOptions.length; i++) {
+        if (sel.selectedOptions[i].value) regionIds.push(parseInt(sel.selectedOptions[i].value));
+      }
+    }
 
-  sbClient.auth.signOut().then(function() {
-  return sbClient.auth.signUp({ email: email, password: pass,
-    options:{ data:{ nombre: primerNombre, apellido: apellidoStr, role_id: parseInt(2) } }
-  });
-  })
-  .then(function(signUp){
-    if(signUp.error) throw signUp.error;
-    var uid = signUp.data.user ? signUp.data.user.id : null;
-    if(!uid) showToast('⚠️ El email puede requerir confirmación. El gerente debe confirmar su email antes de ingresar.');
-    var nombres = nombresArr;
+    if(!nombre||!email||!pass){ showToast('⚠️ Nombre, email y contraseña son obligatorios'); return; }
+
+    if(btn){btn.disabled=true; btn.textContent='⏳ Creando...';}
+
+    var nombresArr = nombre.split(' ');
+    var primerNombre = nombresArr[0];
+    var apellidoStr  = nombresArr.slice(1).join(' ') || '';
+
+    // Capturar credenciales del CEO para restaurar sesión
+    var _ceoEmail = (document.getElementById('cUser').value||'').trim().toLowerCase();
+    var _ceoPass  = (document.getElementById('cPass').value||'').trim();
+
+    if(!_ceoEmail || !_ceoPass){
+      showToast('⚠️ Por seguridad, ingresá tus credenciales en el login para validar la creación de Gerentes.');
+      if(btn){btn.disabled=false; btn.textContent='✅ Crear Gerente';}
+      return;
+    }
+
+    // 1. Cerrar sesión del CEO temporalmente para el signUp
+    await sbClient.auth.signOut();
+
+    // 2. Registrar en Supabase Auth
+    const { data: signUpData, error: signUpErr } = await sbClient.auth.signUp({
+      email: email, password: pass,
+      options:{ data:{ nombre: primerNombre, apellido: apellidoStr, role_id: parseInt(3) } }
+    });
+    if(signUpErr) throw signUpErr;
+
+    var uid = signUpData.user ? signUpData.user.id : null;
+
+    // 3. Insertar en staff_profiles (con la columna region_ids como array)
     var profileData = {
       role_id:    parseInt(ROLE_MANAGER),
-      nombre:     nombres[0],
-      apellido:   nombres.slice(1).join(' ')||'',
+      nombre:     primerNombre,
+      apellido:   apellidoStr,
       badge:      email, activo: true,
       ciudad:     (document.getElementById('gCiudad').value||'').trim()||null,
       telefono1:  (document.getElementById('gTel1').value||'').trim()||null,
@@ -2418,68 +2416,39 @@ function saveNewGerente(){
       fecha_alta: new Date().toISOString().slice(0,10),
       domicilio:  (document.getElementById('gDomicilio').value||'').trim()||null,
       cbu:        (document.getElementById('gCBU').value||'').trim()||null,
-      com_pct: 0, comprobantes_json: '[]'
+      com_pct: 0, comprobantes_json: '[]',
+      region_ids: regionIds, // Guardado como Array (Checkpoint v3.3)
+      user_id:    uid || undefined
     };
-    if(uid) profileData.user_id = uid;
-    return sbClient.from('staff_profiles').insert(profileData).select().single();
-  })
-  .then(function(ins){
-    if(ins.error) throw ins.error;
-    var newGer = mapGerente(ins.data);
-    newGer.region_ids = regionIds;
+
+    const { data: insData, error: insErr } = await sbClient.from('staff_profiles').insert(profileData).select().single();
+    if(insErr) throw insErr;
+
+    // 4. Insertar relaciones en gerente_regiones para compatibilidad SQL
     if(regionIds.length > 0){
-      var rels = regionIds.map(function(rid){ return{gerente_id:ins.data.user_id, region_id:parseInt(rid)}; });
-      return sbClient.from('gerente_regiones').insert(rels).then(function(){ return newGer; });
+      var rels = regionIds.map(function(rid){ return{gerente_id:uid, region_id:parseInt(rid)}; });
+      await sbClient.from('gerente_regiones').insert(rels);
     }
-    return newGer;
-  })
-  .then(function(newGer){
-    var rNombres = regionIds.map(function(rid){
-      var r=reg().find(function(x){return String(x.id)===String(rid);});
-      return r?r.nombre:'';
-    }).filter(Boolean).join(', ');
-    showToast('✅ Gerente '+nombre+' creado'+(rNombres?' · '+rNombres:''));
+
+    // 5. Restaurar sesión del CEO
+    await sbClient.auth.signInWithPassword({ email: _ceoEmail, password: _ceoPass });
+    
+    showToast('✅ Gerente '+nombre+' creado con éxito');
     closeModal();
-    onDone();
-    // ── RESTAURAR SESIÓN CEO ─────────────────────────────────────────────────
-    // Después del signOut+signUp, re-autenticamos al CEO para que el panel
-    // siga funcionando sin que tenga que hacer login nuevamente.
-    if (_ceoEmail && _ceoPass) {
-      sbClient.auth.signInWithPassword({ email: _ceoEmail, password: _ceoPass })
-        .then(function(reAuth) {
-          if (!reAuth.error) {
-            _ceoUid = String(reAuth.data.user.id);
-          }
-          cargarDatosSupabase().then(function(){ renderAll(); renderPasswords(); });
-        })
-        .catch(function() {
-          // Si falla el re-auth, recargar igual — el CEO puede volver a loguearse
-          cargarDatosSupabase().then(function(){ renderAll(); renderPasswords(); });
-        });
-    } else {
-      cargarDatosSupabase().then(function(){ renderAll(); renderPasswords(); });
-    }
-  })
-  .catch(function(e){
-      console.error('saveNewGerente - Detalle Técnico del Error:', {
-        message: e.message,
-        details: e.details,
-        hint: e.hint,
-        status: e.status,
-        raw: e
-      });
-    // Si el signUp falla, restaurar sesión CEO igual
+    cargarDatosSupabase().then(function(){ renderAll(); renderPasswords(); });
+
+  } catch (error) {
+    console.error('Error al crear gerente:', error);
+    alert('❌ Error de Supabase: ' + (error.message || 'Ocurrió un error inesperado'));
+    if(btn){btn.disabled=false; btn.textContent='✅ Crear Gerente';}
+
+    // Intentar restaurar sesión CEO aunque falle el registro
+    var _ceoEmail = (document.getElementById('cUser').value||'').trim().toLowerCase();
+    var _ceoPass  = (document.getElementById('cPass').value||'').trim();
     if (_ceoEmail && _ceoPass) {
       sbClient.auth.signInWithPassword({ email: _ceoEmail, password: _ceoPass }).catch(function(){});
     }
-    var msg = e.message || 'Verificá los datos';
-    if(msg.indexOf('already registered') !== -1 || msg.indexOf('already been registered') !== -1)
-      msg = 'Ese email ya existe en Supabase Auth. Usá otro email o borrá el usuario anterior desde el Dashboard.';
-    else if(msg.indexOf('duplicate') !== -1 || msg.indexOf('unique') !== -1)
-      msg = 'Ya existe un perfil con esos datos. Verificá email o usuario.';
-    showToast('❌ Error al crear gerente: ' + msg);
-    onDone();
-  });
+  }
 }
 
 function openGerDetail(gid){
