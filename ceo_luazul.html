@@ -899,12 +899,25 @@ function cli(){return (_cacheClientes||[]).map(enrich);}
 /** 
  * Recorre los datos de regiones e inserta las opciones en el select indicado
  */
-function poblarSelectorRegiones(selectId, selectedIds) {
+async function poblarSelectorRegiones(selectId, selectedIds) {
   var sel = document.getElementById(selectId);
   if (!sel) return;
   var rs = reg();
+
+  // Si reg() está vacío, forzamos la carga desde Supabase para garantizar los datos (Checkpoint v3.1)
+  if (!rs || rs.length === 0) {
+    const { data, error } = await sbClient.from('regiones').select('*').eq('activo', true);
+    if (!error && data) {
+      _cacheRegiones = data.map(function(r) {
+        return { id: r.id, nombre: r.nombre, bandera: r.bandera || '🌎', pais: r.pais || '', color: r.color || '#a78bfa', activo: r.activo };
+      });
+      dbs(RK, _cacheRegiones);
+      rs = _cacheRegiones;
+    }
+  }
+
   var html = '<option value="">— Seleccionar regiones —</option>';
-  rs.forEach(function(r) {
+  (rs || []).forEach(function(r) {
     var isSelected = (selectedIds && selectedIds.map(String).indexOf(String(r.id)) !== -1) ? 'selected' : '';
     html += '<option value="' + r.id + '" ' + isSelected + '>' + esc(r.bandera) + ' ' + esc(r.nombre) + '</option>';
   });
@@ -2315,8 +2328,7 @@ function saveEditVendCeo(vid){
 }
 
 // ── GESTIÓN DE GERENTES ───────────────────────────────
-
-function openAddGerente(){
+async function openAddGerente(){
   document.getElementById('mbox').innerHTML =
     '<div class="mhead"><div><h2>👔 Nuevo Gerente Regional</h2><p>Completá los datos del nuevo gerente</p></div>'+
     '<button class="mclose" onclick="closeModal()">✕</button></div>'+
@@ -2342,7 +2354,7 @@ function openAddGerente(){
     '<button class="mbtn purple" onclick="saveNewGerente()">✅ Crear Gerente</button>'+
     '<button class="mbtn ghost" onclick="closeModal()">Cancelar</button></div>';
   document.getElementById('modal').classList.add('open');
-  poblarSelectorRegiones('gRegiones', []);
+  await poblarSelectorRegiones('gRegiones', []);
 }
 
 function saveNewGerente(){
@@ -2563,7 +2575,7 @@ function borrarComprobante(gid, idx){
   openGerDetail(gid);
 }
 
-function openEditGerente(gid){
+async function openEditGerente(gid){
   var g = ger().find(function(x){ return String(x.user_id)===String(gid); });
   if(!g){ showToast('⚠️ Gerente no encontrado'); return; }
   document.getElementById('mbox').innerHTML =
@@ -2587,7 +2599,7 @@ function openEditGerente(gid){
     '<button class="mbtn purple" onclick="saveEditGerente(\''+gid+'\')">💾 Guardar cambios</button>'+
     '<button class="mbtn ghost" onclick="openGerDetail(\''+gid+'\')">← Volver</button></div>';
   document.getElementById('modal').classList.add('open');
-  poblarSelectorRegiones('egRegiones', g.region_ids || []);
+  await poblarSelectorRegiones('egRegiones', g.region_ids || []);
 }
 
 function saveEditGerente(gid){
