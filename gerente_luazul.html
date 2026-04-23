@@ -479,7 +479,7 @@ function safeUUID(id){
 var DB_KEY='luazul_db', VK='luazul_vendors', NK='luazul_notifs';
 
 // ── SUPABASE TABLE MAP (tablas reales del proyecto) ────
-// staff_profiles → vendedores/asesores (role_id=2) y gerentes (role_id=3)
+// staff_profiles → vendedores/asesores (role_id=3) y gerentes (role_id=2)
 // clientes       → clientes
 // pagos          → pagos (reemplaza notificaciones de pago)
 // regiones       → regiones
@@ -860,7 +860,7 @@ function gLogin(){
     })
     .then(function(p){
       if(p.error || !p.data) throw new Error('Perfil de gerente no encontrado. Contactá al administrador.');
-      if(String(p.data.role_id) !== '3') throw new Error('Este acceso es exclusivo para gerentes (role_id=3).');
+      if(String(p.data.role_id) !== '2') throw new Error('Este acceso es exclusivo para gerentes (role_id=2).');
       window._gerenteProfile = p.data;
       LZ_AUTH.setPanelSession(LZ_AUTH.PANEL_KEYS.gerente);
       LZ_AUTH._showApp('loginWrap','app');
@@ -1092,7 +1092,7 @@ function initApp(){
         return sbClient.from('staff_profiles')
           .select('*').eq('user_id', session.user.id).single()
           .then(function(p){
-            if(p.data && String(p.data.role_id) === '3'){
+            if(p.data && String(p.data.role_id) === '2'){
               window._gerenteProfile = p.data;
             } else {
               // Bloqueo: sesión activa pero sin rol de gerente (rol cruzado)
@@ -1454,10 +1454,10 @@ function saveVendor(){
   //    Esto evita que Supabase herede metadatos de la sesión activa al nuevo usuario.
   sbClient.auth.signOut().then(function() {
 
-  // 2. Registrar en Supabase Auth con role_id:2 fijo (Vendedor)
+  // 2. Registrar en Supabase Auth con role_id:3 fijo (Vendedor)
   return sbClient.auth.signUp({
     email: e, password: p,
-    options:{ data:{ nombre: primerNombre, apellido: apellidoStr, role_id: 2 } }
+    options:{ data:{ nombre: primerNombre, apellido: apellidoStr, role_id: 3 } }
   });
 
   })
@@ -1472,7 +1472,7 @@ function saveVendor(){
     //    manager_id (BIGINT del gerente) es la clave jerárquica en staff_profiles
     var nombres = nombresArr;
     return sbClient.from('staff_profiles').insert({
-      role_id:    parseInt(2) || 2,
+      role_id:    parseInt(3) || 3,
       nombre:     nombres[0],
       apellido:   nombres.slice(1).join(' ') || '',
       badge:      e,
@@ -3370,7 +3370,7 @@ function showToast(msg,dur){var t=document.getElementById('toast');t.textContent
       }
 
       /* 2. Verificar perfil Supabase en memoria — comparación por String UUID (Checkpoint 3.3) */
-      if (window._gerenteProfile && String(window._gerenteProfile.role_id) === '3') {
+      if (window._gerenteProfile && String(window._gerenteProfile.role_id) === '2') {
         LZ_AUTH._showApp(loginWrapId, appId);
         if (onSuccess) onSuccess();
         return true;
