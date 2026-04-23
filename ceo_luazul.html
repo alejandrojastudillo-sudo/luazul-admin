@@ -822,69 +822,50 @@ function cLogout(){
 
 document.addEventListener('DOMContentLoaded', function() {
     // --- PARCHE DE SEGURIDAD LOGIN ---
-    const cPassElem = document.getElementById('cPass');
+   const cPassElem = document.getElementById('cPass');
     if (cPassElem) {
         cPassElem.addEventListener('keypress', function(e) {
             if (e.key === 'Enter') cLogin();
         });
     }
 
-    // [SUPABASE PHASE 2] – Verificar sesión activa en Supabase al cargar
+    // 2. Validación de sesión automática (Falla 0)
     if (sbClient) {
         sbClient.auth.getSession().then(function(result) {
-            var session = result.data && result.data.session;
+            const session = result.data && result.data.session;
             if (session && session.user) {
-                var email = session.user.email.toLowerCase();
-                var uid = String(session.user.id);
+                const email = session.user.email.toLowerCase();
+                const uid = String(session.user.id);
 
-                // --- GUARDIA v3.2: email allowlist + role_id=1 en profiles ---
+                // Verificamos si el email está autorizado como CEO
                 if (CEO_ALLOWED_EMAILS.indexOf(email) !== -1) {
                     sbClient.from('staff_profiles')
                         .select('role_id, nombre')
                         .eq('user_id', uid)
                         .single()
                         .then(function(profRes) {
-                            if (profRes.error || !profRes.data || String(profRes.data.role_id) !== '1') {
-                                // Sesión activa pero NO es CEO – expulsar y limpiar
+                            if (!profRes.error && profRes.data && String(profRes.data.role_id) === '1') {
+                                // Sesión válida: Guardamos y activamos App
+                                _ceoUid = uid;
+                                sessionStorage.setItem('luazul_ceo', '1');
+                                sessionStorage.setItem('luazul_ceo_nombre', profRes.data.nombre || 'CEO');
+                                
+                                document.getElementById('loginWrap').style.display = 'none';
+                                document.getElementById('app').style.display = 'block';
+                                initApp();
+                            } else {
+                                // No es CEO: Limpieza profunda
                                 sbClient.auth.signOut();
-                                try { 
-                                    sessionStorage.removeItem('luazul_ceo'); 
-                                    sessionStorage.removeItem('luazul_ceo_nombre'); 
-                                } catch(e) {}
-                                return;
+                                sessionStorage.clear();
                             }
-                            var nombre = profRes.data.nombre || email.split('@')[0];
-                            _ceoUid = uid;
-                            try { 
-                                sessionStorage.setItem('luazul_ceo','1'); 
-                                sessionStorage.setItem('luazul_ceo_nombre', nombre); 
-                            } catch(e) {}
-                            
-                            var lw = document.getElementById('loginWrap');
-                            var ap = document.getElementById('app');
-                            if (lw) lw.style.display = 'none';
-                            if (ap) ap.style.display = 'block';
-                            initApp();
                         });
+                } else {
+                    // Email no permitido
+                    sbClient.auth.signOut();
                 }
-        // Email no está en allowlist — cerrar sesión sucia
-        sbClient.auth.signOut();
-        try { sessionStorage.removeItem('luazul_ceo'); sessionStorage.removeItem('luazul_ceo_nombre'); } catch(e){}
-      }
-      // Sin sesión Supabase válida — mostrar login limpio (sin fallback sessionStorage)
-    });
-  } else {
-    // Sin Supabase — mantener compatibilidad
-    var sesionActiva = false;
-    try { sesionActiva = sessionStorage.getItem('luazul_ceo') === '1'; } catch(e){}
-    if (sesionActiva) {
-      var lw = document.getElementById('loginWrap');
-      var ap = document.getElementById('app');
-      if (lw) lw.style.display = 'none';
-      if (ap) ap.style.display = 'block';
-      initApp();
+            }
+        });
     }
-  }
 });
 
 // ── INIT ──────────────────────────────────────────────
