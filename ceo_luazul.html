@@ -2428,11 +2428,12 @@ async function saveNewGerente(){
       // Se omite el bloqueo por seguridad para facilitar la inauguración
     }
 
-    // 1. Cerrar sesión del CEO temporalmente para el signUp
-    await sbClient.auth.signOut();
+    // ── SEGURIDAD DE SESIÓN: Uso de cliente temporal para evitar colisión de tokens ──
+    var sbTemp = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
+    });
 
-    // 2. Registrar en Supabase Auth
-    const { data: signUpData, error: signUpErr } = await sbClient.auth.signUp({
+    const { data: signUpData, error: signUpErr } = await sbTemp.auth.signUp({
       email: email, password: pass,
       options:{ data:{ nombre: primerNombre, apellido: apellidoStr, role_id: ROLE_MANAGER } }
     });

@@ -645,7 +645,11 @@ function _sbLoad(){
     regionIds = regionIds || [];
     // 3. Cargar regiones
     var p3 = sbClient
-      ? sbClient.from('regiones').select('*').eq('activo', true).then(function(res){
+      ? sbClient.from('regiones')
+        .select('*')
+        .eq('activo', true)
+        .in('id', regionIds) // ── Mirror-Clean v1.0: Soporte multirregión con .in() ──
+        .then(function(res){
           if(res.data) _memCache['luazul_regiones'] = res.data;
         })
       : Promise.resolve();
