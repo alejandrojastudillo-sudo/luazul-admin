@@ -1447,29 +1447,28 @@ function saveVendor(){
     email: e, 
     password: p,
     options: { data: { nombre: nombresArr[0], role_id: 3 } }
-  })
-  .then(function(res){
+  }).then(function(res){
     if(res.error) throw res.error;
     var uid = res.data.user.id;
 
-    // 3. Insertar perfil con todos tus campos originales
+    // 3. Insertar perfil usando los nombres de columna que tu planilla YA busca
     return sbClient.from('staff_profiles').insert({
       user_id: uid,
-      role_id: 3, // Rol Asesor
+      role_id: 3, // Regla de Oro: Asesor
       nombre: nombresArr[0],
       apellido: nombresArr.slice(1).join(' ') || '',
-      badge: e,
+      badge: e, // Email/Badge
       activo: true,
       region_id: regionId,
       manager_id: _gerenteId,
-      telefono1: (document.getElementById('vT').value||'').trim() || null,
-      telefono2: (document.getElementById('vT2').value||'').trim() || null,
+      // Cambiamos a 'telefono01' y 'telefono02' para que coincidan con tu frontend
+      telefono01: (document.getElementById('vT').value||'').trim() || null,
+      telefono02: (document.getElementById('vT2').value||'').trim() || null,
       domicilio: (document.getElementById('vDom').value||'').trim() || null,
       cbu: (document.getElementById('vCBU').value||'').trim() || null,
       fecha_alta: new Date().toISOString().slice(0,10),
       comprobantes_json: '[]'
-    }).select('*').single();
-  })
+    }).select('*').single(); // Traemos TODO para asegurar que no falte nada })
   .then(function(ins){
     if(ins.error) throw ins.error;
     showToast('✅ Asesor creado exitosamente');
