@@ -630,15 +630,11 @@ function _sbLoad(){
   return step1.then(function(){
     // 2. Regiones del gerente
     var gerenteUserId = window._gerenteProfile ? window._gerenteProfile.user_id : null;
-    if(!gerenteUserId || !sbClient) return Promise.resolve([]);
-    return sbClient.from('gerente_regiones')
-      .select('region_id')
-      .eq('gerente_id', window._gerenteProfile.id) // FIX: Se usa ID numérico (BigInt) en lugar de UUID
-      .then(function(res){
-        var regionIds = [];
-        if(res.data) regionIds = res.data.map(function(r){ return r.region_id; });
-        window._gerenteRegionIds = regionIds;
-        return regionIds;
+    if(!window._gerenteProfile || !sbClient) return Promise.resolve([]);
+    return sbClient.from('gerente_regiones').select('region_id').eq('gerente_id', parseInt(window._gerenteProfile.id))
+      .then(function(res){ 
+        window._gerenteRegionIds = (res.data || []).map(function(r){ return r.region_id; }); 
+        return window._gerenteRegionIds; 
       });
   })
   .then(function(regionIds){
@@ -659,11 +655,11 @@ function _sbLoad(){
     // que p4 aún no terminó de escribir → sellerIds siempre vacío en la primera carga.
     var p4p5 = sbClient
       ? (function(){
-          var gerenteId = window._gerenteProfile ? parseInt(window._gerenteProfile.id) : null;
+          var gerenteId = window._gerenteProfile ? parseInt(window._gerenteProfile.id, 10) : null;
           if(!gerenteId){ _memCache[VK] = []; _memCache[DB_KEY] = []; return Promise.resolve(); }
           return sbClient.from('staff_profiles')
             .select('*')
-            .eq('role_id', 3) // Regla de Oro: Vendedores son 3
+            .eq('role_id', 3) // Regla de Oro: Subordinados son Rol 3
             .eq('manager_id', gerenteId)
             .then(function(res){
               _memCache[VK] = (res.data || []).map(mapVendorFromSB);
@@ -860,7 +856,7 @@ function gLogin(){
     })
     .then(function(p){
       if(p.error || !p.data) throw new Error('Perfil de gerente no encontrado. Contactá al administrador.');
-      if(String(p.data.role_id) !== '3') throw new Error('Este acceso es exclusivo para gerentes (role_id=3).');
+      if(String(p.data.role_id) !== '2') throw new Error('Acceso exclusivo para Gerencia (Rol 2).');
       window._gerenteProfile = p.data;
       LZ_AUTH.setPanelSession(LZ_AUTH.PANEL_KEYS.gerente);
       LZ_AUTH._showApp('loginWrap','app');
@@ -1876,9 +1872,9 @@ function gerenteUpdate(id){
   var nuevoVid     = document.getElementById('gv').value;
 
   _sbUpdateClient(id, {
-    cuotas_pagadas: nuevasCuotas,
+    cuotas_pagadas: parseInt(nuevasCuotas, 10),
     estado:         nuevoEstado,
-    seller_id:      nuevoVid
+    seller_id:      parseInt(nuevoVid, 10)
   }).then(function(){
     var cs = (_memCache[DB_KEY]||[]).map(function(c){
       if(c.id==id){ c.cuotas_pagadas=nuevasCuotas; c.estado=nuevoEstado; c.vid=nuevoVid; }

@@ -1801,6 +1801,7 @@ function saveNewClienteCeo(){
   var vendId  = document.getElementById('ccVendedor').value||null;
   var regionId= document.getElementById('ccRegion').value||null;
   if(!nombre||!email){ showToast('⚠️ Nombre y email son obligatorios'); return; }
+  if(!nombre||!email||!vendId){ showToast('❌ ERROR: Debe asignar un Vendedor responsable.'); return; }
 
   var btn = document.querySelector('#modal .mbtn.purple');
   if(btn){ btn.disabled=true; btn.textContent='⏳ Creando...'; }
@@ -2137,13 +2138,15 @@ function saveNewVendorCeo(){
   } catch(e){}
 
   // Guardia de Seguridad: Evitar pérdida de sesión (Session Stress Test)
-  if(!_ceoEmailV || !_ceoPassV){
-    showToast('⚠️ Por seguridad, ingresá tus credenciales en el login para validar la creación de Asesores.');
-    return;
-  }
+  // ── SEGURIDAD DE SESIÓN: Uso de cliente temporal para evitar colisión de tokens ──
+  var sbTemp = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
+  });
 
-  sbClient.auth.signOut().then(function() {
-  return sbClient.auth.signUp({ email: email, password: pass, options:{ data:{ nombre: primerNombre, apellido: apellidoStr, role_id: 3 } } });
+  sbTemp.auth.signUp({ 
+    email: email, 
+    password: pass, 
+    options:{ data:{ nombre: primerNombre, apellido: apellidoStr, role_id: 3 } } 
   })
     .then(function(signUp){
       if(signUp.error) throw signUp.error;

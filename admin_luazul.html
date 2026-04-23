@@ -903,9 +903,9 @@ function adminLogin() {
               throw new Error('Perfil de asesor no encontrado. Contactá al administrador.');
             });
           }
-          if (profRes.data.role_id !== 2) {
+          if (profRes.data.role_id !== 3) {
             return sbClient.auth.signOut().then(function() {
-              throw new Error('Este acceso es exclusivo para asesores de ventas.');
+              throw new Error('Acceso denegado: Se requiere rol de Asesor (3).');
             });
           }
           // ✅ Vendedor confirmado
@@ -944,7 +944,7 @@ document.addEventListener('DOMContentLoaded', function() {
             .eq('user_id', uid)
             .single()
             .then(function(profRes) {
-              if (profRes.error || !profRes.data || profRes.data.role_id !== 2) {
+              if (profRes.error || !profRes.data || profRes.data.role_id !== 3) {
                 // Sesión activa pero NO es Vendedor — expulsar y limpiar
                 sbClient.auth.signOut();
                 try { sessionStorage.removeItem('luazul_admin'); sessionStorage.removeItem('luazul_asesor_user'); } catch(ex){}
