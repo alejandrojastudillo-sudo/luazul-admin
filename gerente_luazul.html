@@ -585,9 +585,10 @@ function _sbUpdateClient(id, fields){
 // ── SUPABASE DIRECTO: guardar vendor ─────────────────
 function _sbUpdateVendor(id, fields){
   if(!sbClient) return Promise.resolve();
-  // Lock optimista (E1): agrega updated_at para detectar colisiones
   fields.updated_at = new Date().toISOString();
-  return sbClient.from('staff_profiles').update(fields).eq('id', parseInt(id, 10) || null)
+  return sbClient.from('staff_profiles')
+    .update(fields)
+    .eq('id', parseInt(id, 10))
     .then(function(res){
       if(res.error) console.warn('Supabase update staff_profiles:', res.error.message);
     })
@@ -856,7 +857,8 @@ function gLogin(){
     })
     .then(function(p){
       if(p.error || !p.data) throw new Error('Perfil de gerente no encontrado. Contactá al administrador.');
-      if(String(p.data.role_id) !== '2') throw new Error('Acceso exclusivo para Gerencia (Rol 2).');
+      // ✓ CORRECCIÓN: Validación estricta role_id === 2 (Gerente)
+      if(parseInt(p.data.role_id) !== 2) throw new Error('Acceso exclusivo para Gerencia (Rol 2).');
       window._gerenteProfile = p.data;
       LZ_AUTH.setPanelSession(LZ_AUTH.PANEL_KEYS.gerente);
       LZ_AUTH._showApp('loginWrap','app');
@@ -1419,107 +1421,69 @@ function openAddVendor(){
 
 
 function saveVendor(){
-  var n  = (document.getElementById('vN').value||'').trim();
-  var e  = (document.getElementById('vE').value||'').trim().toLowerCase();
-  var p  = (document.getElementById('vP').value||'').trim();
-  if(!n||!e||!p){ showToast('❌ Nombre, email y contraseña son obligatorios'); return; }
-  if(!sbClient){ showToast('❌ Sin conexión a Supabase'); return; }
+  var n = (document.getElementById('vN').value||'').trim();
+  var e = (document.getElementById('vE').value||'').trim().toLowerCase();
+  var p = (document.getElementById('vP').value||'').trim();
+  
+  if(!n || !e || !p){ 
+    showToast('❌ Nombre, email y contraseña son obligatorios'); 
+    return; 
+  }
 
   var btn = document.querySelector('#modal .mbtn.gold');
   if(btn){ btn.disabled=true; btn.textContent='⏳ Creando...'; }
 
-  // Parsear nombre/apellido antes del signUp para alimentar el trigger de profiles
-  var nombresArr   = n.split(' ');
-  var primerNombre = nombresArr[0];
-  var apellidoStr  = nombresArr.slice(1).join(' ') || '';
-
-  // ── CAPTURAR credenciales del Gerente ANTES del signOut ─────────────────────
-  // Necesitamos restaurar su sesión después del signUp del vendedor.
-  var _gerEmail = (document.getElementById('gUser').value||'').trim().toLowerCase();
-  var _gerPass  = (document.getElementById('gPass').value||'').trim();
-  // Capturar manager_id (BIGINT de staff_profiles) para el insert
-  var _gerenteId  = window._gerenteProfile ? (parseInt(window._gerenteProfile.id) || null) : null;
-
-  // Guardia de Seguridad: Evitar pérdida de sesión si los campos están vacíos (Stress Test)
-  if(!_gerEmail || !_gerPass){
-    showToast('⚠️ Por seguridad, ingresá tu email y contraseña en el login para validar esta operación.');
-    return Promise.resolve();
-  }
-
-  // 1. signOut para limpiar el contexto del Gerente antes de crear el Vendedor.
-  //    Esto evita que Supabase herede metadatos de la sesión activa al nuevo usuario.
-  sbClient.auth.signOut().then(function() {
-
-  // 2. Registrar en Supabase Auth con role_id:2 fijo (Vendedor)
-  return sbClient.auth.signUp({
-    email: e, password: p,
-    options:{ data:{ nombre: primerNombre, apellido: apellidoStr, role_id: 2 } }
+  // 1. Cliente temporal para no cerrar sesión del gerente
+  var sbTemp = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+    auth: { persistSession: false }
   });
 
+  var nombresArr = n.split(' ');
+  var _gerenteId = window._gerenteProfile ? parseInt(window._gerenteProfile.id, 10) : null;
+  var regionId = parseInt(document.getElementById('vReg').value, 10) || null;
+
+  // 2. Crear usuario en Auth
+  sbTemp.auth.signUp({
+    email: e, 
+    password: p,
+    options: { data: { nombre: nombresArr[0], role_id: 3 } }
   })
-  .then(function(signUp){
-    if(signUp.error) throw signUp.error;
-    var uid = signUp.data && signUp.data.user ? signUp.data.user.id : null;
+  .then(function(res){
+    if(res.error) throw res.error;
+    var uid = res.data.user.id;
 
-      // 3. Región seleccionada en el modal
-      var regionId = parseInt(document.getElementById('vReg').value) || null;
-
-    // 4. Insertar en staff_profiles — ADN v4: solo columnas del diccionario
-    //    manager_id (BIGINT del gerente) es la clave jerárquica en staff_profiles
-    var nombres = nombresArr;
+    // 3. Insertar perfil con todos tus campos originales
     return sbClient.from('staff_profiles').insert({
-      role_id:    parseInt(2) || 2,
-      nombre:     nombres[0],
-      apellido:   nombres.slice(1).join(' ') || '',
-      badge:      e,
-      activo:     true,
-      region_id:  regionId,
+      user_id: uid,
+      role_id: 3, // Rol Asesor
+      nombre: nombresArr[0],
+      apellido: nombresArr.slice(1).join(' ') || '',
+      badge: e,
+      activo: true,
+      region_id: regionId,
       manager_id: _gerenteId,
-      telefono1:  (document.getElementById('vT').value||'').trim() || null,
-      telefono2:  (document.getElementById('vT2').value||'').trim() || null,
-      domicilio:  (document.getElementById('vDom').value||'').trim() || null,
-      cbu:        (document.getElementById('vCBU').value||'').trim() || null,
+      telefono1: (document.getElementById('vT').value||'').trim() || null,
+      telefono2: (document.getElementById('vT2').value||'').trim() || null,
+      domicilio: (document.getElementById('vDom').value||'').trim() || null,
+      cbu: (document.getElementById('vCBU').value||'').trim() || null,
       fecha_alta: new Date().toISOString().slice(0,10),
-      comprobantes_json: '[]',
-      user_id:    uid || undefined
+      comprobantes_json: '[]'
     }).select().single();
   })
   .then(function(ins){
     if(ins.error) throw ins.error;
+    showToast('✅ Asesor creado exitosamente');
     closeModal();
-    showToast('✅ Asesor ' + n + ' creado en Supabase');
-    // ── RESTAURAR SESIÓN DEL GERENTE ─────────────────────────────────────────
-    // Después del signOut+signUp, re-autenticamos al Gerente para que el panel
-    // siga funcionando sin que tenga que hacer login nuevamente.
-    if(_gerEmail && _gerPass){
-      sbClient.auth.signInWithPassword({ email: _gerEmail, password: _gerPass })
-        .then(function(reAuth){
-          if(!reAuth.error && reAuth.data && reAuth.data.user){
-            // Restaurar _gerenteProfile desde Supabase (no desde caché potencialmente corrupto)
-            return sbClient.from('staff_profiles')
-              .select('*').eq('user_id', reAuth.data.user.id).single()
-              .then(function(prof){
-                if(prof.data && String(prof.data.role_id) === '3'){
-                  window._gerenteProfile = prof.data;
-                }
-                return _sbLoad();
-              });
-          }
-          return _sbLoad();
-        })
-        .then(function(){ renderAll(); populateVFilt(); populateVendDashSel(); })
-        .catch(function(){ _sbLoad().then(function(){ renderAll(); populateVFilt(); }); });
-    } else {
-      _sbLoad().then(function(){ renderAll(); populateVFilt(); populateVendDashSel(); });
-    }
+    return _sbLoad();
+  })
+  .then(function(){
+    renderAll();
+    if(typeof populateVFilt === 'function') populateVFilt();
+    if(typeof populateVendDashSel === 'function') populateVendDashSel();
   })
   .catch(function(err){
-    console.error('[SB] saveVendor:', err);
-    showToast('❌ Error al crear asesor: ' + (err.message || 'Verificá los datos'));
-    // Restaurar sesión del gerente aunque haya fallado
-    if(_gerEmail && _gerPass){
-      sbClient.auth.signInWithPassword({ email: _gerEmail, password: _gerPass }).catch(function(){});
-    }
+    console.error('[SB] Error:', err);
+    showToast('❌ Error: ' + (err.message || 'Verificá los datos'));
   })
   .then(function(){
     if(btn){ btn.disabled=false; btn.textContent='✅ Crear Vendedor'; }
