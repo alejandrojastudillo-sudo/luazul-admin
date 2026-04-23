@@ -652,48 +652,59 @@ function _sbLoad(){
       : Promise.resolve();
 
     // 4+5. Cargar asesores y luego clientes (Mirror-Clean v1: encadenados — p5 depende de p4)
-    // BUG FIX: antes se ejecutaban en paralelo via Promise.all, pero p5 lee _memCache[VK]
-    // que p4 aún no terminó de escribir → sellerIds siempre vacío en la primera carga.
-    var p4p5 = sbClient
+var p4p5 = sbClient
       ? (function(){
           var gerenteId = window._gerenteProfile ? parseInt(window._gerenteProfile.id, 10) : null;
-          if(!gerenteId){ _memCache[VK] = []; _memCache[DB_KEY] = []; return Promise.resolve(); }
+          if(!gerenteId){ 
+            _memCache[VK] = []; _memCache[DB_KEY] = []; _memCache[NK] = []; 
+            return Promise.resolve(); 
+          }
+
+          // PASO 4: Vendedores
           return sbClient.from('staff_profiles')
             .select('*')
-            .eq('role_id', 3) // Regla de Oro: Subordinados son Rol 3
+            .eq('role_id', 3)
             .eq('manager_id', gerenteId)
             .then(function(res){
+              if(res.error) throw res.error;
               _memCache[VK] = (res.data || []).map(mapVendorFromSB);
-              // Paso 5 encadenado: ahora VK ya está disponible
+              
               var sellerIds = (_memCache[VK]||[]).map(function(v){ return v._sbId || v.id; }).filter(Boolean);
-              if(sellerIds.length === 0){ _memCache[DB_KEY] = []; return Promise.resolve(); }
+              if(sellerIds.length === 0){ 
+    _memCache[DB_KEY] = []; 
+    return Promise.resolve({ data: [], error: null }); 
+}
+
+              // PASO 5: Clientes (Encadenado dentro del éxito de Vendedores)
               return sbClient.from('clientes')
-                .select('id,user_id,seller_id,nombre,email,telefono,documento,domicilio,estado,destino,paquete,fecha_viaje,monto_cuota,cuotas_total,cuotas_pagadas,total_usd,fecha_alta,notas,region_id,mora_json,comprobantes_json,created_at')
+                .select('*')
                 .in('seller_id', sellerIds)
                 .order('created_at', {ascending:false})
-                .limit(1000)
-                .then(function(res){
-                  if(!res.error && res.data) _memCache[DB_KEY] = res.data.map(mapClientFromSB);
+                .limit(1000);
+            })
+            .then(function(res){
+              // Manejo de respuesta de Clientes
+              if(res && !res.error && res.data){
+                _memCache[DB_KEY] = res.data.map(mapClientFromSB);
+              }
+              
+              // PASO 6: Pagos (Ahora sí, garantizamos que existen Clientes en memoria)
+              var clientIds = (_memCache[DB_KEY]||[]).map(function(c){ return c.id; });
+              if(clientIds.length === 0){ _memCache[NK] = []; return Promise.resolve(); }
+
+              return sbClient.from('pagos')
+                .select('*')
+                .in('cliente_id', clientIds)
+                .order('created_at', {ascending:false})
+                .limit(500)
+                .then(function(resNotif){
+                  if(!resNotif.error && resNotif.data) _memCache[NK] = resNotif.data.map(mapPagoToNotif);
                 });
             });
         })()
       : Promise.resolve();
 
     return Promise.all([p3, p4p5]);
-  })
-  .then(function(){
-    // 6. Cargar pagos
-    if(!sbClient){ _memCache[NK] = []; return Promise.resolve(); }
-    var clientIds = (_memCache[DB_KEY]||[]).map(function(c){ return c.id; });
-    if(clientIds.length === 0){ _memCache[NK] = []; return Promise.resolve(); }
-    return sbClient.from('pagos')
-      .select('*')
-      .in('cliente_id', clientIds)
-      .order('created_at', {ascending:false})
-      .limit(500)
-      .then(function(res){
-        if(!res.error && res.data) _memCache[NK] = res.data.map(mapPagoToNotif);
-      });
   })
   .then(function(){ fallback(); })
   .catch(function(e){ console.warn('_sbLoad error:', e); fallback(); });
