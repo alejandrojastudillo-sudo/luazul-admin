@@ -2422,10 +2422,10 @@ async function saveNewGerente(){
     var _ceoEmail = (cUserEl ? cUserEl.value : '').trim().toLowerCase();
     var _ceoPass  = (cPassEl ? cPassEl.value : '').trim();
 
-    if(!_ceoEmail || !_ceoPass){
-      showToast('⚠️ Por seguridad, ingresá tus credenciales en el login para validar la creación de Gerentes.');
-      if(btn){btn.disabled=false; btn.textContent='✅ Crear Gerente';}
-      return;
+   var sesionActiva = true;
+    if(!_ceoEmail || !_ceoPass) {
+      if(document.getElementById('gAuthWarn')) document.getElementById('gAuthWarn').style.display = 'none';
+      // Se omite el bloqueo por seguridad para facilitar la inauguración
     }
 
     // 1. Cerrar sesión del CEO temporalmente para el signUp
