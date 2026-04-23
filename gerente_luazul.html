@@ -663,10 +663,10 @@ function _sbLoad(){
           if(!gerenteId){ _memCache[VK] = []; _memCache[DB_KEY] = []; return Promise.resolve(); }
           return sbClient.from('staff_profiles')
             .select('*')
-            .eq('role_id', 2)
+            .eq('role_id', 3) // Regla de Oro: Vendedores son 3
             .eq('manager_id', gerenteId)
             .then(function(res){
-              if(!res.error && res.data) _memCache[VK] = res.data.map(mapVendorFromSB);
+              _memCache[VK] = (res.data || []).map(mapVendorFromSB);
               // Paso 5 encadenado: ahora VK ya está disponible
               var sellerIds = (_memCache[VK]||[]).map(function(v){ return v._sbId || v.id; }).filter(Boolean);
               if(sellerIds.length === 0){ _memCache[DB_KEY] = []; return Promise.resolve(); }
@@ -676,7 +676,7 @@ function _sbLoad(){
                 .order('created_at', {ascending:false})
                 .limit(1000)
                 .then(function(res){
-                  if(!res.error && res.data) _memCache[DB_KEY] = res.data.map(mapClientFromSB);
+                  _memCache[DB_KEY] = (res.data || []).map(mapClientFromSB);
                 });
             });
         })()

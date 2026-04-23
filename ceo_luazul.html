@@ -2143,14 +2143,14 @@ function saveNewVendorCeo(){
   }
 
   sbClient.auth.signOut().then(function() {
-  return sbClient.auth.signUp({ email: email, password: pass, options:{ data:{ nombre: primerNombre, apellido: apellidoStr, role_id: 2 } } });
+  return sbClient.auth.signUp({ email: email, password: pass, options:{ data:{ nombre: primerNombre, apellido: apellidoStr, role_id: 3 } } });
   })
     .then(function(signUp){
       if(signUp.error) throw signUp.error;
       var uid = signUp.data.user ? signUp.data.user.id : null;
       var nombres = nombresArr;
       var profileData = {
-        role_id:   parseInt(ROLE_SELLER) || 2,
+        role_id:   ROLE_SELLER, // ROLE_SELLER es 3
         nombre:    nombres[0],
         apellido:  nombres.slice(1).join(' ')||'',
         badge:     email,
