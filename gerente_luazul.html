@@ -1468,7 +1468,7 @@ function saveVendor(){
       cbu: (document.getElementById('vCBU').value||'').trim() || null,
       fecha_alta: new Date().toISOString().slice(0,10),
       comprobantes_json: '[]'
-    }).select().single();
+    }).select('*').single();
   })
   .then(function(ins){
     if(ins.error) throw ins.error;
