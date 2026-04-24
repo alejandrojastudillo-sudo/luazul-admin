@@ -1411,7 +1411,8 @@ function renderRegiones() {
     var g = null;
     for (var j = 0; j < gs.length; j++) {
       var gtmp = gs[j];
-      if (String(gtmp.region_id) === ridStr || (gtmp.region_ids && gtmp.region_ids.indexOf(ridStr) !== -1)) {
+      // CORRECCIÓN: comparar region_id (número) y region_ids (array de números)
+      if (String(gtmp.region_id) === ridStr || (gtmp.region_ids && gtmp.region_ids.indexOf(parseInt(ridStr, 10)) !== -1)) {
         g = gtmp;
         break;
       }
@@ -1431,8 +1432,8 @@ function renderRegiones() {
       + '<span style="font-size:.62rem;font-weight:700;padding:2px 8px;border-radius:12px;background:' + r.color + '22;color:' + r.color + ';border:1px solid ' + r.color + '44;">' + r.pais + '</span>'
       + '</div>'
       + '<div style="font-size:.72rem;color:var(--muted);">Gerente: <strong style="color:var(--text);">'
-+ (g.user_id ? '<a href="javascript:void(0)" onclick="verDetalleStaff(\'' + g.user_id + '\')" style="color:#3b82f6; text-decoration:underline; cursor:pointer;">' + (g.nombre || 'Sin asignar') + '</a>' : (g.nombre || 'Sin asignar'))
-+ '</strong></div>'
+      + (g.user_id ? '<a href="javascript:void(0)" onclick="verDetalleStaff(\'' + g.user_id + '\')" style="color:#3b82f6; text-decoration:underline; cursor:pointer;">' + (g.nombre || 'Sin asignar') + '</a>' : (g.nombre || 'Sin asignar'))
+      + '</strong></div>'
       + '<div style="font-size:.7rem;color:var(--muted);">' + (g.ciudad || '') + '</div>'
       + '</div></div>'
       + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;">'
@@ -1469,7 +1470,7 @@ function openRegionDetail(rid) {
   var g = null;
   for (var i = 0; i < gs.length; i++) {
     var gtmp = gs[i];
-    if (String(gtmp.region_id) === String(rid) || (gtmp.region_ids && gtmp.region_ids.indexOf(rid) !== -1)) {
+    if (String(gtmp.region_id) === String(rid) || (gtmp.region_ids && gtmp.region_ids.indexOf(parseInt(rid, 10)) !== -1)) {
       g = gtmp;
       break;
     }
