@@ -2215,86 +2215,89 @@ function saveEditGerente(gid) {
         + '<div><button data-cid="' + c.id + '" onclick="verFichaCliente(this.getAttribute(\'data-cid\'))" style="padding:4px 10px;background:rgba(167,139,250,.15);border:1px solid var(--purple-bd);color:var(--purple);border-radius:6px;font-size:.7rem;font-weight:700;cursor:pointer;">Ficha</button></div>'
         + '</div>';
     }).join('');
-  }
-
+  
   function verFichaCliente(clienteId) {
-    var c = (_cacheClientes || []).find(function(x) { return String(x.id) === String(clienteId); });
-    if (!c) { showToast('Cliente no encontrado'); return; }
-    var v = vby(c.seller_id);
-    var g = null;
-    if (v && v.manager_id) {
-      for (var i = 0; i < (_cacheGerentes || []).length; i++) {
-        if (String(_cacheGerentes[i].user_id) === String(v.manager_id)) { g = _cacheGerentes[i]; break; }
+  var c = (_cacheClientes || []).find(function(x) { return String(x.id) === String(clienteId); });
+  if (!c) { showToast('Cliente no encontrado'); return; }
+  var v = vby(c.seller_id);
+  var g = null;
+  // CORRECCIÓN: buscar gerente por el ID numérico (v.manager_id) y comparar con staff.id numérico
+  if (v && v.manager_id) {
+    for (var i = 0; i < (_cacheGerentes || []).length; i++) {
+      if (Number(_cacheGerentes[i].id) === Number(v.manager_id)) {
+        g = _cacheGerentes[i];
+        break;
       }
     }
-    var r = rby(c.region_id);
-    var badgeStyle = {
-      cliente: 'background:rgba(59,130,246,.15);color:#93c5fd;border:1px solid rgba(59,130,246,.3);',
-      vendedor: 'background:rgba(34,197,94,.1);color:#4ade80;border:1px solid rgba(34,197,94,.3);',
-      gerente: 'background:rgba(167,139,250,.1);color:#a78bfa;border:1px solid rgba(167,139,250,.3);',
-      region: 'background:rgba(245,158,11,.1);color:#fbbf24;border:1px solid rgba(245,158,11,.3);'
-    };
-    function nivelHtml(icon, titulo, nombre, subtitulo, badgeKey) {
-      return '<div style="display:flex;align-items:center;gap:12px;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:10px;padding:10px 14px;">'
-        + '<span style="font-size:1.3rem;flex-shrink:0;">' + icon + '</span>'
-        + '<div style="flex:1;min-width:0;">'
-        + '<div style="font-size:.85rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + esc(nombre) + '</div>'
-        + (subtitulo ? '<div style="font-size:.65rem;color:var(--muted);margin-top:2px;">' + esc(subtitulo) + '</div>' : '')
-        + '</div>'
-        + '<span style="font-size:.62rem;font-weight:700;padding:2px 9px;border-radius:12px;white-space:nowrap;' + badgeStyle[badgeKey] + '">' + titulo + '</span>'
-        + '</div>';
-    }
-    var jerarquiaHtml = '<div style="background:rgba(6,182,212,.04);border:1px solid rgba(6,182,212,.2);border-radius:12px;padding:14px;margin-bottom:16px;">'
-      + '<div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:rgba(6,182,212,.7);margin-bottom:10px;">🔗 Trazabilidad Jerárquica</div>'
-      + '<div style="display:flex;flex-direction:column;gap:6px;">'
-      + nivelHtml('👤', 'Cliente', c.nombre, c.email, 'cliente')
-      + '<div style="text-align:center;color:rgba(6,182,212,.5);font-size:.8rem;line-height:1;">↑</div>'
-      + nivelHtml('💼', 'Asesor', v.nombre || 'Sin asignar', v.email || '', 'vendedor')
-      + '<div style="text-align:center;color:rgba(6,182,212,.5);font-size:.8rem;line-height:1;">↑</div>'
-      + nivelHtml('👔', 'Gerente', g ? g.nombre : 'Sin asignar', g ? (g.email || g.ciudad || '') : 'manager_id no vinculado', 'gerente')
-      + '<div style="text-align:center;color:rgba(6,182,212,.5);font-size:.8rem;line-height:1;">↑</div>'
-      + nivelHtml('📍', 'Región', r.nombre || 'Sin región', r.pais || '', 'region')
-      + '</div>'
-      + (!g && v && v.user_id ? '<div style="margin-top:10px;font-size:.68rem;color:rgba(245,158,11,.7);padding:6px 10px;background:rgba(245,158,11,.06);border-radius:7px;">⚠️ Este asesor aún no tiene <code>manager_id</code> asignado. Editá el perfil del asesor para vincularlo a un Gerente.</div>' : '')
-      + '</div>';
-    var mora = [];
-    try { mora = JSON.parse(c.mora_json && c.mora_json !== '[]' ? c.mora_json : '[]'); } catch(e) {}
-    var cuotasStr = (c.cuotas_pagadas || 0) + '/' + (c.cuotas_total || 10);
-    var pct = Math.round((c.cuotas_pagadas || 0) / (c.cuotas_total || 10) * 100);
-    var noData = '<span style="color:var(--muted)">No cargado</span>';
-    var moraHtml = mora.length ? '<div style="background:var(--red-bg);border:1px solid var(--red-bd);border-radius:8px;padding:10px;font-size:.78rem;color:#fca5a5;">'
-      + mora.map(function(m) { return '&bull; ' + (typeof m === 'object' ? JSON.stringify(m) : m); }).join('<br>')
-      + '</div>' : '<div style="color:var(--green);font-size:.82rem;">Sin mora registrada</div>';
-    var progColor = pct >= 80 ? 'var(--red)' : pct >= 50 ? 'var(--gold)' : 'var(--green)';
-    var progHtml = '<div style="display:flex;justify-content:space-between;font-size:.68rem;color:var(--muted);margin-bottom:4px;">'
-      + '<span>Cuotas pagadas</span><span style="font-weight:700;color:var(--text);">' + cuotasStr + ' (' + pct + '%)</span>'
-      + '</div>'
-      + '<div style="height:7px;background:rgba(255,255,255,.07);border-radius:4px;overflow:hidden;">'
-      + '<div style="height:100%;width:' + pct + '%;background:' + progColor + ';border-radius:4px;transition:width .5s;"></div>'
-      + '</div>';
-    var html = '<div class="mhead">'
-      + '<div><h2>📋 Ficha de Cliente</h2>'
-      + '<p style="color:var(--muted);font-size:.75rem;">' + esc(c.nombre) + ' &middot; ' + esc(c.email) + '</p></div>'
-      + '<button class="mclose" onclick="closeModal()">&#x2715;</button></div>'
-      + '<div class="mbody">'
-      + jerarquiaHtml
-      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">'
-      + '<div><div class="ml">Teléfono</div><div style="font-size:.88rem;font-weight:600;">' + (c.telefono || noData) + '</div></div>'
-      + '<div><div class="ml">DNI / Documento</div><div style="font-size:.88rem;font-weight:600;">' + (c.documento || noData) + '</div></div>'
-      + '<div style="grid-column:span 2;"><div class="ml">Domicilio</div><div style="font-size:.88rem;font-weight:600;">' + (c.domicilio || noData) + '</div></div>'
-      + '<div><div class="ml">Destino</div><div style="font-size:.85rem;">' + esc(c.destino || '—') + '</div></div>'
-      + '<div><div class="ml">Paquete</div><div style="font-size:.85rem;">' + esc(c.paquete || '—') + '</div></div>'
-      + '<div><div class="ml">Total USD</div><div style="font-size:.88rem;font-weight:700;color:var(--gold);">USD ' + (c.total_usd || 0) + '</div></div>'
-      + '<div><div class="ml">Fecha de viaje</div><div style="font-size:.85rem;">' + (c.fecha_viaje || '—') + '</div></div>'
-      + '<div style="grid-column:span 2;"><div class="ml">Fecha de alta</div><div style="font-size:.85rem;">' + (c.fechaAlta || '—') + '</div></div>'
-      + '<div style="grid-column:span 2;">' + progHtml + '</div>'
-      + '<div style="grid-column:span 2;"><div class="ml">Estado mora</div>' + moraHtml + '</div>'
-      + '</div>'
-      + '</div>'
-      + '<div class="mact"><button class="mbtn ghost" onclick="closeModal()">Cerrar</button></div>';
-    document.getElementById('mbox').innerHTML = html;
-    document.getElementById('modal').classList.add('open');
   }
+  var r = rby(c.region_id);
+  var badgeStyle = {
+    cliente: 'background:rgba(59,130,246,.15);color:#93c5fd;border:1px solid rgba(59,130,246,.3);',
+    vendedor: 'background:rgba(34,197,94,.1);color:#4ade80;border:1px solid rgba(34,197,94,.3);',
+    gerente: 'background:rgba(167,139,250,.1);color:#a78bfa;border:1px solid rgba(167,139,250,.3);',
+    region: 'background:rgba(245,158,11,.1);color:#fbbf24;border:1px solid rgba(245,158,11,.3);'
+  };
+  function nivelHtml(icon, titulo, nombre, subtitulo, badgeKey) {
+    return '<div style="display:flex;align-items:center;gap:12px;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:10px;padding:10px 14px;">'
+      + '<span style="font-size:1.3rem;flex-shrink:0;">' + icon + '</span>'
+      + '<div style="flex:1;min-width:0;">'
+      + '<div style="font-size:.85rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + esc(nombre) + '</div>'
+      + (subtitulo ? '<div style="font-size:.65rem;color:var(--muted);margin-top:2px;">' + esc(subtitulo) + '</div>' : '')
+      + '</div>'
+      + '<span style="font-size:.62rem;font-weight:700;padding:2px 9px;border-radius:12px;white-space:nowrap;' + badgeStyle[badgeKey] + '">' + titulo + '</span>'
+      + '</div>';
+  }
+  var jerarquiaHtml = '<div style="background:rgba(6,182,212,.04);border:1px solid rgba(6,182,212,.2);border-radius:12px;padding:14px;margin-bottom:16px;">'
+    + '<div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:rgba(6,182,212,.7);margin-bottom:10px;">🔗 Trazabilidad Jerárquica</div>'
+    + '<div style="display:flex;flex-direction:column;gap:6px;">'
+    + nivelHtml('👤', 'Cliente', c.nombre, c.email, 'cliente')
+    + '<div style="text-align:center;color:rgba(6,182,212,.5);font-size:.8rem;line-height:1;">↑</div>'
+    + nivelHtml('💼', 'Asesor', v.nombre || 'Sin asignar', v.email || '', 'vendedor')
+    + '<div style="text-align:center;color:rgba(6,182,212,.5);font-size:.8rem;line-height:1;">↑</div>'
+    + nivelHtml('👔', 'Gerente', g ? g.nombre : 'Sin asignar', g ? (g.email || g.ciudad || '') : 'manager_id no vinculado', 'gerente')
+    + '<div style="text-align:center;color:rgba(6,182,212,.5);font-size:.8rem;line-height:1;">↑</div>'
+    + nivelHtml('📍', 'Región', r.nombre || 'Sin región', r.pais || '', 'region')
+    + '</div>'
+    + (!g && v && v.user_id ? '<div style="margin-top:10px;font-size:.68rem;color:rgba(245,158,11,.7);padding:6px 10px;background:rgba(245,158,11,.06);border-radius:7px;">⚠️ Este asesor aún no tiene <code>manager_id</code> asignado. Editá el perfil del asesor para vincularlo a un Gerente.</div>' : '')
+    + '</div>';
+  var mora = [];
+  try { mora = JSON.parse(c.mora_json && c.mora_json !== '[]' ? c.mora_json : '[]'); } catch(e) {}
+  var cuotasStr = (c.cuotas_pagadas || 0) + '/' + (c.cuotas_total || 10);
+  var pct = Math.round((c.cuotas_pagadas || 0) / (c.cuotas_total || 10) * 100);
+  var noData = '<span style="color:var(--muted)">No cargado</span>';
+  var moraHtml = mora.length ? '<div style="background:var(--red-bg);border:1px solid var(--red-bd);border-radius:8px;padding:10px;font-size:.78rem;color:#fca5a5;">'
+    + mora.map(function(m) { return '&bull; ' + (typeof m === 'object' ? JSON.stringify(m) : m); }).join('<br>')
+    + '</div>' : '<div style="color:var(--green);font-size:.82rem;">Sin mora registrada</div>';
+  var progColor = pct >= 80 ? 'var(--red)' : pct >= 50 ? 'var(--gold)' : 'var(--green)';
+  var progHtml = '<div style="display:flex;justify-content:space-between;font-size:.68rem;color:var(--muted);margin-bottom:4px;">'
+    + '<span>Cuotas pagadas</span><span style="font-weight:700;color:var(--text);">' + cuotasStr + ' (' + pct + '%)</span>'
+    + '</div>'
+    + '<div style="height:7px;background:rgba(255,255,255,.07);border-radius:4px;overflow:hidden;">'
+    + '<div style="height:100%;width:' + pct + '%;background:' + progColor + ';border-radius:4px;transition:width .5s;"></div>'
+    + '</div>';
+  var html = '<div class="mhead">'
+    + '<div><h2>📋 Ficha de Cliente</h2>'
+    + '<p style="color:var(--muted);font-size:.75rem;">' + esc(c.nombre) + ' &middot; ' + esc(c.email) + '</p></div>'
+    + '<button class="mclose" onclick="closeModal()">&#x2715;</button></div>'
+    + '<div class="mbody">'
+    + jerarquiaHtml
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">'
+    + '<div><div class="ml">Teléfono</div><div style="font-size:.88rem;font-weight:600;">' + (c.telefono || noData) + '</div></div>'
+    + '<div><div class="ml">DNI / Documento</div><div style="font-size:.88rem;font-weight:600;">' + (c.documento || noData) + '</div></div>'
+    + '<div style="grid-column:span 2;"><div class="ml">Domicilio</div><div style="font-size:.88rem;font-weight:600;">' + (c.domicilio || noData) + '</div></div>'
+    + '<div><div class="ml">Destino</div><div style="font-size:.85rem;">' + esc(c.destino || '—') + '</div></div>'
+    + '<div><div class="ml">Paquete</div><div style="font-size:.85rem;">' + esc(c.paquete || '—') + '</div></div>'
+    + '<div><div class="ml">Total USD</div><div style="font-size:.88rem;font-weight:700;color:var(--gold);">USD ' + (c.total_usd || 0) + '</div></div>'
+    + '<div><div class="ml">Fecha de viaje</div><div style="font-size:.85rem;">' + (c.fecha_viaje || '—') + '</div></div>'
+    + '<div style="grid-column:span 2;"><div class="ml">Fecha de alta</div><div style="font-size:.85rem;">' + (c.fechaAlta || '—') + '</div></div>'
+    + '<div style="grid-column:span 2;">' + progHtml + '</div>'
+    + '<div style="grid-column:span 2;"><div class="ml">Estado mora</div>' + moraHtml + '</div>'
+    + '</div>'
+    + '</div>'
+    + '<div class="mact"><button class="mbtn ghost" onclick="closeModal()">Cerrar</button></div>';
+  document.getElementById('mbox').innerHTML = html;
+  document.getElementById('modal').classList.add('open');
+}
 
   // ── CONTRASEÑAS ──────────────────────────────────────
   function renderPasswords() {
