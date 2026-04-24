@@ -266,7 +266,7 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
     <div style="font-size:.65rem;font-weight:700;letter-spacing:2.5px;text-transform:uppercase;color:#a78bfa;margin-bottom:18px;">👑 Panel C.E.O.</div>
     <div class="lf"><label>Usuario</label><input id="cUser" placeholder="owner" /></div>
     <div class="lf"><label>Contraseña</label><div class="lz-pass-wrap"><input id="cPass" type="password" placeholder="••••••••" /><button type="button" class="lz-eye-btn" onclick="lzToggle('cPass', this)" title="Mostrar/ocultar contraseña" tabindex="-1"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lz-eye-cPass"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg></button></div></div>
-    <button class="lbtn" onclick="validarAcceso()">👑 Ingresar</button>
+    <button class="lbtn" onclick="cLogin()">👑 Ingresar</button>
     <div class="lerr" id="cErr"></div>
     <div style="margin-top:18px;font-size:.7rem;color:var(--muted);">Luazul Smart Travel · Suite Ejecutiva</div>
   </div>
@@ -2677,7 +2677,7 @@ function saveEditGerente(gid) {
   }
 
   // Exportar funciones globales necesarias
-  window.validarAcceso = validarAcceso;
+  window.cLogin = cLogin;
   window.cLogout = cLogout;
   window.showTab = showTab;
   window.openAddGerente = openAddGerente;
@@ -2692,59 +2692,3 @@ function saveEditGerente(gid) {
 </script>
 </body>
 </html>
-// 2. Función de Login mejorada para Auditoría
-async function validarAcceso() {
-    const u = document.getElementById('cUser').value.trim();
-    const p = document.getElementById('cPass').value.trim();
-    const err = document.getElementById('cErr');
-    const btn = document.querySelector('.lbtn');
-
-    if (!u || !p) {
-        err.textContent = "❌ Por favor, completa ambos campos.";
-        err.style.display = 'block';
-        return;
-    }
-
-    btn.textContent = "VERIFICANDO...";
-
-    try {
-        // Buscamos al usuario por nombre exacto
-        const { data, error } = await sbClient
-            .from('staff_profiles')
-            .select('*')
-            .eq('nombre', u)
-            .single();
-
-        if (error || !data) {
-            err.textContent = "❌ Usuario no encontrado.";
-            err.style.display = 'block';
-            btn.textContent = "👑 INGRESAR AL PANEL";
-            return;
-        }
-
-        // Validación de Badge
-        if (data.badge === p) {
-            // Guardar sesión en sessionStorage y ejecutar initApp()
-            _ceoUid = String(data.user_id);
-            try {
-                sessionStorage.setItem('luazul_ceo', '1');
-                sessionStorage.setItem('luazul_ceo_nombre', data.nombre);
-            } catch(e) {
-                console.warn("Error al guardar en sessionStorage:", e);
-            }
-            document.getElementById('loginWrap').style.display = 'none';
-            document.getElementById('app').style.display = 'block';
-            console.log("Acceso exitoso:", data.nombre);
-            initApp(); 
-        } else {
-            err.textContent = "❌ Badge incorrecto.";
-            err.style.display = 'block';
-            btn.textContent = "👑 INGRESAR AL PANEL";
-        }
-
-    } catch (e) {
-        err.textContent = "⚠️ Error de conexión.";
-        err.style.display = 'block';
-        btn.textContent = "👑 INGRESAR AL PANEL";
-    }
-}
