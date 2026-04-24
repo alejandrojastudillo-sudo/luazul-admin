@@ -677,7 +677,8 @@ function validarSesionActiva(callback) {
     var user = res.data && res.data.user ? res.data.user : null;
     if (!user) {
       showToast('❌ Sesión expirada. Iniciá sesión nuevamente.');
-      LZ_AUTH._showLogin('loginWrap', 'app');
+      document.getElementById('loginWrap').style.display = 'flex';
+      document.getElementById('app').style.display = 'none';
       return;
     }
     if (_ceoUid && safeUUID(_ceoUid) !== safeUUID(user.id)) {
@@ -1392,7 +1393,7 @@ function openRegionDetail(rid) {
 }
 
 // ── GESTIÓN DE GERENTES (MODAL MODERNO) ─────────────────
-async function openAddGerente() {
+function openAddGerente() {
   // Renderizar modal con grid, chips de regiones y skeleton
   var rs = _cacheRegiones || [];
   // Agrupar regiones por país para mejor visual
@@ -1671,7 +1672,7 @@ function adjuntarComprobante(gid) {
   reader.readAsDataURL(file);
 }
 
-function verComprobante(gid, idx) {
+function openEditGerente(gid) {
   var g = null;
   for (var i = 0; i < _cacheGerentes.length; i++) {
     if (String(_cacheGerentes[i].user_id) === String(gid)) { g = _cacheGerentes[i]; break; }
@@ -1837,14 +1838,8 @@ function saveEditGerente(gid) {
     })
     .catch(function(e) { showToast('❌ Error: ' + (e.message || '')); });
 }
-
 // ── OTRAS FUNCIONES (DASHBOARD, PAGOS, MORA, EQUIPO, CLIENTES, BACKUP) ──
-// (Se mantienen la mayoría de las funciones originales pero adaptadas a ES5 y a los mapeadores)
-// Por razones de espacio, aquí iría el resto de funciones que ya están en el archivo original,
-// pero adaptadas a ES5 y usando user_id. En la práctica, pegaremos el resto del código
-// del CEO que ya está corregido en el archivo original (versión ES5, usando user_id, etc.)
-<script>
-  // ── DASHBOARD DE ASESOR (VENDEDOR) ──────────────────
+// (Resto del código sin la etiqueta <script>)
   function populateVendDashSel() {
     var rfilt = document.getElementById('vdRegFilt') ? document.getElementById('vdRegFilt').value : '';
     var vs = _cacheVendedores || [];
@@ -1874,6 +1869,11 @@ function saveEditGerente(gid) {
   }
 
   function renderVendDash() {
+    if (!_cacheVendedores || !_cacheClientes) {
+      var elDash = document.getElementById('vendDashContent');
+      if (elDash) elDash.innerHTML = '<div style="text-align:center;padding:40px;">⏳ Cargando datos del asesor...</div>';
+      return;
+    }
     var vid = document.getElementById('vendDashSel').value;
     var el = document.getElementById('vendDashContent');
     var btnPerfil = document.getElementById('btnVerPerfilVend');
@@ -1993,6 +1993,11 @@ function saveEditGerente(gid) {
   }
 
   function renderPagos() {
+    if (!_cachePagos || !Array.isArray(_cachePagos)) {
+      var elBody = document.getElementById('pagosBody');
+      if (elBody) elBody.innerHTML = '<div style="text-align:center;padding:40px;">⏳ Cargando pagos...</div>';
+      return;
+    }
     var pays = (_cachePagos || []).filter(function(n) { return true; });
     var ef = (document.getElementById('pagoEstFilt') || {}).value || '';
     if (ef === 'pendiente') pays = pays.filter(function(n) { return n.estado === 'pendiente'; });
@@ -2072,6 +2077,13 @@ function saveEditGerente(gid) {
 
   // ── MORA ─────────────────────────────────────────────
   function renderMora() {
+    if (!_cacheClientes || !Array.isArray(_cacheClientes)) {
+      var elT = document.getElementById('moraTemp');
+      var elA = document.getElementById('moraAvanz');
+      if (elT) elT.innerHTML = '<div style="text-align:center;padding:20px;">⏳ Cargando mora...</div>';
+      if (elA) elA.innerHTML = '<div style="text-align:center;padding:20px;">⏳ Cargando mora...</div>';
+      return;
+    }
     var rf = (document.getElementById('moraRegFilt') || {}).value || '';
     var cs = (_cacheClientes || []).map(enrich).filter(function(c) {
       return (!rf || String(c.region_id) === String(rf)) && (c.estado === 'atraso' || c.estado === 'atraso_gestion');
@@ -2098,6 +2110,11 @@ function saveEditGerente(gid) {
 
   // ── EQUIPO & OBJETIVOS ───────────────────────────────
   function renderEquipoDash() {
+      if (!_cacheClientes || !_cacheVendedores) {
+      var elDash = document.getElementById('equipoDash');
+      if (elDash) elDash.innerHTML = '<div style="text-align:center;padding:40px;">⏳ Cargando estadísticas del equipo...</div>';
+      return;
+    }
     var cs = (_cacheClientes || []).map(enrich);
     var vs = _cacheVendedores || [];
     var rs = _cacheRegiones || [];
@@ -2188,6 +2205,11 @@ function saveEditGerente(gid) {
 
   // ── CLIENTES ─────────────────────────────────────────
   function renderClientes() {
+     if (!_cacheClientes || !Array.isArray(_cacheClientes)) {
+      var elBody = document.getElementById('cliBody');
+      if (elBody) elBody.innerHTML = '<div style="text-align:center;padding:40px;">⏳ Cargando clientes...</div>';
+      return;
+    }
     var cs = (_cacheClientes || []).map(enrich);
     var srch = (document.getElementById('cliSearch') || {}).value || '';
     var rf = (document.getElementById('cliRegFilt') || {}).value || '';
@@ -2216,6 +2238,7 @@ function saveEditGerente(gid) {
         + '</div>';
     }).join('');
   
+  }
   function verFichaCliente(clienteId) {
   var c = (_cacheClientes || []).find(function(x) { return String(x.id) === String(clienteId); });
   if (!c) { showToast('Cliente no encontrado'); return; }
@@ -2611,9 +2634,53 @@ function saveEditGerente(gid) {
     renderVendDash();
   }
 
+  function showTab(tabId) {
+    var tabs = document.querySelectorAll('.tab');
+    var pages = document.querySelectorAll('.tabpg');
+
+    // Ocultar todas las páginas y quitar estado activo a los botones
+    for (var i = 0; i < tabs.length; i++) {
+      tabs[i].classList.remove('active');
+    }
+    for (var j = 0; j < pages.length; j++) {
+      pages[j].classList.remove('active');
+      pages[j].style.display = 'none';
+    }
+
+    // Activar el botón de la pestaña seleccionada
+    var targetTab = document.getElementById('tab-' + tabId);
+    if (targetTab) targetTab.classList.add('active');
+
+    // Mostrar la página correspondiente
+    var targetPage = document.getElementById('tabpg-' + tabId);
+    if (targetPage) {
+      targetPage.classList.add('active');
+      targetPage.style.display = 'block';
+    }
+
+    // Disparar inicializaciones o renders específicos de la pestaña
+    if (tabId === 'venddash') populateVendDashSel();
+    if (tabId === 'pagos') { populatePagoFiltros(); renderPagos(); }
+    if (tabId === 'mora') renderMora();
+    if (tabId === 'equipo') renderEquipoDash();
+    if (tabId === 'passwords') renderPasswords();
+    if (tabId === 'mensual') renderMensual();
+    if (tabId === 'backup') initBackupTab();
+  }
+
   function closeModal() { document.getElementById('modal').classList.remove('open'); }
   function closeModalOut(e) { if (e.target === document.getElementById('modal')) closeModal(); }
   function showToast(msg, dur) { var t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show'); setTimeout(function() { t.classList.remove('show'); }, dur || 3500); }
+
+  function calcComision(v, cs) { return { neta: 0, meses: [], ventasMes: 0, tasaActual: 20 }; }
+  function getClientMonth(c) { return new Date().getFullYear() + '-' + new Date().getMonth(); }
+  function dbg(key) { return null; }
+  function dbs(key, val) { }
+  function renderMensual() { document.getElementById('mensualDash').innerHTML = '<div style="padding:40px;text-align:center;">Módulo en construcción</div>'; }
+  function renderPwCeoUsers() { document.getElementById('pwCeoUsers').innerHTML = '<div>Usuarios CEO: solo el usuario actual</div>'; }
+  function openAddVendorCeo() { alert("Función: Agregar nuevo asesor - en desarrollo"); }
+  function openAddClienteCeo() { alert("Función: Agregar nuevo cliente - en desarrollo"); }
+  function approvePayment() { alert("Aprobación de pago - pendiente de implementación"); }
 
   // Alias para toggle password
   window.lzToggle = function(inputId, btn) {
@@ -2626,14 +2693,6 @@ function saveEditGerente(gid) {
       ? '<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>'
       : '<path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>';
   };
-
-  // Inicialización tras cargar datos
-  function initApp() {
-    cargarDatosSupabase().then(function() {
-      renderAll();
-      populateAllFilters();
-    });
-  }
 
   function renderAll() {
     renderOverview();
