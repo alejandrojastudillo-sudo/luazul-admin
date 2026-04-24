@@ -1672,15 +1672,19 @@ function adjuntarComprobante(gid) {
   reader.readAsDataURL(file);
 }
 
-function openEditGerente(gid) {
+function verComprobante(gid, idx) {
   var g = null;
   for (var i = 0; i < _cacheGerentes.length; i++) {
     if (String(_cacheGerentes[i].user_id) === String(gid)) { g = _cacheGerentes[i]; break; }
   }
-  if (!g || !g.comprobantes || !g.comprobantes[idx]) return;
+  if (!g || !g.comprobantes || !g.comprobantes[idx]) {
+    showToast('Comprobante no encontrado');
+    return;
+  }
   var c = g.comprobantes[idx];
   var w = window.open('', '_blank');
-  w.document.open(); w.document.close();
+  w.document.open();
+  w.document.close();
   if (c.tipo && c.tipo.indexOf('image') === 0) {
     var img = w.document.createElement('img');
     img.src = c.data;
@@ -1694,7 +1698,6 @@ function openEditGerente(gid) {
     w.document.body.appendChild(fr);
   }
 }
-
 function borrarComprobante(gid, idx) {
   if (!confirm('¿Eliminar este comprobante?')) return;
   var g = null;
@@ -2680,7 +2683,14 @@ function saveEditGerente(gid) {
         if (String(r.id) === String(cur)) o.selected = true;
         el.appendChild(o);
       }
-      var vacias = allRs.filter(function(r) { return !rs.find(function(a) { return String(a.id) === String(r.id); }); });
+      var vacias = [];
+for (var k = 0; k < allRs.length; k++) {
+  var encontrada = false;
+  for (var m = 0; m < rs.length; m++) {
+    if (String(allRs[k].id) === String(rs[m].id)) { encontrada = true; break; }
+  }
+  if (!encontrada) vacias.push(allRs[k]);
+}
       if (vacias.length) {
         var sep = document.createElement('option'); sep.disabled = true; sep.textContent = '── Sin actividad ──';
         el.appendChild(sep);
