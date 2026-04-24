@@ -1430,7 +1430,9 @@ function renderRegiones() {
       + r.nombre
       + '<span style="font-size:.62rem;font-weight:700;padding:2px 8px;border-radius:12px;background:' + r.color + '22;color:' + r.color + ';border:1px solid ' + r.color + '44;">' + r.pais + '</span>'
       + '</div>'
-      + '<div style="font-size:.72rem;color:var(--muted);">Gerente: <strong style="color:var(--text);">' + (g.nombre || 'Sin asignar') + '</strong></div>'
+      + '<div style="font-size:.72rem;color:var(--muted);">Gerente: <strong style="color:var(--text);">'
++ (g.user_id ? '<a href="javascript:void(0)" onclick="verDetalleStaff(\'' + g.user_id + '\')" style="color:#3b82f6; text-decoration:underline; cursor:pointer;">' + (g.nombre || 'Sin asignar') + '</a>' : (g.nombre || 'Sin asignar'))
++ '</strong></div>'
       + '<div style="font-size:.7rem;color:var(--muted);">' + (g.ciudad || '') + '</div>'
       + '</div></div>'
       + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;">'
@@ -2407,7 +2409,51 @@ function saveEditGerente(gid) {
   document.getElementById('mbox').innerHTML = modalHtml;
   document.getElementById('modal').classList.add('open');
 }
+function verDetalleStaff(staffId) {
+  var staff = null;
+  // Buscar en gerentes
+  for (var i = 0; i < _cacheGerentes.length; i++) {
+    if (String(_cacheGerentes[i].user_id) === String(staffId)) {
+      staff = _cacheGerentes[i];
+      break;
+    }
+  }
+  // Si no está en gerentes, buscar en vendedores
+  if (!staff && _cacheVendedores) {
+    for (var i = 0; i < _cacheVendedores.length; i++) {
+      if (String(_cacheVendedores[i].user_id) === String(staffId)) {
+        staff = _cacheVendedores[i];
+        break;
+      }
+    }
+  }
+  if (!staff) {
+    showToast('Staff no encontrado');
+    return;
+  }
 
+  var rol = staff.hasOwnProperty('pct_bonus') ? 'Gerente' : 'Asesor';
+  var r = rby(staff.region_id);
+  var html = '<div class="mhead">'
+    + '<div><h2>' + (rol === 'Gerente' ? '👔' : '🧑‍💼') + ' ' + staff.nombre + '</h2>'
+    + '<p>' + rol + ' · ' + r.bandera + ' ' + r.nombre + '</p></div>'
+    + '<button class="mclose" onclick="closeModal()">✕</button></div>'
+    + '<div class="mbody">'
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
+    + '<div><div class="ml">Email</div><div>' + (staff.email || '—') + '</div></div>'
+    + '<div><div class="ml">Teléfono principal</div><div>' + (staff.telefono1 || '—') + '</div></div>'
+    + '<div><div class="ml">Teléfono ref.</div><div>' + (staff.telefono2 || '—') + '</div></div>'
+    + '<div><div class="ml">Ciudad</div><div>' + (staff.ciudad || '—') + '</div></div>'
+    + '<div style="grid-column:span 2;"><div class="ml">Domicilio</div><div>' + (staff.domicilio || '—') + '</div></div>'
+    + '<div style="grid-column:span 2;background:rgba(251,191,36,.07);border:1px solid rgba(251,191,36,.2);border-radius:8px;padding:8px;">'
+    + '<div class="ml">💰 CBU / Alias bancario</div>'
+    + '<div style="font-family:monospace;font-size:.85rem;">' + (staff.cbu || '<span style="color:var(--muted);">No cargado</span>') + '</div></div>'
+    + '</div>'
+    + '</div>'
+    + '<div class="mact"><button class="mbtn ghost" onclick="closeModal()">Cerrar</button></div>';
+  document.getElementById('mbox').innerHTML = html;
+  document.getElementById('modal').classList.add('open');
+}
   // ── CONTRASEÑAS ──────────────────────────────────────
   function renderPasswords() {
     renderPwCeoUsers();
