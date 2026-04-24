@@ -2677,7 +2677,7 @@ function saveEditGerente(gid) {
   }
 
   // Exportar funciones globales necesarias
-  window.cLogin = cLogin;
+  window.validarAcceso = validarAcceso;
   window.cLogout = cLogout;
   window.showTab = showTab;
   window.openAddGerente = openAddGerente;
@@ -2724,11 +2724,14 @@ async function validarAcceso() {
 
         // Validación de Badge
         if (data.badge === p) {
+            // Guardar sesión en sessionStorage y ejecutar initApp()
             _ceoUid = String(data.user_id);
             try {
                 sessionStorage.setItem('luazul_ceo', '1');
                 sessionStorage.setItem('luazul_ceo_nombre', data.nombre);
-            } catch(e) {}
+            } catch(e) {
+                console.warn("Error al guardar en sessionStorage:", e);
+            }
             document.getElementById('loginWrap').style.display = 'none';
             document.getElementById('app').style.display = 'block';
             console.log("Acceso exitoso:", data.nombre);
