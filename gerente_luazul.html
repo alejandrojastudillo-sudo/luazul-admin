@@ -280,6 +280,9 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;back
         if(!gerenteId) { _memCache[VK]=[]; _memCache[DB_KEY]=[]; _memCache[NK]=[]; return Promise.resolve(); }
         return sbClient.from('staff_profiles').select('*').eq('role_id',3).eq('manager_id',gerenteId)
           .then(res=>{
+            console.log('Vendedores desde Supabase:', res.data);
+            console.log('Cantidad de vendedores:', res.data ? res.data.length : 0);
+            console.log('gerenteId usado:', gerenteId);
             _memCache[VK] = (res.data||[]).map(mapVendorFromSB);
             var sellerIds = _memCache[VK].map(v=>v.user_id).filter(Boolean);
             if(!sellerIds.length){ _memCache[DB_KEY]=[]; return Promise.resolve({data:[]}); }
