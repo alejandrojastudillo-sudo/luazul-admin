@@ -246,43 +246,66 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;back
     };
   }
 function _sbLoad() {
-  function fallback() { _memCache[VK]=[]; _memCache[DB_KEY]=[]; _memCache[NK]=[]; }
+  function fallback() { 
+    console.warn("⚠️ Fallback: limpiando caché");
+    _memCache[VK]=[]; 
+    _memCache[DB_KEY]=[]; 
+    _memCache[NK]=[]; 
+  }
   var step1 = Promise.resolve();
   if(sbClient && !window._gerenteProfile){
-    step1 = sbClient.auth.getUser().then(res=>{
+    step1 = sbClient.auth.getUser().then(function(res){
       var user = res.data?.user;
       if(!user) return;
-      return sbClient.from('staff_profiles').select('*').eq('user_id',user.id).single().then(p=>{ if(p.data) window._gerenteProfile = p.data; });
+      return sbClient.from('staff_profiles').select('*').eq('user_id',user.id).single().then(function(p){ 
+        if(p.data) {
+          window._gerenteProfile = p.data;
+          console.log("✅ Perfil gerente cargado:", window._gerenteProfile.nombre);
+        }
+      });
     });
   }
-  return step1.then(()=>{
-    if(!window._gerenteProfile || !sbClient) return Promise.resolve([]);
-    return sbClient.from('gerente_regiones').select('region_id').eq('gerente_id', window._gerenteProfile.user_id).then(res=>{ window._gerenteRegionIds = (res.data||[]).map(r=>r.region_id); return window._gerenteRegionIds; });
-  }).then(regionIds=>{
+  return step1.then(function(){
+    if(!window._gerenteProfile || !sbClient) {
+      console.log("❌ No hay perfil gerente o sbClient");
+      return Promise.resolve([]);
+    }
+    return sbClient.from('gerente_regiones').select('region_id').eq('gerente_id', window._gerenteProfile.user_id).then(function(res){
+      window._gerenteRegionIds = (res.data||[]).map(function(r){ return r.region_id; });
+      console.log("🌍 Regiones del gerente:", window._gerenteRegionIds);
+      return window._gerenteRegionIds;
+    });
+  }).then(function(regionIds){
     regionIds = regionIds||[];
-    var p3 = sbClient ? sbClient.from('regiones').select('*').eq('activo',true).in('id',regionIds).then(r=>{if(r.data)_memCache['luazul_regiones']=r.data;}) : Promise.resolve();
+    var p3 = sbClient ? sbClient.from('regiones').select('*').eq('activo',true).in('id',regionIds).then(function(r){
+      if(r.data) _memCache['luazul_regiones']=r.data;
+    }) : Promise.resolve();
     var p4p5 = sbClient ? (function() {
       var gerenteId = window._gerenteProfile ? parseInt(window._gerenteProfile.id,10) : null;
       if(!gerenteId) { 
+        console.log("❌ gerenteId inválido");
         _memCache[VK]=[]; _memCache[DB_KEY]=[]; _memCache[NK]=[]; 
         return Promise.resolve(); 
       }
       if (regionIds.length === 0) {
+        console.log("⚠️ El gerente no tiene regiones asignadas. Asignale regiones desde el panel CEO.");
         _memCache[VK] = [];
         _memCache[DB_KEY] = [];
         _memCache[NK] = [];
         return Promise.resolve({ data: [] });
       }
+      console.log("🔍 Buscando vendedores con region_ids:", regionIds);
       return sbClient.from('staff_profiles')
         .select('*')
         .eq('role_id', 3)
         .in('region_id', regionIds)
         .then(function(res) {
+          console.log("📦 Vendedores encontrados:", res.data ? res.data.length : 0);
           _memCache[VK] = (res.data||[]).map(mapVendorFromSB);
           var sellerIds = _memCache[VK].map(function(v) { return v.user_id; }).filter(Boolean);
-          if(!sellerIds.length) {
-            _memCache[DB_KEY]=[];
-            return Promise.resolve({data:[]});
+          if(!sellerIds.length){ 
+            _memCache[DB_KEY]=[]; 
+            return Promise.resolve({data:[]}); 
           }
           return sbClient.from('clientes')
             .select('*')
@@ -293,9 +316,9 @@ function _sbLoad() {
         .then(function(res) {
           if(res && !res.error && res.data) _memCache[DB_KEY] = res.data.map(mapClientFromSB);
           var clientIds = _memCache[DB_KEY].map(function(c) { return c.id; });
-          if(!clientIds.length) {
-            _memCache[NK]=[];
-            return Promise.resolve();
+          if(!clientIds.length){ 
+            _memCache[NK]=[]; 
+            return Promise.resolve(); 
           }
           return sbClient.from('pagos')
             .select('*')
@@ -308,7 +331,10 @@ function _sbLoad() {
         });
     })() : Promise.resolve();
     return Promise.all([p3, p4p5]);
-  }).then(fallback).catch(function(e) { console.warn(e); fallback(); });
+  }).then(fallback).catch(function(e) { 
+    console.error("❌ Error en _sbLoad:", e); 
+    fallback(); 
+  });
 }
 </script>
 </head>
