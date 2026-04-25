@@ -586,7 +586,7 @@ function _sbLoad() {
         return Promise.resolve({ data: [] });
       }
       console.log("🔍 Buscando vendedores con region_ids:", regionIds);
-      return sbClient.from('staff_profiles')
+      return sbClient.from('staff_profiles_view')
         .select('*')
         .eq('role_id', 3)
         .in('region_id', regionIds)
