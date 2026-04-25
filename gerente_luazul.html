@@ -266,7 +266,7 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;back
       step1 = sbClient.auth.getUser().then(res=>{
         var user = res.data?.user;
         if(!user) return;
-        return sbClient.from('staff_profiles').select('*').eq('user_id',user.id).single().then(p=>{ if(p.data) window._gerenteProfile = p.data; });
+        return sbClient.from('staff_profiles').select('*').eq('user_id',user.id).single().then(p=>{ if(p.data) { window._gerenteProfile = p.data; sessionStorage.setItem('gerente_id_interno', p.data.id); } });
       });
     }
     return step1.then(()=>{
@@ -276,7 +276,7 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;back
       regionIds = regionIds||[];
       var p3 = sbClient ? sbClient.from('regiones').select('*').eq('activo',true).in('id',regionIds).then(r=>{if(r.data)_memCache['luazul_regiones']=r.data;}) : Promise.resolve();
       var p4p5 = sbClient ? (()=>{
-        var gerenteId = window._gerenteProfile ? parseInt(window._gerenteProfile.id,10) : null;
+        var gerenteId = parseInt(sessionStorage.getItem('gerente_id_interno'), 10);
         if(!gerenteId) { _memCache[VK]=[]; _memCache[DB_KEY]=[]; _memCache[NK]=[]; return Promise.resolve(); }
         return sbClient.from('staff_profiles').select('*').eq('role_id',3).eq('manager_id',gerenteId)
           .then(res=>{
@@ -678,6 +678,7 @@ function gLogin() {
       if (p.error || !p.data) throw new Error('Perfil de gerente no encontrado. Contactá al administrador.');
       if (parseInt(p.data.role_id) !== 2) throw new Error('Acceso exclusivo para Gerencia (Rol 2).');
       window._gerenteProfile = p.data;
+      sessionStorage.setItem('gerente_id_interno', p.data.id);
       LZ_AUTH.setPanelSession(LZ_AUTH.PANEL_KEYS.gerente);
       LZ_AUTH._showApp('loginWrap', 'app');
       initApp();
@@ -1150,7 +1151,7 @@ function saveVendor() {
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Creando...'; }
   var sbTemp = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: false } });
   var nombresArr = n.split(' ');
-  var _gerenteId = window._gerenteProfile ? parseInt(window._gerenteProfile.id, 10) : null;
+  var _gerenteId = parseInt(sessionStorage.getItem('gerente_id_interno'), 10);
   var regionId = parseInt(document.getElementById('vReg').value, 10) || null;
   sbTemp.auth.signUp({ email: e, password: p, options: { data: { nombre: nombresArr[0], role_id: 3 } } })
     .then(function(res) {
