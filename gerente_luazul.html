@@ -278,12 +278,12 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;back
       var p4p5 = sbClient ? (()=>{
         var gerenteId = window._gerenteProfile ? parseInt(window._gerenteProfile.id,10) : null;
         if(!gerenteId) { _memCache[VK]=[]; _memCache[DB_KEY]=[]; _memCache[NK]=[]; return Promise.resolve(); }
-        return sbClient.from('staff_profiles').select('*').eq('role_id',3).eq('manager_id',gerenteId).in('region_id',regionIds)
+        return sbClient.from('staff_profiles').select('*').eq('role_id',3).eq('manager_id',gerenteId)
           .then(res=>{
             _memCache[VK] = (res.data||[]).map(mapVendorFromSB);
             var sellerIds = _memCache[VK].map(v=>v.user_id).filter(Boolean);
             if(!sellerIds.length){ _memCache[DB_KEY]=[]; return Promise.resolve({data:[]}); }
-            return sbClient.from('clientes').select('*').or(`seller_id.in.(${sellerIds.join(',')}),seller_id.is.null`).in('region_id',regionIds).order('created_at',{ascending:false}).limit(1000);
+            return sbClient.from('clientes').select('*').or(`seller_id.in.(${sellerIds.join(',')}),seller_id.is.null`).order('created_at',{ascending:false}).limit(1000);
           }).then(res=>{
             if(res && !res.error && res.data) _memCache[DB_KEY] = res.data.map(mapClientFromSB);
             var clientIds = _memCache[DB_KEY].map(c=>c.id);
