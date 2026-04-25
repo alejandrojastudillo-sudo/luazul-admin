@@ -276,30 +276,68 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;back
       regionIds = regionIds||[];
       var p3 = sbClient ? sbClient.from('regiones').select('*').eq('activo',true).in('id',regionIds).then(r=>{if(r.data)_memCache['luazul_regiones']=r.data;}) : Promise.resolve();
       var p4p5 = sbClient ? (async () => {
+        // 1. Obtenemos el ID del gerente
         var gerenteId = window._gerenteProfile ? parseInt(window._gerenteProfile.id, 10) : null;
+        
         if (!gerenteId) {
+          console.error('Error: No se encontró ID de gerente para cargar vendedores.');
           _memCache[VK] = []; _memCache[DB_KEY] = []; _memCache[NK] = [];
           return Promise.resolve();
         }
 
-        console.log('Consultando Vista (Ojo) para Gerente:', gerenteId);
+        console.log('🚀 Iniciando carga desde la VISTA (Ojo) para Gerente ID:', gerenteId);
 
-        // Consultamos a la VISTA, que no tiene candado (RLS)
+        // 2. CONSULTA A LA VISTA (staff_profiles_view) - Aquí está la clave
         return sbClient.from('staff_profiles_view')
           .select('*')
           .eq('manager_id', gerenteId)
           .filter('role_id', 'in', '(3, "3")')
           .then(res => {
-            console.log('Resultado desde la Vista:', res.data);
-            _memCache[VK] = (res.data || []).map(mapVendorFromSB);
+            console.log('✅ Datos recibidos de la Vista:', res.data);
+            
+            if (!res.data || res.data.length === 0) {
+              console.warn('Atención: La vista no devolvió vendedores para este gerente.');
+              _memCache[VK] = [];
+              return { data: [] };
+            }
+
+            _memCache[VK] = res.data.map(mapVendorFromSB);
             var sellerIds = _memCache[VK].map(v => v.user_id).filter(Boolean);
-            if (!sellerIds.length) { _memCache[DB_KEY] = []; return Promise.resolve({ data: [] }); }
-            return sbClient.from('clientes').select('*').or(`seller_id.in.(${sellerIds.join(',')}),seller_id.is.null`).order('created_at', { ascending: false }).limit(1000);
-          }).then(res => {
-            if (res && !res.error && res.data) _memCache[DB_KEY] = res.data.map(mapClientFromSB);
-            var clientIds = _memCache[DB_KEY].map(c => c.id);
-            if (!clientIds.length) { _memCache[NK] = []; return Promise.resolve(); }
-            return sbClient.from('pagos').select('*').in('cliente_id', clientIds).order('created_at', { ascending: false }).limit(500).then(pRes => { if (!pRes.error && pRes.data) _memCache[NK] = pRes.data.map(mapPagoToNotif); });
+
+            if (!sellerIds.length) {
+              _memCache[DB_KEY] = [];
+              return { data: [] };
+            }
+
+            // 3. Cargamos Clientes vinculados a esos vendedores
+            return sbClient.from('clientes')
+              .select('*')
+              .or(`seller_id.in.(${sellerIds.join(',')}),seller_id.is.null`)
+              .order('created_at', { ascending: false })
+              .limit(1000);
+          })
+          .then(res => {
+            if (res && !res.error && res.data) {
+              _memCache[DB_KEY] = res.data.map(mapClientFromSB);
+              var clientIds = _memCache[DB_KEY].map(c => c.id);
+              
+              if (!clientIds.length) {
+                _memCache[NK] = [];
+                return;
+              }
+
+              // 4. Cargamos Pagos/Notificaciones
+              return sbClient.from('pagos')
+                .select('*')
+                .in('cliente_id', clientIds)
+                .order('created_at', { ascending: false })
+                .limit(500)
+                .then(pRes => {
+                  if (!pRes.error && pRes.data) {
+                    _memCache[NK] = pRes.data.map(mapPagoToNotif);
+                  }
+                });
+            }
           });
       })() : Promise.resolve();
       return Promise.all([p3,p4p5]);
