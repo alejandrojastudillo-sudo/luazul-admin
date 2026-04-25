@@ -261,14 +261,16 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;back
   // _sbLoad corregida
   function _sbLoad() {
     function fallback() { _memCache[VK]=[]; _memCache[DB_KEY]=[]; _memCache[NK]=[]; }
-    var step1 = Promise.resolve();
+    var step0 = new Promise(function(resolve) { setTimeout(resolve, 50); });
+    var step1 = step0.then(function() {
     if(sbClient && !window._gerenteProfile){
-      step1 = sbClient.auth.getUser().then(res=>{
+      return sbClient.auth.getUser().then(res=>{
         var user = res.data?.user;
         if(!user) return;
         return sbClient.from('staff_profiles').select('*').eq('user_id',user.id).single().then(p=>{ if(p.data) { window._gerenteProfile = p.data; sessionStorage.setItem('gerente_id_interno', p.data.id); } });
       });
     }
+    });
     return step1.then(()=>{
       if(!window._gerenteProfile || !sbClient) return Promise.resolve([]);
       return sbClient.from('gerente_regiones').select('region_id').eq('gerente_id', window._gerenteProfile.user_id).then(res=>{ window._gerenteRegionIds = (res.data||[]).map(r=>r.region_id); return window._gerenteRegionIds; });
@@ -278,11 +280,9 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;back
       var p4p5 = sbClient ? (()=>{
         var gerenteId = parseInt(sessionStorage.getItem('gerente_id_interno'), 10);
         if(!gerenteId) { _memCache[VK]=[]; _memCache[DB_KEY]=[]; _memCache[NK]=[]; return Promise.resolve(); }
+        console.log('ID Gerente en Sesión:', sessionStorage.getItem('gerente_id_interno'));
         return sbClient.from('staff_profiles').select('*').eq('role_id',3).eq('manager_id',gerenteId)
           .then(res=>{
-            console.log('Vendedores desde Supabase:', res.data);
-            console.log('Cantidad de vendedores:', res.data ? res.data.length : 0);
-            console.log('gerenteId usado:', gerenteId);
             _memCache[VK] = (res.data||[]).map(mapVendorFromSB);
             var sellerIds = _memCache[VK].map(v=>v.user_id).filter(Boolean);
             if(!sellerIds.length){ _memCache[DB_KEY]=[]; return Promise.resolve({data:[]}); }
@@ -676,9 +676,9 @@ function gLogin() {
     })
     .then(function(p) {
       if (p.error || !p.data) throw new Error('Perfil de gerente no encontrado. Contactá al administrador.');
+      sessionStorage.setItem('gerente_id_interno', p.data.id);
       if (parseInt(p.data.role_id) !== 2) throw new Error('Acceso exclusivo para Gerencia (Rol 2).');
       window._gerenteProfile = p.data;
-      sessionStorage.setItem('gerente_id_interno', p.data.id);
       LZ_AUTH.setPanelSession(LZ_AUTH.PANEL_KEYS.gerente);
       LZ_AUTH._showApp('loginWrap', 'app');
       initApp();
@@ -874,6 +874,10 @@ function initApp() {
       + '<div style="width:44px;height:44px;border:3px solid rgba(245,158,11,.15);border-top-color:#f59e0b;border-radius:50%;animation:lzSpin .7s linear infinite;"></div>'
       + '<div style="font-size:.72rem;color:rgba(180,200,240,.4);">Conectando con Supabase</div>';
     document.getElementById('app').appendChild(overlay);
+    
+    if (!sessionStorage.getItem('gerente_id_interno') && window._gerenteProfile) {
+      sessionStorage.setItem('gerente_id_interno', window._gerenteProfile.id);
+    }
     return _sbLoad();
   })
   .then(function() {
