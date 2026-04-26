@@ -337,9 +337,12 @@ function _sbLoad() {
         });
     })() : Promise.resolve();
     return Promise.all([p3, p4p5]);
-  }).then(fallback).catch(function(e) { 
-    console.error("❌ Error en _sbLoad:", e); 
-    fallback(); 
+  }).then(function() {
+    // Éxito: no hacer fallback, solo log
+    console.log("🏁 Carga completada con éxito. Vendedores en memoria:", _memCache[VK] ? _memCache[VK].length : 0);
+  }).catch(function(e) { 
+    console.error("❌ Error real en _sbLoad:", e); 
+    fallback(); // Solo se ejecuta si hubo un error
   });
 }
 </script>
