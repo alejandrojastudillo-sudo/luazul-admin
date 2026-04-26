@@ -247,7 +247,7 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;back
   }
 function _sbLoad() {
   function fallback() { 
-    console.warn("⚠️ Fallback: limpiando caché");
+    console.warn("⚠️ Fallback: limpiando caché por error");
     _memCache[VK]=[]; 
     _memCache[DB_KEY]=[]; 
     _memCache[NK]=[]; 
@@ -270,7 +270,6 @@ function _sbLoad() {
       console.log("❌ No hay perfil gerente o sbClient");
       return Promise.resolve([]);
     }
-    // CONVERSIÓN CLAVE: convertir user_id a string porque en gerente_regiones es TEXT
     var gerenteUid = String(window._gerenteProfile.user_id);
     return sbClient.from('gerente_regiones').select('region_id').eq('gerente_id', gerenteUid).then(function(res){
       window._gerenteRegionIds = (res.data||[]).map(function(r){ return r.region_id; });
@@ -289,27 +288,39 @@ function _sbLoad() {
         _memCache[VK]=[]; _memCache[DB_KEY]=[]; _memCache[NK]=[]; 
         return Promise.resolve(); 
       }
-      if (regionIds.length === 0) {
-        console.log("⚠️ El gerente no tiene regiones asignadas. Asignale regiones desde el panel CEO.");
-        _memCache[VK] = [];
-        _memCache[DB_KEY] = [];
-        _memCache[NK] = [];
-        return Promise.resolve({ data: [] });
-      }
-      console.log("🔍 Buscando vendedores con region_ids:", regionIds);
-      // USAR LA VISTA (no la tabla) para evitar RLS
+      // Ya no bloqueamos si regionIds está vacío; dejamos que la consulta por manager_id funcione sola
+      console.log("🔍 Buscando asesores vinculados por jerarquía (manager_id):", gerenteId);
       return sbClient.from('staff_profiles_view')
         .select('*')
         .eq('role_id', 3)
-        .in('region_id', regionIds)
+        .eq('manager_id', gerenteId)   // Filtro principal: relación jerárquica
         .then(function(res) {
-          console.log("📦 Vendedores encontrados:", res.data ? res.data.length : 0);
+          console.log("📦 Vendedores encontrados por manager_id:", res.data ? res.data.length : 0);
           if (!res.data || res.data.length === 0) {
-            console.warn("⚠️ No se encontraron vendedores. Verifica que los vendedores tengan region_id (ej: 4 o 14) y que coincidan con las regiones del gerente.");
+            console.warn("⚠️ No se encontraron asesores con manager_id =", gerenteId);
+            // Si no hay por manager_id, intentamos por regiones (como respaldo)
+            if (regionIds.length > 0) {
+              console.log("🔄 Intentando búsqueda por regiones:", regionIds);
+              return sbClient.from('staff_profiles_view')
+                .select('*')
+                .eq('role_id', 3)
+                .in('region_id', regionIds)
+                .then(function(res2) {
+                  console.log("📦 Vendedores encontrados por regiones:", res2.data ? res2.data.length : 0);
+                  return res2;
+                });
+            }
           }
+          return res;
+        })
+        .then(function(res) {
+          console.log("✅ Vendedores listos para procesar:", res.data ? res.data.length : 0);
           _memCache[VK] = (res.data||[]).map(mapVendorFromSB);
-          var sellerIds = _memCache[VK].map(function(v) { return v.user_id; }).filter(Boolean);
+          console.log("💾 Contenido de Memoria VK (IDs numéricos):", _memCache[VK].map(function(v){ return {id: v.id, nombre: v.nombre}; }));
+          // Usamos el ID numérico (v.id) para vincular con clientes.seller_id
+          var sellerIds = _memCache[VK].map(function(v) { return v.id; }).filter(Boolean);
           if(!sellerIds.length){ 
+            console.log("ℹ️ No hay sellerIds (IDs numéricos) para buscar clientes.");
             _memCache[DB_KEY]=[]; 
             return Promise.resolve({data:[]}); 
           }
@@ -338,11 +349,10 @@ function _sbLoad() {
     })() : Promise.resolve();
     return Promise.all([p3, p4p5]);
   }).then(function() {
-    // Éxito: no hacer fallback, solo log
     console.log("🏁 Carga completada con éxito. Vendedores en memoria:", _memCache[VK] ? _memCache[VK].length : 0);
   }).catch(function(e) { 
     console.error("❌ Error real en _sbLoad:", e); 
-    fallback(); // Solo se ejecuta si hubo un error
+    fallback();
   });
 }
 </script>
