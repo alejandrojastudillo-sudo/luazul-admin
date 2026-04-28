@@ -812,53 +812,40 @@ function validarSesionActiva(callback) {
 }
 
 // ── MAPEADORES UNIFICADOS (IDEM GERENTE) ─────────────
-function mapVendedorFromSB(v) {
+// ── Mapper unificado (staff_profiles_view) — idéntico en CEO y Gerente ──
+function mapStaffFromSB(v) {
   var comps = [];
   if (v.comprobantes_json) {
     try { comps = JSON.parse(v.comprobantes_json); } catch(e) {}
   }
   return {
-    id:          v.id,
-    user_id:     v.user_id,
-    nombre:      (v.nombre || '') + (v.apellido ? ' ' + v.apellido : ''),
-    email:       v.badge || '',
-    activo:      v.activo !== false,
-    fechaAlta:   v.fecha_alta || '',
-    telefono1:   v.telefono1 || '',
-    telefono2:   v.telefono2 || '',
-    domicilio:   v.domicilio || '',
-    cbu:         v.cbu || '',
-    region_id:   v.region_id || '',
-    manager_id:  v.manager_id || null,
-    com_pct:     v.com_pct || 0,
+    id:           v.id,
+    user_id:      v.user_id,
+    nombre:       (v.nombre || '') + (v.apellido ? ' ' + v.apellido : ''),
+    email:        v.email || v.badge || '',
+    role_id:      v.role_id || null,
+    role_name:    v.role_name || '',
+    activo:       v.activo !== false,
+    fechaAlta:    v.fecha_alta || '',
+    telefono1:    v.telefono1 || '',
+    telefono2:    v.telefono2 || '',
+    domicilio:    v.domicilio || '',
+    cbu:          v.cbu || '',
+    ciudad:       v.ciudad || '',
+    region_id:    v.region_id || '',
+    region_name:  v.region_name || '',
+    manager_id:   v.manager_id || null,
+    com_pct:      v.com_pct || 0,
+    pct_bonus:    v.com_pct || 0,   // alias para gerentes
+    region_ids:   [],               // se llena desde gerente_regiones
     comprobantes: comps,
-    _sbId:       v.id
+    _sbId:        v.id,
+    _raw:         v
   };
 }
-
-function mapGerenteFromSB(g) {
-  var comps = [];
-  if (g.comprobantes_json) {
-    try { comps = JSON.parse(g.comprobantes_json); } catch(e) {}
-  }
-  return {
-    id:          g.id,
-    user_id:     g.user_id,
-    nombre:      (g.nombre || '') + (g.apellido ? ' ' + g.apellido : ''),
-    email:       g.badge || '',
-    activo:      g.activo !== false,
-    fechaAlta:   g.fecha_alta || '',
-    telefono1:   g.telefono1 || '',
-    telefono2:   g.telefono2 || '',
-    domicilio:   g.domicilio || '',
-    cbu:         g.cbu || '',
-    ciudad:      g.ciudad || '',
-    pct_bonus:   g.com_pct || 0,
-    region_ids:  [],   // se llena desde gerente_regiones
-    comprobantes: comps,
-    _raw:        g
-  };
-}
+// Aliases para compatibilidad con código existente
+var mapVendedorFromSB = mapStaffFromSB;
+var mapGerenteFromSB  = mapStaffFromSB;
 
 function mapClienteFromSB(c) {
   return {
@@ -934,8 +921,8 @@ function cargarDatosSupabase() {
         return { id: r.id, nombre: r.nombre, bandera: r.bandera || '🌎', pais: r.pais || '', color: r.color || '#a78bfa', activo: r.activo };
       });
       try { localStorage.setItem(RK, JSON.stringify(_cacheRegiones)); } catch(e) {}
-      return sbClient.from('staff_profiles')
-        .select('id,user_id,nombre,apellido,activo,badge,color,role_id,ciudad,telefono1,telefono2,domicilio,cbu,region_id,com_pct,comprobantes_json')
+      return sbClient.from('staff_profiles_view')
+        .select('id,user_id,nombre,apellido,email,role_id,role_name,ciudad,telefono1,telefono2,domicilio,cbu,region_id,region_name,com_pct,comprobantes_json,activo,fecha_alta')
         .eq('role_id', ROLE_MANAGER);
     })
     .catch(handleError(1));
@@ -955,8 +942,8 @@ function cargarDatosSupabase() {
         return String(x.gerente_id) === String(g.user_id);
       }).map(function(x) { return x.region_id; });
     });
-    return sbClient.from('staff_profiles')
-      .select('id,user_id,nombre,apellido,activo,badge,color,role_id,ciudad,telefono1,telefono2,domicilio,cbu,region_id,manager_id,fecha_alta,comprobantes_json')
+    return sbClient.from('staff_profiles_view')
+      .select('id,user_id,nombre,apellido,email,role_id,role_name,ciudad,telefono1,telefono2,domicilio,cbu,region_id,region_name,manager_id,com_pct,comprobantes_json,activo,fecha_alta')
       .eq('role_id', ROLE_SELLER);
   }).catch(handleError(3));
 
@@ -1090,8 +1077,8 @@ function cLogin() {
           throw new Error('Este usuario no tiene acceso al panel CEO.');
         });
       }
-      return sbClient.from('staff_profiles')
-        .select('id, user_id, role_id, nombre')
+      return sbClient.from('staff_profiles_view')
+        .select('id, user_id, role_id, role_name, nombre')
         .eq('user_id', result.data.user.id)
         .single()
         .then(function(profRes) {
@@ -2752,7 +2739,185 @@ function verDetalleStaff(staffId) {
   //  pero en la práctica se copiarían las versiones ya corregidas del archivo original)
   function getPendingPayments() { return []; } // stub
   function renderPagosAprobacion() { document.getElementById('pagosAprobacionList').innerHTML = '<div style="padding:20px;text-align:center;">Funcionalidad en desarrollo</div>'; }
-  function renderPagoComisiones() { document.getElementById('pagoComisionesList').innerHTML = '<div style="padding:20px;text-align:center;">Cargando comisiones...</div>'; }
+  function renderPagoComisiones() {
+    var vs = _cacheVendedores || [];
+    var cs = _cacheClientes || [];
+    var container = document.getElementById('pagoComisionesList');
+    if (!container) return;
+    if (!vs.length) {
+      container.innerHTML = '<div style="padding:40px;text-align:center;">No hay asesores cargados.</div>';
+      return;
+    }
+    function calcularNeta(v) {
+      var vc = cs.filter(function(c) { return String(c.seller_id) === String(v.user_id); });
+      var byMonth = {};
+      vc.forEach(function(c) {
+        if (c.estado === 'baja' && (parseInt(c.cuotas_pagadas) || 0) === 0) return;
+        var d = c.fechaAlta ? new Date(c.fechaAlta + 'T00:00:00') : new Date();
+        var key = d.getFullYear() + '-' + d.getMonth();
+        if (!byMonth[key]) byMonth[key] = [];
+        byMonth[key].push(c);
+      });
+      var totalBruta = 0, totalPen = 0;
+      Object.keys(byMonth).forEach(function(key) {
+        var grupo = byMonth[key];
+        var activos = grupo.filter(function(c) { return c.estado !== 'baja'; });
+        var bajasP3 = grupo.filter(function(c) { return c.estado === 'baja' && (parseInt(c.cuotas_pagadas) || 0) <= 3; });
+        var tasa = grupo.length >= 3 ? 0.80 : 0.50;
+        var bruta = activos.reduce(function(s, c) { return s + (parseFloat(c.monto_cuota) || 0) * tasa; }, 0);
+        var pen = bajasP3.reduce(function(s, c) { return s + (parseFloat(c.monto_cuota) || 0) * tasa; }, 0);
+        totalBruta += bruta;
+        totalPen += pen;
+      });
+      return Math.round((totalBruta - totalPen) * 100) / 100;
+    }
+    var rows = '';
+    for (var i = 0; i < vs.length; i++) {
+      var v = vs[i];
+      var neta = calcularNeta(v);
+      var pagado = 0;
+      if (v.comprobantes && v.comprobantes.length) {
+        pagado = v.comprobantes.reduce(function(s, c) { return s + (parseFloat(c.monto) || 0); }, 0);
+      }
+      var pendiente = Math.max(0, neta - pagado);
+      rows += '<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:12px;">' +
+        '<div style="display:flex;justify-content:space-between;"><div><strong>' + esc(v.nombre) + '</strong><br><span style="font-size:.7rem;">' + esc(v.email || '') + '</span></div>' +
+        '<div><span style="color:var(--gold);">Comisión neta: USD ' + neta.toFixed(2) + '</span><br><span style="color:var(--green);">Pagado: USD ' + pagado.toFixed(2) + '</span></div></div>' +
+        '<div style="margin:12px 0;"><div class="progress-track"><div class="progress-fill" style="width:' + Math.min(100, (pagado / (neta || 1)) * 100) + '%;background:var(--green);"></div></div></div>' +
+        '<div><button onclick="mostrarModalPagoComision(\'' + v.user_id + '\',' + pendiente.toFixed(2) + ')" class="mbtn gold" style="margin-top:4px;">💰 Pagar comisión</button>&nbsp;' +
+        '<button onclick="verComprobantesVendedor(\'' + v.user_id + '\')" class="mbtn ghost">📎 Historial</button></div></div>';
+    }
+    container.innerHTML = rows;
+  }
+
+  function mostrarModalPagoComision(vendorUid, montoMax) {
+    var v = null;
+    for (var i = 0; i < _cacheVendedores.length; i++) {
+      if (String(_cacheVendedores[i].user_id) === String(vendorUid)) { v = _cacheVendedores[i]; break; }
+    }
+    if (!v) return;
+    var html = '<div class="mhead"><div><h2>💰 Pagar Comisión a ' + esc(v.nombre) + '</h2></div><button class="mclose" onclick="closeModal()">✕</button></div>' +
+      '<div class="mbody">' +
+      '<div class="manager-input-group"><label>Monto a pagar (USD)</label><input id="montoComision" type="number" step="1" max="' + montoMax + '" value="' + montoMax + '" /></div>' +
+      '<div class="manager-input-group"><label>Descripción</label><input id="descComision" placeholder="Ej: Comisión Marzo 2026" /></div>' +
+      '<div class="manager-input-group"><label>Comprobante (archivo)</label><input id="fileComision" type="file" accept="image/*,application/pdf" /></div>' +
+      '</div><div class="mact"><button class="mbtn gold" onclick="procesarPagoComision(\'' + vendorUid + '\')">✅ Registrar Pago</button><button class="mbtn ghost" onclick="closeModal()">Cancelar</button></div>';
+    document.getElementById('mbox').innerHTML = html;
+    document.getElementById('modal').classList.add('open');
+  }
+
+  function procesarPagoComision(vendorUid) {
+    var monto = parseFloat(document.getElementById('montoComision').value);
+    var desc = document.getElementById('descComision').value.trim();
+    var fileInput = document.getElementById('fileComision');
+    if (!desc) { showToast('⚠️ Ingresá una descripción'); return; }
+    if (!monto || monto <= 0) { showToast('⚠️ Ingresá un monto válido'); return; }
+    var v = null;
+    for (var i = 0; i < _cacheVendedores.length; i++) {
+      if (String(_cacheVendedores[i].user_id) === String(vendorUid)) { v = _cacheVendedores[i]; break; }
+    }
+    if (!v) return;
+    function guardar(dataURL, tipo) {
+      var comprobantes = v.comprobantes || [];
+      comprobantes.push({ nombre: desc, monto: monto, fecha: new Date().toLocaleDateString('es-AR'), data: dataURL, tipo: tipo });
+      sbClient.from('staff_profiles').update({ comprobantes_json: JSON.stringify(comprobantes) }).eq('user_id', vendorUid)
+        .then(function(res) {
+          if (res.error) throw res.error;
+          showToast('✅ Comisión registrada');
+          closeModal();
+          return cargarDatosSupabase().then(function() { renderPagoComisiones(); });
+        })
+        .catch(function(e) { showToast('❌ Error: ' + (e.message || '')); });
+    }
+    if (fileInput.files && fileInput.files[0]) {
+      var reader = new FileReader();
+      reader.onload = function(ev) { guardar(ev.target.result, fileInput.files[0].type); };
+      reader.readAsDataURL(fileInput.files[0]);
+    } else {
+      guardar(null, null);
+    }
+  }
+
+  function verComprobantesVendedor(vendorUid) {
+    var v = null;
+    for (var i = 0; i < _cacheVendedores.length; i++) {
+      if (String(_cacheVendedores[i].user_id) === String(vendorUid)) { v = _cacheVendedores[i]; break; }
+    }
+    if (!v || !v.comprobantes || !v.comprobantes.length) { showToast('No hay comprobantes'); return; }
+    var html = '<div class="mhead"><div><h2>📎 Historial - ' + esc(v.nombre) + '</h2></div><button class="mclose" onclick="closeModal()">✕</button></div><div class="mbody">';
+    v.comprobantes.slice().reverse().forEach(function(c, idx) {
+      var realIdx = v.comprobantes.length - 1 - idx;
+      html += '<div style="border-bottom:1px solid var(--border);padding:8px 0;display:flex;justify-content:space-between;">' +
+        '<div><strong>' + esc(c.nombre) + '</strong><br><span style="font-size:.7rem;">' + c.fecha + '</span></div>' +
+        '<div><span style="color:var(--green);">USD ' + (parseFloat(c.monto) || 0) + '</span> <button onclick="verComprobanteVend(\'' + vendorUid + '\',' + realIdx + ')" class="mbtn ghost" style="padding:3px 8px;">Ver</button></div></div>';
+    });
+    html += '</div><div class="mact"><button class="mbtn ghost" onclick="closeModal()">Cerrar</button></div>';
+    document.getElementById('mbox').innerHTML = html;
+    document.getElementById('modal').classList.add('open');
+  }
+
+  function verComprobanteVend(vendorUid, idx) {
+    var v = null;
+    for (var i = 0; i < _cacheVendedores.length; i++) {
+      if (String(_cacheVendedores[i].user_id) === String(vendorUid)) { v = _cacheVendedores[i]; break; }
+    }
+    if (v && v.comprobantes && v.comprobantes[idx]) {
+      var comp = v.comprobantes[idx];
+      var w = window.open('', '_blank');
+      w.document.open(); w.document.close();
+      if (comp.tipo && comp.tipo.indexOf('image') === 0) {
+        var img = w.document.createElement('img');
+        img.src = comp.data;
+        img.style.cssText = 'max-width:100%;display:block;margin:auto;';
+        w.document.body.appendChild(img);
+      } else if (comp.data) {
+        var fr = w.document.createElement('iframe');
+        fr.src = comp.data;
+        fr.style.cssText = 'width:100%;height:100vh;border:0;';
+        w.document.body.appendChild(fr);
+      }
+    }
+  }
+
+  function verFichaCliente(clienteId) {
+    var c = null;
+    for (var i = 0; i < _cacheClientes.length; i++) {
+      if (String(_cacheClientes[i].id) === String(clienteId)) { c = _cacheClientes[i]; break; }
+    }
+    if (!c) { showToast('Cliente no encontrado'); return; }
+    var v = vby(c.seller_id);
+    var r = rby(c.region_id);
+    var pagadas = parseInt(c.cuotas_pagadas) || 0;
+    var total = parseInt(c.cuotas_total) || 10;
+    var montoCuota = parseFloat(c.monto_cuota) || 0;
+    var abonado = pagadas * montoCuota;
+    var restante = (total - pagadas) * montoCuota;
+    var pagosHtml = '';
+    if (_cachePagos) {
+      var pagosCliente = _cachePagos.filter(function(p) { return String(p.cliente_id) === String(c.id); }).slice(0, 5);
+      pagosHtml = pagosCliente.map(function(p) {
+        return '<div style="border-bottom:1px solid var(--border);padding:4px 0;"><span>Cuota ' + p.numero_cuota + ' · USD ' + p.monto_usd + '</span><span style="float:right;">' + (p.estado === 'aprobado' ? '✅ Aprobado' : '⏳ Pendiente') + '</span></div>';
+      }).join('');
+      if (!pagosCliente.length) pagosHtml = '<div>Sin pagos registrados</div>';
+    }
+    var modalHtml =
+      '<div class="mhead"><div><h2>' + esc(c.nombre) + '</h2><p>' + esc(c.email || '') + ' · ' + esc(c.documento || '—') + '</p></div><button class="mclose" onclick="closeModal()">✕</button></div>' +
+      '<div class="mbody">' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">' +
+      '<div class="mi"><div class="ml">Teléfono</div><div class="mv">' + (c.telefono || '—') + '</div></div>' +
+      '<div class="mi"><div class="ml">Domicilio</div><div class="mv">' + (c.domicilio || '—') + '</div></div>' +
+      '<div class="mi"><div class="ml">Asesor</div><div class="mv">' + (v.nombre || '—') + '</div></div>' +
+      '<div class="mi"><div class="ml">Región</div><div class="mv">' + (r.bandera || '') + ' ' + (r.nombre || '—') + '</div></div>' +
+      '<div class="mi"><div class="ml">Destino / Paquete</div><div class="mv">' + (c.destino || '—') + ' · ' + (c.paquete || '—') + '</div></div>' +
+      '<div class="mi"><div class="ml">Fecha viaje</div><div class="mv">' + (c.fecha_viaje || '—') + '</div></div>' +
+      '<div class="mi"><div class="ml">Progreso</div><div class="mv">' + pagadas + '/' + total + ' cuotas (' + Math.round(pagadas / (total || 1) * 100) + '%)</div></div>' +
+      '<div class="mi"><div class="ml">Abonado / Saldo</div><div class="mv">USD ' + abonado.toFixed(0) + ' / USD ' + restante.toFixed(0) + '</div></div>' +
+      '</div>' +
+      '<div style="margin-top:16px;"><div class="ml">📋 Últimos pagos</div><div style="max-height:150px;overflow-y:auto;">' + pagosHtml + '</div></div>' +
+      '</div><div class="mact"><button class="mbtn ghost" onclick="closeModal()">Cerrar</button></div>';
+    document.getElementById('mbox').innerHTML = modalHtml;
+    document.getElementById('modal').classList.add('open');
+  }
   function renderContratosPendientes() { document.getElementById('contratosBody').innerHTML = '<div style="padding:20px;text-align:center;">Módulo Contratos</div>'; }
   function renderComisionesBloqueadas() { document.getElementById('comisionesBloqBody').innerHTML = '<div style="padding:20px;text-align:center;">Sin comisiones bloqueadas</div>'; }
   function renderPremiosReferidos() { document.getElementById('premiosReferidosBody').innerHTML = '<div style="padding:20px;text-align:center;">Premios por referidos</div>'; }
@@ -2811,8 +2976,217 @@ function verDetalleStaff(staffId) {
   function dbs(key, val) { }
   function renderMensual() { document.getElementById('mensualDash').innerHTML = '<div style="padding:40px;text-align:center;">Módulo en construcción</div>'; }
   function renderPwCeoUsers() { document.getElementById('pwCeoUsers').innerHTML = '<div>Usuarios CEO: solo el usuario actual</div>'; }
-  function openAddVendorCeo() { alert("Función: Agregar nuevo asesor - en desarrollo"); }
-  function openAddClienteCeo() { alert("Función: Agregar nuevo cliente - en desarrollo"); }
+  function openAddVendorCeo() {
+    var rs = _cacheRegiones || [];
+    var regionesHtml = '<option value="">Sin región</option>';
+    for (var i = 0; i < rs.length; i++) {
+      regionesHtml += '<option value="' + rs[i].id + '">' + rs[i].bandera + ' ' + rs[i].nombre + '</option>';
+    }
+    var gerentes = _cacheGerentes || [];
+    var gerentesHtml = '<option value="">Sin gerente asignado</option>';
+    for (var j = 0; j < gerentes.length; j++) {
+      gerentesHtml += '<option value="' + gerentes[j].user_id + '">' + esc(gerentes[j].nombre) + '</option>';
+    }
+    var modalHtml =
+      '<div class="mhead"><div><h2>➕ Nuevo Asesor</h2></div><button class="mclose" onclick="closeModal()">✕</button></div>' +
+      '<div class="mbody"><div class="manager-modal-grid"><div class="manager-modal-col"><div class="manager-modal-section">' +
+      '<h3>👤 Datos personales</h3>' +
+      '<div class="manager-input-group"><label>Nombre completo</label><input id="vN" class="normalize-upper" placeholder="Ej: Martín López" /></div>' +
+      '<div class="manager-input-group"><label>Email</label><input id="vE" type="email" placeholder="asesor@luazul.com" /></div>' +
+      '<div class="manager-input-group"><label>Contraseña</label><input id="vP" type="password" placeholder="Contraseña de acceso" /></div>' +
+      '<div class="manager-input-group"><label>Teléfono principal</label><input id="vT1" placeholder="+54 9 11 1234-5678" /></div>' +
+      '<div class="manager-input-group"><label>Teléfono referencia</label><input id="vT2" placeholder="+54 9 351 9876-5432" /></div>' +
+      '<div class="manager-input-group"><label>Domicilio</label><input id="vDom" placeholder="Av. Colón 1234" /></div>' +
+      '</div></div>' +
+      '<div class="manager-modal-col"><div class="manager-modal-section">' +
+      '<h3>🏢 Configuración</h3>' +
+      '<div class="manager-input-group"><label>Región</label><select id="vReg" class="msel">' + regionesHtml + '</select></div>' +
+      '<div class="manager-input-group"><label>Gerente a cargo</label><select id="vManager" class="msel">' + gerentesHtml + '</select></div>' +
+      '<div class="manager-input-group"><label>💰 CBU / Alias</label><input id="vCBU" placeholder="CBU o Alias" style="font-family:monospace;" /></div>' +
+      '<div class="manager-input-group"><label>% Comisión (opcional)</label><input id="vCom" type="number" value="0" step="1" min="0" max="100" /></div>' +
+      '</div></div></div>' +
+      '<div class="mact"><button class="mbtn gold" onclick="saveNewVendorCeo()">✅ Crear Asesor</button><button class="mbtn ghost" onclick="closeModal()">Cancelar</button></div></div>';
+    document.getElementById('mbox').innerHTML = modalHtml;
+    document.getElementById('modal').classList.add('open');
+    if (document.getElementById('vN')) document.getElementById('vN').addEventListener('input', function() { this.value = this.value.toUpperCase(); });
+  }
+
+  function saveNewVendorCeo() {
+    var nombre = document.getElementById('vN').value.trim();
+    var email = document.getElementById('vE').value.trim().toLowerCase();
+    var pass = document.getElementById('vP').value.trim();
+    if (!nombre || !email || !pass) { showToast('⚠️ Nombre, email y contraseña son obligatorios'); return; }
+    var btn = document.querySelector('#modal .mbtn.gold');
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Creando...'; }
+    var telefono1 = document.getElementById('vT1').value.trim();
+    var telefono2 = document.getElementById('vT2').value.trim();
+    var domicilio = document.getElementById('vDom').value.trim();
+    var regionId = document.getElementById('vReg').value ? parseInt(document.getElementById('vReg').value, 10) : null;
+    var managerId = document.getElementById('vManager').value || null;
+    var cbu = document.getElementById('vCBU').value.trim();
+    var comPct = parseInt(document.getElementById('vCom').value, 10) || 0;
+    var nombresArr = nombre.split(' ');
+    var primerNombre = nombresArr[0];
+    var apellidoStr = nombresArr.slice(1).join(' ') || '';
+
+    var sbTemp = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: false } });
+    sbTemp.auth.signUp({
+      email: email,
+      password: pass,
+      options: { data: { nombre: primerNombre, apellido: apellidoStr, role_id: 3 } }
+    })
+    .then(function(signRes) {
+      if (signRes.error) throw signRes.error;
+      var uid = signRes.data.user.id;
+      return sbClient.from('staff_profiles').insert({
+        user_id: uid, role_id: 3, nombre: primerNombre, apellido: apellidoStr, badge: email,
+        activo: true, telefono1: telefono1 || null, telefono2: telefono2 || null,
+        domicilio: domicilio || null, cbu: cbu || null, region_id: regionId, manager_id: managerId,
+        com_pct: comPct, fecha_alta: new Date().toISOString().slice(0, 10), comprobantes_json: '[]'
+      }).select().single();
+    })
+    .then(function(insRes) {
+      if (insRes.error) throw insRes.error;
+      showToast('✅ Asesor ' + nombre + ' creado');
+      closeModal();
+      return cargarDatosSupabase().then(function() { renderAll(); populateAllFilters(); renderPasswords(); });
+    })
+    .catch(function(err) { showToast('❌ Error: ' + (err.message || '')); })
+    .finally(function() { if (btn) { btn.disabled = false; btn.textContent = '✅ Crear Asesor'; } });
+  }
+
+  function openAddClienteCeo() {
+    var vs = _cacheVendedores || [];
+    var rs = _cacheRegiones || [];
+
+    // Construir opciones de asesores
+    var vendOpts = '<option value="">— Seleccionar asesor —</option>';
+    for (var i = 0; i < vs.length; i++) {
+      var v = vs[i];
+      vendOpts += '<option value="' + v.user_id + '">' + (v.nombre || v.user_id) + '</option>';
+    }
+
+    // Construir opciones de regiones
+    var regOpts = '<option value="">— Seleccionar región —</option>';
+    for (var j = 0; j < rs.length; j++) {
+      var r = rs[j];
+      regOpts += '<option value="' + r.id + '">' + r.bandera + ' ' + r.nombre + '</option>';
+    }
+
+    var modalContent = '<div class="mhead"><div><h2>➕ Nuevo Cliente</h2><p>Completá los datos del nuevo cliente</p></div><button class="mclose" onclick="closeModal()">✕</button></div>'
+      + '<div class="mbody">'
+      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">'
+      + '<div class="manager-input-group"><label>Nombre completo *</label><input id="nNombre" placeholder="Ej: Juan Pérez" autocomplete="off" /></div>'
+      + '<div class="manager-input-group"><label>Email</label><input id="nEmail" type="email" placeholder="cliente@email.com" autocomplete="off" /></div>'
+      + '<div class="manager-input-group"><label>Teléfono</label><input id="nTelefono" placeholder="+54 9 11 1234-5678" /></div>'
+      + '<div class="manager-input-group"><label>Documento (DNI/CI)</label><input id="nDocumento" placeholder="Ej: 30123456" /></div>'
+      + '<div class="manager-input-group"><label>Domicilio</label><input id="nDomicilio" placeholder="Calle 123, Ciudad" /></div>'
+      + '<div class="manager-input-group"><label>Destino</label><input id="nDestino" placeholder="Ej: Cancún 2026" /></div>'
+      + '<div class="manager-input-group"><label>Paquete</label><input id="nPaquete" placeholder="Ej: Paquete Premium" /></div>'
+      + '<div class="manager-input-group"><label>Total USD *</label><input id="nTotalUsd" type="number" min="0" placeholder="0.00" /></div>'
+      + '<div class="manager-input-group"><label>Monto cuota USD</label><input id="nMontoCuota" type="number" min="0" placeholder="0.00" /></div>'
+      + '<div class="manager-input-group"><label>Cuotas totales</label><input id="nCuotasTotal" type="number" min="1" value="12" /></div>'
+      + '<div class="manager-input-group"><label>Fecha de viaje</label><input id="nFechaViaje" type="date" /></div>'
+      + '<div class="manager-input-group"><label>Asesor asignado</label><select id="nSeller" class="msel" style="width:100%;padding:10px 14px;background:rgba(0,0,0,.35);border:1px solid var(--border2);border-radius:10px;color:var(--text);font-size:.85rem;">' + vendOpts + '</select></div>'
+      + '<div class="manager-input-group"><label>Región</label><select id="nRegion" class="msel" style="width:100%;padding:10px 14px;background:rgba(0,0,0,.35);border:1px solid var(--border2);border-radius:10px;color:var(--text);font-size:.85rem;">' + regOpts + '</select></div>'
+      + '<div class="manager-input-group"><label>Notas</label><input id="nNotas" placeholder="Observaciones adicionales..." /></div>'
+      + '<div class="manager-input-group" style="grid-column:span 2;">'
+      + '<label>🎁 Código de referido (opcional)</label>'
+      + '<input id="nRefCodigo" placeholder="Ej: LUA-JUANPEREZ" />'
+      + '</div>'
+      + '</div>'
+      + '</div>'
+      + '<div class="mact"><button class="mbtn gold" onclick="saveNewClienteCeo()">✅ Crear Cliente</button><button class="mbtn ghost" onclick="closeModal()">Cancelar</button></div>';
+
+    document.getElementById('mbox').innerHTML = modalContent;
+    document.getElementById('modal').classList.add('open');
+  }
+
+  function saveNewClienteCeo() {
+    var nombre   = (document.getElementById('nNombre')      || {}).value || '';
+    var email    = (document.getElementById('nEmail')       || {}).value || '';
+    var telefono = (document.getElementById('nTelefono')    || {}).value || '';
+    var documento= (document.getElementById('nDocumento')   || {}).value || '';
+    var domicilio= (document.getElementById('nDomicilio')   || {}).value || '';
+    var destino  = (document.getElementById('nDestino')     || {}).value || '';
+    var paquete  = (document.getElementById('nPaquete')     || {}).value || '';
+    var totalUsd = parseFloat((document.getElementById('nTotalUsd')    || {}).value || 0);
+    var cuota    = parseFloat((document.getElementById('nMontoCuota')  || {}).value || 0);
+    var cuotasT  = parseInt((document.getElementById('nCuotasTotal')   || {}).value || 12, 10);
+    var fechaViaje = (document.getElementById('nFechaViaje') || {}).value || null;
+    var sellerId = (document.getElementById('nSeller')      || {}).value || '';
+    var regionId = (document.getElementById('nRegion')      || {}).value || '';
+    var notas    = (document.getElementById('nNotas')       || {}).value || '';
+
+    nombre = nombre.trim();
+    if (!nombre) { showToast('⚠️ El nombre es obligatorio'); return; }
+    if (!totalUsd || totalUsd <= 0) { showToast('⚠️ Ingresá el total USD'); return; }
+
+    var payload = {
+      nombre:        nombre,
+      email:         email || null,
+      telefono:      telefono || null,
+      documento:     documento || null,
+      domicilio:     domicilio || null,
+      destino:       destino || null,
+      paquete:       paquete || null,
+      total_usd:     totalUsd,
+      monto_cuota:   cuota || null,
+      cuotas_total:  cuotasT,
+      cuotas_pagadas: 0,
+      estado:        'activo',
+      fecha_viaje:   fechaViaje || null,
+      seller_id:     sellerId || null,
+      region_id:     regionId || null,
+      notas:         notas || null,
+      fecha_alta:    new Date().toISOString()
+    };
+
+    sbClient.from('clientes').insert(payload).select()
+      .then(function(insRes) {
+        if (insRes.error) throw insRes.error;
+        var nuevoCliente = insRes.data && insRes.data[0] ? insRes.data[0] : null;
+
+        // Registro de referido (si se ingresó código)
+        var codigoReferido = ((document.getElementById('nRefCodigo') || {}).value || '').trim();
+        var referidor = null;
+
+        if (codigoReferido && nuevoCliente && nuevoCliente.id) {
+          for (var i = 0; i < _cacheClientes.length; i++) {
+            var c = _cacheClientes[i];
+            var code = 'LUA-' + (c.nombre ? c.nombre.split(' ')[0].toUpperCase() : '');
+            if (code === codigoReferido.toUpperCase()) {
+              referidor = c;
+              break;
+            }
+          }
+          if (referidor) {
+            sbClient.from('referidos').insert({
+              cliente_referidor_id: referidor.id,
+              cliente_referido_id:  nuevoCliente.id,
+              referido_nombre:      nuevoCliente.nombre,
+              referido_email:       nuevoCliente.email,
+              referido_tel:         nuevoCliente.telefono || null,
+              estado:               'pendiente',
+              vendedor_id:          nuevoCliente.seller_id || null,
+              created_at:           new Date().toISOString()
+            }).catch(function(e) { console.warn('Error al registrar referido:', e); });
+          }
+        }
+
+        showToast('✅ Cliente ' + nombre + ' creado');
+        closeModal();
+        return cargarDatosSupabase().then(function() {
+          renderAll();
+          populateAllFilters();
+          renderClientes();
+        });
+      })
+      .catch(function(err) {
+        showToast('❌ Error al crear cliente: ' + ((err && err.message) || 'desconocido'));
+        console.error('saveNewClienteCeo error:', err);
+      });
+  }
   function approvePayment() { alert("Aprobación de pago - pendiente de implementación"); }
 
   // Alias para toggle password
@@ -2884,7 +3258,15 @@ for (var k = 0; k < allRs.length; k++) {
   window.showTab = showTab;
   window.openAddGerente = openAddGerente;
   window.openAddVendorCeo = openAddVendorCeo;
+  window.saveNewVendorCeo = saveNewVendorCeo;
   window.openAddClienteCeo = openAddClienteCeo;
+  window.saveNewClienteCeo = saveNewClienteCeo;
+  window.renderPagoComisiones = renderPagoComisiones;
+  window.mostrarModalPagoComision = mostrarModalPagoComision;
+  window.procesarPagoComision = procesarPagoComision;
+  window.verComprobantesVendedor = verComprobantesVendedor;
+  window.verComprobanteVend = verComprobanteVend;
+  window.verFichaCliente = verFichaCliente;
   window.approvePayment = approvePayment;
   window.aprobarTodos = aprobarTodos;
   window.escanearMora = escanearMora;

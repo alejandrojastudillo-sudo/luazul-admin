@@ -224,16 +224,37 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;back
   function safeUUID(id) { return String(id == null ? '' : id); }
 
   // Funciones de mapeo
-  function mapVendorFromSB(v) {
+  // ── Mapper unificado (staff_profiles_view) — idéntico en CEO y Gerente ──
+  function mapStaffFromSB(v) {
     var comps = [];
     if (v.comprobantes_json) try { comps = JSON.parse(v.comprobantes_json); } catch(e) {}
     return {
-      id: v.id, user_id: v.user_id, nombre: (v.nombre||'')+(v.apellido?' '+v.apellido:''), email: v.badge||'',
-      activo: v.activo!==false, fechaAlta: v.fecha_alta||'', telefono1: v.telefono1||'', telefono2: v.telefono2||'',
-      domicilio: v.domicilio||'', cbu: v.cbu||'', region_id: v.region_id||'', manager_id: v.manager_id||null,
-      com_pct: v.com_pct||0, comprobantes: comps, _sbId: v.id
+      id:           v.id,
+      user_id:      v.user_id,
+      nombre:       (v.nombre || '') + (v.apellido ? ' ' + v.apellido : ''),
+      email:        v.email || v.badge || '',
+      role_id:      v.role_id || null,
+      role_name:    v.role_name || '',
+      activo:       v.activo !== false,
+      fechaAlta:    v.fecha_alta || '',
+      telefono1:    v.telefono1 || '',
+      telefono2:    v.telefono2 || '',
+      domicilio:    v.domicilio || '',
+      cbu:          v.cbu || '',
+      ciudad:       v.ciudad || '',
+      region_id:    v.region_id || '',
+      region_name:  v.region_name || '',
+      manager_id:   v.manager_id || null,
+      com_pct:      v.com_pct || 0,
+      pct_bonus:    v.com_pct || 0,
+      region_ids:   [],
+      comprobantes: comps,
+      _sbId:        v.id,
+      _raw:         v
     };
   }
+  // Alias para compatibilidad con código existente
+  var mapVendorFromSB = mapStaffFromSB;
   function mapClientFromSB(c) {
     return {
       id: c.id, vid: String(c.seller_id||''), nombre: c.nombre||'', email: c.email||'', telefono: c.telefono||'',
@@ -257,7 +278,7 @@ function _sbLoad() {
     step1 = sbClient.auth.getUser().then(function(res){
       var user = res.data?.user;
       if(!user) return;
-      return sbClient.from('staff_profiles').select('*').eq('user_id',user.id).single().then(function(p){ 
+      return sbClient.from('staff_profiles_view').select('id,user_id,role_id,role_name,nombre,region_id,region_name').eq('user_id',user.id).single().then(function(p){ 
         if(p.data) {
           window._gerenteProfile = p.data;
           console.log("✅ Perfil gerente cargado:", window._gerenteProfile.nombre);
@@ -291,7 +312,7 @@ function _sbLoad() {
       // Ya no bloqueamos si regionIds está vacío; dejamos que la consulta por manager_id funcione sola
       console.log("🔍 Buscando asesores vinculados por jerarquía (manager_id):", gerenteId);
       return sbClient.from('staff_profiles_view')
-        .select('*')
+        .select('id,user_id,nombre,apellido,email,role_id,role_name,ciudad,telefono1,telefono2,domicilio,cbu,region_id,region_name,manager_id,com_pct,comprobantes_json,activo,fecha_alta')
         .eq('role_id', 3)
         .eq('manager_id', gerenteId)   // Filtro principal: relación jerárquica
         .then(function(res) {
@@ -302,7 +323,7 @@ function _sbLoad() {
             if (regionIds.length > 0) {
               console.log("🔄 Intentando búsqueda por regiones:", regionIds);
               return sbClient.from('staff_profiles_view')
-                .select('*')
+                .select('id,user_id,nombre,apellido,email,role_id,role_name,ciudad,telefono1,telefono2,domicilio,cbu,region_id,region_name,manager_id,com_pct,comprobantes_json,activo,fecha_alta')
                 .eq('role_id', 3)
                 .in('region_id', regionIds)
                 .then(function(res2) {
@@ -645,7 +666,7 @@ function gLogin() {
   sbClient.auth.signInWithPassword({ email: emailToUse, password: pass })
     .then(function(res) {
       if (res.error || !res.data || !res.data.user) throw new Error(res.error ? res.error.message : 'Sin respuesta del servidor');
-      return sbClient.from('staff_profiles').select('*').eq('user_id', res.data.user.id).single();
+      return sbClient.from('staff_profiles_view').select('id,user_id,role_id,role_name,nombre,region_id,region_name').eq('user_id', res.data.user.id).single();
     })
     .then(function(p) {
       if (p.error || !p.data) throw new Error('Perfil de gerente no encontrado. Contactá al administrador.');
@@ -823,8 +844,8 @@ function initApp() {
       .then(function(res) {
         var session = res.data && res.data.session ? res.data.session : null;
         if (!session || !session.user) return Promise.resolve();
-        return sbClient.from('staff_profiles')
-          .select('*').eq('user_id', session.user.id).single()
+        return sbClient.from('staff_profiles_view')
+          .select('id,user_id,role_id,role_name,nombre,region_id,region_name').eq('user_id', session.user.id).single()
           .then(function(p) {
             if (p.data && String(p.data.role_id) === '2') {
               window._gerenteProfile = p.data;
@@ -2409,6 +2430,59 @@ window.lzToggle = function(inputId, btn) {
   global.lzToggle = function (inputId, btn) { LZ_AUTH.togglePassword(inputId, btn); };
   global.LZ_AUTH = LZ_AUTH;
 })(window);
+
+// ── Inicialización: restaurar visibilidad y mostrar login si corresponde ──
+document.addEventListener('DOMContentLoaded', function() {
+  var guardPassed = LZ_AUTH.guard({
+    panelKey    : LZ_AUTH.PANEL_KEYS.gerente,
+    portalRoles : ['gerente', 'owner', 'super_admin'],
+    loginWrapId : 'loginWrap',
+    appId       : 'app',
+    onSuccess   : function() { initApp(); }
+  });
+  if (!guardPassed) {
+    // Sin sesión válida: solo mostrar el formulario de login
+    document.documentElement.style.visibility = 'visible';
+  }
+});
+
+// ── Ver Voucher desde panel Gerente ──────────────────────────────
+window.verVoucherGerente = function(clientId) {
+  var cs = _memCache[DB_KEY] || [];
+  var c = cs.find(function(x) { return x.id == clientId; });
+  if (!c) return;
+  sbClient.from('contratos').select('estado').eq('cliente_id', parseInt(clientId, 10)).single()
+    .then(function(ctRes) {
+      var contratoEstado = ctRes.data ? ctRes.data.estado : null;
+      var pagoCompleto = (parseInt(c.cuotas_pagadas) === parseInt(c.cuotas_total));
+      var tieneFirma = c.firma_url && c.firma_url.length > 100;
+      var contratoAutorizado = (contratoEstado === 'autorizado_ceo');
+      var desbloqueado = pagoCompleto && tieneFirma && contratoAutorizado;
+      var modalHtml = '<div class="mhead"><div><h2>🎫 Voucher de ' + esc(c.nombre) + '</h2></div><button class="mclose" onclick="closeModal()">✕</button></div>';
+      if (desbloqueado) {
+        modalHtml += '<div class="mbody"><div style="background:var(--surface);border:1px solid var(--gold-bd);border-radius:16px;padding:24px;">' +
+          '<div style="display:inline-block;background:var(--green-bg);color:#6ee7b7;padding:4px 12px;border-radius:20px;">✅ VOUCHER ACTIVO</div>' +
+          '<div style="margin-top:16px;font-size:.65rem;color:var(--muted);text-transform:uppercase;">Pasajero</div><div style="font-size:.9rem;">' + esc(c.nombre) + '</div>' +
+          '<div style="font-size:.65rem;color:var(--muted);text-transform:uppercase;margin-top:8px;">Destino</div><div style="font-size:.9rem;">' + esc(c.destino || 'Brasil') + '</div>' +
+          '<div style="font-size:.65rem;color:var(--muted);text-transform:uppercase;margin-top:8px;">Fecha de viaje</div><div style="font-size:.9rem;">' + (c.fecha_viaje || 'Por confirmar') + '</div>' +
+          '<div style="font-size:.65rem;color:var(--muted);text-transform:uppercase;margin-top:8px;">Paquete</div><div style="font-size:.9rem;">' + esc(c.paquete || 'Luazul Smart Travel') + '</div>' +
+          '<div style="margin-top:16px;"><div style="font-size:.65rem;color:var(--muted);text-transform:uppercase;">Servicios incluidos</div><ul style="margin-top:6px;padding-left:16px;font-size:.82rem;"><li>✓ Traslados aeropuerto/hotel</li><li>✓ Alojamiento con desayuno</li><li>✓ Asistencia durante el viaje</li></ul></div>' +
+          '</div></div>';
+      } else {
+        var razones = [];
+        if (!pagoCompleto) razones.push('Pago incompleto (faltan ' + (parseInt(c.cuotas_total) - parseInt(c.cuotas_pagadas)) + ' cuotas)');
+        if (!tieneFirma) razones.push('Firma digital no registrada');
+        if (!contratoAutorizado) razones.push('Contrato no autorizado por CEO');
+        modalHtml += '<div class="mbody"><div style="background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);border-radius:12px;padding:20px;text-align:center;">' +
+          '<div style="font-size:2rem;">🔒</div><div style="font-weight:800;margin-top:8px;">Voucher bloqueado</div>' +
+          '<div style="margin-top:8px;font-size:.82rem;color:var(--muted);">Motivos: ' + razones.join(', ') + '</div></div></div>';
+      }
+      modalHtml += '<div class="mact"><button class="mbtn ghost" onclick="closeModal()">Cerrar</button></div>';
+      document.getElementById('mbox').innerHTML = modalHtml;
+      document.getElementById('modal').classList.add('open');
+    })
+    .catch(function() { showToast('Error al verificar voucher'); });
+};
 </script>
 </body>
 </html>

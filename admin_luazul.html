@@ -410,7 +410,10 @@ body::after {
 @media (max-width:900px) {
   .tbl-head { display:none; }
   .tbl-row { grid-template-columns:12px 1fr auto auto; padding:14px; min-height:auto; gap:8px; }
-  .tc-dest,.tc-cuotas,.th-actions { display:none; }
+  .tc-dest,.tc-cuotas { display:none; }
+  /* FIX 14: Botones de acción visibles en móvil */
+  .th-actions { display:flex !important; }
+  .act-btn { width:36px; height:36px; }
   .main { padding:16px; }
   .topbar { padding:0 16px; }
   .stats-row { grid-template-columns:1fr 1fr !important; }
@@ -654,7 +657,6 @@ var allClients      = [];
 var currentFilter   = 'todos';
 var currentClient   = null;
 var _firmaDataURL   = null;       // Firma digital en curso
-var _asignacionesYaVistas = {};
 
 // ──────────────────────────────────────────────────────────────────────────
 // 3. UTILIDADES UI
@@ -1091,7 +1093,7 @@ function renderTable() {
       '<div class="tbl-cell" style="display:flex;align-items:center;"><div class="sem '+c._semaforo+'"></div></div>'+
       '<div class="tbl-cell">'+
         '<div class="cli-name">'+esc(c.nombre)+((parseInt(c.cuotas_pagadas)||0)<=3&&c.estado!=='baja'&&c.estado!=='completo'?' <span style="font-size:.62rem;background:rgba(245,158,11,.2);color:#f59e0b;border:1px solid rgba(245,158,11,.3);border-radius:10px;padding:1px 7px;font-weight:700;vertical-align:middle;">🎯 seguimiento</span>':'')+'</div>'+
-        '<div class="cli-email">'+esc(c.email)+'</div>'+
+        '<div class="cli-email" title="'+esc(c.email)+'">'+esc(c.email)+'</div>'+
       '</div>'+
       '<div class="tbl-cell tc-dest">'+
         '<div class="cli-dest">'+(c.destino||'—')+'</div>'+
@@ -1123,7 +1125,7 @@ function renderAll() {
   renderStats();
   renderPriorityBanner();
   renderTable();
-  checkNuevasAsignaciones();
+  // FIX 2: checkNuevasAsignaciones eliminada (propiedad _asignacion nunca se poblaba)
   var ts = document.getElementById('tbTotal');
   if (ts) ts.textContent = allClients.length + ' clientes';
 }
@@ -1229,6 +1231,32 @@ function openModal(clientId) {
     '</select>'+
     '<button class="m-btn primary" onclick="updateClient(\''+c.id+'\')">💾 Guardar</button>'+
     '</div></div>'+
+    '<div style="margin-top:16px;padding:16px;background:rgba(167,139,250,.04);border:1px solid rgba(167,139,250,.15);border-radius:12px;">'+
+    '<div style="font-size:.72rem;font-weight:700;text-transform:uppercase;color:#a78bfa;margin-bottom:12px;">✏️ Editar datos del cliente</div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">'+
+    '<div><label style="font-size:.68rem;color:var(--muted);display:block;margin-bottom:4px;">Nombre completo</label><input class="edit-input" id="efNombre" value="'+esc(c.nombre||'')+'"></div>'+
+    '<div><label style="font-size:.68rem;color:var(--muted);display:block;margin-bottom:4px;">Email</label><input class="edit-input" id="efEmail" type="email" value="'+esc(c.email||'')+'"></div>'+
+    '<div><label style="font-size:.68rem;color:var(--muted);display:block;margin-bottom:4px;">Documento</label><input class="edit-input" id="efDoc" value="'+esc(c.documento||'')+'"></div>'+
+    '<div><label style="font-size:.68rem;color:var(--muted);display:block;margin-bottom:4px;">Teléfono</label><input class="edit-input" id="efTel" value="'+esc(c.telefono||'')+'"></div>'+
+    '<div><label style="font-size:.68rem;color:var(--muted);display:block;margin-bottom:4px;">Destino</label>'+
+    '<select class="edit-input" id="efDest">'+
+    '<option value="Cabo Frío, Brasil"'+(c.destino==='Cabo Frío, Brasil'?' selected':'')+'>🏖️ Cabo Frío</option>'+
+    '<option value="Arraial do Cabo, Brasil"'+(c.destino==='Arraial do Cabo, Brasil'?' selected':'')+'>🌊 Arraial do Cabo</option>'+
+    '<option value="Búzios, Brasil"'+(c.destino==='Búzios, Brasil'?' selected':'')+'>⛵ Búzios</option>'+
+    '<option value="Río de Janeiro – Copacabana, Brasil"'+(c.destino==='Río de Janeiro – Copacabana, Brasil'?' selected':'')+'>🏙️ Río de Janeiro</option>'+
+    '</select></div>'+
+    '<div><label style="font-size:.68rem;color:var(--muted);display:block;margin-bottom:4px;">Paquete</label>'+
+    '<select class="edit-input" id="efPkg">'+
+    '<option value="Escapada en Pareja"'+(c.paquete==='Escapada en Pareja'?' selected':'')+'>Escapada en Pareja</option>'+
+    '<option value="Paquete 4 Amigos"'+(c.paquete==='Paquete 4 Amigos'?' selected':'')+'>Paquete 4 Amigos</option>'+
+    '<option value="Paquete 6 Amigos"'+(c.paquete==='Paquete 6 Amigos'?' selected':'')+'>Paquete 6 Amigos</option>'+
+    '</select></div>'+
+    '<div><label style="font-size:.68rem;color:var(--muted);display:block;margin-bottom:4px;">Fecha de viaje</label><input class="edit-input" id="efFecha" type="date" value="'+(c.fecha_viaje||'')+'"></div>'+
+    '<div><label style="font-size:.68rem;color:var(--muted);display:block;margin-bottom:4px;">Noches</label><input class="edit-input" id="efNoches" type="number" value="'+(c.noches||'')+'"></div>'+
+    '<div><label style="font-size:.68rem;color:var(--muted);display:block;margin-bottom:4px;">Personas</label><input class="edit-input" id="efPersonas" type="number" value="'+(c.personas||'')+'"></div>'+
+    '</div>'+
+    '<button class="m-btn primary" style="background:rgba(167,139,250,.8);" onclick="updateClientFull(\''+c.id+'\')">💾 Guardar datos completos</button>'+
+    '</div>'+
     '<div class="modal-actions">'+
     '<button class="m-btn green" onclick="waMensaje(\''+c.id+'\')">💬 WhatsApp</button>'+
     '<button class="m-btn ghost" onclick="waRecordatorio(\''+c.id+'\')">📲 Recordatorio</button>'+
@@ -1279,9 +1307,43 @@ function updateClient(clientId) {
     .catch(function(e){ showToast('❌ Error: '+e.message); });
 }
 
-// ──────────────────────────────────────────────────────────────────────────
-// 18. MODAL MORA
-// ──────────────────────────────────────────────────────────────────────────
+// FIX 6: updateClientFull — guarda todos los campos editables del modal
+function updateClientFull(clientId) {
+  var c = allClients.find(function(x){ return String(x.id)===String(clientId); });
+  if (!c) return;
+  var btn = document.querySelector('#modalBox .m-btn[onclick*="updateClientFull"]');
+  if (btn) { btn.disabled=true; btn.textContent='⏳ Guardando...'; }
+
+  var campos = {
+    nombre:    (document.getElementById('efNombre')||{}).value.trim() || c.nombre,
+    email:     (document.getElementById('efEmail')||{}).value.trim().toLowerCase() || c.email,
+    documento: (document.getElementById('efDoc')||{}).value.trim() || null,
+    telefono:  (document.getElementById('efTel')||{}).value.trim() || null,
+    destino:   (document.getElementById('efDest')||{}).value || c.destino,
+    paquete:   (document.getElementById('efPkg')||{}).value || c.paquete,
+    fecha_viaje: (document.getElementById('efFecha')||{}).value || null,
+    noches:    parseInt((document.getElementById('efNoches')||{}).value,10) || null,
+    personas:  parseInt((document.getElementById('efPersonas')||{}).value,10) || null
+  };
+
+  if (!campos.nombre) { showToast('⚠️ El nombre es obligatorio'); if(btn){btn.disabled=false;btn.textContent='💾 Guardar datos completos';} return; }
+
+  // Actualizar local
+  Object.assign(c, campos);
+  allClients[allClients.indexOf(c)] = enrich(c);
+
+  if (!sbClient) { closeModal(); renderAll(); showToast('✅ Datos actualizados localmente'); return; }
+
+  sbClient.from('clientes').update(campos).eq('id', parseInt(clientId, 10))
+    .then(function(r) {
+      if (r.error) throw r.error;
+      closeModal(); renderAll(); showToast('✅ Datos del cliente actualizados');
+    })
+    .catch(function(e) { showToast('❌ Error: ' + e.message); })
+    .finally(function() { if(btn){ btn.disabled=false; btn.textContent='💾 Guardar datos completos'; } });
+}
+
+
 function openMoraModal(clientId) {
   var c = allClients.find(function(x){ return x.id==clientId; });
   if (!c) return;
@@ -1337,6 +1399,9 @@ function saveMora(clientId) {
   var contacto   = document.getElementById('morContacto').value;
   var newEstado  = document.getElementById('morEstado').value;
   if (!motivo||!compromiso) { showToast('⚠️ Completá motivo y compromiso de pago'); return; }
+  // FIX 9: Anti-doble-clic
+  var btn = document.querySelector('#modalBox .m-btn[onclick*="saveMora"]');
+  if (btn) { btn.disabled=true; btn.textContent='⏳ Guardando...'; }
   var now = new Date();
   var fecha = now.getDate()+'/'+(now.getMonth()+1)+'/'+now.getFullYear()+' '+now.getHours().toString().padStart(2,'0')+':'+now.getMinutes().toString().padStart(2,'0');
   var entry = { fecha:fecha, motivo:motivo, compromiso:compromiso, contacto:contacto, resuelta:false };
@@ -1352,10 +1417,11 @@ function saveMora(clientId) {
   sbClient.from('clientes').update(updateData).eq('id',parseInt(clientId,10))
     .then(function(r){
       if (r.error) throw r.error;
-      if (newEstado==='atraso_gestion'||newEstado==='atraso') notificarAccion('gestion_mora','Gestión de mora: '+motivo,c.id,JSON.stringify({motivo,compromiso}));
+      if (newEstado==='atraso_gestion'||newEstado==='atraso') notificarAccion('gestion_mora','Gestión de mora: '+motivo,c.id,JSON.stringify({motivo:motivo,compromiso:compromiso}));
       closeModal(); renderAll(); showToast('📋 Gestión registrada');
     })
-    .catch(function(e){ showToast('❌ Error: '+e.message); });
+    .catch(function(e){ showToast('❌ Error: '+e.message); })
+    .finally(function(){ if(btn){ btn.disabled=false; btn.textContent='📋 Guardar gestión'; } });
 }
 
 function resolverMora(clientId, idx) {
@@ -1373,19 +1439,37 @@ function resolverMora(clientId, idx) {
 // ──────────────────────────────────────────────────────────────────────────
 // 19. WHATSAPP
 // ──────────────────────────────────────────────────────────────────────────
+// FIX 1: WhatsApp usa teléfono del cliente, no número fijo
+function normalizarTelefono(tel) {
+  // Elimina todo excepto dígitos
+  var digits = String(tel).replace(/\D/g, '');
+  // Si empieza con +, ya está implícito en replace
+  // Si empieza en 0 (ej: 0297...), quitamos el 0 inicial y agregamos 54
+  if (digits.charAt(0) === '0') digits = '54' + digits.slice(1);
+  // Si no tiene código de país (menos de 12 dígitos y no empieza con 54)
+  if (digits.length < 10) return null;
+  return digits;
+}
+
 function waMensaje(clientId) {
   var c = allClients.find(function(x){ return x.id==clientId; });
   if (!c) return;
+  if (!c.telefono) { showToast('⚠️ Este cliente no tiene teléfono registrado'); return; }
+  var tel = normalizarTelefono(c.telefono);
+  if (!tel || tel.length < 8 || tel.length > 15) { showToast('⚠️ Número de teléfono inválido: ' + c.telefono); return; }
   var msg = '¡Hola '+c.nombre.split(' ')[0]+'! 👋 Te contactamos desde Luazul Smart Travel. ¿En qué te podemos ayudar?';
-  window.open('https://wa.me/5492974726449?text='+encodeURIComponent(msg),'_blank');
+  window.open('https://wa.me/'+tel+'?text='+encodeURIComponent(msg),'_blank');
 }
 
 function waRecordatorio(clientId) {
   var c = allClients.find(function(x){ return x.id==clientId; });
   if (!c) return;
+  if (!c.telefono) { showToast('⚠️ Este cliente no tiene teléfono registrado'); return; }
+  var tel = normalizarTelefono(c.telefono);
+  if (!tel || tel.length < 8 || tel.length > 15) { showToast('⚠️ Número de teléfono inválido: ' + c.telefono); return; }
   var next = (parseInt(c.cuotas_pagadas)||0)+1;
   var msg = '¡Hola '+c.nombre.split(' ')[0]+'! 👋 Te recordamos que la *cuota N°'+next+'* de tu plan Luazul está próxima a vencer. Total: *USD '+c.monto_cuota+'*. ¡Seguís avanzando hacia tu viaje! ✈️';
-  window.open('https://wa.me/5492974726449?text='+encodeURIComponent(msg),'_blank');
+  window.open('https://wa.me/'+tel+'?text='+encodeURIComponent(msg),'_blank');
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -1507,14 +1591,18 @@ function guardarReferido() {
   var por    = (document.getElementById('refPor').value||'').trim().toLowerCase();
   if (!nombre) { showToast('⚠️ El nombre del referido es obligatorio'); return; }
   if (!_currentProfile||!sbClient) { showToast('⚠️ Sin sesión o conexión'); return; }
+  // FIX 9: Anti-doble-clic
+  var btn = document.querySelector('[onclick="guardarReferido()"]');
+  if (btn) { btn.disabled=true; btn.textContent='⏳ Guardando...'; }
   var referidor = por ? allClients.find(function(c){ return (c.email||'').toLowerCase()===por; }) : null;
   sbClient.from('referidos').insert({ vendedor_id:parseInt(_currentProfile.id,10), cliente_id:referidor?parseInt(referidor.id,10):null, referido_nombre:nombre, referido_email:email||null, referido_tel:tel||null, estado:'pendiente' })
     .then(function(r){
       if (r.error) throw r.error;
-      notificarAccion('referido','Nuevo referido: '+nombre,null,JSON.stringify({nombre,email}));
+      notificarAccion('referido','Nuevo referido: '+nombre,null,JSON.stringify({nombre:nombre,email:email}));
       showToast('✅ Referido registrado'); limpiarFormReferido(); renderRefList();
     })
-    .catch(function(e){ showToast('❌ Error: '+e.message); });
+    .catch(function(e){ showToast('❌ Error al guardar referido: '+e.message); })
+    .finally(function(){ if(btn){ btn.disabled=false; btn.textContent='✅ Guardar referido'; } });
 }
 
 function limpiarFormReferido() {
@@ -1606,21 +1694,26 @@ function enviarComprobante(clientId) {
   if (!cuotaNum||isNaN(monto)||monto<=0) { showToast('⚠️ Completá cuota y monto'); return; }
   var c = allClients.find(function(x){ return x.id==clientId; });
   if (!c||!sbClient) { showToast('❌ Sin conexión'); return; }
+  // FIX 9 + 10: Anti-doble-clic y catch mejorado
+  var btn = document.querySelector('#payModal button[onclick*="enviarComprobante"]');
+  if (btn) { btn.disabled=true; btn.textContent='⏳ Enviando...'; }
   var asesor = _currentProfile ? (_currentProfile.nombre+' '+(_currentProfile.apellido||'')).trim() : 'Asesor';
 
   function procesarEnvio(url) {
     sbClient.from('pagos').insert([{ cliente_id:parseInt(c.id,10), cliente_nombre:c.nombre, vendedor_nombre:asesor, numero_cuota:cuotaNum, monto_usd:monto, estado:'pendiente', fecha_pago:fecha||new Date().toISOString().slice(0,10), comprobante_url:url||null, seller_id:_currentProfile?(parseInt(_currentProfile.id,10)||null):null }])
       .then(function(r){
         if (r.error) throw r.error;
-        return notificarAccion('pago_pendiente','Comprobante enviado: Cuota '+cuotaNum+' - USD '+monto,c.id,JSON.stringify({cuota:cuotaNum,monto}));
+        return notificarAccion('pago_pendiente','Comprobante enviado: Cuota '+cuotaNum+' - USD '+monto,c.id,JSON.stringify({cuota:cuotaNum,monto:monto}));
       })
       .then(function(){ closePayModal(); renderTable(); showToast('✅ Comprobante enviado · Cuota '+cuotaNum); })
-      .catch(function(e){ showToast('❌ Error: '+e.message); });
+      .catch(function(e){ showToast('❌ Error al enviar comprobante: '+e.message); })
+      .finally(function(){ if(btn){ btn.disabled=false; btn.textContent='✅ Confirmar Pago'; } });
   }
 
   if (fileInput.files&&fileInput.files[0]) {
     var reader=new FileReader();
     reader.onload=function(ev){ procesarEnvio(ev.target.result); };
+    reader.onerror=function(){ showToast('❌ Error al leer el archivo'); if(btn){btn.disabled=false;btn.textContent='✅ Confirmar Pago';} };
     reader.readAsDataURL(fileInput.files[0]);
   } else { procesarEnvio(''); }
 }
@@ -1672,6 +1765,9 @@ function guardarCuenta() {
   var banco   = (document.getElementById('ctaBanco')||{}).value.trim().toUpperCase();
   if (!alias&&!cbu) { showToast('⚠️ Completá al menos Alias o CBU'); return; }
   if (!sbClient||!_currentProfile) { showToast('❌ Sin sesión'); return; }
+  // FIX 9: Anti-doble-clic
+  var btn = document.querySelector('[onclick="guardarCuenta()"]');
+  if (btn) { btn.disabled=true; btn.textContent='⏳ Guardando...'; }
   var cbuStr = [banco?banco+':':'', titular?titular+' — ':'', cbu||alias].filter(Boolean).join('').trim();
   sbClient.from('staff_profiles').update({cbu:cbuStr}).eq('id',parseInt(_currentProfile.id,10))
     .then(function(r){
@@ -1680,7 +1776,8 @@ function guardarCuenta() {
       ['ctaAlias','ctaCbu','ctaTitular','ctaBanco'].forEach(function(id){ var el=document.getElementById(id); if(el) el.value=''; });
       renderCuentasList(); showToast('✅ Cuenta guardada');
     })
-    .catch(function(e){ showToast('❌ Error: '+e.message); });
+    .catch(function(e){ showToast('❌ Error al guardar cuenta: '+e.message); })
+    .finally(function(){ if(btn){ btn.disabled=false; btn.textContent='💾 Guardar cuenta'; } });
 }
 
 function eliminarCuenta() {
@@ -1708,18 +1805,16 @@ function renderMisComisionesAdmin() {
   var el=document.getElementById('misComisionesSection'); if (!el) return;
   if (!sbClient||!_currentProfile) { el.innerHTML='<div style="text-align:center;padding:50px;color:var(--muted);">Sin datos</div>'; return; }
   var yo=_currentProfile;
-  var comps=[]; try { comps=yo.comprobantes_json?JSON.parse(yo.comprobantes_json):[]; } catch(e){}
-  var totalPagado=comps.reduce(function(s,c){ return s+(parseFloat(c.monto)||0); },0);
+  // FIX 3: Historial de pagos de comisiones eliminado (comprobantes_json nunca se popula)
+  // Se muestra mensaje informativo en su lugar
+  var compsHTML = '<div style="text-align:center;padding:36px;background:rgba(255,255,255,.02);border:1px dashed rgba(255,255,255,.1);border-radius:14px;color:var(--muted);">'+
+    '<div style="font-size:1.8rem;margin-bottom:10px;">🔜</div>'+
+    '<div style="font-weight:700;color:rgba(200,220,255,.6);margin-bottom:6px;">Próximamente</div>'+
+    '<div style="font-size:.82rem;">Podrás ver aquí el registro de pagos de tus comisiones una vez que el sistema de liquidaciones esté habilitado.</div>'+
+    '</div>';
   var cbuBlock=yo.cbu
     ?'<div style="background:rgba(74,222,128,.07);border:1px solid rgba(74,222,128,.2);border-radius:14px;padding:16px 20px;margin-bottom:20px;display:flex;align-items:center;gap:16px;"><span style="font-size:1.6rem;">🏦</span><div><div style="font-size:.62rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:rgba(74,222,128,.7);">Tu CBU / Alias</div><div style="font-family:monospace;font-size:.95rem;font-weight:700;color:#4ade80;">'+yo.cbu+'</div></div></div>'
     :'<div style="background:rgba(255,255,255,.03);border:1px dashed rgba(255,255,255,.1);border-radius:14px;padding:16px;margin-bottom:20px;text-align:center;">⚠️ Sin cuenta de cobro. Andá a <strong>🏦 Cuentas</strong>.</div>';
-  var compsHTML=!comps.length
-    ?'<div style="text-align:center;padding:36px;background:rgba(255,255,255,.02);border:1px dashed rgba(255,255,255,.1);border-radius:14px;color:var(--muted);"><div style="font-size:1.8rem;">📭</div><div>Sin comprobantes aún.</div></div>'
-    :'<div style="background:rgba(74,222,128,.06);border:1px solid rgba(74,222,128,.15);border-radius:12px;padding:12px 16px;margin-bottom:14px;display:flex;justify-content:space-between;"><span>Total recibido en comisiones</span><span style="font-size:1.3rem;font-weight:800;color:#4ade80;">USD '+totalPagado.toLocaleString('es-AR')+'</span></div>'+
-      '<div style="display:flex;flex-direction:column;gap:10px;">'+comps.slice().reverse().map(function(comp,idx){
-        var realIdx=comps.length-1-idx;
-        return '<div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:14px 16px;display:flex;align-items:center;gap:14px;"><div style="width:40px;height:40px;border-radius:10px;background:rgba(74,222,128,.1);display:flex;align-items:center;justify-content:center;">📎</div><div style="flex:1;"><div style="font-weight:700;">'+comp.nombre+'</div><div style="font-size:.72rem;color:var(--muted);">'+comp.fecha+(comp.monto?' · <span style="color:#4ade80;">USD '+Number(comp.monto).toLocaleString('es-AR')+'</span>':'')+'</div></div><button onclick="verCompAdmin('+realIdx+')" style="padding:7px 14px;background:rgba(74,222,128,.1);border:1px solid rgba(74,222,128,.25);color:#4ade80;border-radius:8px;font-size:.75rem;cursor:pointer;font-family:inherit;">Ver 📄</button></div>';
-      }).join('')+'</div>';
   el.innerHTML='<div style="padding:24px;max-width:700px;"><div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;"><div style="font-size:.68rem;font-weight:700;text-transform:uppercase;color:rgba(74,222,128,.7);">💰 Estado de tus comisiones</div><span style="font-size:.6rem;padding:2px 8px;border-radius:20px;background:rgba(107,114,128,.15);color:#9ca3af;">🔒 Solo lectura</span></div>'+cbuBlock+'<div style="font-size:.68rem;font-weight:700;text-transform:uppercase;margin-bottom:12px;">📋 Historial de pagos</div>'+compsHTML+'</div>';
 }
 
@@ -1773,7 +1868,11 @@ function generarContratoPDF(clientId) {
   var c=allClients.find(function(x){ return x.id==clientId; }); if (!c) return;
   var hoy=new Date(); var fechaStr=hoy.toLocaleDateString('es-AR',{day:'2-digit',month:'long',year:'numeric'});
   var numContrato='LZ-'+String(c.id).slice(-6).toUpperCase();
-  var firmaSrc = _firmaDataURL ? '<div style="text-align:center;"><img src="'+_firmaDataURL+'" style="max-width:200px;border-top:1px solid #333;margin-top:50px;display:block;margin-left:auto;margin-right:auto;"/><p style="font-size:.8rem;color:#555;">Firma digital del cliente</p></div>' : '';
+  // FIX 4: Priorizar firma guardada en BD, luego la recién dibujada, o mensaje informativo
+  var firmaDisponible = c.firma_url || _firmaDataURL;
+  var firmaSrc = firmaDisponible
+    ? '<div style="text-align:center;"><img src="'+firmaDisponible+'" style="max-width:200px;border-top:1px solid #333;margin-top:50px;display:block;margin-left:auto;margin-right:auto;"/><p style="font-size:.8rem;color:#555;">Firma digital del cliente</p></div>'
+    : '<div style="text-align:center;margin-top:50px;"><div style="border-top:1px solid #999;width:200px;margin:0 auto;padding-top:8px;font-size:.8rem;color:#aaa;">Sin firma digital</div></div>';
   var html='<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Contrato LUAZUL</title>'+
     '<style>body{font-family:Georgia,serif;max-width:800px;margin:40px auto;padding:20px;color:#1a1a2e;}'+
     'h1{text-align:center;font-size:1.4rem;border-bottom:2px solid #0B3D91;padding-bottom:10px;color:#0B3D91;}'+
@@ -1871,8 +1970,30 @@ function guardarFirma() {
   if (!_firmaCanvas) return;
   _firmaDataURL = _firmaCanvas.toDataURL('image/png');
   var info = document.getElementById('firmaGuardadaInfo');
-  if (info) { info.style.display='block'; }
-  showToast('✍️ Firma guardada — se incluirá en el contrato');
+
+  // Guardar en Supabase si hay un cliente asociado
+  if (sbClient && _firmaClienteId) {
+    var currentClientObj = allClients.find(function(c) { return c.id == _firmaClienteId; });
+    if (currentClientObj) {
+      sbClient.from('clientes').update({ firma_url: _firmaDataURL }).eq('id', parseInt(_firmaClienteId, 10))
+        .then(function(res) {
+          if (res.error) throw res.error;
+          if (info) info.style.display = 'block';
+          showToast('✍️ Firma guardada en la base de datos');
+          // Actualizar cliente local
+          currentClientObj.firma_url = _firmaDataURL;
+        })
+        .catch(function(e) {
+          showToast('❌ Error al guardar firma: ' + e.message);
+        });
+    } else {
+      if (info) info.style.display = 'block';
+      showToast('✍️ Firma guardada localmente (sin cliente asociado)');
+    }
+  } else {
+    if (info) info.style.display = 'block';
+    showToast('✍️ Firma guardada localmente');
+  }
   setTimeout(function(){ closeFirmaModal(); }, 1200);
 }
 
@@ -1919,13 +2040,15 @@ function calcSim() {
   var pkgKey = (document.getElementById('simPkg')||{}).value || 'Escapada en Pareja';
   var cuotas = parseInt((document.getElementById('simCuotas')||{}).value,10) || 10;
   var pkg    = PKG_PRICES[pkgKey] || { price:870, pers:2 };
-  var cuota  = Math.ceil(pkg.price / cuotas);
+  // FIX 7: Math.floor para cuota, última cuota ajustada para no superar el total
+  var cuotaBase  = Math.floor(pkg.price / cuotas * 100) / 100;
+  var ultimaCuota = Math.round((pkg.price - cuotaBase * (cuotas - 1)) * 100) / 100;
   var tEl=document.getElementById('simTotal'), cEl=document.getElementById('simCuota'), pEl=document.getElementById('simPers');
   if (tEl) tEl.textContent = 'USD '+pkg.price.toLocaleString('es-AR');
-  if (cEl) cEl.textContent = 'USD '+cuota.toLocaleString('es-AR');
+  if (cEl) cEl.textContent = 'USD '+cuotaBase.toLocaleString('es-AR');
   if (pEl) pEl.textContent = pkg.pers+(pkg.pers===1?' persona':' personas');
   var bd=document.getElementById('simBreakdown');
-  if (bd) bd.innerHTML='<span style="color:var(--muted);">USD '+pkg.price.toLocaleString('es-AR')+' en '+cuotas+' cuotas de </span><strong style="color:#60a5fa;font-size:1.1rem;">USD '+cuota.toLocaleString('es-AR')+'</strong>';
+  if (bd) bd.innerHTML='<span style="color:var(--muted);">USD '+pkg.price.toLocaleString('es-AR')+' en '+cuotas+' cuotas de </span><strong style="color:#60a5fa;font-size:1.1rem;">USD '+cuotaBase.toLocaleString('es-AR')+'</strong>'+(ultimaCuota!==cuotaBase?' <span style="color:var(--muted);font-size:.82rem;">(última cuota: USD '+ultimaCuota.toLocaleString('es-AR')+')</span>':'');
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -1937,13 +2060,15 @@ function calcCuota() {
   var cuotas   = parseInt(cuotasSel?cuotasSel.value:10,10)||10;
   var pkgKey   = pkgSel?pkgSel.value:'Escapada en Pareja';
   var pkg      = PKG_PRICES[pkgKey]||{price:870,pers:2};
-  var cuota    = Math.ceil(pkg.price/cuotas);
+  // FIX 7: Math.floor para que la suma de cuotas no supere el total
+  var cuota    = Math.floor(pkg.price/cuotas * 100) / 100;
+  var ultimaCuota = Math.round((pkg.price - cuota * (cuotas - 1)) * 100) / 100;
   var td=document.getElementById('nTotalDisplay'); if(td) td.textContent='USD '+pkg.price.toLocaleString('es-AR');
   var cd=document.getElementById('nCuotaDisplay'); if(cd) cd.textContent='USD '+cuota.toLocaleString('es-AR');
   var pd=document.getElementById('nPersDisplay');  if(pd) pd.textContent=pkg.pers+(pkg.pers===1?' persona':' personas');
   var tf=document.getElementById('nTotal');        if(tf) tf.value=pkg.price;
   var pf=document.getElementById('nPersonas');     if(pf) pf.value=pkg.pers;
-  var bd=document.getElementById('nBreakdown');    if(bd) bd.innerHTML='<span style="color:var(--muted);">USD '+pkg.price.toLocaleString('es-AR')+' en '+cuotas+' cuotas de </span><strong style="color:#60a5fa;">USD '+cuota.toLocaleString('es-AR')+'</strong>';
+  var bd=document.getElementById('nBreakdown');    if(bd) bd.innerHTML='<span style="color:var(--muted);">USD '+pkg.price.toLocaleString('es-AR')+' en '+cuotas+' cuotas de </span><strong style="color:#60a5fa;">USD '+cuota.toLocaleString('es-AR')+'</strong>'+(ultimaCuota!==cuota?' <span style="font-size:.78rem;color:var(--muted);">(última: USD '+ultimaCuota+')</span>':'');
 }
 
 function openAddModal() {
@@ -1992,9 +2117,16 @@ function openAddModal() {
 function buscarReferidor(codigo) {
   var info=document.getElementById('nRefInfo'); if (!info) return;
   if (!codigo||codigo.length<4) { info.textContent=''; return; }
-  var match=allClients.find(function(c){ var code='LUA-'+c.nombre.split(' ')[0].toUpperCase(); return code===codigo.toUpperCase()||(c.refCode&&c.refCode.toUpperCase()===codigo.toUpperCase()); });
-  if (match) info.innerHTML='✅ Referidor encontrado: '+match.nombre;
-  else info.innerHTML='⚠️ No se encontró cliente con ese código';
+  var term = codigo.trim().toUpperCase();
+  // FIX 8: Buscar por codigo_referido guardado en BD, por email exacto, o por código generado LUA-NOMBRE
+  var match = allClients.find(function(c) {
+    if (c.codigo_referido && c.codigo_referido.toUpperCase()===term) return true;
+    if (c.email && c.email.toUpperCase()===codigo.trim().toUpperCase()) return true;
+    var codGen = 'LUA-'+(c.nombre||'').split(' ')[0].toUpperCase();
+    return codGen===term;
+  });
+  if (match) info.innerHTML='✅ Referidor encontrado: <strong>'+esc(match.nombre)+'</strong> ('+esc(match.email)+')';
+  else info.innerHTML='⚠️ No se encontró cliente con ese código o email';
 }
 
 function addClient() {
@@ -2008,27 +2140,43 @@ function addClient() {
   if (!_currentProfile) { showToast('⚠️ Sesión no cargada'); return; }
   if (!sbClient) { showToast('❌ Sin conexión'); return; }
   var btn=document.querySelector('#modal .m-btn.primary');
-  if (btn) { btn.disabled=true; btn.textContent='⏳ Creando...'; }
-  var sbTemp=supabase.createClient(SUPABASE_URL,SUPABASE_KEY,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}});
-  var nombresArr=nombre.split(' ');
-  sbTemp.auth.signUp({ email:email, password:pass, options:{ data:{ nombre:nombresArr[0], apellido:nombresArr.slice(1).join(' ')||'', role_id:4 } } })
-    .then(function(authRes){
-      if (authRes.error) throw authRes.error;
-      var uid=authRes.data.user.id;
-      return sbClient.from('clientes').insert([{
-        nombre:nombre, email:email, user_id:uid,
-        documento:document.getElementById('nDoc').value.trim()||null,
-        telefono:document.getElementById('nTel1').value.trim()||null,
-        destino:document.getElementById('nDest').value||null,
-        paquete:document.getElementById('nPkg').value||null,
-        fecha_viaje:document.getElementById('nFecha').value||null,
-        total_usd:total, cuotas_total:cuotas, cuotas_pagadas:0,
-        monto_cuota:total>0?parseFloat((total/cuotas).toFixed(2)):0,
-        estado:'activo', fecha_alta:new Date().toISOString().slice(0,10),
-        seller_id:parseInt(_currentProfile.id,10)||null,
-        region_id:_currentProfile.region_id?(parseInt(_currentProfile.region_id,10)||null):null,
-        notas:''
-      }]).select().single().then(function(r){ if(r.error) throw r.error; return r.data; });
+  // FIX 9: Anti-doble-clic
+  if (btn) { btn.disabled=true; btn.textContent='⏳ Verificando...'; }
+
+  // FIX 5: Verificar si el email ya existe en clientes antes de crear
+  sbClient.from('clientes').select('id,email').eq('email',email).maybeSingle()
+    .then(function(checkRes) {
+      if (checkRes.data) throw new Error('Ya hay un cliente registrado con ese email');
+      // Proceder con el registro
+      var sbTemp=supabase.createClient(SUPABASE_URL,SUPABASE_KEY,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}});
+      var nombresArr=nombre.split(' ');
+      if (btn) btn.textContent='⏳ Creando...';
+      return sbTemp.auth.signUp({ email:email, password:pass, options:{ data:{ nombre:nombresArr[0], apellido:nombresArr.slice(1).join(' ')||'', role_id:4 } } })
+        .then(function(authRes){
+          if (authRes.error) {
+            var msg = authRes.error.message||'';
+            if (msg.toLowerCase().indexOf('already registered')!==-1 || msg.toLowerCase().indexOf('already exists')!==-1) {
+              throw new Error('Ya hay un usuario registrado con ese email');
+            }
+            throw authRes.error;
+          }
+          var uid=authRes.data.user.id;
+          var cuotaFloor = Math.floor(total/cuotas * 100) / 100;
+          return sbClient.from('clientes').insert([{
+            nombre:nombre, email:email, user_id:uid,
+            documento:document.getElementById('nDoc').value.trim()||null,
+            telefono:document.getElementById('nTel1').value.trim()||null,
+            destino:document.getElementById('nDest').value||null,
+            paquete:document.getElementById('nPkg').value||null,
+            fecha_viaje:document.getElementById('nFecha').value||null,
+            total_usd:total, cuotas_total:cuotas, cuotas_pagadas:0,
+            monto_cuota:total>0?cuotaFloor:0,
+            estado:'activo', fecha_alta:new Date().toISOString().slice(0,10),
+            seller_id:parseInt(_currentProfile.id,10)||null,
+            region_id:_currentProfile.region_id?(parseInt(_currentProfile.region_id,10)||null):null,
+            notas:''
+          }]).select().single().then(function(r){ if(r.error) throw r.error; return r.data; });
+        });
     })
     .then(function(created){
       allClients.push(enrich(created));
@@ -2040,21 +2188,6 @@ function addClient() {
 }
 
 // ──────────────────────────────────────────────────────────────────────────
-// 31. NOTIFICACIÓN DE NUEVAS ASIGNACIONES
-// ──────────────────────────────────────────────────────────────────────────
-function checkNuevasAsignaciones() {
-  var nuevos=allClients.filter(function(c){ return c._asignacion&&(parseInt(c.cuotas_pagadas)||0)===0; });
-  if (!nuevos.length) return;
-  var key=nuevos.map(function(c){ return c.id; }).sort().join(',');
-  if (_asignacionesYaVistas[key]) return;
-  _asignacionesYaVistas[key]=true;
-  var banner=document.getElementById('asignacionBanner');
-  if (!banner) { banner=document.createElement('div'); banner.id='asignacionBanner'; banner.style.cssText='position:fixed;top:72px;right:20px;z-index:9999;background:rgba(14,30,80,.97);border:1px solid rgba(99,179,255,.4);border-radius:14px;padding:14px 18px;max-width:320px;box-shadow:0 4px 24px rgba(0,0,0,.5);display:flex;flex-direction:column;gap:8px;'; document.body.appendChild(banner); }
-  banner.innerHTML='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;"><span style="font-size:.72rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#7eb8ff;">👔 Asignados por el Gerente</span><button onclick="document.getElementById(\'asignacionBanner\').remove()" style="background:none;border:none;color:rgba(180,200,255,.5);cursor:pointer;font-size:1rem;">&times;</button></div>'+
-    nuevos.map(function(c){ return '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(99,179,255,.1);"><span>🔔</span><div><div style="font-weight:700;font-size:.88rem;color:#7eb8ff;">Nueva Asignación</div><div style="font-size:.82rem;color:rgba(200,220,255,.85);">'+esc(c.nombre)+'</div><div style="font-size:.72rem;color:rgba(180,200,255,.5);">'+(c.destino||'Sin destino')+'</div></div></div>'; }).join('');
-  setTimeout(function(){ var b=document.getElementById('asignacionBanner'); if(b) b.remove(); },12000);
-}
-
 // ──────────────────────────────────────────────────────────────────────────
 // 32. INICIALIZACIÓN
 // ──────────────────────────────────────────────────────────────────────────
