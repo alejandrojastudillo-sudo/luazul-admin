@@ -266,6 +266,25 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;back
       comprobantes: {}
     };
   }
+
+  function mapPagoToNotif(p) {
+    return {
+      id:          p.id,
+      tipo:        'payment',
+      ts:          p.created_at ? new Date(p.created_at).getTime() : Date.now(),
+      leida:       false,
+      aprobada:    p.estado === 'aprobado',
+      cliente:     p.cliente_nombre || '',
+      cid:         p.cliente_id || '',
+      cuota:       p.numero_cuota || 1,
+      monto:       p.monto_usd || 0,
+      vendedor:    p.vendedor_nombre || '',
+      comp:        p.comprobante_url || null,
+      aprobadoPor: p.aprobado_por || '',
+      vid:         p.seller_id || ''
+    };
+  }
+
 function _sbLoad() {
   function fallback() { 
     console.warn("⚠️ Fallback: limpiando caché por error");
@@ -526,6 +545,23 @@ function _sbLoad() {
 <div id="toast"></div>
 <script>
 
+// ── COMUNICACIÓN CON SUPABASE (funciones auxiliares) ──────────────────────
+async function _sbUpdateClient(id, data) {
+  var result = await sbClient.from('clientes').update(data).eq('id', parseInt(id));
+  if (result.error) throw result.error;
+}
+
+async function _sbUpdateVendor(vid, data) {
+  var result = await sbClient.from('staff_profiles').update(data).eq('user_id', vid);
+  if (result.error) throw result.error;
+}
+
+async function _sbApprovePayment(pagoId) {
+  var result = await sbClient.from('pagos').update({ estado: 'aprobado', aprobado_por: 'gerente' }).eq('id', pagoId);
+  if (result.error) throw result.error;
+  return true;
+}
+
 //  COMMISSION ENGINE (Reglas de negocio)
 // ══════════════════════════════════════════════════════
 function getClientMonth(c) {
@@ -629,12 +665,12 @@ function vby(uid) {
   var vendList = (_memCache[VK] || []) || [];
   var found = null;
   for (var i = 0; i < vendList.length; i++) {
-    if (String(vendList[i].user_id) === String(uid)) {
+    if (String(vendList[i].id) === String(uid) || String(vendList[i].user_id) === String(uid)) {
       found = vendList[i];
       break;
     }
   }
-  return found || { nombre: 'Sin asignar', id: '', user_id: '' };
+  return found || { nombre: 'Sin asignar', id: '', user_id: '', telefono1: '', telefono2: '', domicilio: '', cbu: '', comprobantes: [] };
 }
 
 function fmtTs(ts) {
@@ -878,6 +914,40 @@ function initApp() {
   });
 }
 
+function renderRegiones() {
+  var rs = _memCache['luazul_regiones'] || [];
+  var vs = (_memCache[VK] || []);
+  var cs = (_memCache[DB_KEY] || []);
+  var el = document.getElementById('rGrid');
+  if (!el) return;
+  if (!rs.length) { el.innerHTML = '<div style="text-align:center;padding:30px;color:var(--muted);font-size:.82rem;">Sin regiones asignadas</div>'; return; }
+  var html = '';
+  for (var i = 0; i < rs.length; i++) {
+    var r = rs[i];
+    var rid = String(r.id);
+    var rv = vs.filter(function(v) { return String(v.region_id) === rid; });
+    var rc = cs.filter(function(c) { return String(c.region_id) === rid; });
+    var rec = rc.reduce(function(s, c) { return s + (parseInt(c.cuotas_pagadas) || 0) * (parseFloat(c.monto_cuota) || 0); }, 0);
+    html += '<div style="background:var(--surface);border:1px solid ' + (r.color || '#a78bfa') + '33;border-radius:16px;padding:20px;" data-rid="' + r.id + '">'
+      + '<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">'
+      + '<span style="font-size:2rem;">' + (r.bandera || '🌎') + '</span>'
+      + '<div><div style="font-weight:800;font-family:Syne,sans-serif;">' + esc(r.nombre) + '</div>'
+      + '<div style="font-size:.7rem;color:var(--muted);">Región ID: ' + r.id + '</div></div>'
+      + '</div>'
+      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;">'
+      + '<div style="background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center;">'
+      + '<div style="font-family:Syne,sans-serif;font-size:1.3rem;font-weight:800;">' + rv.length + '</div>'
+      + '<div style="font-size:.68rem;color:var(--muted);">Asesores</div></div>'
+      + '<div style="background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center;">'
+      + '<div style="font-family:Syne,sans-serif;font-size:1.3rem;font-weight:800;">' + rc.length + '</div>'
+      + '<div style="font-size:.68rem;color:var(--muted);">Clientes</div></div>'
+      + '</div>'
+      + '<div style="font-weight:700;color:var(--gold);font-size:.88rem;">USD ' + Math.round(rec).toLocaleString('es-AR') + ' recaudado</div>'
+      + '</div>';
+  }
+  el.innerHTML = html;
+}
+
 function renderAll() { renderOverview(); renderVendors(); renderClients(); renderNotifs(); renderMoraTab(); }
 
 // ══════════════════════════════════════════════════════
@@ -904,7 +974,7 @@ function renderOverview() {
   }).join('');
   var maxRec = 1;
   var vp = vs.map(function(v) {
-    var vc = cs.filter(function(c) { return String(c.vid) === String(v.user_id); });
+    var vc = cs.filter(function(c) { return String(c.vid) === String(v.id); });
     var r = vc.reduce(function(s, c) { return s + (parseInt(c.cuotas_pagadas) || 0) * (parseFloat(c.monto_cuota) || 0); }, 0);
     if (r > maxRec) maxRec = r;
     return { v: v, n: vc.length, r: r, at: vc.filter(function(c) { return c.estado === 'atraso'; }).length };
@@ -1684,7 +1754,7 @@ function renderVendDash() {
   var allCs = ((_memCache[DB_KEY] || []) || []).map(enrich);
   var cs = allCs.filter(function(c) { return String(c.vid) === String(vid); });
   var ns = ((_memCache[NK] || []) || []).filter(function(n) { return n.vid === vid; });
-  var cm = calcComision(v, cs);
+  var cm = calcComision(v, allCs);
   var ini = v.nombre.split(' ').map(function(w) { return w[0]; }).join('').slice(0, 2).toUpperCase();
   var totalRec = cs.reduce(function(s, c) { return s + (parseInt(c.cuotas_pagadas) || 0) * (parseFloat(c.monto_cuota) || 0); }, 0);
   var activos = cs.filter(function(c) { return c.estado === 'activo'; }).length;
@@ -1808,8 +1878,8 @@ function populatePagoFiltros() {
   sel.innerHTML = '<option value="">Todos los asesores</option>';
   vs.forEach(function(v) {
     var o = document.createElement('option');
-    o.value = v.user_id; o.textContent = v.nombre;
-    if (String(v.user_id) === String(cur)) o.selected = true;
+    o.value = v.id; o.textContent = v.nombre;
+    if (String(v.id) === String(cur)) o.selected = true;
     sel.appendChild(o);
   });
 }
@@ -1883,21 +1953,22 @@ function aprobarPago(nid) {
 // ══════════════════════════════════════════════════════
 //  APROBAR TODOS (versión optimizada con Promise.all)
 // ══════════════════════════════════════════════════════
-function aprobarTodos() {
+async function aprobarTodos() {
   var ns = _memCache[NK] || [];
   var pendientes = ns.filter(function(n) { return n.tipo === 'payment' && !n.aprobada && n.id; });
   if (!pendientes.length) { showToast('✅ No hay pagos pendientes'); return; }
   showToast('⏳ Aprobando ' + pendientes.length + ' pagos...');
-  Promise.all(pendientes.map(function(p) { return _sbApprovePayment(p.id); }))
-    .then(function(results) {
-      var count = results.filter(function(r) { return r === true; }).length;
-      return _sbLoad();
-    })
-    .then(function() {
-      renderAll();
-      renderPagos();
-      showToast('✅ ' + count + ' pagos aprobados');
-    });
+  var count = 0;
+  for (var i = 0; i < pendientes.length; i++) {
+    try {
+      await _sbApprovePayment(pendientes[i].id);
+      count++;
+    } catch(e) { console.warn(e); }
+  }
+  await _sbLoad();
+  renderAll();
+  renderPagos();
+  showToast('✅ ' + count + ' pagos aprobados');
 }
 
 // ══════════════════════════════════════════════════════

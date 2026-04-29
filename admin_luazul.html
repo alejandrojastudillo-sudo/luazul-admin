@@ -658,6 +658,11 @@ var currentFilter   = 'todos';
 var currentClient   = null;
 var _firmaDataURL   = null;       // Firma digital en curso
 
+// ── Protección brute-force login ──────────────────────────────────────────
+var loginAttempts  = 0;
+var loginBlocked   = false;
+var countdownTimer = null;
+
 // ──────────────────────────────────────────────────────────────────────────
 // 3. UTILIDADES UI
 // ──────────────────────────────────────────────────────────────────────────
@@ -741,44 +746,70 @@ function loadCurrentProfile() {
 // 6. LOGIN / LOGOUT
 // ──────────────────────────────────────────────────────────────────────────
 function adminLogin() {
-  var email  = document.getElementById('adUser').value.trim().toLowerCase();
-  var pass   = document.getElementById('adPass').value.trim();
-  var errEl  = document.getElementById('adErr');
+  if (loginBlocked) return;
+  var email = document.getElementById('adUser').value.trim().toLowerCase();
+  var pass = document.getElementById('adPass').value.trim();
+  var errEl = document.getElementById('adErr');
   errEl.style.display = 'none';
-
   if (!email || !pass) {
     errEl.style.display = 'block'; errEl.textContent = '❌ Ingresá email y contraseña.'; return;
   }
   if (!sbClient) {
     errEl.style.display = 'block'; errEl.textContent = '❌ Error de conexión con Supabase.'; return;
   }
-
   var btn = document.querySelector('.lc-btn');
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Verificando...'; }
 
-  sbClient.auth.signInWithPassword({ email:email, password:pass })
+  sbClient.auth.signInWithPassword({ email: email, password: pass })
     .then(function(result) {
       if (result.error) throw result.error;
       return loadCurrentProfile();
     })
     .then(function(profile) {
+      loginAttempts = 0;
       LZ_AUTH.setPanelSession('luazul_admin');
-      try { sessionStorage.setItem('luazul_asesor_user', profile.nombre||email.split('@')[0]); } catch(e){}
+      try { sessionStorage.setItem('luazul_asesor_user', profile.nombre || email.split('@')[0]); } catch(e) {}
       LZ_AUTH._showApp('loginWrap','app');
       loadClients();
-      // FIX: Llamar refreshAdminNotifBadge explícitamente tras login
       setTimeout(refreshAdminNotifBadge, 100);
       showToast('✅ Bienvenido, ' + profile.nombre);
     })
     .catch(function(err) {
+      loginAttempts++;
       errEl.style.display = 'block';
-      var msg = err.message||'Error al iniciar sesión.';
-      if (msg === 'Invalid login credentials') msg = '❌ Usuario o contraseña incorrectos.';
+      var msg = err.message || 'Error al iniciar sesión.';
+      if (msg === 'Invalid login credentials') {
+        msg = '❌ Usuario o contraseña incorrectos.';
+        if (loginAttempts >= 3) startLoginBlock();
+        else msg += ' (' + (3 - loginAttempts) + ' intentos restantes)';
+      }
       errEl.textContent = msg;
     })
     .finally(function() {
-      if (btn) { btn.disabled = false; btn.textContent = 'Ingresar'; }
+      if (btn && !loginBlocked) { btn.disabled = false; btn.textContent = 'Ingresar'; }
     });
+}
+
+function startLoginBlock() {
+  loginBlocked = true;
+  var btn = document.querySelector('.lc-btn');
+  var errEl = document.getElementById('adErr');
+  var countdownDiv = document.createElement('div');
+  countdownDiv.id = 'loginCountdown';
+  countdownDiv.style.cssText = 'font-size:.8rem;color:#fcd34d;margin-top:8px;';
+  errEl.parentNode.insertBefore(countdownDiv, errEl.nextSibling);
+  var seconds = 60;
+  var timer = setInterval(function() {
+    seconds--;
+    countdownDiv.textContent = '⏳ Demasiados intentos. Esperá ' + seconds + 's para reintentar.';
+    if (seconds <= 0) {
+      clearInterval(timer);
+      loginBlocked = false;
+      loginAttempts = 0;
+      if (btn) btn.disabled = false;
+      if (countdownDiv) countdownDiv.remove();
+    }
+  }, 1000);
 }
 
 function adminLogout() {
@@ -859,7 +890,10 @@ function loadClients() {
     });
 }
 
-function syncData() { loadClients(); }
+async function syncData() {
+  await loadClients();
+  refreshAdminNotifBadge();
+}
 
 // ──────────────────────────────────────────────────────────────────────────
 // 9. COMISIONES
@@ -919,7 +953,7 @@ function calcComisionVendedor(clients) {
 // ──────────────────────────────────────────────────────────────────────────
 // 10. RENDER STATS
 // ──────────────────────────────────────────────────────────────────────────
-function renderStats() {
+async function renderStats() {
   var total     = allClients.length;
   var activos   = allClients.filter(function(c){ return c.estado==='activo'; }).length;
   var atraso    = allClients.filter(function(c){ return c.estado==='atraso'||c.estado==='atraso_gestion'; }).length;
@@ -928,8 +962,13 @@ function renderStats() {
   var recaudado = allClients.reduce(function(s,c){ return s + (parseInt(c.cuotas_pagadas||0) * parseFloat(c.monto_cuota||0)); }, 0);
   var cm = calcComisionVendedor(allClients);
 
-  // FIX: Cálculo de referidos (usa allClients, real)
-  var refCount = allClients.filter(function(c){ return c.referido_por || c.referido_codigo; }).length;
+  var refCount = 0;
+  try {
+    var { count } = await sbClient.from('referidos')
+      .select('*', { count: 'exact', head: true })
+      .eq('vendedor_id', _currentProfile.id);
+    refCount = count || 0;
+  } catch(e) { console.warn('Error al contar referidos:', e); }
 
   var stats = [
     { icon:'👥', val:total,    lbl:'Total clientes',   delta:'',                dc:'' },
@@ -1121,8 +1160,8 @@ function renderTable() {
 // ──────────────────────────────────────────────────────────────────────────
 // 14. RENDER ALL
 // ──────────────────────────────────────────────────────────────────────────
-function renderAll() {
-  renderStats();
+async function renderAll() {
+  await renderStats();
   renderPriorityBanner();
   renderTable();
   // FIX 2: checkNuevasAsignaciones eliminada (propiedad _asignacion nunca se poblaba)
@@ -1595,7 +1634,7 @@ function guardarReferido() {
   var btn = document.querySelector('[onclick="guardarReferido()"]');
   if (btn) { btn.disabled=true; btn.textContent='⏳ Guardando...'; }
   var referidor = por ? allClients.find(function(c){ return (c.email||'').toLowerCase()===por; }) : null;
-  sbClient.from('referidos').insert({ vendedor_id:parseInt(_currentProfile.id,10), cliente_id:referidor?parseInt(referidor.id,10):null, referido_nombre:nombre, referido_email:email||null, referido_tel:tel||null, estado:'pendiente' })
+  sbClient.from('referidos').insert({ vendedor_id:parseInt(_currentProfile.id,10), cliente_referidor_id:referidor?parseInt(referidor.id,10):null, referido_nombre:nombre, referido_email:email||null, referido_tel:tel||null, estado:'pendiente' })
     .then(function(r){
       if (r.error) throw r.error;
       notificarAccion('referido','Nuevo referido: '+nombre,null,JSON.stringify({nombre:nombre,email:email}));
@@ -1640,7 +1679,7 @@ function confirmarCargaReferido(clientId) {
   if (!nombre) { showToast('⚠️ El nombre es obligatorio'); return; }
   var c = allClients.find(function(x){ return x.id==clientId; });
   if (!c||!sbClient||!_currentProfile) return;
-  sbClient.from('referidos').insert({ vendedor_id:parseInt(_currentProfile.id,10), cliente_id:parseInt(c.id,10), referido_nombre:nombre, referido_email:(document.getElementById('rEmail')||{}).value.trim().toLowerCase()||null, referido_tel:(document.getElementById('rTel')||{}).value.trim()||null, notas:(document.getElementById('rNotas')||{}).value.trim()||null, estado:'pendiente' })
+  sbClient.from('referidos').insert({ vendedor_id:parseInt(_currentProfile.id,10), cliente_referidor_id:parseInt(c.id,10), referido_nombre:nombre, referido_email:(document.getElementById('rEmail')||{}).value.trim().toLowerCase()||null, referido_tel:(document.getElementById('rTel')||{}).value.trim()||null, notas:(document.getElementById('rNotas')||{}).value.trim()||null, estado:'pendiente' })
     .then(function(r){
       if (r.error) throw r.error;
       notificarAccion('referido','Referido de '+c.nombre+': '+nombre,c.id,null);
@@ -1669,7 +1708,8 @@ function abrirRegistroPago(clientId) {
     '<h3 style="font-size:1rem;font-weight:900;margin-bottom:6px;">📤 Enviar Comprobante de Pago</h3>'+
     '<div style="font-size:.78rem;color:rgba(200,220,255,.7);margin-bottom:22px;">'+esc(c.nombre)+' · Cuota '+proxima+' de '+c.cuotas_total+'</div>'+
     '<div style="margin-bottom:14px;"><label style="display:block;font-size:.65rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:rgba(150,190,255,.5);margin-bottom:7px;">Número de cuota *</label>'+
-    '<input id="pCuotaNum" type="number" min="1" max="'+c.cuotas_total+'" value="'+proxima+'" class="edit-input"></div>'+
+    '<input id="pCuotaNum" type="number" min="1" max="'+c.cuotas_total+'" value="'+proxima+'" class="edit-input">'+
+    '<div style="font-size:.65rem; color:var(--muted); margin-top:3px;">📌 Debe coincidir con la cuota que el cliente está pagando actualmente</div></div>'+
     '<div style="margin-bottom:14px;"><label style="display:block;font-size:.65rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:rgba(150,190,255,.5);margin-bottom:7px;">Monto recibido (USD) *</label>'+
     '<input id="pMonto" type="number" value="'+(c.monto_cuota||0)+'" class="edit-input"></div>'+
     '<div style="margin-bottom:14px;"><label style="display:block;font-size:.65rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:rgba(150,190,255,.5);margin-bottom:7px;">Fecha de pago</label>'+
@@ -1697,7 +1737,7 @@ function enviarComprobante(clientId) {
   // FIX 9 + 10: Anti-doble-clic y catch mejorado
   var btn = document.querySelector('#payModal button[onclick*="enviarComprobante"]');
   if (btn) { btn.disabled=true; btn.textContent='⏳ Enviando...'; }
-  var asesor = _currentProfile ? (_currentProfile.nombre+' '+(_currentProfile.apellido||'')).trim() : 'Asesor';
+  var asesor = _currentProfile ? (_currentProfile.nombre || 'Asesor') : 'Asesor';
 
   function procesarEnvio(url) {
     sbClient.from('pagos').insert([{ cliente_id:parseInt(c.id,10), cliente_nombre:c.nombre, vendedor_nombre:asesor, numero_cuota:cuotaNum, monto_usd:monto, estado:'pendiente', fecha_pago:fecha||new Date().toISOString().slice(0,10), comprobante_url:url||null, seller_id:_currentProfile?(parseInt(_currentProfile.id,10)||null):null }])
@@ -1966,35 +2006,39 @@ function limpiarFirma() {
   _firmaCtx.setTransform(1,0,0,1,0,0);
 }
 
-function guardarFirma() {
+async function guardarFirma() {
   if (!_firmaCanvas) return;
-  _firmaDataURL = _firmaCanvas.toDataURL('image/png');
-  var info = document.getElementById('firmaGuardadaInfo');
+  if (!_firmaClienteId) { showToast('⚠️ No hay cliente seleccionado'); return; }
 
-  // Guardar en Supabase si hay un cliente asociado
-  if (sbClient && _firmaClienteId) {
-    var currentClientObj = allClients.find(function(c) { return c.id == _firmaClienteId; });
-    if (currentClientObj) {
-      sbClient.from('clientes').update({ firma_url: _firmaDataURL }).eq('id', parseInt(_firmaClienteId, 10))
-        .then(function(res) {
-          if (res.error) throw res.error;
-          if (info) info.style.display = 'block';
-          showToast('✍️ Firma guardada en la base de datos');
-          // Actualizar cliente local
-          currentClientObj.firma_url = _firmaDataURL;
-        })
-        .catch(function(e) {
-          showToast('❌ Error al guardar firma: ' + e.message);
-        });
-    } else {
-      if (info) info.style.display = 'block';
-      showToast('✍️ Firma guardada localmente (sin cliente asociado)');
-    }
-  } else {
+  var canvas = _firmaCanvas;
+  // Convertir canvas a Blob
+  var blob = await new Promise(function(resolve) { canvas.toBlob(resolve, 'image/png'); });
+  if (!blob) { showToast('❌ Error al generar la imagen'); return; }
+
+  var fileName = 'firmas/firma_cliente_' + _firmaClienteId + '_' + Date.now() + '.png';
+  var btn = document.querySelector('#firmaModal .m-btn.primary');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Subiendo...'; }
+
+  try {
+    var { error: upErr } = await sbClient.storage.from('firmas').upload(fileName, blob, { contentType: 'image/png' });
+    if (upErr) throw upErr;
+    var { data: urlData } = sbClient.storage.from('firmas').getPublicUrl(fileName);
+    var { error: updateErr } = await sbClient.from('clientes').update({ firma_url: urlData.publicUrl }).eq('id', parseInt(_firmaClienteId, 10));
+    if (updateErr) throw updateErr;
+
+    // Actualizar local
+    var client = allClients.find(function(c) { return c.id == _firmaClienteId; });
+    if (client) client.firma_url = urlData.publicUrl;
+
+    showToast('✍️ Firma guardada en la base de datos');
+    var info = document.getElementById('firmaGuardadaInfo');
     if (info) info.style.display = 'block';
-    showToast('✍️ Firma guardada localmente');
+    setTimeout(function() { closeFirmaModal(); }, 1200);
+  } catch (e) {
+    showToast('❌ Error al guardar firma: ' + e.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '💾 Guardar firma'; }
   }
-  setTimeout(function(){ closeFirmaModal(); }, 1200);
 }
 
 // ──────────────────────────────────────────────────────────────────────────
