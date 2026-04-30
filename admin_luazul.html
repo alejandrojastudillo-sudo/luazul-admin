@@ -2296,6 +2296,10 @@ function addClient() {
   if (!sbClient) { showToast('❌ Sin conexión'); return; }
   if (!total || total <= 0) { showToast('⚠️ El total del plan debe ser mayor a 0'); return; }
 
+  // Opcional: evitar duplicados locales antes de la RPC
+  var yaExiste = allClients.some(function(c) { return c.email === email; });
+  if (yaExiste) { showToast('❌ Ya existe un cliente con ese email'); return; }
+
   var btn = document.querySelector('#modal .m-btn.primary');
   var originalText = btn ? btn.textContent : '✅ Agregar cliente';
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Creando...'; }
@@ -2303,6 +2307,9 @@ function addClient() {
   var montoCuota = Math.floor(total / cuotas * 100) / 100;
   var sellerId = parseInt(_currentProfile.id, 10);
   var regionId = _currentProfile.region_id ? parseInt(_currentProfile.region_id, 10) : null;
+  var telefono1 = document.getElementById('nTel1').value.trim() || null;
+  var telefono2 = (document.getElementById('nTel2') || {}).value.trim() || null;
+  var domicilio = (document.getElementById('nDomicilio') || {}).value.trim() || null;
 
   sbClient.rpc('crear_usuario_staff', {
     p_email: email,
@@ -2311,8 +2318,12 @@ function addClient() {
     p_nombre: nombre,
     p_apellido: '',
     p_region_ids: regionId ? [regionId] : null,
-    p_telefono1: document.getElementById('nTel1').value.trim() || null,
+    p_telefono1: telefono1,
+    p_telefono2: telefono2,
+    p_ciudad: null,
+    p_domicilio: domicilio,
     p_cbu: null,
+    p_manager_id: null,
     p_seller_id: sellerId,
     p_total_usd: total,
     p_monto_cuota: montoCuota,
@@ -2323,16 +2334,16 @@ function addClient() {
     var nuevoClienteId = result.data;
 
     var camposExtra = {
-      documento: document.getElementById('nDoc').value.trim() || null,
-      telefono: document.getElementById('nTel1').value.trim() || null,
-      telefono2: (document.getElementById('nTel2') || {}).value && document.getElementById('nTel2').value.trim() || null,
-      destino: document.getElementById('nDest').value || null,
-      paquete: document.getElementById('nPkg').value || null,
-      fecha_viaje: document.getElementById('nFecha').value || null,
-      domicilio: (document.getElementById('nDomicilio') || {}).value && document.getElementById('nDomicilio').value.trim() || null,
-      notas: (document.getElementById('nNotas') || {}).value && document.getElementById('nNotas').value.trim() || null
+      documento: (document.getElementById('nDoc') || {}).value.trim() || null,
+      telefono: telefono1,
+      destino: (document.getElementById('nDest') || {}).value || null,
+      paquete: (document.getElementById('nPkg') || {}).value || null,
+      fecha_viaje: (document.getElementById('nFecha') || {}).value || null,
+      domicilio: domicilio,
+      notas: (document.getElementById('nNotas') || {}).value && document.getElementById('nNotas').value.trim() || null,
+      personas: parseInt((document.getElementById('nPersDisplay') || {}).innerText, 10) || null,
+      noches: parseInt((document.getElementById('nNoches') || {}).value, 10) || null
     };
-    Object.keys(camposExtra).forEach(function(k) { if (camposExtra[k] === '') camposExtra[k] = null; });
 
     return sbClient.from('clientes').update(camposExtra).eq('id', nuevoClienteId)
       .then(function(updRes) {
@@ -2350,15 +2361,12 @@ function addClient() {
     notificarAccion('nuevo_cliente', 'Nuevo cliente creado: ' + nuevoCliente.nombre, nuevoCliente.id, null);
 
     if (codigoReferido && nuevoCliente.id) {
-      var referidor = null;
-      for (var i = 0; i < allClients.length; i++) {
-        var c = allClients[i];
+      var referidor = allClients.find(function(c) {
         var codGen = 'LUA-' + (c.nombre ? c.nombre.split(' ')[0].toUpperCase() : '');
-        if (codGen === codigoReferido.toUpperCase() || (c.email && c.email.toUpperCase() === codigoReferido.toUpperCase())) {
-          referidor = c;
-          break;
-        }
-      }
+        return (c.codigo_referido && c.codigo_referido.toUpperCase() === codigoReferido.toUpperCase()) ||
+               (c.email && c.email.toUpperCase() === codigoReferido.toUpperCase()) ||
+               codGen === codigoReferido.toUpperCase();
+      });
       if (referidor) {
         sbClient.from('referidos').insert({
           cliente_referidor_id: referidor.id,
