@@ -118,7 +118,7 @@ body::after {
 @keyframes cardInA { from{opacity:0;transform:translateY(28px) scale(.97);} to{opacity:1;transform:translateY(0) scale(1);} }
 
 .lux-logo-a {
-  width:92px; height:92px; border-radius:50%;
+  width:125px; height:125px; border-radius:50%;
   margin:0 auto 22px;
   background:linear-gradient(135deg,#000d1a 0%,#001a33 50%,#000d1a 100%);
   border:2px solid rgba(0,210,255,.4);
@@ -504,7 +504,7 @@ body::after {
   <div class="lux-particles-a" id="luxParticlesA"></div>
   <div class="login-card">
     <div class="lux-logo-a">
-      <img src="hero-luazul.png" alt="Luazul" onerror="this.style.display='none'">
+      <img src="logo-hero.png" alt="Luazul" onerror="this.style.display='none'">
     </div>
     <h1>LUAZUL</h1>
     <div class="lc-sub">Smart Travel · Asesor</div>
@@ -529,7 +529,7 @@ body::after {
   <!-- TOPBAR -->
   <header class="topbar">
     <div class="topbar-left">
-      <img src="hero-luazul.png" alt="Luazul" class="brand-logo">
+      <img src="logo-hero.png" alt="Luazul" class="brand-logo">
       <div class="brand">
         LUAZUL <span>SMART TRAVEL</span>
         <span class="brand-tag">Panel Asesor de Viajes</span>
@@ -1626,7 +1626,7 @@ function notificarAccion(tipo, mensaje, clienteId, datosExtra) {
 function refreshAdminNotifBadge() {
   if (!sbClient||!_currentProfile) return;
   sbClient.from('notificaciones').select('id',{count:'exact'}).eq('leida',false)
-    .or('destinatario_id.eq.'+_currentProfile.user_id+',destinatario_rol.eq.seller')
+    .or('destinatario_id.eq.'+_currentProfile.user_id+',destinatario_rol.eq.admin')
     .then(function(r){
       var count = r.count||0;
       var dot = document.getElementById('adminNotifDot');
@@ -1645,7 +1645,7 @@ function openAdminNotifs() {
     '<div class="modal-head"><div><h2>🔔 Notificaciones</h2></div><button class="modal-close" onclick="closeModal()">✕</button></div>'+
     '<div class="modal-body" style="max-height:70vh;overflow-y:auto;"><p style="text-align:center;color:var(--muted);padding:30px;">⏳ Cargando...</p></div>';
   sbClient.from('notificaciones').select('*')
-    .or('destinatario_id.eq.'+_currentProfile.user_id+',destinatario_rol.eq.seller')
+    .or('destinatario_id.eq.'+_currentProfile.user_id+',destinatario_rol.eq.admin')
     .order('created_at',{ascending:false}).limit(50)
     .then(function(r){
       var ns = r.data||[];
