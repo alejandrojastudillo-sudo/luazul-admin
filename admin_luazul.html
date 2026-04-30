@@ -1625,17 +1625,25 @@ function notificarAccion(tipo, mensaje, clienteId, datosExtra) {
 
 function refreshAdminNotifBadge() {
   if (!sbClient||!_currentProfile) return;
-  sbClient.from('notificaciones').select('id',{count:'exact'}).eq('leida',false)
-    .or('destinatario_id.eq.'+_currentProfile.user_id+',destinatario_rol.eq.admin')
-    .then(function(r){
-      var count = r.count||0;
+  sbClient.from('notificaciones')
+    .select('id', { count: 'exact', head: true })
+    .eq('leida', false)
+    .eq('destinatario_id', _currentProfile.user_id)
+    .then(function(r) {
+      var count = r.count || 0;
       var dot = document.getElementById('adminNotifDot');
       var lbl = document.getElementById('adminNotifLabel');
-      if (!dot||!lbl) return;
-      if (count>0) { dot.style.display='flex'; dot.textContent=count; lbl.textContent='Alertas ('+count+')'; }
-      else { dot.style.display='none'; lbl.textContent='Alertas'; }
+      if (!dot || !lbl) return;
+      if (count > 0) {
+        dot.style.display = 'flex';
+        dot.textContent = count;
+        lbl.textContent = 'Alertas (' + count + ')';
+      } else {
+        dot.style.display = 'none';
+        lbl.textContent = 'Alertas';
+      }
     })
-    .catch(function(e){ console.warn('[refreshAdminNotifBadge]', e.message); });
+    .catch(function(e) { console.warn('[refreshAdminNotifBadge]', e.message); });
 }
 
 function openAdminNotifs() {
@@ -1644,9 +1652,11 @@ function openAdminNotifs() {
   document.getElementById('modalBox').innerHTML =
     '<div class="modal-head"><div><h2>🔔 Notificaciones</h2></div><button class="modal-close" onclick="closeModal()">✕</button></div>'+
     '<div class="modal-body" style="max-height:70vh;overflow-y:auto;"><p style="text-align:center;color:var(--muted);padding:30px;">⏳ Cargando...</p></div>';
-  sbClient.from('notificaciones').select('*')
-    .or('destinatario_id.eq.'+_currentProfile.user_id+',destinatario_rol.eq.admin')
-    .order('created_at',{ascending:false}).limit(50)
+  sbClient.from('notificaciones')
+    .select('*')
+    .eq('destinatario_id', _currentProfile.user_id)
+    .order('created_at', { ascending: false })
+    .limit(50)
     .then(function(r){
       var ns = r.data||[];
       function fmtTs(ts){ var d=Math.round((Date.now()-new Date(ts))/60000); return d<60?'Hace '+d+' min':d<1440?'Hace '+Math.round(d/60)+' h':'Hace '+Math.round(d/1440)+' días'; }
