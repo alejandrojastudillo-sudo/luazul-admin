@@ -1842,6 +1842,9 @@ function saveNewGerente() {
     p_apellido: apellidoStr,
     p_region_ids: regionIds,
     p_telefono1: tel1 || null,
+    p_telefono2: tel2 || null,
+    p_ciudad: ciudad || null,
+    p_domicilio: domicilio || null,
     p_cbu: cbu || null
   })
   .then(function(result) {
