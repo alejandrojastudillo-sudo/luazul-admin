@@ -75,58 +75,125 @@ body::after {
 ::-webkit-scrollbar-thumb:hover { background:rgba(255,255,255,0.3); }
 
 /* ── LOGIN ─────────────────────────────────────────────────────────────── */
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Cormorant+Garamond:wght@400;600&display=swap');
 #loginWrap {
   position:fixed; inset:0; z-index:100;
   display:flex; align-items:center; justify-content:center;
-  background:var(--bg); padding:24px;
+  background:#000; padding:24px; overflow:hidden;
 }
+#loginWrap::before {
+  content:''; position:absolute; inset:0;
+  background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+  background-size:200px 200px; opacity:.4; pointer-events:none;
+}
+#loginWrap::after {
+  content:''; position:absolute; inset:0;
+  background:
+    radial-gradient(ellipse 55% 40% at 20% 10%, rgba(0,210,255,.09) 0%, transparent 60%),
+    radial-gradient(ellipse 40% 35% at 80% 90%, rgba(59,130,246,.07) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 50% at 50% 50%, rgba(0,210,255,.04) 0%, transparent 70%);
+  pointer-events:none; animation:luxShiftA 8s ease-in-out infinite alternate;
+}
+@keyframes luxShiftA { from{opacity:.7;} to{opacity:1;} }
+.lux-particles-a { position:absolute; inset:0; pointer-events:none; overflow:hidden; z-index:1; }
+.lux-particle-a {
+  position:absolute; border-radius:50%; opacity:0;
+  animation:luxFloatA linear infinite;
+  background:rgba(0,210,255,.7); box-shadow:0 0 6px rgba(0,210,255,.5);
+}
+@keyframes luxFloatA { 0%{transform:translateY(110vh) scale(.5);opacity:0;} 10%{opacity:.8;} 90%{opacity:.3;} 100%{transform:translateY(-10vh) scale(1.2);opacity:0;} }
 
 .login-card {
-  width:100%; max-width:420px;
-  background:var(--surface);
-  border:1px solid var(--border2);
-  border-radius:24px;
-  padding:44px 40px;
-  text-align:center;
-  box-shadow:0 24px 80px rgba(0,0,0,0.5),inset 0 1px 0 rgba(255,255,255,0.06);
-  backdrop-filter:blur(4px);
+  position:relative; z-index:10;
+  width:100%; max-width:420px; padding:48px 40px 40px; text-align:center;
+  background:rgba(0,6,20,.72);
+  backdrop-filter:blur(24px) saturate(1.3); -webkit-backdrop-filter:blur(24px) saturate(1.3);
+  border:1px solid rgba(0,210,255,.22); border-radius:24px;
+  box-shadow:0 0 0 1px rgba(0,210,255,.07),0 8px 80px rgba(0,0,0,.88),0 0 40px rgba(0,210,255,.07) inset;
+  animation:cardInA .7s cubic-bezier(.22,1,.36,1) both; transition:box-shadow .4s;
 }
+.login-card:hover {
+  box-shadow:0 0 0 1px rgba(0,210,255,.18),0 8px 80px rgba(0,0,0,.9),0 0 60px rgba(0,210,255,.12) inset;
+}
+@keyframes cardInA { from{opacity:0;transform:translateY(28px) scale(.97);} to{opacity:1;transform:translateY(0) scale(1);} }
+
+.lux-logo-a {
+  width:92px; height:92px; border-radius:50%;
+  margin:0 auto 22px;
+  background:linear-gradient(135deg,#000d1a 0%,#001a33 50%,#000d1a 100%);
+  border:2px solid rgba(0,210,255,.4);
+  box-shadow:0 0 0 5px rgba(0,210,255,.07),0 8px 32px rgba(0,0,0,.7);
+  display:flex; align-items:center; justify-content:center; overflow:hidden; position:relative;
+}
+.lux-logo-a img { width:100%; height:100%; object-fit:cover; border-radius:50%; position:relative; z-index:1; }
 
 .login-card h1 {
-  font-size:1.6rem; font-weight:900;
-  letter-spacing:2px; margin-bottom:4px;
+  font-family:'Syne',sans-serif; font-size:1.45rem; font-weight:800;
+  letter-spacing:3px; margin-bottom:3px;
+  background:linear-gradient(90deg,#0070a0 0%,#00D2FF 40%,#7ee8fa 70%,#00D2FF 100%);
+  background-size:200% auto;
+  -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text;
+  animation:shimmerA 4s linear infinite;
+}
+@keyframes shimmerA { to{background-position:200% center;} }
+
+.login-card .lc-sub {
+  font-family:'Cormorant Garamond',serif; font-size:.78rem;
+  letter-spacing:4px; text-transform:uppercase;
+  color:rgba(0,210,255,.45); margin-bottom:30px; font-weight:400;
 }
 
 .lc-field { margin-bottom:16px; text-align:left; }
-.lc-field label { display:block; font-size:.72rem; font-weight:700; text-transform:uppercase; letter-spacing:1px; color:var(--accent2); margin-bottom:7px; }
+.lc-field label {
+  display:block; font-size:.68rem; font-weight:700;
+  text-transform:uppercase; letter-spacing:1.5px;
+  color:rgba(0,210,255,.65); margin-bottom:7px; font-family:'Syne',sans-serif;
+}
 .lc-field input {
   width:100%; padding:13px 16px;
-  background:rgba(255,255,255,0.05);
-  border:1px solid var(--border2);
-  border-radius:12px; color:var(--text);
-  font-family:'Montserrat',sans-serif; font-size:.95rem;
-  transition:border .2s,box-shadow .2s;
+  background:rgba(0,210,255,.04); border:1px solid rgba(0,210,255,.18);
+  border-radius:12px; color:#cce8ff;
+  font-family:'Montserrat',sans-serif; font-size:.93rem;
+  transition:border-color .25s,box-shadow .25s,background .25s; box-sizing:border-box;
 }
-.lc-field input:focus { outline:none; border-color:var(--accent); box-shadow:0 0 0 3px rgba(59,130,246,0.15); }
-.lc-field input::placeholder { color:rgba(180,200,240,0.25); }
+.lc-field input:focus {
+  outline:none; border-color:rgba(0,210,255,.6);
+  background:rgba(0,210,255,.07); box-shadow:0 0 0 3px rgba(0,210,255,.10);
+}
+.lc-field input::placeholder { color:rgba(0,210,255,.2); font-style:italic; }
+
+.lz-pass-wrap { position:relative; }
+.lz-pass-wrap input { padding-right:50px; }
+.lz-eye-btn {
+  position:absolute; right:13px; top:50%; transform:translateY(-50%);
+  background:none; border:none; color:rgba(0,210,255,.3); cursor:pointer;
+  padding:8px; display:flex; align-items:center; transition:color .2s;
+  min-width:44px; min-height:44px; justify-content:center;
+}
+.lz-eye-btn:hover { color:rgba(0,210,255,.8); }
 
 .lc-btn {
-  width:100%; padding:14px; margin-top:6px;
-  background:var(--accent); color:white; border:none;
-  border-radius:12px; font-family:'Montserrat',sans-serif;
-  font-size:.95rem; font-weight:700; letter-spacing:.5px;
-  cursor:pointer; transition:all .2s;
+  width:100%; padding:14px; margin-top:4px; margin-bottom:10px;
+  background:linear-gradient(90deg,#003d60 0%,#00D2FF 40%,#7ee8fa 70%,#005580 100%);
+  background-size:200% auto; color:#000d1a; border:none; border-radius:12px;
+  font-family:'Syne',sans-serif; font-size:.92rem; font-weight:800;
+  letter-spacing:1.5px; text-transform:uppercase; cursor:pointer;
+  box-shadow:0 4px 24px rgba(0,210,255,.25);
+  transition:background-position .4s,transform .15s,box-shadow .3s;
 }
-.lc-btn:hover { background:#2563eb; transform:translateY(-1px); box-shadow:0 8px 20px rgba(59,130,246,0.4); }
+.lc-btn:hover { background-position:right center; box-shadow:0 6px 36px rgba(0,210,255,.5); transform:translateY(-1px); }
+.lc-btn:active { transform:translateY(0); }
+.lc-btn:disabled { opacity:.45; cursor:not-allowed; transform:none; }
 
 .lc-err {
-  background:var(--red-bg); border:1px solid var(--red-bd);
-  color:#fca5a5; border-radius:10px;
-  padding:10px 14px; font-size:.82rem; margin-top:12px; display:none;
+  background:rgba(239,68,68,.12); border:1px solid rgba(239,68,68,.3);
+  color:#fca5a5; border-radius:10px; padding:10px 14px;
+  font-size:.8rem; margin-top:10px; display:none; font-family:'Montserrat',sans-serif;
 }
 
 /* ── APP LAYOUT ─────────────────────────────────────────────────────────── */
 #app { display:none; position:relative; z-index:1; min-height:100vh; }
+
 
 .topbar {
   position:sticky; top:0; z-index:50;
@@ -434,21 +501,29 @@ body::after {
 <!-- LOGIN                                                                  -->
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
 <div id="loginWrap">
+  <div class="lux-particles-a" id="luxParticlesA"></div>
   <div class="login-card">
-    <img src="hero-luazul.png" alt="Luazul Smart Travel" class="brand-logo" style="margin:0 auto 16px;">
-    <h1>LUAZUL <span style="color:var(--accent2);">SMART TRAVEL</span></h1>
-    <div style="font-size:.65rem;font-weight:700;letter-spacing:2.5px;text-transform:uppercase;color:#34d399;margin-bottom:24px;">🧑‍💼 Panel Asesor de Viajes</div>
+    <div class="lux-logo-a">
+      <img src="hero-luazul.png" alt="Luazul" onerror="this.style.display='none'">
+    </div>
+    <h1>LUAZUL</h1>
+    <div class="lc-sub">Smart Travel · Asesor</div>
     <div class="lc-field"><label>Email</label><input type="email" id="adUser" placeholder="asesor@luazul.com" autocomplete="username"></div>
-    <div class="lc-field"><label>Contraseña</label><input type="password" id="adPass" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')adminLogin()"></div>
+    <div class="lc-field">
+      <label>Contraseña</label>
+      <div class="lz-pass-wrap">
+        <input type="password" id="adPass" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')adminLogin()">
+        <button type="button" class="lz-eye-btn" onclick="lzToggle('adPass', this)" tabindex="-1">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lz-eye-adPass"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+        </button>
+      </div>
+    </div>
     <button class="lc-btn" onclick="adminLogin()">Ingresar</button>
     <div class="lc-err" id="adErr"></div>
-    <p style="margin-top:20px;font-size:.72rem;color:var(--muted);">Luazul Smart Travel · Panel Exclusivo</p>
+    <div style="margin-top:18px;font-size:.65rem;color:rgba(0,210,255,.25);font-family:'Cormorant Garamond',serif;letter-spacing:2px;">Panel Asesor · Acceso Restringido</div>
   </div>
 </div>
 
-<!-- ═══════════════════════════════════════════════════════════════════════ -->
-<!-- APP PRINCIPAL                                                          -->
-<!-- ═══════════════════════════════════════════════════════════════════════ -->
 <div id="app">
 
   <!-- TOPBAR -->
@@ -745,6 +820,30 @@ function loadCurrentProfile() {
 // ──────────────────────────────────────────────────────────────────────────
 // 6. LOGIN / LOGOUT
 // ──────────────────────────────────────────────────────────────────────────
+// ── PARTÍCULAS LUXURY (Asesor: azul eléctrico) ──
+(function initLuxParticlesA() {
+  var c = document.getElementById('luxParticlesA');
+  if (!c) return;
+  for (var i = 0; i < 22; i++) {
+    var p = document.createElement('div');
+    p.className = 'lux-particle-a';
+    var s = 1.5 + Math.random() * 2.5;
+    p.style.cssText = 'left:'+(Math.random()*100)+'%;bottom:-6px;width:'+s+'px;height:'+s+'px;animation-duration:'+(10+Math.random()*14)+'s;animation-delay:'+(Math.random()*16)+'s;';
+    c.appendChild(p);
+  }
+})();
+
+function lzToggle(inputId, btn) {
+  var inp = document.getElementById(inputId);
+  var svg = btn ? btn.querySelector('svg') : null;
+  if (!inp || !svg) return;
+  var show = inp.type === 'password';
+  inp.type = show ? 'text' : 'password';
+  svg.innerHTML = show
+    ? '<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>'
+    : '<path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>';
+}
+
 function adminLogin() {
   if (loginBlocked) return;
   var email = document.getElementById('adUser').value.trim().toLowerCase();
@@ -2175,60 +2274,113 @@ function buscarReferidor(codigo) {
 
 function addClient() {
   var nombre = document.getElementById('nNombre').value.trim();
-  var email  = document.getElementById('nEmail').value.trim().toLowerCase();
-  var pass   = document.getElementById('nPass').value.trim();
-  var total  = parseFloat(document.getElementById('nTotal').value)||0;
-  var cuotas = parseInt(document.getElementById('nCuotas').value,10)||10;
-  if (!nombre||!email) { showToast('⚠️ Nombre y email son obligatorios'); return; }
-  if (!pass||pass.length<6) { showToast('⚠️ La contraseña debe tener al menos 6 caracteres'); return; }
+  var email = document.getElementById('nEmail').value.trim().toLowerCase();
+  var pass = document.getElementById('nPass').value.trim();
+  var total = parseFloat(document.getElementById('nTotal').value) || 0;
+  var cuotas = parseInt(document.getElementById('nCuotas').value, 10) || 10;
+  var codigoReferido = (document.getElementById('nRefCodigo') || {}).value && document.getElementById('nRefCodigo').value.trim();
+
+  if (!nombre || !email) { showToast('⚠️ Nombre y email son obligatorios'); return; }
+  if (!pass || pass.length < 6) { showToast('⚠️ La contraseña debe tener al menos 6 caracteres'); return; }
   if (!_currentProfile) { showToast('⚠️ Sesión no cargada'); return; }
   if (!sbClient) { showToast('❌ Sin conexión'); return; }
-  var btn=document.querySelector('#modal .m-btn.primary');
-  // FIX 9: Anti-doble-clic
-  if (btn) { btn.disabled=true; btn.textContent='⏳ Verificando...'; }
+  if (!total || total <= 0) { showToast('⚠️ El total del plan debe ser mayor a 0'); return; }
 
-  // FIX 5: Verificar si el email ya existe en clientes antes de crear
-  sbClient.from('clientes').select('id,email').eq('email',email).maybeSingle()
-    .then(function(checkRes) {
-      if (checkRes.data) throw new Error('Ya hay un cliente registrado con ese email');
-      // Proceder con el registro
-      var sbTemp=supabase.createClient(SUPABASE_URL,SUPABASE_KEY,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}});
-      var nombresArr=nombre.split(' ');
-      if (btn) btn.textContent='⏳ Creando...';
-      return sbTemp.auth.signUp({ email:email, password:pass, options:{ data:{ nombre:nombresArr[0], apellido:nombresArr.slice(1).join(' ')||'', role_id:4 } } })
-        .then(function(authRes){
-          if (authRes.error) {
-            var msg = authRes.error.message||'';
-            if (msg.toLowerCase().indexOf('already registered')!==-1 || msg.toLowerCase().indexOf('already exists')!==-1) {
-              throw new Error('Ya hay un usuario registrado con ese email');
-            }
-            throw authRes.error;
-          }
-          var uid=authRes.data.user.id;
-          var cuotaFloor = Math.floor(total/cuotas * 100) / 100;
-          return sbClient.from('clientes').insert([{
-            nombre:nombre, email:email, user_id:uid,
-            documento:document.getElementById('nDoc').value.trim()||null,
-            telefono:document.getElementById('nTel1').value.trim()||null,
-            destino:document.getElementById('nDest').value||null,
-            paquete:document.getElementById('nPkg').value||null,
-            fecha_viaje:document.getElementById('nFecha').value||null,
-            total_usd:total, cuotas_total:cuotas, cuotas_pagadas:0,
-            monto_cuota:total>0?cuotaFloor:0,
-            estado:'activo', fecha_alta:new Date().toISOString().slice(0,10),
-            seller_id:parseInt(_currentProfile.id,10)||null,
-            region_id:_currentProfile.region_id?(parseInt(_currentProfile.region_id,10)||null):null,
-            notas:''
-          }]).select().single().then(function(r){ if(r.error) throw r.error; return r.data; });
-        });
-    })
-    .then(function(created){
-      allClients.push(enrich(created));
-      notificarAccion('nuevo_cliente','Nuevo cliente creado: '+created.nombre,created.id,null);
-      closeModal(); renderAll(); showToast('✅ Cliente '+nombre+' creado');
-    })
-    .catch(function(e){ showToast('❌ Error: '+e.message); })
-    .finally(function(){ if(btn){ btn.disabled=false; btn.textContent='✅ Agregar cliente'; } });
+  var btn = document.querySelector('#modal .m-btn.primary');
+  var originalText = btn ? btn.textContent : '✅ Agregar cliente';
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Creando...'; }
+
+  var montoCuota = Math.floor(total / cuotas * 100) / 100;
+  var sellerId = parseInt(_currentProfile.id, 10);
+  var regionId = _currentProfile.region_id ? parseInt(_currentProfile.region_id, 10) : null;
+
+  sbClient.rpc('crear_usuario_staff', {
+    p_email: email,
+    p_password: pass,
+    p_role_id: 4,
+    p_nombre: nombre,
+    p_apellido: '',
+    p_region_ids: regionId ? [regionId] : null,
+    p_telefono1: document.getElementById('nTel1').value.trim() || null,
+    p_cbu: null,
+    p_seller_id: sellerId,
+    p_total_usd: total,
+    p_monto_cuota: montoCuota,
+    p_cuotas_total: cuotas
+  })
+  .then(function(result) {
+    if (result.error) throw result.error;
+    var nuevoClienteId = result.data;
+
+    var camposExtra = {
+      documento: document.getElementById('nDoc').value.trim() || null,
+      telefono: document.getElementById('nTel1').value.trim() || null,
+      telefono2: (document.getElementById('nTel2') || {}).value && document.getElementById('nTel2').value.trim() || null,
+      destino: document.getElementById('nDest').value || null,
+      paquete: document.getElementById('nPkg').value || null,
+      fecha_viaje: document.getElementById('nFecha').value || null,
+      domicilio: (document.getElementById('nDomicilio') || {}).value && document.getElementById('nDomicilio').value.trim() || null,
+      notas: (document.getElementById('nNotas') || {}).value && document.getElementById('nNotas').value.trim() || null
+    };
+    Object.keys(camposExtra).forEach(function(k) { if (camposExtra[k] === '') camposExtra[k] = null; });
+
+    return sbClient.from('clientes').update(camposExtra).eq('id', nuevoClienteId)
+      .then(function(updRes) {
+        if (updRes.error) throw updRes.error;
+        return nuevoClienteId;
+      });
+  })
+  .then(function(clienteId) {
+    return sbClient.from('clientes').select('*').eq('id', clienteId).single();
+  })
+  .then(function(clienteRes) {
+    if (clienteRes.error) throw clienteRes.error;
+    var nuevoCliente = enrich(clienteRes.data);
+    allClients.push(nuevoCliente);
+    notificarAccion('nuevo_cliente', 'Nuevo cliente creado: ' + nuevoCliente.nombre, nuevoCliente.id, null);
+
+    if (codigoReferido && nuevoCliente.id) {
+      var referidor = null;
+      for (var i = 0; i < allClients.length; i++) {
+        var c = allClients[i];
+        var codGen = 'LUA-' + (c.nombre ? c.nombre.split(' ')[0].toUpperCase() : '');
+        if (codGen === codigoReferido.toUpperCase() || (c.email && c.email.toUpperCase() === codigoReferido.toUpperCase())) {
+          referidor = c;
+          break;
+        }
+      }
+      if (referidor) {
+        sbClient.from('referidos').insert({
+          cliente_referidor_id: referidor.id,
+          cliente_referido_id: nuevoCliente.id,
+          referido_nombre: nuevoCliente.nombre,
+          referido_email: nuevoCliente.email,
+          referido_tel: nuevoCliente.telefono || null,
+          estado: 'pendiente',
+          vendedor_id: sellerId,
+          created_at: new Date().toISOString()
+        }).catch(function(e) { console.warn('Error al registrar referido:', e); });
+      }
+    }
+
+    closeModal();
+    renderAll();
+    showToast('✅ Cliente ' + nombre + ' creado exitosamente');
+  })
+  .catch(function(err) {
+    console.error('[addClient] Error:', err);
+    var msg = err.message || 'Error desconocido';
+    if (msg.indexOf('duplicate key') !== -1 || msg.indexOf('already exists') !== -1) {
+      showToast('❌ Ya existe un usuario con ese email');
+    } else if (msg.indexOf('Ya hay un cliente registrado') !== -1) {
+      showToast('❌ Ya hay un cliente registrado con ese email');
+    } else {
+      showToast('❌ Error al crear cliente: ' + msg);
+    }
+  })
+  .finally(function() {
+    if (btn) { btn.disabled = false; btn.textContent = originalText; }
+  });
 }
 
 // ──────────────────────────────────────────────────────────────────────────
