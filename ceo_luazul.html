@@ -623,6 +623,7 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
             <button id="regFiltTodas" onclick="setRegFiltMode('todas')" style="padding:6px 14px;border-radius:7px;font-size:.78rem;font-weight:700;font-family:Mulish,sans-serif;cursor:pointer;border:none;background:transparent;color:var(--muted);transition:all .15s;">🌎 Todas (26)</button>
           </div>
           <button class="addbtn" onclick="openAddGerente()">➕ Nuevo Gerente</button>
+          <button onclick="alert('Regiones: ' + (_cacheRegiones ? _cacheRegiones.length : 'null') + '\n' + (_cacheRegiones ? _cacheRegiones.map(r=>r.nombre).join(', ') : 'vacío'))" style="background:gold; color:black; padding:4px 8px;">🔍 Debug</button>
         </div>
       </div>
       <div id="regFiltInfo" style="margin-bottom:10px;font-size:.74rem;color:var(--muted);padding:0 2px;"></div>
