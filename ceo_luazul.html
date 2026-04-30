@@ -1198,11 +1198,6 @@ function showToast(msg, dur) {
 }
 
 // ── AUTH (CEO) ────────────────────────────────────────
-var CEO_ALLOWED_EMAILS = [
-  'luazul.turismobr@gmail.com',
-  'luazulsmarttravel@gmail.com'
-];
-
 var loginAttempts = 0;
 
 // ── PARTÍCULAS LUXURY (CEO: dorado) ──
@@ -1245,39 +1240,33 @@ function cLogin() {
   sbClient.auth.signInWithPassword({ email: u, password: p })
     .then(function(result) {
       if (result.error) throw result.error;
-      var email = result.data.user.email.toLowerCase();
-      if (CEO_ALLOWED_EMAILS.indexOf(email) === -1) {
-        return sbClient.auth.signOut().then(function() {
-          throw new Error('Este usuario no tiene acceso al panel CEO.');
-        });
-      }
       return sbClient.from('staff_profiles_view')
         .select('id, user_id, role_id, role_name, nombre')
         .eq('user_id', result.data.user.id)
-        .single()
-        .then(function(profRes) {
-          if (profRes.error || !profRes.data) {
-            return sbClient.auth.signOut().then(function() {
-              throw new Error('Perfil CEO no encontrado. Contactá al administrador.');
-            });
-          }
-          if (String(profRes.data.role_id) !== '1') {
-            return sbClient.auth.signOut().then(function() {
-              throw new Error('Acceso denegado: este usuario no tiene rol CEO (role_id=1).');
-            });
-          }
-          _ceoUid = String(result.data.user.id);
-          try {
-            sessionStorage.setItem('luazul_ceo', '1');
-            sessionStorage.setItem('luazul_ceo_nombre', profRes.data.nombre);
-          } catch(e) {}
-          var lw = document.getElementById('loginWrap');
-          var ap = document.getElementById('app');
-          if (lw) lw.style.display = 'none';
-          if (ap) ap.style.display = 'block';
-          onDone();
-          initApp();
+        .single();
+    })
+    .then(function(profRes) {
+      if (profRes.error || !profRes.data) {
+        return sbClient.auth.signOut().then(function() {
+          throw new Error('Perfil CEO no encontrado. Contactá al administrador.');
         });
+      }
+      if (String(profRes.data.role_id) !== '1') {
+        return sbClient.auth.signOut().then(function() {
+          throw new Error('Acceso denegado: este usuario no tiene rol CEO (role_id=1).');
+        });
+      }
+      _ceoUid = String(profRes.data.user_id);
+      try {
+        sessionStorage.setItem('luazul_ceo', '1');
+        sessionStorage.setItem('luazul_ceo_nombre', profRes.data.nombre);
+      } catch(e) {}
+      var lw = document.getElementById('loginWrap');
+      var ap = document.getElementById('app');
+      if (lw) lw.style.display = 'none';
+      if (ap) ap.style.display = 'block';
+      onDone();
+      initApp();
     })
     .catch(function(e) {
       loginAttempts++;
