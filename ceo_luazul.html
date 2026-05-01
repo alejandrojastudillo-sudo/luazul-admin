@@ -3532,89 +3532,114 @@ function verDetalleStaff(staffId) {
   }
 
   function saveNewClienteCeo() {
-    var nombre   = (document.getElementById('nNombre')      || {}).value || '';
-    var email    = (document.getElementById('nEmail')       || {}).value || '';
-    var telefono = (document.getElementById('nTelefono')    || {}).value || '';
-    var documento= (document.getElementById('nDocumento')   || {}).value || '';
-    var domicilio= (document.getElementById('nDomicilio')   || {}).value || '';
-    var destino  = (document.getElementById('nDestino')     || {}).value || '';
-    var paquete  = (document.getElementById('nPaquete')     || {}).value || '';
-    var totalUsd = parseFloat((document.getElementById('nTotalUsd')    || {}).value || 0);
-    var cuota    = parseFloat((document.getElementById('nMontoCuota')  || {}).value || 0);
-    var cuotasT  = parseInt((document.getElementById('nCuotasTotal')   || {}).value || 12, 10);
+    var nombre     = (document.getElementById('nNombre')      || {}).value.trim();
+    var email      = (document.getElementById('nEmail')       || {}).value.trim().toLowerCase();
+    var telefono   = (document.getElementById('nTelefono')    || {}).value.trim();
+    var documento  = (document.getElementById('nDocumento')   || {}).value.trim();
+    var domicilio  = (document.getElementById('nDomicilio')   || {}).value.trim();
+    var destino    = (document.getElementById('nDestino')     || {}).value.trim();
+    var paquete    = (document.getElementById('nPaquete')     || {}).value.trim();
+    var totalUsd   = parseFloat((document.getElementById('nTotalUsd')    || {}).value || 0);
+    var montoCuota = parseFloat((document.getElementById('nMontoCuota')  || {}).value || 0);
+    var cuotasTotal= parseInt((document.getElementById('nCuotasTotal')   || {}).value || 12, 10);
     var fechaViaje = (document.getElementById('nFechaViaje') || {}).value || null;
-    var sellerId = (document.getElementById('nSeller')      || {}).value || '';
-    var regionId = (document.getElementById('nRegion')      || {}).value || '';
-    var notas    = (document.getElementById('nNotas')       || {}).value || '';
+    var sellerId   = (document.getElementById('nSeller')      || {}).value || null;
+    var regionId   = (document.getElementById('nRegion')      || {}).value || null;
+    var notas      = (document.getElementById('nNotas')       || {}).value.trim();
+    var codigoReferido = (document.getElementById('nRefCodigo') || {}).value.trim();
 
-    nombre = nombre.trim();
     if (!nombre) { showToast('⚠️ El nombre es obligatorio'); return; }
     if (!totalUsd || totalUsd <= 0) { showToast('⚠️ Ingresá el total USD'); return; }
+    if (!email) { showToast('⚠️ El email es obligatorio'); return; }
 
-    var payload = {
-      nombre:        nombre,
-      email:         email || null,
-      telefono:      telefono || null,
-      documento:     documento || null,
-      domicilio:     domicilio || null,
-      destino:       destino || null,
-      paquete:       paquete || null,
-      total_usd:     totalUsd,
-      monto_cuota:   cuota || null,
-      cuotas_total:  cuotasT,
-      cuotas_pagadas: 0,
-      estado:        'activo',
-      fecha_viaje:   fechaViaje || null,
-      seller_id:     sellerId || null,
-      region_id:     regionId || null,
-      notas:         notas || null,
-      fecha_alta:    new Date().toISOString()
-    };
+    var passwordTemp = 'Luazul' + Math.floor(Math.random() * 10000) + '!';
 
-    sbClient.from('clientes').insert(payload).select()
-      .then(function(insRes) {
-        if (insRes.error) throw insRes.error;
-        var nuevoCliente = insRes.data && insRes.data[0] ? insRes.data[0] : null;
+    var btn = document.querySelector('#modal .mbtn.gold');
+    var originalText = btn ? btn.textContent : '✅ Crear Cliente';
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Creando...'; }
 
-        // Registro de referido (si se ingresó código)
-        var codigoReferido = ((document.getElementById('nRefCodigo') || {}).value || '').trim();
-        var referidor = null;
-
-        if (codigoReferido && nuevoCliente && nuevoCliente.id) {
-          for (var i = 0; i < _cacheClientes.length; i++) {
-            var c = _cacheClientes[i];
-            var code = 'LUA-' + (c.nombre ? c.nombre.split(' ')[0].toUpperCase() : '');
-            if (code === codigoReferido.toUpperCase()) {
-              referidor = c;
-              break;
-            }
-          }
-          if (referidor) {
-            sbClient.from('referidos').insert({
-              cliente_referidor_id: referidor.id,
-              cliente_referido_id:  nuevoCliente.id,
-              referido_nombre:      nuevoCliente.nombre,
-              referido_email:       nuevoCliente.email,
-              referido_tel:         nuevoCliente.telefono || null,
-              estado:               'pendiente',
-              vendedor_id:          nuevoCliente.seller_id || null,
-              created_at:           new Date().toISOString()
-            }).catch(function(e) { console.warn('Error al registrar referido:', e); });
-          }
-        }
-
-        showToast('✅ Cliente ' + nombre + ' creado');
-        closeModal();
-        return cargarDatosSupabase().then(function() {
-          renderAll();
-          populateAllFilters();
-          renderClientes();
-        });
+    fetch('https://yunvqgaljopirzvjrntc.supabase.co/functions/v1/crear_usuario_staff_v2', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + SUPABASE_KEY
+      },
+      body: JSON.stringify({
+        p_email: email,
+        p_password: passwordTemp,
+        p_role_id: 4,
+        p_nombre: nombre,
+        p_apellido: '',
+        p_region_ids: regionId ? [parseInt(regionId)] : [],
+        p_telefono1: telefono || null,
+        p_telefono2: null,
+        p_ciudad: null,
+        p_domicilio: domicilio || null,
+        p_cbu: null,
+        p_manager_id: null,
+        p_seller_id: sellerId ? parseInt(sellerId) : null,
+        p_total_usd: totalUsd,
+        p_monto_cuota: montoCuota,
+        p_cuotas_total: cuotasTotal,
+        p_destino: destino || null,
+        p_paquete: paquete || null,
+        p_fecha_viaje: fechaViaje || null,
+        p_personas: null,
+        p_noches: null
       })
-      .catch(function(err) {
-        showToast('❌ Error al crear cliente: ' + ((err && err.message) || 'desconocido'));
-        console.error('saveNewClienteCeo error:', err);
+    })
+    .then(function(response) { return response.json(); })
+    .then(function(data) {
+      if (data.error) throw new Error(data.error);
+      var nuevoClienteId = data.id;
+
+      var camposExtra = {
+        documento: documento || null,
+        notas: notas || null
+      };
+      return sbClient.from('clientes').update(camposExtra).eq('id', nuevoClienteId)
+        .then(function(updRes) {
+          if (updRes.error) throw updRes.error;
+          return nuevoClienteId;
+        });
+    })
+    .then(function(clienteId) {
+      if (codigoReferido && clienteId) {
+        var referidor = (_cacheClientes || []).find(function(c) {
+          var codGen = 'LUA-' + (c.nombre ? c.nombre.split(' ')[0].toUpperCase() : '');
+          return (c.codigo_referido && c.codigo_referido.toUpperCase() === codigoReferido.toUpperCase()) ||
+                 (c.email && c.email.toUpperCase() === codigoReferido.toUpperCase()) ||
+                 codGen === codigoReferido.toUpperCase();
+        });
+        if (referidor) {
+          sbClient.from('referidos').insert({
+            cliente_referidor_id: referidor.id,
+            cliente_referido_id: clienteId,
+            referido_nombre: nombre,
+            referido_email: email,
+            referido_tel: telefono || null,
+            estado: 'pendiente',
+            vendedor_id: sellerId ? parseInt(sellerId) : null,
+            created_at: new Date().toISOString()
+          }).catch(function(e) { console.warn('Error al registrar referido:', e); });
+        }
+      }
+      showToast('✅ Cliente ' + nombre + ' creado exitosamente. Contraseña temporal: ' + passwordTemp);
+      closeModal();
+      cargarDatosSupabase().then(function() {
+        renderAll();
+        populateAllFilters();
+        renderClientes();
       });
+    })
+    .catch(function(err) {
+      console.error('[saveNewClienteCeo] Error:', err);
+      var msg = err.message || 'Error desconocido';
+      showToast('❌ Error al crear cliente: ' + msg);
+    })
+    .finally(function() {
+      if (btn) { btn.disabled = false; btn.textContent = originalText; }
+    });
   }
   function approvePayment() { alert("Aprobación de pago - pendiente de implementación"); }
 
