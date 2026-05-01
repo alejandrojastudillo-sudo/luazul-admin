@@ -391,7 +391,22 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
 .rcard:hover{transform:translateY(-3px);box-shadow:0 12px 40px rgba(0,0,0,.3);}
 /* Otros estilos existentes (tablas, etc.) se mantienen igual */
 .twrap{background:var(--surface);border:1px solid var(--border);border-radius:16px;overflow:hidden;}
-/* ... resto de estilos previos (tablas, badges, etc.) se incluyen pero no los repito por espacio */
+.thead-ceo{display:grid;align-items:center;padding:0 16px;height:38px;background:rgba(255,255,255,.03);border-bottom:1px solid var(--border);font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);}
+.trow-ceo:hover{background:rgba(255,255,255,.03);}
+.sem{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
+.sem.r{background:#ef4444;box-shadow:0 0 6px #ef4444;}
+.sem.n{background:#f97316;box-shadow:0 0 6px #f97316;}
+.sem.a{background:#eab308;box-shadow:0 0 6px #eab308;}
+.sem.v{background:#22c55e;box-shadow:0 0 6px #22c55e;}
+.sem.b{background:var(--muted);}
+.bdg{display:inline-block;padding:2px 8px;border-radius:6px;font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;}
+.bdg.activo{background:rgba(34,197,94,.15);color:#4ade80;border:1px solid rgba(34,197,94,.25);}
+.bdg.atraso{background:rgba(239,68,68,.15);color:#f87171;border:1px solid rgba(239,68,68,.25);}
+.bdg.atraso_gestion{background:rgba(249,115,22,.15);color:#fb923c;border:1px solid rgba(249,115,22,.25);}
+.bdg.completo{background:rgba(99,102,241,.15);color:#818cf8;border:1px solid rgba(99,102,241,.25);}
+.bdg.baja{background:rgba(100,116,139,.15);color:#94a3b8;border:1px solid rgba(100,116,139,.25);}
+.act-btn{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:7px;border:1px solid var(--border);background:rgba(255,255,255,.06);cursor:pointer;font-size:.85rem;transition:all .15s;padding:0;}
+.act-btn:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(0,0,0,.3);}
 /* ─── MODAL GLASS MODERN ─── */
 #modal {
   position: fixed;
@@ -711,8 +726,8 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
         </div>
       </div>
       <div class="twrap">
-        <div class="thead-ceo" style="grid-template-columns:10px 2fr 1.4fr 1fr 90px 100px 80px 80px;">
-          <div></div><div>Cliente</div><div>Asesor · Región</div><div>Paquete</div><div>Total</div><div>Cuotas</div><div>Estado</div><div>Viaje</div>
+        <div class="thead-ceo" style="grid-template-columns:10px 2fr 1.4fr 1fr 100px 80px 110px 90px 90px;">
+          <div></div><div>Cliente</div><div>Asesor · Región</div><div>Paquete · Destino</div><div>Total · %</div><div>Cuotas</div><div>Viaje</div><div>Estado</div><div>Acciones</div>
         </div>
         <div id="cliBody"></div>
       </div>
