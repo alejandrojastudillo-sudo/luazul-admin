@@ -222,6 +222,20 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;back
 .chart-bar{flex:1;border-radius:4px 4px 0 0;min-width:20px;transition:height .5s;cursor:pointer;position:relative;}
 .chart-bar:hover::after{content:attr(data-val);position:absolute;top:-22px;left:50%;transform:translateX(-50%);font-size:.62rem;font-weight:700;color:var(--text);white-space:nowrap;background:rgba(0,0,0,.7);padding:2px 6px;border-radius:4px;}
 @keyframes lzSpin{to{transform:rotate(360deg);}}
+/* ── EDIT INPUT ─────────────────────────────────────────────────────── */
+.edit-input{background:rgba(255,255,255,.06);border:1px solid var(--border2);border-radius:10px;color:var(--text);font-family:'Mulish',sans-serif;font-size:.9rem;padding:9px 13px;width:100%;transition:border .2s;}
+.edit-input:focus{outline:none;border-color:var(--gold);}
+/* ── BOTÓN VERDE EN MODAL ───────────────────────────────────────────── */
+.m-btn.green{background:var(--green-bg);color:var(--green);border:1px solid var(--green-bd);}
+.m-btn.green:hover{background:rgba(34,197,94,.2);}
+/* ── LÍNEA DE CUOTAS ────────────────────────────────────────────────── */
+.cuotas-timeline{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0;}
+.ctile{width:38px;height:38px;border-radius:10px;font-size:.8rem;font-weight:800;display:flex;align-items:center;justify-content:center;transition:transform .15s;}
+.ctile:hover{transform:scale(1.1);}
+.ctile.pagada{background:var(--green-bg);color:var(--green);border:1px solid var(--green-bd);}
+.ctile.proxima{background:var(--yellow-bg);color:var(--yellow);border:1px solid var(--yellow-bd);animation:pulse-yellow 1.5s infinite;}
+.ctile.futura{background:rgba(255,255,255,.04);color:var(--muted);border:1px solid var(--border);}
+@keyframes pulse-yellow{0%,100%{opacity:1}50%{opacity:.6}}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
@@ -277,9 +291,9 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;back
     return {
       id: c.id, vid: String(c.seller_id||''), nombre: c.nombre||'', email: c.email||'', telefono: c.telefono||'',
       documento: c.documento||'', domicilio: c.domicilio||'', estado: c.estado||'activo', destino: c.destino||'',
-      paquete: c.paquete||'', fecha_viaje: c.fecha_viaje||'', monto_cuota: c.monto_cuota||0,
-      cuotas_total: c.cuotas_total||10, cuotas_pagadas: c.cuotas_pagadas||0, total_usd: c.total_usd||0,
-      fechaAlta: c.fecha_alta||'', notas: c.notas||'', region_id: c.region_id||'',
+      paquete: c.paquete||'', fecha_viaje: c.fecha_viaje||'', noches: c.noches||null, personas: c.personas||null,
+      monto_cuota: c.monto_cuota||0, cuotas_total: c.cuotas_total||10, cuotas_pagadas: c.cuotas_pagadas||0,
+      total_usd: c.total_usd||0, fechaAlta: c.fecha_alta||'', notas: c.notas||'', region_id: c.region_id||'',
       mora: (function(){ try{ return c.mora_json?JSON.parse(c.mora_json):[]; }catch(e){ return []; } })(),
       comprobantes: {}
     };
@@ -389,7 +403,7 @@ function _sbLoad() {
             .limit(1000);
         })
         .then(function(res) {
-          if(res && !res.error && res.data) _memCache[DB_KEY] = res.data.map(mapClientFromSB);
+          if(res && !res.error && res.data) _memCache[DB_KEY] = res.data.map(mapClientFromSB).map(enrich);
           var clientIds = _memCache[DB_KEY].map(function(c) { return c.id; });
           if(!clientIds.length){ 
             _memCache[NK]=[]; 
@@ -707,16 +721,37 @@ function calcComision(v, allClients) {
 }
 
 function enrich(c) {
-  var t = parseInt(c.cuotas_total) || 10, p = parseInt(c.cuotas_pagadas) || 0;
-  c._pct = Math.round(p / t * 100);
-  c._pend = t - p;
-  if (c.estado === 'baja') { c._s = 'b'; c._p = 9; }
-  else if (c.estado === 'completo') { c._s = 'v'; c._p = 5; }
-  else if (c.estado === 'atraso') { c._s = 'r'; c._p = 1; }
-  else if (c._pct >= 80) { c._s = 'r'; c._p = 2; }
-  else if (c._pct >= 60) { c._s = 'n'; c._p = 3; }
-  else if (c._pct >= 40) { c._s = 'a'; c._p = 4; }
-  else { c._s = 'v'; c._p = 6; }
+  var total   = parseInt(c.cuotas_total)   || 10;
+  var pagadas = parseInt(c.cuotas_pagadas) || 0;
+  c._pct        = Math.round((pagadas / total) * 100);
+  c._pend       = total - pagadas;
+  c._pendientes = c._pend; // alias semántico
+
+  if (c.estado === 'baja') {
+    c._semaforo = 'baja';    c._prioridad = 99; c._s = 'b'; c._p = 9;
+  } else if (c.estado === 'completo') {
+    c._semaforo = 'verde';   c._prioridad = 50; c._s = 'v'; c._p = 5;
+  } else if (c.estado === 'atraso' || c.estado === 'atraso_gestion') {
+    c._semaforo = 'rojo';    c._prioridad = 1;  c._s = 'r'; c._p = 1;
+  } else if (c._pct >= 80) {
+    c._semaforo = 'rojo';    c._prioridad = 2;  c._s = 'r'; c._p = 2;
+  } else if (c._pct >= 60) {
+    c._semaforo = 'naranja'; c._prioridad = 3;  c._s = 'n'; c._p = 3;
+  } else if (c._pct >= 40) {
+    c._semaforo = 'amarillo';c._prioridad = 4;  c._s = 'a'; c._p = 4;
+  } else {
+    c._semaforo = 'verde';   c._prioridad = 5;  c._s = 'v'; c._p = 6;
+  }
+
+  // Días hasta el viaje — sin ambigüedad de zona horaria
+  if (c.fecha_viaje) {
+    var parts = String(c.fecha_viaje).split('-');
+    var fv = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+    var today = new Date(); today.setHours(0, 0, 0, 0);
+    c._dias = Math.ceil((fv - today) / 86400000);
+  } else {
+    c._dias = 9999;
+  }
   return c;
 }
 
