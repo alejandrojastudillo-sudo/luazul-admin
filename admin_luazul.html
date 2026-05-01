@@ -1614,13 +1614,16 @@ function waRecordatorio(clientId) {
 // 20. NOTIFICACIONES
 // ──────────────────────────────────────────────────────────────────────────
 function notificarAccion(tipo, mensaje, clienteId, datosExtra) {
-  if (!sbClient||!_currentProfile) return Promise.resolve();
+  if (!sbClient || !_currentProfile) return Promise.resolve();
   var inserciones = [
-    { tipo:tipo, mensaje:mensaje, destinatario_rol:'manager', remitente_id:_currentProfile.user_id, cliente_id:clienteId||null, datos_extra:datosExtra||null, leida:false },
-    { tipo:tipo, mensaje:mensaje, destinatario_rol:'ceo',     remitente_id:_currentProfile.user_id, cliente_id:clienteId||null, datos_extra:datosExtra||null, leida:false }
+    { tipo: tipo, mensaje: mensaje, destinatario_rol: 'manager', remitente_id: _currentProfile.user_id, cliente_id: clienteId || null, datos_extra: datosExtra || null, leida: false },
+    { tipo: tipo, mensaje: mensaje, destinatario_rol: 'ceo', remitente_id: _currentProfile.user_id, cliente_id: clienteId || null, datos_extra: datosExtra || null, leida: false }
   ];
-  return sbClient.from('notificaciones').insert(inserciones)
-    .catch(function(e){ console.warn('[notificarAccion]', e.message); });
+  return sbClient.from('notificaciones').insert(inserciones).then(function() {
+    // éxito silencioso
+  }).catch(function(e) {
+    console.warn('[notificarAccion] Error al insertar notificaciones:', e.message);
+  });
 }
 
 function refreshAdminNotifBadge() {
@@ -2311,27 +2314,35 @@ function addClient() {
   var telefono2 = (document.getElementById('nTel2') || {}).value.trim() || null;
   var domicilio = (document.getElementById('nDomicilio') || {}).value.trim() || null;
 
-  sbClient.rpc('crear_usuario_staff', {
-    p_email: email,
-    p_password: pass,
-    p_role_id: 4,
-    p_nombre: nombre,
-    p_apellido: '',
-    p_region_ids: regionId ? [regionId] : null,
-    p_telefono1: telefono1,
-    p_telefono2: telefono2,
-    p_ciudad: null,
-    p_domicilio: domicilio,
-    p_cbu: null,
-    p_manager_id: null,
-    p_seller_id: sellerId,
-    p_total_usd: total,
-    p_monto_cuota: montoCuota,
-    p_cuotas_total: cuotas
+  fetch('https://yunvqgaljopirzvjrntc.supabase.co/functions/v1/crear_usuario_staff_v2', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + SUPABASE_KEY
+    },
+    body: JSON.stringify({
+      p_email: email,
+      p_password: pass,
+      p_role_id: 4,
+      p_nombre: nombre,
+      p_apellido: '',
+      p_region_ids: regionId ? [regionId] : null,
+      p_telefono1: telefono1,
+      p_telefono2: telefono2,
+      p_ciudad: null,
+      p_domicilio: domicilio,
+      p_cbu: null,
+      p_manager_id: null,
+      p_seller_id: sellerId,
+      p_total_usd: total,
+      p_monto_cuota: montoCuota,
+      p_cuotas_total: cuotas
+    })
   })
-  .then(function(result) {
-    if (result.error) throw result.error;
-    var nuevoClienteId = result.data;
+  .then(function(response) { return response.json(); })
+  .then(function(data) {
+    if (data.error) throw new Error(data.error);
+    var nuevoClienteId = data.id;
 
     var camposExtra = {
       documento: (document.getElementById('nDoc') || {}).value.trim() || null,
