@@ -1160,11 +1160,25 @@ function gby(uid) {
 }
 
 function vby(uid) {
-  if (!_cacheVendedores) return { nombre: 'Sin asesor', user_id: '' };
+  if (!_cacheVendedores) return { nombre: 'Sin asesor', id: '', user_id: '' };
+  var found = null;
   for (var i = 0; i < _cacheVendedores.length; i++) {
-    if (String(_cacheVendedores[i].user_id) === String(uid)) return _cacheVendedores[i];
+    if (String(_cacheVendedores[i].id) === String(uid)) { found = _cacheVendedores[i]; break; }
   }
-  return { nombre: 'Sin asesor', user_id: '' };
+  if (!found) {
+    for (var i = 0; i < _cacheVendedores.length; i++) {
+      if (String(_cacheVendedores[i].user_id) === String(uid)) { found = _cacheVendedores[i]; break; }
+    }
+  }
+  return found || { nombre: 'Sin asesor', id: '', user_id: '' };
+}
+
+function normalizarTelefono(tel) {
+  if (!tel) return '';
+  var digits = String(tel).replace(/\D/g, '');
+  if (digits.charAt(0) === '0') digits = '54' + digits.slice(1);
+  if (!digits.startsWith('54')) digits = '54' + digits;
+  return digits;
 }
 
 function enrich(c) {
@@ -2485,7 +2499,7 @@ function saveEditGerente(gid) {
 
   // ── CLIENTES ─────────────────────────────────────────
   function renderClientes() {
-     if (!_cacheClientes || !Array.isArray(_cacheClientes)) {
+    if (!_cacheClientes || !Array.isArray(_cacheClientes)) {
       var elBody = document.getElementById('cliBody');
       if (elBody) elBody.innerHTML = '<div style="text-align:center;padding:40px;">⏳ Cargando clientes...</div>';
       return;
@@ -2497,27 +2511,132 @@ function saveEditGerente(gid) {
     if (srch) cs = cs.filter(function(c) { return (c.nombre || '').toLowerCase().indexOf(srch.toLowerCase()) !== -1 || (c.email || '').toLowerCase().indexOf(srch.toLowerCase()) !== -1; });
     if (rf) cs = cs.filter(function(c) { return String(c.region_id) === String(rf); });
     if (ef) cs = cs.filter(function(c) { return c.estado === ef; });
-    // slice(0, 150) eliminado — sin límite artificial de clientes visibles
+
     var el = document.getElementById('cliBody');
     if (!el) return;
     if (!cs.length) { el.innerHTML = '<div style="text-align:center;padding:30px;color:var(--muted);">Sin resultados</div>'; return; }
+
+    var meses = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+
+    function getSemColor(pct, estado) {
+      if (estado === 'baja') return 'var(--muted)';
+      if (pct >= 80) return 'var(--red)';
+      if (pct >= 60) return 'var(--orange, #f97316)';
+      if (pct >= 40) return 'var(--yellow, #eab308)';
+      return 'var(--green)';
+    }
+
     el.innerHTML = cs.map(function(c) {
       var v = vby(c.seller_id);
       var r = rby(c.region_id);
-      return '<div class="trow-ceo" style="grid-template-columns:10px 2fr 1.4fr 1fr 90px 100px 80px 80px 90px;">'
+      var pagadas = parseInt(c.cuotas_pagadas) || 0;
+      var total = parseInt(c.cuotas_total) || 10;
+      var pct = Math.round(pagadas / total * 100);
+      var fillColor = getSemColor(pct, c.estado);
+
+      var fechaViaje = '—';
+      if (c.fecha_viaje) {
+        var parts = String(c.fecha_viaje).split('-');
+        var d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+        fechaViaje = d.getDate() + ' ' + meses[d.getMonth()] + ' ' + d.getFullYear();
+      }
+
+      var estadoLabel = (c.estado || '').replace('_gestion', ' (gestión)').toUpperCase();
+
+      var waBtn = c.telefono
+        ? '<button class="act-btn" onclick="event.stopPropagation();window.open(\'https://wa.me/' + normalizarTelefono(c.telefono) + '?text=' + encodeURIComponent('Hola ' + (c.nombre || '').split(' ')[0] + ', soy del equipo Luazul. ¿Cómo estás?') + '\',\'_blank\')" title="WhatsApp" style="background:rgba(37,211,102,.15);border-color:rgba(37,211,102,.3);color:#25d366;">💬</button>'
+        : '';
+
+      return '<div class="trow-ceo" style="display:grid;grid-template-columns:10px 2fr 1.4fr 1fr 100px 80px 110px 90px 90px;align-items:center;gap:0;padding:0 16px;border-bottom:1px solid var(--border);min-height:70px;cursor:pointer;" onclick="verFichaCliente(' + c.id + ')">'
         + '<div class="sem ' + c._s + '"></div>'
-        + '<div><div style="font-size:.84rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + c.nombre + '</div>'
-        + '<div style="font-size:.66rem;color:var(--muted);">' + c.email + '</div></div>'
-        + '<div style="font-size:.77rem;"><div>' + v.nombre + '</div><div style="font-size:.65rem;color:var(--muted);">' + r.bandera + ' ' + r.nombre + '</div></div>'
-        + '<div style="font-size:.78rem;">' + c.paquete + '</div>'
-        + '<div style="font-size:.82rem;font-weight:700;">USD ' + c.total_usd + '</div>'
-        + '<div style="font-size:.78rem;">' + c.cuotas_pagadas + '/' + c.cuotas_total + '</div>'
-        + '<div><span class="bdg ' + c.estado + '">' + c.estado + '</span></div>'
-        + '<div style="font-size:.72rem;color:var(--muted);">' + (c.fecha_viaje || '—') + '</div>'
-        + '<div><button data-cid="' + c.id + '" onclick="verFichaCliente(this.getAttribute(\'data-cid\'))" style="padding:4px 10px;background:rgba(167,139,250,.15);border:1px solid var(--purple-bd);color:var(--purple);border-radius:6px;font-size:.7rem;font-weight:700;cursor:pointer;">Ficha</button></div>'
+        + '<div><div style="font-size:.84rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + esc(c.nombre) + '</div>'
+        + '<div style="font-size:.66rem;color:var(--muted);">' + esc(c.email) + '</div></div>'
+        + '<div><div style="font-size:.77rem;">' + (v.nombre !== 'Sin asesor' ? esc(v.nombre) : '<span style="color:var(--red);">⚠️ Sin asesor</span>') + '</div>'
+        + '<div style="font-size:.65rem;color:var(--muted);">' + (r.bandera || '') + ' ' + (r.nombre || '—') + '</div></div>'
+        + '<div><div style="font-size:.78rem;">' + esc(c.paquete || '—') + '</div>'
+        + '<div style="font-size:.65rem;color:var(--muted);">' + esc(c.destino || '—') + '</div></div>'
+        + '<div><div style="font-size:.82rem;font-weight:700;">USD ' + (c.total_usd || '0') + '</div>'
+        + '<div style="height:4px;background:rgba(255,255,255,.08);border-radius:2px;margin-top:4px;"><div style="height:4px;width:' + pct + '%;background:' + fillColor + ';border-radius:2px;"></div></div>'
+        + '<div style="font-size:.65rem;color:var(--muted);">' + pct + '%</div></div>'
+        + '<div style="font-size:.78rem;">' + pagadas + '/' + total + '</div>'
+        + '<div style="font-size:.72rem;color:var(--muted);">' + fechaViaje + '</div>'
+        + '<div><span class="bdg ' + c.estado + '">' + estadoLabel + '</span></div>'
+        + '<div style="display:flex;gap:6px;" onclick="event.stopPropagation()">'
+        + waBtn
+        + '<button class="act-btn" onclick="openEditClientModal(' + c.id + ')" title="Editar" style="background:rgba(167,139,250,.15);border:1px solid rgba(167,139,250,.3);color:var(--purple);">✏️</button>'
+        + '<button class="act-btn" onclick="verFichaCliente(' + c.id + ')" title="Ver ficha" style="background:rgba(99,102,241,.15);border:1px solid rgba(99,102,241,.3);color:#818cf8;">🔍</button>'
+        + '</div>'
         + '</div>';
-         }).join('');
+    }).join('');
   }  // ← Cierre de renderClientes
+
+  function openEditClientModal(clientId) {
+    var c = null;
+    for (var i = 0; i < _cacheClientes.length; i++) {
+      if (String(_cacheClientes[i].id) === String(clientId)) { c = _cacheClientes[i]; break; }
+    }
+    if (!c) return;
+    var vs = _cacheVendedores || [];
+    var rs = _cacheRegiones || [];
+    var vOptions = '<option value="">Sin asesor</option>';
+    for (var i = 0; i < vs.length; i++) {
+      vOptions += '<option value="' + vs[i].id + '"' + (String(vs[i].id) === String(c.seller_id) ? ' selected' : '') + '>' + esc(vs[i].nombre) + '</option>';
+    }
+    var rOptions = '<option value="">Sin región</option>';
+    for (var i = 0; i < rs.length; i++) {
+      rOptions += '<option value="' + rs[i].id + '"' + (String(rs[i].id) === String(c.region_id) ? ' selected' : '') + '>' + rs[i].bandera + ' ' + rs[i].nombre + '</option>';
+    }
+    var modalHtml = '<div class="mhead"><div><h2>✏️ Editar Cliente</h2><p>' + esc(c.nombre) + '</p></div><button class="mclose" onclick="closeModal()">✕</button></div>'
+      + '<div class="mbody"><div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
+      + '<div><div class="ml">Nombre</div><input id="editNombre" class="medit" value="' + esc(c.nombre) + '"></div>'
+      + '<div><div class="ml">Email</div><input id="editEmail" class="medit" value="' + esc(c.email || '') + '"></div>'
+      + '<div><div class="ml">Teléfono</div><input id="editTelefono" class="medit" value="' + esc(c.telefono || '') + '"></div>'
+      + '<div><div class="ml">Documento</div><input id="editDocumento" class="medit" value="' + esc(c.documento || '') + '"></div>'
+      + '<div style="grid-column:span 2;"><div class="ml">Domicilio</div><input id="editDomicilio" class="medit" value="' + esc(c.domicilio || '') + '"></div>'
+      + '<div><div class="ml">Destino</div><input id="editDestino" class="medit" value="' + esc(c.destino || '') + '"></div>'
+      + '<div><div class="ml">Paquete</div><input id="editPaquete" class="medit" value="' + esc(c.paquete || '') + '"></div>'
+      + '<div><div class="ml">Fecha viaje</div><input id="editFechaViaje" type="date" class="medit" value="' + (c.fecha_viaje || '') + '"></div>'
+      + '<div><div class="ml">Asesor</div><select id="editSeller" class="medit">' + vOptions + '</select></div>'
+      + '<div><div class="ml">Región</div><select id="editRegion" class="medit">' + rOptions + '</select></div>'
+      + '<div><div class="ml">Estado</div><select id="editEstado" class="medit">'
+      + '<option value="activo"' + (c.estado === 'activo' ? ' selected' : '') + '>Activo</option>'
+      + '<option value="atraso"' + (c.estado === 'atraso' ? ' selected' : '') + '>Atraso</option>'
+      + '<option value="atraso_gestion"' + (c.estado === 'atraso_gestion' ? ' selected' : '') + '>Atraso con gestión</option>'
+      + '<option value="completo"' + (c.estado === 'completo' ? ' selected' : '') + '>Completo</option>'
+      + '<option value="baja"' + (c.estado === 'baja' ? ' selected' : '') + '>Baja</option>'
+      + '</select></div>'
+      + '<div style="grid-column:span 2;"><div class="ml">Notas</div><textarea id="editNotas" rows="3" class="medit">' + esc(c.notas || '') + '</textarea></div>'
+      + '</div>'
+      + '<div class="mact"><button class="mbtn gold" onclick="guardarEdicionCliente(' + c.id + ')">💾 Guardar cambios</button><button class="mbtn ghost" onclick="closeModal()">Cancelar</button></div>'
+      + '</div>';
+    document.getElementById('mbox').innerHTML = modalHtml;
+    document.getElementById('modal').classList.add('open');
+  }
+
+  function guardarEdicionCliente(clientId) {
+    var upd = {
+      nombre:      document.getElementById('editNombre').value.trim(),
+      email:       document.getElementById('editEmail').value.trim().toLowerCase(),
+      telefono:    document.getElementById('editTelefono').value.trim() || null,
+      documento:   document.getElementById('editDocumento').value.trim() || null,
+      domicilio:   document.getElementById('editDomicilio').value.trim() || null,
+      destino:     document.getElementById('editDestino').value.trim() || null,
+      paquete:     document.getElementById('editPaquete').value.trim() || null,
+      fecha_viaje: document.getElementById('editFechaViaje').value || null,
+      seller_id:   parseInt(document.getElementById('editSeller').value) || null,
+      region_id:   parseInt(document.getElementById('editRegion').value) || null,
+      estado:      document.getElementById('editEstado').value,
+      notas:       document.getElementById('editNotas').value.trim() || null
+    };
+    sbClient.from('clientes').update(upd).eq('id', clientId)
+      .then(function(res) {
+        if (res.error) throw res.error;
+        showToast('✅ Cliente actualizado');
+        closeModal();
+        cargarDatosSupabase().then(function() { renderAll(); populateAllFilters(); renderClientes(); });
+      })
+      .catch(function(e) { showToast('❌ Error: ' + e.message); });
+  }
 
   function openVendPerfilCeo() {
   var vid = document.getElementById('vendDashSel').value;
