@@ -1316,32 +1316,64 @@ function openAddVendor() {
 }
 
 async function saveVendor() {
-  var nombre = (document.getElementById('vN').value || '').trim().toUpperCase();
-  var email = (document.getElementById('vE').value || '').trim().toLowerCase();
-  var pass = (document.getElementById('vP').value || '').trim();
-  var telefono1 = (document.getElementById('vT').value || '').trim();
-  var telefono2 = (document.getElementById('vT2').value || '').trim();
-  var domicilio = (document.getElementById('vDom').value || '').trim();
-  var cbu = (document.getElementById('vCBU').value || '').trim();
-  var regionId = document.getElementById('vReg').value ? parseInt(document.getElementById('vReg').value) : null;
-  var managerId = window._gerenteProfile ? parseInt(window._gerenteProfile.id) : null;
+  var nombreRaw  = (document.getElementById('vN').value || '').trim();
+  var email      = (document.getElementById('vE').value || '').trim().toLowerCase();
+  var pass       = (document.getElementById('vP').value || '').trim();
+  var telefono1  = (document.getElementById('vT').value || '').trim();
+  var telefono2  = (document.getElementById('vT2').value || '').trim();
+  var domicilio  = (document.getElementById('vDom').value || '').trim();
+  var cbu        = (document.getElementById('vCBU').value || '').trim();
+  var regionId   = document.getElementById('vReg').value ? parseInt(document.getElementById('vReg').value, 10) : null;
+  var managerId  = window._gerenteProfile ? parseInt(window._gerenteProfile.id, 10) : null;
 
-  if (!nombre || !email || !pass) {
+  // Validaciones de campos obligatorios
+  if (!nombreRaw || !email || !pass) {
     showToast('⚠️ Nombre, email y contraseña son obligatorios');
     return;
   }
+
+  // Validación de email (formato básico)
   if (!email.includes('@') || !email.includes('.')) {
     showToast('⚠️ Ingresá un email válido');
     return;
   }
 
+  // Validación de contraseña (mínimo 6 caracteres)
+  if (pass.length < 6) {
+    showToast('⚠️ La contraseña debe tener al menos 6 caracteres');
+    return;
+  }
+
+  // Verificar managerId (sesión válida)
+  if (!managerId) {
+    showToast('❌ Error de sesión: no se pudo identificar al gerente');
+    return;
+  }
+
+  // Evitar duplicados por email (comprobación local en caché)
+  var existingVendor = (_memCache[VK] || []).find(function(v) { return v.email === email; });
+  if (existingVendor) {
+    showToast('❌ Ya existe un asesor con el email ' + email);
+    return;
+  }
+
+  // Capitalización correcta del nombre
+  var nombreCapitalizado = nombreRaw
+    .split(' ')
+    .map(function(palabra) {
+      if (!palabra) return '';
+      return palabra.charAt(0).toUpperCase() + palabra.slice(1).toLowerCase();
+    })
+    .join(' ');
+
+  // Separar nombre y apellido
+  var partes      = nombreCapitalizado.split(' ');
+  var primerNombre = partes[0];
+  var apellidoStr  = partes.slice(1).join(' ') || '';
+
   var btn = document.querySelector('#modal .mbtn.gold');
   var originalText = btn ? btn.textContent : '✅ Crear Vendedor';
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Creando...'; }
-
-  var nombresArr = nombre.split(' ');
-  var primerNombre = nombresArr[0];
-  var apellidoStr = nombresArr.slice(1).join(' ') || '';
 
   try {
     const response = await fetch('https://yunvqgaljopirzvjrntc.supabase.co/functions/v1/crear_usuario_staff_v2', {
@@ -1367,7 +1399,7 @@ async function saveVendor() {
     });
     const data = await response.json();
     if (data.error) throw new Error(data.error);
-    showToast('✅ Asesor ' + nombre + ' creado exitosamente');
+    showToast('✅ Asesor ' + nombreCapitalizado + ' creado exitosamente');
     closeModal();
     await _sbLoad();
     renderAll();
@@ -1375,8 +1407,12 @@ async function saveVendor() {
     if (typeof populateVendDashSel === 'function') populateVendDashSel();
     if (typeof renderPasswords === 'function') renderPasswords();
   } catch (err) {
-    console.error(err);
-    showToast('❌ Error: ' + err.message);
+    console.error('[saveVendor]', err);
+    let errorMsg = err.message || 'Error desconocido';
+    if (errorMsg.toLowerCase().includes('duplicate') || errorMsg.toLowerCase().includes('already exists')) {
+      errorMsg = 'Ya existe un usuario con ese email';
+    }
+    showToast('❌ Error al crear asesor: ' + errorMsg);
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = originalText; }
   }
