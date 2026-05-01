@@ -1354,21 +1354,6 @@ function openModal(clientId) {
     '</div>'+
     '<div style="font-size:.72rem;font-weight:700;text-transform:uppercase;color:var(--accent2);margin-bottom:8px;">📊 Línea de cuotas</div>'+
     '<div class="cuotas-timeline">'+timeline+'</div>'+
-    '<div style="margin-top:20px;padding:16px;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:12px;">'+
-    '<div style="font-size:.72rem;font-weight:700;text-transform:uppercase;color:var(--accent2);margin-bottom:10px;">Actualizar cuotas pagadas</div>'+
-    '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">'+
-    '<label>Cuotas pagadas:</label>'+
-    '<input type="number" id="editCuotas" value="'+pagadas+'" min="0" max="'+total+'" class="edit-input" style="width:80px;" />'+
-    '<label>Estado:</label>'+
-    '<select id="editEstado" class="edit-input" style="width:160px;">'+
-    '<option value="activo"'+(c.estado==='activo'?' selected':'')+'>Activo</option>'+
-    '<option value="atraso"'+(c.estado==='atraso'?' selected':'')+'>Atraso</option>'+
-    '<option value="atraso_gestion"'+(c.estado==='atraso_gestion'?' selected':'')+'>Atraso (con gestión)</option>'+
-    '<option value="completo"'+(c.estado==='completo'?' selected':'')+'>Completo</option>'+
-    '<option value="baja"'+(c.estado==='baja'?' selected':'')+'>Baja</option>'+
-    '</select>'+
-    '<button class="m-btn primary" onclick="updateClient(\''+c.id+'\')">💾 Guardar</button>'+
-    '</div></div>'+
     '<div style="margin-top:16px;padding:16px;background:rgba(167,139,250,.04);border:1px solid rgba(167,139,250,.15);border-radius:12px;">'+
     '<div style="font-size:.72rem;font-weight:700;text-transform:uppercase;color:#a78bfa;margin-bottom:12px;">✏️ Editar datos del cliente</div>'+
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">'+
@@ -1402,10 +1387,7 @@ function openModal(clientId) {
     '<button class="m-btn ghost" onclick="closeModal()">Cerrar</button>'+
     '</div>'+
     '<div class="modal-actions" style="margin-top:8px;border-top:1px solid rgba(100,160,255,.1);padding-top:12px;">'+
-    '<button class="m-btn" style="background:rgba(11,61,145,.3);color:#7eb8ff;" onclick="generarContratoPDF(\''+c.id+'\')">📄 Contrato PDF</button>'+
-    '<button class="m-btn" style="background:rgba(251,146,60,.1);color:#fb923c;" onclick="abrirRegistroPago(\''+c.id+'\')">📤 Comprobante</button>'+
     '<button class="m-btn" style="background:rgba(251,146,60,.1);color:#fb923c;" onclick="verComprobantes(\''+c.id+'\')">📎 Ver pagos</button>'+
-    '<button class="m-btn" style="background:rgba(167,139,250,.15);color:#a78bfa;" onclick="abrirFirmaModal(\''+c.id+'\')">✍️ Firma</button>'+
     '</div>'+
     '</div>';
   document.getElementById('modal').classList.add('open');

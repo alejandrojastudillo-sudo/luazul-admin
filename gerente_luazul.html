@@ -1566,65 +1566,267 @@ function renderClients() {
 function openClientDetail(id) {
   var cs = (_memCache[DB_KEY] || []) || [];
   var c = cs.find(function(x) { return x.id == id; });
-  if (!c) return; c = enrich(c);
+  if (!c) return;
+  c = enrich(c);
   var v = vby(c.vid);
   var vs = (_memCache[VK] || []) || [];
   var pag = parseInt(c.cuotas_pagadas) || 0;
   var tot = parseInt(c.cuotas_total) || 10;
   var mnt = parseFloat(c.monto_cuota) || 0;
+
+  // Timeline de cuotas (solo visual)
   var tl = '';
   for (var i = 1; i <= tot; i++) {
-    var cls = i <= pag ? 'pagada' : i === pag + 1 ? 'proxima' : 'futura';
-    var comp = c.comprobantes && c.comprobantes[i];
-    var bg = cls === 'pagada' ? 'rgba(34,197,94,.15)' : cls === 'proxima' ? 'rgba(234,179,8,.15)' : 'rgba(255,255,255,.04)';
-    var brd = cls === 'pagada' ? 'rgba(34,197,94,.4)' : cls === 'proxima' ? 'rgba(234,179,8,.4)' : 'var(--border)';
-    var col = cls === 'pagada' ? '#22c55e' : cls === 'proxima' ? '#eab308' : 'var(--muted)';
-    tl += '<div style="width:32px;height:32px;border-radius:7px;background:' + bg + ';border:1px solid ' + brd + ';display:flex;align-items:center;justify-content:center;font-size:.76rem;font-weight:700;color:' + col + ';position:relative;" title="Cuota ' + i + (comp ? ' · Con comprobante' : '') + '">' + (comp ? '<span style="position:absolute;top:-3px;right:-3px;width:9px;height:9px;background:var(--green);border-radius:50%;"></span>' : '') + i + '</div>';
+    var cls = i <= pag ? 'pagada' : (i === pag + 1 ? 'proxima' : 'futura');
+    tl += '<div style="width:32px;height:32px;border-radius:7px;background:' + (cls === 'pagada' ? 'rgba(34,197,94,.15)' : cls === 'proxima' ? 'rgba(234,179,8,.15)' : 'rgba(255,255,255,.04)') + ';border:1px solid ' + (cls === 'pagada' ? 'rgba(34,197,94,.4)' : cls === 'proxima' ? 'rgba(234,179,8,.4)' : 'var(--border)') + ';display:flex;align-items:center;justify-content:center;font-size:.76rem;font-weight:700;color:' + (cls === 'pagada' ? '#22c55e' : cls === 'proxima' ? '#eab308' : 'var(--muted)') + ';" title="Cuota ' + i + '">' + i + '</div>';
   }
-  document.getElementById('mbox').innerHTML = '<div class="mhead"><div><h2>' + esc(c.nombre) + '</h2><p style="font-size:.76rem;color:var(--muted);">' + esc(c.email) + ' · <span class="bdg ' + c.estado + '">' + c.estado + '</span></p></div><button class="mclose" onclick="closeModal()">&#x2715;</button></div>'
-    + '<div class="mbody"><div class="mgrid">'
-    + '<div class="mi"><div class="ml">Telefono</div><div class="mv" style="font-weight:700;">' + (c.telefono || '<span style="color:var(--muted)">No cargado</span>') + '</div></div>'
-    + '<div class="mi"><div class="ml">DNI / Documento</div><div class="mv" style="font-weight:700;">' + (c.documento || '<span style="color:var(--muted)">No cargado</span>') + '</div></div>'
-    + '<div class="mi" style="grid-column:span 2;"><div class="ml">Domicilio</div><div class="mv">' + (c.domicilio || '<span style="color:var(--muted)">No cargado</span>') + '</div></div>'
-    + '<div class="mi"><div class="ml">Vendedor</div><div class="mv">&#x1F454; ' + esc(v.nombre) + '</div></div>'
-    + '<div class="mi"><div class="ml">Destino</div><div class="mv">' + c.destino + '</div></div>'
-    + '<div class="mi"><div class="ml">Total plan</div><div class="mv">USD ' + c.total_usd + '</div></div>'
-    + '<div class="mi"><div class="ml">Abonado</div><div class="mv" style="color:var(--green);">USD ' + (pag * mnt).toFixed(0) + '</div></div>'
-    + '<div class="mi"><div class="ml">Progreso</div><div class="mv" style="color:' + sc(c._s) + ';">' + c._pct + '% &mdash; ' + pag + '/' + tot + '</div></div>'
-    + '<div class="mi"><div class="ml">Fecha viaje</div><div class="mv">' + (c.fecha_viaje || 'Por confirmar') + '</div></div>'
-    + '</div>'
-    + '<div style="font-size:.67rem;color:var(--gold);font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Cuotas — verde = con comprobante</div>'
-    + '<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:16px;">' + tl + '</div>'
-    + '<div style="background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:12px;">'
-    + '<div style="font-size:.67rem;color:var(--gold);font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:9px;">Actualizar</div>'
-    + '<div style="display:flex;gap:9px;flex-wrap:wrap;align-items:center;">'
-    + '<label style="font-size:.8rem;color:var(--muted);">Cuotas pagadas:</label>'
-    + '<input type="number" id="gc" value="' + pag + '" min="0" max="' + tot + '" class="min" style="width:66px;"/>'
-    + '<label style="font-size:.8rem;color:var(--muted);">Estado:</label>'
-    + '<select id="ge" class="msel" style="width:125px;">'
-    + '<option value="activo"' + (c.estado === 'activo' ? ' selected' : '') + '>Activo</option>'
-    + '<option value="atraso"' + (c.estado === 'atraso' ? ' selected' : '') + '>Atraso</option>'
-    + '<option value="completo"' + (c.estado === 'completo' ? ' selected' : '') + '>Completo</option>'
-    + '<option value="baja"' + (c.estado === 'baja' ? ' selected' : '') + '>Baja</option>'
-    + '</select>'
-    + '<label style="font-size:.8rem;color:var(--muted);">Vendedor:</label>'
-    + '<select id="gv" class="msel" style="width:150px;">'
-    + vs.map(function(vv) { return '<option value="' + vv.user_id + '"' + (String(vv.user_id) === String(c.vid) ? ' selected' : '') + '>' + esc(vv.nombre) + '</option>'; }).join('')
-    + '</select></div></div>'
-    + '<div class="mact"><button class="mbtn gold" onclick="gerenteUpdate(' + id + ')">💾 Guardar</button><button class="mbtn orange" onclick="closeModal();openGerenteMora(' + id + ')">📋 Gestión mora</button><button class="mbtn ghost" onclick="closeModal()">Cerrar</button></div>'
-    + '</div>';
+
+  // Opciones para vendedor (solo asesores del gerente)
+  var vOptions = '<option value="">Sin asesor</option>';
+  for (var i = 0; i < vs.length; i++) {
+    var vv = vs[i];
+    vOptions += '<option value="' + vv.user_id + '"' + (String(vv.user_id) === String(c.vid) ? ' selected' : '') + '>' + esc(vv.nombre) + '</option>';
+  }
+
+  // Opciones para estado
+  var estadoOptions = '<option value="activo"' + (c.estado === 'activo' ? ' selected' : '') + '>Activo</option>' +
+    '<option value="atraso"' + (c.estado === 'atraso' ? ' selected' : '') + '>Atraso</option>' +
+    '<option value="atraso_gestion"' + (c.estado === 'atraso_gestion' ? ' selected' : '') + '>Atraso (con gestión)</option>' +
+    '<option value="completo"' + (c.estado === 'completo' ? ' selected' : '') + '>Completo</option>' +
+    '<option value="baja"' + (c.estado === 'baja' ? ' selected' : '') + '>Baja</option>';
+
+  var abonado = pag * mnt;
+  var restante = (tot - pag) * mnt;
+  var pct = Math.round(pag / tot * 100);
+  var fillColor = pct >= 80 ? 'var(--red)' : (pct >= 60 ? 'var(--orange)' : (pct >= 40 ? 'var(--yellow)' : 'var(--green)'));
+  if (c.estado === 'baja') fillColor = 'var(--gray)';
+
+  var diasStr = c._dias < 0 ? '¡Viaje realizado!' : (c._dias < 30 ? '⚡ ' + c._dias + ' días' : c._dias + ' días');
+
+  var modalHtml = `
+    <div class="mhead">
+      <div><h2>${esc(c.nombre)}</h2><p>${esc(c.email)} · ${esc(c.documento || '—')} · ${esc(c.domicilio || '—')}</p></div>
+      <div style="display:flex;align-items:center;gap:10px;"><span class="bdg ${c.estado}">${c.estado.toUpperCase()}</span><button class="mclose" onclick="closeModal()">&times;</button></div>
+    </div>
+    <div class="mbody">
+      <!-- Semáforo y progreso -->
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px;padding:12px 16px;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:12px;">
+        <div class="sem ${c._s}" style="width:16px;height:16px;"></div>
+        <span style="font-weight:700;color:${sc(c._s)};">${c._s === 'r' ? '🔴 Reservar YA' : (c._s === 'n' ? '🟠 Planificar' : (c._s === 'a' ? '🟡 Seguimiento' : (c._s === 'v' ? '🟢 En curso' : '⚫ Dado de baja')))}</span>
+        <span style="margin-left:auto;">Progreso: <strong>${pct}%</strong></span>
+      </div>
+      <!-- Datos principales -->
+      <div class="mgrid" style="grid-template-columns:1fr 1fr; gap:10px; margin-bottom:20px;">
+        <div class="mi"><div class="ml">🏖️ Destino</div><div class="mv">${c.destino || '—'}</div></div>
+        <div class="mi"><div class="ml">📦 Paquete</div><div class="mv">${c.paquete || '—'}</div></div>
+        <div class="mi"><div class="ml">👥 Personas</div><div class="mv">${c.personas || '—'} · ${c.noches || '—'} noches</div></div>
+        <div class="mi"><div class="ml">📅 Fecha viaje</div><div class="mv">${c.fecha_viaje || 'Por confirmar'} · ${diasStr}</div></div>
+        <div class="mi"><div class="ml">💰 Total plan</div><div class="mv">USD ${c.total_usd || '—'}</div></div>
+        <div class="mi"><div class="ml">💵 Cuota mensual</div><div class="mv">USD ${c.monto_cuota || '—'}</div></div>
+        <div class="mi"><div class="ml">✅ Abonado</div><div class="mv" style="color:var(--green);">USD ${abonado.toFixed(0)}</div></div>
+        <div class="mi"><div class="ml">⏳ Saldo pendiente</div><div class="mv" style="color:${restante > 0 ? 'var(--yellow)' : 'var(--green)'};">USD ${restante.toFixed(0)}</div></div>
+      </div>
+      <!-- Línea de cuotas -->
+      <div style="font-size:.67rem;color:var(--gold);font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">📊 Línea de cuotas</div>
+      <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:20px;">${tl}</div>
+      <!-- Sección de edición de datos (incluye estado y vendedor) -->
+      <div style="margin-top:16px;padding:16px;background:rgba(167,139,250,.04);border:1px solid rgba(167,139,250,.15);border-radius:12px;">
+        <div style="font-size:.72rem;font-weight:700;text-transform:uppercase;color:#a78bfa;margin-bottom:12px;">✏️ Editar datos del cliente</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+          <div><label style="font-size:.68rem;color:var(--muted);display:block;margin-bottom:4px;">Nombre completo</label><input class="edit-input" id="efNombre" value="${esc(c.nombre || '')}"></div>
+          <div><label style="font-size:.68rem;color:var(--muted);display:block;margin-bottom:4px;">Email</label><input class="edit-input" id="efEmail" type="email" value="${esc(c.email || '')}"></div>
+          <div><label style="font-size:.68rem;color:var(--muted);display:block;margin-bottom:4px;">Documento</label><input class="edit-input" id="efDoc" value="${esc(c.documento || '')}"></div>
+          <div><label style="font-size:.68rem;color:var(--muted);display:block;margin-bottom:4px;">Teléfono</label><input class="edit-input" id="efTel" value="${esc(c.telefono || '')}"></div>
+          <div><label style="font-size:.68rem;color:var(--muted);display:block;margin-bottom:4px;">Destino</label>
+            <select class="edit-input" id="efDest">
+              <option value="Cabo Frío, Brasil" ${c.destino === 'Cabo Frío, Brasil' ? 'selected' : ''}>🏖️ Cabo Frío</option>
+              <option value="Arraial do Cabo, Brasil" ${c.destino === 'Arraial do Cabo, Brasil' ? 'selected' : ''}>🌊 Arraial do Cabo</option>
+              <option value="Búzios, Brasil" ${c.destino === 'Búzios, Brasil' ? 'selected' : ''}>⛵ Búzios</option>
+              <option value="Río de Janeiro – Copacabana, Brasil" ${c.destino === 'Río de Janeiro – Copacabana, Brasil' ? 'selected' : ''}>🏙️ Río de Janeiro</option>
+            </select>
+          </div>
+          <div><label style="font-size:.68rem;color:var(--muted);display:block;margin-bottom:4px;">Paquete</label>
+            <select class="edit-input" id="efPkg">
+              <option value="Escapada en Pareja" ${c.paquete === 'Escapada en Pareja' ? 'selected' : ''}>Escapada en Pareja</option>
+              <option value="Paquete 4 Amigos" ${c.paquete === 'Paquete 4 Amigos' ? 'selected' : ''}>Paquete 4 Amigos</option>
+              <option value="Paquete 6 Amigos" ${c.paquete === 'Paquete 6 Amigos' ? 'selected' : ''}>Paquete 6 Amigos</option>
+            </select>
+          </div>
+          <div><label style="font-size:.68rem;color:var(--muted);display:block;margin-bottom:4px;">Fecha de viaje</label><input class="edit-input" id="efFecha" type="date" value="${c.fecha_viaje || ''}"></div>
+          <div><label style="font-size:.68rem;color:var(--muted);display:block;margin-bottom:4px;">Noches</label><input class="edit-input" id="efNoches" type="number" value="${c.noches || ''}"></div>
+          <div><label style="font-size:.68rem;color:var(--muted);display:block;margin-bottom:4px;">Personas</label><input class="edit-input" id="efPersonas" type="number" value="${c.personas || ''}"></div>
+          <div><label style="font-size:.68rem;color:var(--muted);display:block;margin-bottom:4px;">Estado</label><select class="edit-input" id="efEstado">${estadoOptions}</select></div>
+          <div><label style="font-size:.68rem;color:var(--muted);display:block;margin-bottom:4px;">Vendedor</label><select class="edit-input" id="efVendedor">${vOptions}</select></div>
+        </div>
+        <button class="m-btn primary" style="background:rgba(167,139,250,.8);" onclick="updateClientFullGerente('${c.id}')">💾 Guardar datos completos</button>
+      </div>
+      <!-- Botones de acción -->
+      <div class="mact" style="margin-top:16px;">
+        <button class="m-btn green" onclick="waMensajeGerente('${c.id}')">💬 WhatsApp</button>
+        <button class="m-btn ghost" onclick="waRecordatorioGerente('${c.id}')">📲 Recordatorio</button>
+        <button class="m-btn ghost" onclick="verComprobantesGerente('${c.id}')">📎 Ver pagos</button>
+        <button class="m-btn ghost" onclick="abrirCargaReferidoGerente('${c.id}')" style="color:#fbbf24;">🎁 Referido</button>
+        <button class="m-btn ghost" onclick="closeModal()">Cerrar</button>
+      </div>
+    </div>
+  `;
+  document.getElementById('mbox').innerHTML = modalHtml;
   document.getElementById('modal').classList.add('open');
 }
 
-function gerenteUpdate(id) {
-  var nuevasCuotas = parseInt(document.getElementById('gc').value) || 0;
-  var nuevoEstado = document.getElementById('ge').value;
-  var nuevoVid = document.getElementById('gv').value;
-  _sbUpdateClient(id, { cuotas_pagadas: nuevasCuotas, estado: nuevoEstado, seller_id: nuevoVid }).then(function() {
-    var cs = (_memCache[DB_KEY] || []).map(function(c) { if (c.id == id) { c.cuotas_pagadas = nuevasCuotas; c.estado = nuevoEstado; c.vid = nuevoVid; } return c; });
-    _memCache[DB_KEY] = cs;
-    closeModal(); renderAll(); showToast('💾 Cambios guardados en Supabase');
-  });
+// Normalización de números de teléfono (igual que el asesor)
+function normalizarTelefono(tel) {
+  if (!tel) return '';
+  var digits = String(tel).replace(/\D/g, '');
+  if (digits.charAt(0) === '0') digits = '54' + digits.slice(1);
+  if (!digits.startsWith('54')) digits = '54' + digits;
+  return digits;
+}
+
+// WhatsApp para gerente
+function waMensajeGerente(clientId) {
+  var cs = _memCache[DB_KEY] || [];
+  var c = cs.find(function(x) { return x.id == clientId; });
+  if (!c) return;
+  if (!c.telefono) { showToast('⚠️ Este cliente no tiene teléfono registrado'); return; }
+  var tel = normalizarTelefono(c.telefono);
+  if (!tel || tel.length < 8 || tel.length > 15) { showToast('⚠️ Número inválido: ' + c.telefono); return; }
+  var msg = '¡Hola ' + (c.nombre || '').split(' ')[0] + '! 👋 Te contactamos desde Luazul Smart Travel. ¿En qué te podemos ayudar?';
+  window.open('https://wa.me/' + tel + '?text=' + encodeURIComponent(msg), '_blank');
+}
+
+// Recordatorio para gerente
+function waRecordatorioGerente(clientId) {
+  var cs = _memCache[DB_KEY] || [];
+  var c = cs.find(function(x) { return x.id == clientId; });
+  if (!c) return;
+  if (!c.telefono) { showToast('⚠️ Este cliente no tiene teléfono registrado'); return; }
+  var tel = normalizarTelefono(c.telefono);
+  if (!tel || tel.length < 8 || tel.length > 15) { showToast('⚠️ Número inválido: ' + c.telefono); return; }
+  var next = (parseInt(c.cuotas_pagadas) || 0) + 1;
+  var msg = '¡Hola ' + (c.nombre || '').split(' ')[0] + '! 👋 Te recordamos que la *cuota N°' + next + '* de tu plan Luazul está próxima a vencer. Total: *USD ' + (c.monto_cuota || 0) + '*. ¡Seguís avanzando hacia tu viaje! ✈️';
+  window.open('https://wa.me/' + tel + '?text=' + encodeURIComponent(msg), '_blank');
+}
+
+// Ver comprobantes (pagos)
+function verComprobantesGerente(clientId) {
+  var cs = _memCache[DB_KEY] || [];
+  var c = cs.find(function(x) { return x.id == clientId; });
+  if (!c) return;
+  document.getElementById('mbox').innerHTML = '<div class="mhead"><div><h2>📎 Comprobantes · ' + esc(c.nombre) + '</h2></div><button class="mclose" onclick="closeModal()">✕</button></div><div class="mbody"><p style="text-align:center;padding:20px;color:var(--muted);">⏳ Cargando...</p></div>';
+  document.getElementById('modal').classList.add('open');
+  sbClient.from('pagos').select('*').eq('cliente_id', parseInt(clientId)).order('numero_cuota')
+    .then(function(r) {
+      var items = r.data || [];
+      if (!items.length) {
+        document.getElementById('mbox').innerHTML = '<div class="mhead"><div><h2>📎 Comprobantes · ' + esc(c.nombre) + '</h2></div><button class="mclose" onclick="closeModal()">✕</button></div><div class="mbody"><p style="text-align:center;color:var(--muted);padding:30px;">Sin comprobantes registrados</p><div class="mact"><button class="mbtn ghost" onclick="closeModal()">Cerrar</button></div></div>';
+        return;
+      }
+      var rows = '';
+      for (var i = 0; i < items.length; i++) {
+        var p = items[i];
+        var eb = p.estado === 'aprobado' ? '<span style="background:rgba(52,211,153,.12);color:#34d399;">✅ Aprobado</span>' : (p.estado === 'rechazado' ? '<span style="background:rgba(239,68,68,.12);color:#fca5a5;">❌ Rechazado</span>' : '<span style="background:rgba(251,146,60,.12);color:#fb923c;">⏳ Pendiente</span>');
+        rows += '<div style="background:rgba(11,61,145,.2);border:1px solid rgba(100,160,255,.15);border-radius:12px;padding:12px 14px;margin-bottom:8px;">' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;"><span style="font-weight:700;">Cuota ' + p.numero_cuota + ' · USD ' + p.monto_usd + '</span>' +
+          '<span style="font-size:.7rem;color:rgba(200,220,255,.6);">' + (p.fecha_pago ? p.fecha_pago.slice(0, 10) : '—') + '</span></div>' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;">' +
+          (p.comprobante_url ? '<a href="' + p.comprobante_url + '" target="_blank" style="font-size:.72rem;color:#7eb8ff;">📄 Ver comprobante</a>' : '<span style="color:var(--muted);font-size:.72rem;">Sin imagen</span>') +
+          eb + '</div></div>';
+      }
+      document.getElementById('mbox').innerHTML = '<div class="mhead"><div><h2>📎 Comprobantes · ' + esc(c.nombre) + '</h2></div><button class="mclose" onclick="closeModal()">✕</button></div><div class="mbody" style="max-height:400px;overflow-y:auto;">' + rows + '</div><div class="mact"><button class="mbtn ghost" onclick="closeModal()">Cerrar</button></div>';
+    })
+    .catch(function() { showToast('❌ Error al cargar comprobantes'); });
+}
+
+// Edición completa de datos (incluye estado y vendedor)
+function updateClientFullGerente(clientId) {
+  var cs = _memCache[DB_KEY] || [];
+  var c = cs.find(function(x) { return x.id == clientId; });
+  if (!c) return;
+  var btn = document.querySelector('#modal .m-btn.primary[onclick*="updateClientFullGerente"]');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Guardando...'; }
+
+  var campos = {
+    nombre:      document.getElementById('efNombre').value.trim(),
+    email:       document.getElementById('efEmail').value.trim().toLowerCase(),
+    documento:   document.getElementById('efDoc').value.trim() || null,
+    telefono:    document.getElementById('efTel').value.trim() || null,
+    destino:     document.getElementById('efDest').value,
+    paquete:     document.getElementById('efPkg').value,
+    fecha_viaje: document.getElementById('efFecha').value || null,
+    noches:      parseInt(document.getElementById('efNoches').value, 10) || null,
+    personas:    parseInt(document.getElementById('efPersonas').value, 10) || null,
+    estado:      document.getElementById('efEstado').value,
+    seller_id:   document.getElementById('efVendedor').value ? parseInt(document.getElementById('efVendedor').value, 10) : null
+  };
+
+  if (!campos.nombre) { showToast('⚠️ El nombre es obligatorio'); if(btn) { btn.disabled = false; btn.textContent = '💾 Guardar datos completos'; } return; }
+
+  // Actualizar local
+  Object.assign(c, campos);
+  _memCache[DB_KEY] = cs; // actualizar referencia
+
+  if (!sbClient) { closeModal(); renderAll(); showToast('✅ Datos actualizados localmente'); return; }
+
+  sbClient.from('clientes').update(campos).eq('id', parseInt(clientId, 10))
+    .then(function(r) {
+      if (r.error) throw r.error;
+      closeModal();
+      renderAll();
+      showToast('✅ Datos del cliente actualizados');
+    })
+    .catch(function(e) { showToast('❌ Error: ' + e.message); })
+    .finally(function() { if(btn) { btn.disabled = false; btn.textContent = '💾 Guardar datos completos'; } });
+}
+
+// Referido (opcional, igual que en asesor)
+function abrirCargaReferidoGerente(clientId) {
+  var cs = _memCache[DB_KEY] || [];
+  var c = cs.find(function(x) { return x.id == clientId; });
+  if (!c) return;
+  var codigoActual = 'LUA-' + (c.nombre || '').split(' ')[0].toUpperCase();
+  var modalHtml = `
+    <div class="mhead"><div><h2>🎁 Cargar Referido</h2><p>${esc(c.nombre)} · ${c.email}</p></div><button class="mclose" onclick="closeModal()">✕</button></div>
+    <div class="mbody">
+      <div style="background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.2);border-radius:12px;padding:14px;margin-bottom:16px;">
+        <div style="font-size:.7rem;color:#fbbf24;text-transform:uppercase;">Código de referido de este cliente</div>
+        <div style="font-size:1.15rem;font-weight:800;font-family:monospace;color:#fcd34d;">${codigoActual}</div>
+        <div style="font-size:.72rem;color:rgba(200,220,255,.45);">Este código lo comparte el cliente con sus conocidos</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:12px;">
+        <div><label class="m-label">Nombre del referido *</label><input class="edit-input" id="rNombre" placeholder="Ej: María García"></div>
+        <div><label class="m-label">Email del referido</label><input class="edit-input" id="rEmail" type="email" placeholder="maria@email.com"></div>
+        <div><label class="m-label">Teléfono del referido</label><input class="edit-input" id="rTel" placeholder="+54 9 297 555-1234"></div>
+        <div><label class="m-label">Notas (opcional)</label><input class="edit-input" id="rNotas" placeholder="Ej: Interesado en escapada en pareja"></div>
+      </div>
+      <div class="mact"><button class="m-btn primary" style="background:linear-gradient(135deg,#b45309,#f59e0b);" onclick="confirmarCargaReferidoGerente('${c.id}')">💾 Registrar referido</button><button class="mbtn ghost" onclick="closeModal()">Cancelar</button></div>
+    </div>
+  `;
+  document.getElementById('mbox').innerHTML = modalHtml;
+  document.getElementById('modal').classList.add('open');
+}
+
+function confirmarCargaReferidoGerente(clientId) {
+  var nombre = (document.getElementById('rNombre') || {}).value.trim();
+  if (!nombre) { showToast('⚠️ El nombre es obligatorio'); return; }
+  var cs = _memCache[DB_KEY] || [];
+  var c = cs.find(function(x) { return x.id == clientId; });
+  if (!c || !sbClient || !window._gerenteProfile) return;
+  sbClient.from('referidos').insert({
+    vendedor_id: parseInt(window._gerenteProfile.id, 10),
+    cliente_referidor_id: parseInt(c.id, 10),
+    referido_nombre: nombre,
+    referido_email: (document.getElementById('rEmail') || {}).value.trim().toLowerCase() || null,
+    referido_tel: (document.getElementById('rTel') || {}).value.trim() || null,
+    notas: (document.getElementById('rNotas') || {}).value.trim() || null,
+    estado: 'pendiente'
+  })
+  .then(function(r) {
+    if (r.error) throw r.error;
+    closeModal();
+    showToast('✅ Referido registrado');
+  })
+  .catch(function(e) { showToast('❌ Error: ' + e.message); });
 }
 
 // ══════════════════════════════════════════════════════
