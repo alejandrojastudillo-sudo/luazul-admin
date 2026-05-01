@@ -604,6 +604,7 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
       <div class="tab" onclick="showTab('auditoria')" id="tab-auditoria" style="color:#fca5a5;">👁️ Auditoría</div>
       <div class="tab" onclick="showTab('premios_referidos')" id="tab-premios_referidos" style="color:#fbbf24;">🎁 Premios Referidos</div>
       <div class="tab" onclick="showTab('vouchers')" id="tab-vouchers">🎟️ Gestión Vouchers</div>
+      <div class="tab" onclick="showTab('tickets')" id="tab-tickets" style="color:#fbbf24;">🎫 Tickets</div>
     </div>
         <!-- ══ OVERVIEW ══ -->
     <div class="tabpg active" id="tabpg-overview">
@@ -917,6 +918,41 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
           </label>
         </div>
         <button onclick="guardarVoucher()" style="width:100%; margin-top:20px; padding:15px; background:linear-gradient(135deg, #b45309, #f59e0b); border:none; border-radius:10px; font-weight:800; cursor:pointer; color:#1a0a00;">ACTUALIZAR VIAJE Y VOUCHER</button>
+      </div>
+    </div>
+
+    <!-- ══ TICKETS ══ -->
+    <div class="tabpg" id="tabpg-tickets">
+      <div class="sec-head">
+        <h2>🎫 Gestión de Tickets</h2>
+        <button class="addbtn" onclick="abrirNuevoTicket()">➕ Nuevo ticket</button>
+      </div>
+      <!-- Filtros rápidos -->
+      <div style="display:flex; gap:12px; margin-bottom:16px; flex-wrap:wrap;">
+        <select id="ticketFiltroEstado" onchange="cargarTickets()" class="msel">
+          <option value="todos">Todos los estados</option>
+          <option value="abierto">Abiertos</option>
+          <option value="en_progreso">En progreso</option>
+          <option value="resuelto">Resueltos</option>
+          <option value="cerrado">Cerrados</option>
+        </select>
+        <select id="ticketFiltroPrioridad" onchange="cargarTickets()" class="msel">
+          <option value="todos">Todas las prioridades</option>
+          <option value="baja">Baja</option>
+          <option value="media">Media</option>
+          <option value="alta">Alta</option>
+          <option value="urgente">Urgente</option>
+        </select>
+        <div class="search-box" style="flex:1;">
+          <span>🔍</span>
+          <input type="text" id="ticketSearch" placeholder="Buscar por número, título o cliente..." oninput="cargarTickets()">
+        </div>
+      </div>
+      <div id="ticketsLista" class="twrap" style="overflow-x:auto;">
+        <div class="thead-ceo" style="grid-template-columns: 100px 2fr 1fr 100px 100px 120px 80px; gap:8px; padding:12px 16px;">
+          <div>Nº Ticket</div><div>Asunto / Descripción</div><div>Cliente / Vendedor</div><div>Estado</div><div>Prioridad</div><div>Última actividad</div><div>Acciones</div>
+        </div>
+        <div id="ticketsListaBody"></div>
       </div>
     </div>
 
@@ -3528,6 +3564,7 @@ function verDetalleStaff(staffId) {
     if (tabId === 'passwords') renderPasswords();
     if (tabId === 'mensual') renderMensual();
     if (tabId === 'backup') initBackupTab();
+    if (tabId === 'tickets') cargarTickets();
   }
 
   function closeModal() { document.getElementById('modal').classList.remove('open'); }
@@ -4012,6 +4049,281 @@ function verDetalleStaff(staffId) {
   function approvePayment() { alert("Aprobación de pago - pendiente de implementación"); }
 
   // Alias para toggle password
+  // ===================== TICKETS =====================
+
+  var _ticketsCache = [];
+
+  function cargarTickets() {
+    if (!sbClient) return;
+    var estadoFiltro = (document.getElementById('ticketFiltroEstado') || {}).value || 'todos';
+    var prioridadFiltro = (document.getElementById('ticketFiltroPrioridad') || {}).value || 'todos';
+    var search = ((document.getElementById('ticketSearch') || {}).value || '').toLowerCase();
+
+    var query = sbClient.from('notificaciones')
+      .select('*, cliente:clientes(nombre, email), vendedor:staff_profiles!vendedor_id(nombre)')
+      .in('tipo', ['incidencia', 'soporte', 'mejora', 'falla_tecnica'])
+      .order('created_at', { ascending: false });
+
+    if (estadoFiltro !== 'todos') query = query.eq('estado', estadoFiltro);
+    if (prioridadFiltro !== 'todos') query = query.eq('prioridad', prioridadFiltro);
+
+    query.then(function(res) {
+      if (res.error) throw res.error;
+      var tickets = res.data || [];
+      if (search) {
+        tickets = tickets.filter(function(t) {
+          var num = (t.numero_ticket || '').toLowerCase();
+          var asunto = (t.mensaje || '').toLowerCase();
+          var cliente = (t.cliente && t.cliente.nombre) ? t.cliente.nombre.toLowerCase() : '';
+          return num.indexOf(search) !== -1 || asunto.indexOf(search) !== -1 || cliente.indexOf(search) !== -1;
+        });
+      }
+      _ticketsCache = tickets;
+      renderListaTickets(tickets);
+    }).catch(function(e) {
+      console.error('Error cargando tickets:', e);
+      showToast('❌ Error al cargar tickets');
+    });
+  }
+
+  function renderListaTickets(tickets) {
+    var container = document.getElementById('ticketsListaBody');
+    if (!container) return;
+    if (!tickets.length) {
+      container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted);">No hay tickets</div>';
+      return;
+    }
+    var html = '';
+    for (var i = 0; i < tickets.length; i++) {
+      var t = tickets[i];
+      var estadoTexto = t.estado || 'abierto';
+      var estadoClase = estadoTexto === 'abierto' ? 'bdg atraso' : estadoTexto === 'en_progreso' ? 'bdg atraso_gestion' : estadoTexto === 'resuelto' ? 'bdg completo' : 'bdg baja';
+      var prioridadTexto = t.prioridad || 'media';
+      var prioridadColor = prioridadTexto === 'urgente' ? '#ef4444' : prioridadTexto === 'alta' ? '#f97316' : prioridadTexto === 'media' ? '#eab308' : '#22c55e';
+      var clienteNombre = t.cliente ? t.cliente.nombre : (t.cliente_id ? 'ID: ' + t.cliente_id : '—');
+      var vendedorNombre = t.vendedor ? t.vendedor.nombre : (t.vendedor_id ? 'ID: ' + t.vendedor_id : '—');
+      var diasInactivos = calcularDiasInactivos(t.updated_at || t.created_at);
+      var highlight = (diasInactivos > 7 && estadoTexto !== 'cerrado') ? '⚠️ ' : '';
+
+      html += '<div class="trow" style="display:grid;grid-template-columns: 100px 2fr 1fr 100px 100px 120px 80px; gap:8px; padding:12px 16px; border-bottom:1px solid var(--border); cursor:pointer;" onclick="verTicket(' + t.id + ')">' +
+        '<div style="font-family:monospace;font-weight:700;font-size:.8rem;">' + esc(t.numero_ticket || 'LK-????') + '</div>' +
+        '<div><div style="font-weight:600;">' + highlight + esc(t.tipo || 'Incidencia') + '</div><div style="font-size:.75rem;color:var(--muted);">' + esc((t.mensaje || '').substring(0, 60)) + (t.mensaje && t.mensaje.length > 60 ? '…' : '') + '</div></div>' +
+        '<div><div style="font-size:.82rem;">' + esc(clienteNombre) + '</div><div style="font-size:.7rem;color:var(--muted);">' + esc(vendedorNombre) + '</div></div>' +
+        '<div><span class="' + estadoClase + '" style="font-size:.65rem;">' + estadoTexto.toUpperCase() + '</span></div>' +
+        '<div><span style="font-size:.72rem;font-weight:700;color:' + prioridadColor + ';">' + prioridadTexto.toUpperCase() + '</span></div>' +
+        '<div style="font-size:.75rem;color:var(--muted);">' + formatDateRelative(t.updated_at || t.created_at) + (diasInactivos > 7 ? ' <span style="color:var(--red);">⏰ ' + diasInactivos + 'd</span>' : '') + '</div>' +
+        '<div><button style="padding:4px 8px;background:var(--card);border:1px solid var(--border2);border-radius:6px;cursor:pointer;font-size:.8rem;" onclick="event.stopPropagation();verTicket(' + t.id + ')">👁️</button></div>' +
+        '</div>';
+    }
+    container.innerHTML = html;
+  }
+
+  function calcularDiasInactivos(fechaISO) {
+    if (!fechaISO) return 0;
+    return Math.floor((new Date() - new Date(fechaISO)) / (1000 * 60 * 60 * 24));
+  }
+
+  function formatDateRelative(iso) {
+    if (!iso) return '—';
+    var d = new Date(iso);
+    var diff = Math.floor((new Date() - d) / 1000);
+    if (diff < 60) return 'Hace ' + diff + ' seg';
+    if (diff < 3600) return 'Hace ' + Math.floor(diff / 60) + ' min';
+    if (diff < 86400) return 'Hace ' + Math.floor(diff / 3600) + ' h';
+    return d.toLocaleDateString('es-AR');
+  }
+
+  function abrirNuevoTicket() {
+    var clientesOpt = '<option value="">Sin cliente asociado</option>';
+    for (var i = 0; i < (_cacheClientes || []).length; i++) {
+      var cli = _cacheClientes[i];
+      clientesOpt += '<option value="' + cli.id + '">' + esc(cli.nombre) + ' (' + esc(cli.email) + ')</option>';
+    }
+    var vendedoresOpt = '<option value="">Sin vendedor asignado</option>';
+    for (var i = 0; i < (_cacheVendedores || []).length; i++) {
+      var ven = _cacheVendedores[i];
+      vendedoresOpt += '<option value="' + ven.id + '">' + esc(ven.nombre) + '</option>';
+    }
+    var regionesOpt = '<option value="">Sin región</option>';
+    for (var i = 0; i < (_cacheRegiones || []).length; i++) {
+      var reg = _cacheRegiones[i];
+      regionesOpt += '<option value="' + reg.id + '">' + (reg.bandera || '') + ' ' + reg.nombre + '</option>';
+    }
+
+    var modalHtml = '<div class="mhead"><div><h2>🎫 Nuevo Ticket</h2><p>Reportar incidencia, falla o solicitud de soporte</p></div><button class="mclose" onclick="closeModal()">✕</button></div>' +
+      '<div class="mbody">' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:16px;">' +
+      '<div>' +
+      '<div style="font-size:.72rem;font-weight:700;text-transform:uppercase;color:#a78bfa;margin-bottom:10px;">📋 Información del ticket</div>' +
+      '<div class="mitem"><div class="ml">Tipo / Categoría</div><select id="ticketCategoria" class="msel"><option value="falla_tecnica">⚙️ Falla técnica</option><option value="error_datos">📊 Error en datos</option><option value="soporte">🛠️ Soporte</option><option value="mejora">💡 Sugerencia / Mejora</option><option value="otro">📌 Otro</option></select></div>' +
+      '<div class="mitem"><div class="ml">Prioridad</div><select id="ticketPrioridad" class="msel"><option value="baja">🟢 Baja</option><option value="media" selected>🟡 Media</option><option value="alta">🟠 Alta</option><option value="urgente">🔴 Urgente</option></select></div>' +
+      '<div class="mitem"><div class="ml">Asignar a (responsable)</div><select id="ticketAsignado" class="msel"><option value="">⏳ Cargando...</option></select></div>' +
+      '</div>' +
+      '<div>' +
+      '<div style="font-size:.72rem;font-weight:700;text-transform:uppercase;color:#a78bfa;margin-bottom:10px;">🔗 Relación con el sistema</div>' +
+      '<div class="mitem"><div class="ml">Cliente afectado (opcional)</div><select id="ticketCliente" class="msel">' + clientesOpt + '</select></div>' +
+      '<div class="mitem"><div class="ml">Vendedor reportante</div><select id="ticketVendedor" class="msel">' + vendedoresOpt + '</select></div>' +
+      '<div class="mitem"><div class="ml">Región (opcional)</div><select id="ticketRegion" class="msel">' + regionesOpt + '</select></div>' +
+      '</div>' +
+      '</div>' +
+      '<div class="mitem"><div class="ml">Asunto / descripción *</div><textarea id="ticketDesc" rows="4" class="medit" style="width:100%;resize:vertical;" placeholder="Describí detalladamente la incidencia o solicitud..."></textarea></div>' +
+      '<div class="mact">' +
+      '<button class="mbtn gold" onclick="guardarTicket()">✅ Crear ticket</button>' +
+      '<button class="mbtn ghost" onclick="closeModal()">Cancelar</button>' +
+      '</div></div>';
+
+    document.getElementById('mbox').innerHTML = modalHtml;
+    document.getElementById('modal').classList.add('open');
+
+    // Cargar lista de posibles asignados
+    sbClient.from('staff_profiles').select('user_id, nombre, role_id').in('role_id', [1, 2]).then(function(res) {
+      if (res.error) throw res.error;
+      var select = document.getElementById('ticketAsignado');
+      if (!select) return;
+      var opts = '<option value="">Sin asignar (gerente por defecto)</option>';
+      res.data.forEach(function(u) {
+        var roleName = u.role_id === 1 ? ' (CEO)' : ' (Gerente)';
+        opts += '<option value="' + u.user_id + '">' + esc(u.nombre) + roleName + '</option>';
+      });
+      select.innerHTML = opts;
+    }).catch(console.warn);
+  }
+
+  function guardarTicket() {
+    var categoria = document.getElementById('ticketCategoria').value;
+    var prioridad = document.getElementById('ticketPrioridad').value;
+    var desc = document.getElementById('ticketDesc').value.trim();
+    var clienteId = document.getElementById('ticketCliente').value ? parseInt(document.getElementById('ticketCliente').value) : null;
+    var vendedorId = document.getElementById('ticketVendedor').value ? parseInt(document.getElementById('ticketVendedor').value) : null;
+    var regionId = document.getElementById('ticketRegion').value ? parseInt(document.getElementById('ticketRegion').value) : null;
+    var asignadoA = document.getElementById('ticketAsignado').value || null;
+
+    if (!desc) { showToast('⚠️ La descripción es obligatoria'); return; }
+    if (!sbClient || !_ceoUid) { showToast('⚠️ Sesión no válida'); return; }
+
+    var btn = document.querySelector('#modal .mbtn.gold');
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Creando...'; }
+
+    sbClient.rpc('crear_ticket', {
+      p_tipo: categoria,
+      p_mensaje: desc,
+      p_remitente_id: _ceoUid,
+      p_cliente_id: clienteId,
+      p_vendedor_id: vendedorId,
+      p_region_id: regionId,
+      p_asignado_a: asignadoA,
+      p_prioridad: prioridad,
+      p_categoria: categoria
+    }).then(function(res) {
+      if (res.error) throw res.error;
+      showToast('✅ Ticket creado exitosamente');
+      closeModal();
+      cargarTickets();
+    }).catch(function(err) {
+      console.error('Error creating ticket:', err);
+      showToast('❌ Error al crear ticket: ' + (err.message || err));
+    }).finally(function() {
+      if (btn) { btn.disabled = false; btn.textContent = '✅ Crear ticket'; }
+    });
+  }
+
+  function verTicket(ticketId) {
+    var ticket = null;
+    for (var i = 0; i < _ticketsCache.length; i++) {
+      if (_ticketsCache[i].id === ticketId) { ticket = _ticketsCache[i]; break; }
+    }
+    if (!ticket) { showToast('Ticket no encontrado'); return; }
+    sbClient.from('notificaciones')
+      .select('*')
+      .eq('respuesta_a', ticketId)
+      .order('created_at', { ascending: true })
+      .then(function(res) { renderDetalleTicket(ticket, res.data || []); })
+      .catch(function(e) { console.warn(e); renderDetalleTicket(ticket, []); });
+  }
+
+  function renderDetalleTicket(ticket, comentarios) {
+    var estadoOpts = '<option value="abierto"' + (ticket.estado === 'abierto' ? ' selected' : '') + '>Abierto</option>' +
+      '<option value="en_progreso"' + (ticket.estado === 'en_progreso' ? ' selected' : '') + '>En progreso</option>' +
+      '<option value="resuelto"' + (ticket.estado === 'resuelto' ? ' selected' : '') + '>Resuelto</option>' +
+      '<option value="cerrado"' + (ticket.estado === 'cerrado' ? ' selected' : '') + '>Cerrado</option>';
+    var prioridadOpts = '<option value="baja"' + (ticket.prioridad === 'baja' ? ' selected' : '') + '>Baja</option>' +
+      '<option value="media"' + (ticket.prioridad === 'media' ? ' selected' : '') + '>Media</option>' +
+      '<option value="alta"' + (ticket.prioridad === 'alta' ? ' selected' : '') + '>Alta</option>' +
+      '<option value="urgente"' + (ticket.prioridad === 'urgente' ? ' selected' : '') + '>Urgente</option>';
+    var clienteNombre = ticket.cliente ? ticket.cliente.nombre : (ticket.cliente_id ? 'ID: ' + ticket.cliente_id : '—');
+    var vendedorNombre = ticket.vendedor ? ticket.vendedor.nombre : (ticket.vendedor_id ? 'ID: ' + ticket.vendedor_id : '—');
+
+    var comentariosHtml = '';
+    for (var i = 0; i < comentarios.length; i++) {
+      var cm = comentarios[i];
+      comentariosHtml += '<div style="padding:12px;border-bottom:1px solid var(--border);">' +
+        '<div style="font-weight:700;font-size:.8rem;">' + esc(cm.remitente_nombre || 'Usuario') + '</div>' +
+        '<div style="font-size:.85rem;margin-top:4px;">' + esc(cm.mensaje) + '</div>' +
+        '<div style="font-size:.7rem;color:var(--muted);margin-top:4px;">' + formatDateRelative(cm.created_at) + '</div></div>';
+    }
+
+    var modalHtml = '<div class="mhead"><div><h2>🎫 ' + esc(ticket.numero_ticket || 'Ticket #' + ticket.id) + '</h2><p>' + esc(ticket.tipo || 'Incidencia') + ' · Creado ' + formatDateRelative(ticket.created_at) + '</p></div><button class="mclose" onclick="closeModal()">✕</button></div>' +
+      '<div class="mbody">' +
+      '<div class="mgrid" style="grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">' +
+      '<div class="mi"><div class="ml">Cliente</div><div class="mv">' + esc(clienteNombre) + '</div></div>' +
+      '<div class="mi"><div class="ml">Vendedor reportante</div><div class="mv">' + esc(vendedorNombre) + '</div></div>' +
+      '<div class="mi"><div class="ml">Estado</div><div><select id="detEstado" class="msel" style="width:auto;">' + estadoOpts + '</select></div></div>' +
+      '<div class="mi"><div class="ml">Prioridad</div><div><select id="detPrioridad" class="msel" style="width:auto;">' + prioridadOpts + '</select></div></div>' +
+      '</div>' +
+      '<div class="mi" style="margin-bottom:12px;"><div class="ml">Descripción</div><div class="mv" style="white-space:pre-wrap;">' + esc(ticket.mensaje || '') + '</div></div>' +
+      '<div style="margin-top:16px;"><div class="ml" style="margin-bottom:8px;">Historial / Comentarios</div>' +
+      '<div style="max-height:200px;overflow-y:auto;background:rgba(255,255,255,.02);border:1px solid var(--border);border-radius:8px;">' +
+      (comentariosHtml || '<div style="color:var(--muted);padding:12px;font-size:.82rem;">Sin comentarios aún</div>') +
+      '</div></div>' +
+      '<div style="margin-top:12px;"><textarea id="nuevoComentario" class="medit" rows="2" style="width:100%;" placeholder="Agregar un comentario..."></textarea></div>' +
+      '<div class="mact">' +
+      '<button class="mbtn gold" onclick="agregarComentario(' + ticket.id + ')">💬 Comentar</button>' +
+      '<button class="mbtn purple" onclick="actualizarTicket(' + ticket.id + ')">💾 Guardar cambios</button>' +
+      '<button class="mbtn ghost" onclick="closeModal()">Cerrar</button>' +
+      '</div></div>';
+
+    document.getElementById('mbox').innerHTML = modalHtml;
+    document.getElementById('modal').classList.add('open');
+  }
+
+  function agregarComentario(ticketId) {
+    var comentario = (document.getElementById('nuevoComentario') || {}).value.trim();
+    if (!comentario) { showToast('Escribí un comentario'); return; }
+    if (!sbClient || !_ceoUid) return;
+    sbClient.from('notificaciones').insert({
+      tipo: 'comentario',
+      mensaje: comentario,
+      remitente_id: _ceoUid,
+      respuesta_a: ticketId,
+      created_at: new Date().toISOString()
+    }).then(function(res) {
+      if (res.error) throw res.error;
+      return sbClient.from('notificaciones').update({ updated_at: new Date().toISOString() }).eq('id', ticketId);
+    }).then(function() {
+      showToast('✅ Comentario agregado');
+      verTicket(ticketId);
+      cargarTickets();
+    }).catch(function(e) { showToast('❌ Error: ' + e.message); });
+  }
+
+  function actualizarTicket(ticketId) {
+    var nuevoEstado = (document.getElementById('detEstado') || {}).value;
+    var nuevaPrioridad = (document.getElementById('detPrioridad') || {}).value;
+    sbClient.from('notificaciones').update({
+      estado: nuevoEstado,
+      prioridad: nuevaPrioridad,
+      updated_at: new Date().toISOString(),
+      fecha_cierre: nuevoEstado === 'cerrado' ? new Date().toISOString() : null
+    }).eq('id', ticketId).then(function(res) {
+      if (res.error) throw res.error;
+      showToast('✅ Ticket actualizado');
+      verTicket(ticketId);
+      cargarTickets();
+    }).catch(function(e) { showToast('❌ Error: ' + e.message); });
+  }
+
+  // ═══════════════════════════════════════════════════════
+
   window.lzToggle = function(inputId, btn) {
     var inp = document.getElementById(inputId);
     var svg = btn ? btn.querySelector('svg') : null;
@@ -4094,6 +4406,12 @@ for (var k = 0; k < allRs.length; k++) {
   window.escanearMora = escanearMora;
   window.exportarExcel = exportarExcel;
   window.guardarVoucher = guardarVoucher;
+  window.cargarTickets = cargarTickets;
+  window.abrirNuevoTicket = abrirNuevoTicket;
+  window.guardarTicket = guardarTicket;
+  window.verTicket = verTicket;
+  window.agregarComentario = agregarComentario;
+  window.actualizarTicket = actualizarTicket;
   // ... más según necesidad
 </script>
 </body>

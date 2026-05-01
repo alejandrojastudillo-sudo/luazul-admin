@@ -470,6 +470,7 @@ function _sbLoad() {
       <div class="tab" onclick="showTab('mensual')" id="tab-mensual" style="color:#67e8f9;">📆 Recaudación Mensual</div>
       <div class="tab" onclick="showTab('miscomisiones')" id="tab-miscomisiones" style="color:#4ade80;">💰 Mis Comisiones</div>
       <div class="tab" onclick="showTab('passwords')" id="tab-passwords" style="color:#a78bfa;">🔑 Contraseñas</div>
+      <div class="tab" onclick="showTab('tickets')" id="tab-tickets" style="color:#fbbf24;">🎫 Tickets</div>
     </div>
     <!-- OVERVIEW -->
     <div class="tabpg active" id="tabpg-overview">
@@ -566,6 +567,37 @@ function _sbLoad() {
     <div class="tabpg" id="tabpg-miscomisiones">
       <div class="sec-head"><h2>💰 Mis Comisiones</h2><button onclick="renderMisComisionesGerente()" style="padding:8px 16px;border-radius:9px;background:rgba(74,222,128,.1);border:1px solid rgba(74,222,128,.25);color:#4ade80;font-family:inherit;font-size:.78rem;font-weight:700;cursor:pointer;">🔄 Actualizar</button></div>
       <div id="misComisionesGerente"></div>
+    </div>
+
+    <!-- TICKETS -->
+    <div class="tabpg" id="tabpg-tickets">
+      <div class="sec-head">
+        <h2>🎫 Gestión de Tickets</h2>
+        <button class="addbtn" onclick="abrirNuevoTicketGerente()">➕ Nuevo ticket</button>
+      </div>
+      <div style="display:flex; gap:12px; margin-bottom:16px; flex-wrap:wrap;">
+        <select id="ticketFiltroEstado" onchange="cargarTicketsGerente()">
+          <option value="todos">Todos los estados</option>
+          <option value="abierto">Abiertos</option>
+          <option value="en_progreso">En progreso</option>
+          <option value="resuelto">Resueltos</option>
+          <option value="cerrado">Cerrados</option>
+        </select>
+        <select id="ticketFiltroPrioridad" onchange="cargarTicketsGerente()">
+          <option value="todos">Todas las prioridades</option>
+          <option value="baja">Baja</option><option value="media">Media</option>
+          <option value="alta">Alta</option><option value="urgente">Urgente</option>
+        </select>
+        <div class="sbox" style="flex:1;">
+          <span>🔍</span><input type="text" id="ticketSearch" placeholder="Buscar..." oninput="cargarTicketsGerente()">
+        </div>
+      </div>
+      <div class="twrap" style="overflow-x:auto;">
+        <div class="thead" style="grid-template-columns: 100px 2fr 1fr 100px 100px 120px 80px;">
+          <div>Nº</div><div>Asunto</div><div>Cliente / Vendedor</div><div>Estado</div><div>Prioridad</div><div>Última actividad</div><div>Acciones</div>
+        </div>
+        <div id="ticketsListaBodyGerente"></div>
+      </div>
     </div>
   </main>
 </div>
@@ -2413,6 +2445,7 @@ function showTab(id) {
   if (id === 'passwords') { renderPasswords(); }
   if (id === 'miscomisiones') { renderMisComisionesGerente(); }
   if (id === 'mensual') { renderMensual(); }
+  if (id === 'tickets') { cargarTicketsGerente(); }
 }
 
 // ── RECAUDACIÓN MENSUAL ─────────────────────────────────────
@@ -2817,6 +2850,311 @@ window.verVoucherGerente = function(clientId) {
     })
     .catch(function() { showToast('Error al verificar voucher'); });
 };
+
+// ===================== TICKETS (GERENTE) =====================
+var _ticketsCacheGerente = [];
+
+function cargarTicketsGerente() {
+  if (!sbClient || !window._gerenteProfile) return;
+  var regionIds = window._gerenteRegionIds || [];
+  var estado = document.getElementById('ticketFiltroEstado').value;
+  var prioridad = document.getElementById('ticketFiltroPrioridad').value;
+  var search = (document.getElementById('ticketSearch').value || '').toLowerCase();
+
+  var query = sbClient.from('notificaciones')
+    .select('*, cliente:clientes(nombre, email), vendedor:staff_profiles!vendedor_id(nombre)')
+    .in('tipo', ['incidencia','soporte','mejora','falla_tecnica'])
+    .order('created_at', { ascending: false });
+
+  if (regionIds.length) query = query.in('region_id', regionIds);
+  if (estado !== 'todos') query = query.eq('estado', estado);
+  if (prioridad !== 'todos') query = query.eq('prioridad', prioridad);
+
+  query.then(function(res) {
+    if (res.error) throw res.error;
+    var tickets = res.data || [];
+    if (search) {
+      tickets = tickets.filter(function(t) {
+        return (t.numero_ticket || '').toLowerCase().includes(search) ||
+          (t.mensaje || '').toLowerCase().includes(search) ||
+          (t.cliente && t.cliente.nombre ? t.cliente.nombre.toLowerCase().includes(search) : false);
+      });
+    }
+    _ticketsCacheGerente = tickets;
+    renderListaTicketsGerente(tickets);
+  }).catch(function(e) { console.error(e); showToast('❌ Error al cargar tickets'); });
+}
+
+function renderListaTicketsGerente(tickets) {
+  var container = document.getElementById('ticketsListaBodyGerente');
+  if (!container) return;
+  if (!tickets.length) { container.innerHTML = '<div class="empty">Sin tickets</div>'; return; }
+  var html = '';
+  for (var i = 0; i < tickets.length; i++) {
+    var t = tickets[i];
+    var estadoClase = t.estado === 'abierto' ? 'badge atraso' : (t.estado === 'en_progreso' ? 'badge atraso_gestion' : (t.estado === 'resuelto' ? 'badge completo' : 'badge baja'));
+    var prioridadClase = t.prioridad === 'urgente' ? 'pri-chip rojo' : (t.prioridad === 'alta' ? 'pri-chip naranja' : (t.prioridad === 'media' ? 'pri-chip amarillo' : 'pri-chip verde'));
+    var clienteNombre = (t.cliente && t.cliente.nombre) ? t.cliente.nombre : (t.cliente_id ? 'ID: '+t.cliente_id : '—');
+    var vendedorNombre = (t.vendedor && t.vendedor.nombre) ? t.vendedor.nombre : (t.vendedor_id ? 'ID: '+t.vendedor_id : '—');
+    var diasInactivos = Math.floor((new Date() - new Date(t.updated_at || t.created_at)) / (1000*3600*24));
+    var highlight = diasInactivos > 7 && t.estado !== 'cerrado' ? '⚠️ ' : '';
+    html += '<div class="trow" style="grid-template-columns: 100px 2fr 1fr 100px 100px 120px 80px;" onclick="verTicketGerente('+t.id+')">' +
+      '<div style="font-family:monospace;">'+(t.numero_ticket || 'LK-??')+'</div>' +
+      '<div><div style="font-weight:600;">'+highlight+esc(t.tipo)+'</div><div style="font-size:.75rem;">'+esc((t.mensaje || '').substring(0,60))+'...</div></div>' +
+      '<div><div>'+esc(clienteNombre)+'</div><div class="cemail">'+esc(vendedorNombre)+'</div></div>' +
+      '<div><span class="'+estadoClase+'">'+(t.estado ? t.estado.toUpperCase() : 'ABIERTO')+'</span></div>' +
+      '<div><span class="'+prioridadClase+'">'+(t.prioridad ? t.prioridad.toUpperCase() : 'MEDIA')+'</span></div>' +
+      '<div style="font-size:.75rem;">'+formatDateRelativeT(t.updated_at || t.created_at)+(diasInactivos>7?' <span style="color:red;">⏰'+diasInactivos+'d</span>':'')+'</div>' +
+      '<div><button class="vcbtn" onclick="event.stopPropagation();verTicketGerente('+t.id+')">👁️</button></div>' +
+      '</div>';
+  }
+  container.innerHTML = html;
+}
+
+function formatDateRelativeT(iso) {
+  var d = new Date(iso), now = new Date(), diff = Math.floor((now - d)/1000);
+  if (diff<60) return 'Hace '+diff+' seg';
+  if (diff<3600) return 'Hace '+Math.floor(diff/60)+' min';
+  if (diff<86400) return 'Hace '+Math.floor(diff/3600)+' h';
+  return d.toLocaleDateString('es-AR');
+}
+
+function abrirNuevoTicketGerente() {
+  var clientesOpt = '<option value="">Sin cliente asociado</option>';
+  var cacheClientes = _memCache[DB_KEY] || [];
+  for (var i = 0; i < cacheClientes.length; i++) {
+    var c = cacheClientes[i];
+    clientesOpt += '<option value="'+c.id+'">'+esc(c.nombre)+' ('+esc(c.email || '')+')</option>';
+  }
+  var vendedoresOpt = '<option value="">Sin vendedor asignado</option>';
+  var cacheVendedores = _memCache['lz_vend'] || [];
+  for (var j = 0; j < cacheVendedores.length; j++) {
+    var v = cacheVendedores[j];
+    vendedoresOpt += '<option value="'+v.id+'">'+esc(v.nombre)+'</option>';
+  }
+  var regionesOpt = '<option value="">Sin región</option>';
+  var cacheRegiones = window._cacheRegiones || [];
+  for (var k = 0; k < cacheRegiones.length; k++) {
+    var r = cacheRegiones[k];
+    regionesOpt += '<option value="'+r.id+'">'+(r.bandera||'')+' '+r.nombre+'</option>';
+  }
+  var modalHtml =
+    '<div class="mhead"><div><h2>🎫 Nuevo Ticket</h2><p>Reportar incidencia, falla o solicitud de soporte</p></div><button class="mclose" onclick="closeModal()">✕</button></div>' +
+    '<div class="mbody">' +
+    '<div class="mgrid" style="grid-template-columns:1fr 1fr; gap:12px;">' +
+    '<div><label class="ml">Categoría</label><select id="tktCat" class="msel"><option value="falla_tecnica">Falla técnica</option><option value="error_datos">Error en datos</option><option value="soporte">Soporte</option><option value="mejora">Mejora</option></select></div>' +
+    '<div><label class="ml">Prioridad</label><select id="tktPrior" class="msel"><option value="baja">Baja</option><option value="media" selected>Media</option><option value="alta">Alta</option><option value="urgente">Urgente</option></select></div>' +
+    '<div><label class="ml">Cliente</label><select id="tktCli" class="msel">'+clientesOpt+'</select></div>' +
+    '<div><label class="ml">Vendedor (reportante)</label><select id="tktVen" class="msel">'+vendedoresOpt+'</select></div>' +
+    '<div><label class="ml">Región</label><select id="tktReg" class="msel">'+regionesOpt+'</select></div>' +
+    '<div><label class="ml">Asignar a</label><select id="tktAsig" class="msel"><option value="">Sin asignar (Gerente por defecto)</option></select></div>' +
+    '</div>' +
+    '<div class="mitem"><label class="ml">Descripción *</label><textarea id="tktDesc" rows="4" class="medit"></textarea></div>' +
+    '<div class="mitem"><label class="ml">📎 Adjuntar archivos (opcional)</label>' +
+    '<input type="file" id="tktAdjuntos" multiple accept="image/*,application/pdf" style="margin-top:6px;width:100%;color:var(--muted);font-size:.82rem;">' +
+    '<div id="tktAdjuntosPreview" style="margin-top:6px;font-size:.75rem;color:var(--muted);"></div></div>' +
+    '<div class="mact"><button class="mbtn gold" onclick="guardarTicketGerente()">✅ Crear ticket</button><button class="mbtn ghost" onclick="closeModal()">Cancelar</button></div>' +
+    '</div>';
+  document.getElementById('mbox').innerHTML = modalHtml;
+  document.getElementById('modal').classList.add('open');
+  // Preview de nombres de archivos al seleccionar
+  document.getElementById('tktAdjuntos').addEventListener('change', function() {
+    var preview = document.getElementById('tktAdjuntosPreview');
+    var names = Array.from(this.files).map(function(f) { return '📄 '+f.name; });
+    preview.innerHTML = names.join('<br>');
+  });
+  sbClient.from('staff_profiles').select('user_id, nombre, role_id').in('role_id',[1,2]).then(function(res) {
+    if (res.error) return;
+    var select = document.getElementById('tktAsig');
+    if (res.data && select) {
+      res.data.forEach(function(u) {
+        var roleName = u.role_id === 1 ? ' (CEO)' : ' (Gerente)';
+        select.innerHTML += '<option value="'+u.user_id+'">'+esc(u.nombre)+roleName+'</option>';
+      });
+    }
+  });
+}
+
+async function guardarTicketGerente() {
+  var categoria = document.getElementById('tktCat').value;
+  var prioridad = document.getElementById('tktPrior').value;
+  var desc = document.getElementById('tktDesc').value.trim();
+  var clienteIdRaw = document.getElementById('tktCli').value;
+  var vendedorIdRaw = document.getElementById('tktVen').value;
+  var regionIdRaw = document.getElementById('tktReg').value;
+  var clienteId = clienteIdRaw ? parseInt(clienteIdRaw) : null;
+  var vendedorId = vendedorIdRaw ? parseInt(vendedorIdRaw) : null;
+  var regionId = regionIdRaw ? parseInt(regionIdRaw) : null;
+  var asignado = document.getElementById('tktAsig').value || null;
+  var files = document.getElementById('tktAdjuntos').files;
+  if (!desc) { showToast('⚠️ La descripción es obligatoria'); return; }
+  var btn = document.querySelector('#modal .mbtn.gold');
+  if (btn) btn.disabled = true;
+  try {
+    // 1. Subir archivos adjuntos al storage
+    var adjuntosUrls = [];
+    for (var i = 0; i < files.length; i++) {
+      var file = files[i];
+      var ext = file.name.split('.').pop();
+      var fileName = 'ticket_adjuntos/' + window._gerenteProfile.user_id + '/' + Date.now() + '_' + i + '.' + ext;
+      var upRes = await sbClient.storage.from('ticket_adjuntos').upload(fileName, file);
+      if (upRes.error) throw upRes.error;
+      var urlRes = sbClient.storage.from('ticket_adjuntos').getPublicUrl(fileName);
+      adjuntosUrls.push(urlRes.data.publicUrl);
+    }
+    // 2. Crear ticket vía RPC
+    var rpcRes = await sbClient.rpc('crear_ticket', {
+      p_tipo: categoria, p_mensaje: desc, p_remitente_id: window._gerenteProfile.user_id,
+      p_cliente_id: clienteId, p_vendedor_id: vendedorId, p_region_id: regionId,
+      p_asignado_a: asignado, p_prioridad: prioridad, p_categoria: categoria
+    });
+    if (rpcRes.error) throw rpcRes.error;
+    // 3. Si hay adjuntos, guardarlos en el registro del ticket
+    if (adjuntosUrls.length && rpcRes.data) {
+      await sbClient.from('notificaciones').update({ adjuntos: adjuntosUrls }).eq('id', rpcRes.data);
+    }
+    showToast('✅ Ticket creado' + (adjuntosUrls.length ? ' con ' + adjuntosUrls.length + ' adjunto(s)' : ''));
+    closeModal();
+    cargarTicketsGerente();
+  } catch (err) {
+    console.error(err);
+    showToast('❌ Error: ' + (err.message || err));
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+function verTicketGerente(id) {
+  var ticket = _ticketsCacheGerente.find(function(t) { return t.id === id; });
+  if (!ticket) return;
+  sbClient.from('notificaciones').select('*').eq('respuesta_a', id).order('created_at').then(function(res) {
+    renderDetalleTicketGerente(ticket, res.data || []);
+  });
+}
+
+function renderDetalleTicketGerente(ticket, comentarios) {
+  var estadoOpts = '<select id="detEstadoGerente" class="msel">' +
+    '<option '+(ticket.estado==='abierto'?'selected':'')+'>abierto</option>' +
+    '<option '+(ticket.estado==='en_progreso'?'selected':'')+'>en_progreso</option>' +
+    '<option '+(ticket.estado==='resuelto'?'selected':'')+'>resuelto</option>' +
+    '<option '+(ticket.estado==='cerrado'?'selected':'')+'>cerrado</option></select>';
+  var prioridadOpts = '<select id="detPrioridadGerente" class="msel">' +
+    '<option '+(ticket.prioridad==='baja'?'selected':'')+'>baja</option>' +
+    '<option '+(ticket.prioridad==='media'?'selected':'')+'>media</option>' +
+    '<option '+(ticket.prioridad==='alta'?'selected':'')+'>alta</option>' +
+    '<option '+(ticket.prioridad==='urgente'?'selected':'')+'>urgente</option></select>';
+  // Adjuntos existentes
+  var adjuntosHtml = '';
+  if (ticket.adjuntos && ticket.adjuntos.length) {
+    adjuntosHtml = '<div class="mi"><div class="ml">📎 Adjuntos</div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;">';
+    for (var ai = 0; ai < ticket.adjuntos.length; ai++) {
+      var adjUrl = ticket.adjuntos[ai];
+      var esImagen = /\.(jpg|jpeg|png|gif|webp)$/i.test(adjUrl);
+      adjuntosHtml += '<a href="'+adjUrl+'" target="_blank" style="display:inline-flex;align-items:center;gap:4px;padding:5px 10px;background:rgba(255,255,255,.06);border:1px solid var(--border2);border-radius:8px;text-decoration:none;color:var(--text);font-size:.78rem;">' +
+        (esImagen ? '🖼️' : '📄') + ' Ver archivo '+(ai+1)+'</a>';
+    }
+    adjuntosHtml += '</div></div>';
+  }
+  var comentariosHtml = comentarios.map(function(c) {
+    return '<div style="padding:8px; border-bottom:1px solid var(--border);"><strong>'+(c.remitente_nombre || 'Usuario')+'</strong><div>'+esc(c.mensaje)+'</div><div class="cemail">'+formatDateRelativeT(c.created_at)+'</div></div>';
+  }).join('');
+  var clienteN = (ticket.cliente && ticket.cliente.nombre) ? ticket.cliente.nombre : '—';
+  var vendedorN = (ticket.vendedor && ticket.vendedor.nombre) ? ticket.vendedor.nombre : '—';
+  var modalHtml =
+    '<div class="mhead"><div><h2>🎫 '+(ticket.numero_ticket || '#'+ticket.id)+'</h2><p>'+esc(ticket.tipo)+' · Creado '+formatDateRelativeT(ticket.created_at)+'</p></div><button class="mclose" onclick="closeModal()">✕</button></div>' +
+    '<div class="mbody">' +
+    '<div class="mgrid" style="grid-template-columns:1fr 1fr;">' +
+    '<div><div class="ml">Cliente</div><div>'+esc(clienteN)+'</div></div>' +
+    '<div><div class="ml">Vendedor</div><div>'+esc(vendedorN)+'</div></div>' +
+    '<div><div class="ml">Estado</div><div>'+estadoOpts+'</div></div>' +
+    '<div><div class="ml">Prioridad</div><div>'+prioridadOpts+'</div></div>' +
+    '<div><div class="ml">Región</div><div>'+(ticket.region_id || '—')+'</div></div>' +
+    '<div><div class="ml">Asignado a</div><div>'+(ticket.asignado_a || '—')+'</div></div>' +
+    '</div>' +
+    '<div class="mi"><div class="ml">Descripción</div><div style="white-space:pre-wrap;margin-top:4px;">'+esc(ticket.mensaje)+'</div></div>' +
+    adjuntosHtml +
+    '<div><div class="ml">Historial</div><div style="max-height:200px;overflow:auto;">'+(comentariosHtml || '<div class="cemail">Sin comentarios</div>')+'</div></div>' +
+    '<div class="mitem" style="margin-top:12px;">' +
+    '<label class="ml">📎 Agregar adjunto</label>' +
+    '<input type="file" id="nuevoAdjuntoTicketGerente" accept="image/*,application/pdf" style="margin-top:6px;width:100%;color:var(--muted);font-size:.82rem;">' +
+    '<button class="mbtn ghost" style="margin-top:6px;font-size:.78rem;" onclick="subirAdjuntoATicketGerente('+ticket.id+')">➕ Subir adjunto</button>' +
+    '</div>' +
+    '<textarea id="nuevoComentarioGerente" class="medit" rows="2" placeholder="Agregar comentario..." style="margin-top:10px;"></textarea>' +
+    '<div class="mact">' +
+    '<button class="mbtn gold" onclick="agregarComentarioGerente('+ticket.id+')">💬 Comentar</button>' +
+    '<button class="mbtn purple" onclick="actualizarTicketGerente('+ticket.id+')">💾 Guardar cambios</button>' +
+    '<button class="mbtn ghost" onclick="closeModal()">Cerrar</button>' +
+    '</div>' +
+    '</div>';
+  document.getElementById('mbox').innerHTML = modalHtml;
+  document.getElementById('modal').classList.add('open');
+}
+
+function agregarComentarioGerente(id) {
+  var texto = document.getElementById('nuevoComentarioGerente').value.trim();
+  if (!texto) return;
+  sbClient.from('notificaciones').insert({ tipo:'comentario', mensaje:texto, remitente_id:window._gerenteProfile.user_id, respuesta_a:id, created_at:new Date() })
+    .then(function() { return sbClient.from('notificaciones').update({ updated_at: new Date() }).eq('id', id); })
+    .then(function() {
+      document.getElementById('nuevoComentarioGerente').value = '';
+      verTicketGerente(id);
+      cargarTicketsGerente();
+      showToast('✅ Comentario agregado');
+    })
+    .catch(function(e) { showToast('❌ Error: '+e.message); });
+}
+
+function actualizarTicketGerente(id) {
+  var nuevoEstado = document.getElementById('detEstadoGerente').value;
+  var nuevaPrioridad = document.getElementById('detPrioridadGerente').value;
+  var fechaCierre = nuevoEstado === 'cerrado' ? new Date().toISOString() : null;
+  sbClient.from('notificaciones').update({ estado:nuevoEstado, prioridad:nuevaPrioridad, updated_at:new Date(), fecha_cierre:fechaCierre }).eq('id', id)
+    .then(function() {
+      showToast('✅ Ticket actualizado');
+      verTicketGerente(id);
+      cargarTicketsGerente();
+    })
+    .catch(function(e) { showToast('❌ Error: '+e.message); });
+}
+
+async function subirAdjuntoATicketGerente(ticketId) {
+  var fileInput = document.getElementById('nuevoAdjuntoTicketGerente');
+  if (!fileInput || !fileInput.files.length) { showToast('⚠️ Seleccioná un archivo primero'); return; }
+  var file = fileInput.files[0];
+  var btn = document.querySelector('#modal .mbtn.ghost[onclick*="subirAdjunto"]');
+  if (btn) btn.disabled = true;
+  try {
+    var ext = file.name.split('.').pop();
+    var fileName = 'ticket_adjuntos/' + window._gerenteProfile.user_id + '/' + Date.now() + '_' + file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+    var upRes = await sbClient.storage.from('ticket_adjuntos').upload(fileName, file);
+    if (upRes.error) throw upRes.error;
+    var urlRes = sbClient.storage.from('ticket_adjuntos').getPublicUrl(fileName);
+    // Leer adjuntos actuales y agregar el nuevo
+    var tktRes = await sbClient.from('notificaciones').select('adjuntos').eq('id', ticketId).single();
+    if (tktRes.error) throw tktRes.error;
+    var adjuntos = (tktRes.data && tktRes.data.adjuntos) ? tktRes.data.adjuntos : [];
+    adjuntos.push(urlRes.data.publicUrl);
+    var updRes = await sbClient.from('notificaciones').update({ adjuntos: adjuntos }).eq('id', ticketId);
+    if (updRes.error) throw updRes.error;
+    showToast('✅ Adjunto agregado');
+    fileInput.value = '';
+    verTicketGerente(ticketId);
+  } catch (err) {
+    console.error(err);
+    showToast('❌ Error: ' + (err.message || err));
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+window.cargarTicketsGerente = cargarTicketsGerente;
+window.abrirNuevoTicketGerente = abrirNuevoTicketGerente;
+window.guardarTicketGerente = guardarTicketGerente;
+window.verTicketGerente = verTicketGerente;
+window.renderDetalleTicketGerente = renderDetalleTicketGerente;
+window.agregarComentarioGerente = agregarComentarioGerente;
+window.actualizarTicketGerente = actualizarTicketGerente;
+window.subirAdjuntoATicketGerente = subirAdjuntoATicketGerente;
 </script>
 </body>
 </html>

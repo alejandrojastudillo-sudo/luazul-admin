@@ -579,6 +579,7 @@ body::after {
         <div class="ftab" data-f="cuentas"           onclick="activarSeccion('cuentas')" style="color:#34d399;">🏦 Cuentas</div>
         <div class="ftab" data-f="miscomisiones"     onclick="activarSeccion('miscomisiones')" style="color:#4ade80;">💰 Comisiones</div>
         <div class="ftab" data-f="legajo"            onclick="activarSeccion('legajo')" style="color:#a78bfa;">🪪 Mi Legajo</div>
+        <div class="ftab" data-f="tickets"           onclick="activarSeccion('tickets')" style="color:#fbbf24;">🎫 Tickets</div>
       </div>
       <select class="sort-select" id="sortSelect" onchange="renderTable()">
         <option value="prioridad">Ordenar: Prioridad</option>
@@ -676,6 +677,42 @@ body::after {
 
     <!-- ── SECCIÓN MI LEGAJO ────────────────────────────────────────────── -->
     <div id="legajoSection" class="section-container"></div>
+
+    <!-- ── SECCIÓN TICKETS ──────────────────────────────────────────────── -->
+    <div id="ticketsSection" class="section-container">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:16px;">
+        <h2 style="font-size:1rem;font-weight:900;">🎫 Mis Tickets</h2>
+        <button class="add-btn" onclick="abrirNuevoTicketAsesor()">➕ Nuevo ticket</button>
+      </div>
+      <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
+        <select id="ticketFiltroEstado" onchange="cargarTicketsAsesor()" style="background:var(--surface);border:1px solid var(--border2);border-radius:10px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:.82rem;">
+          <option value="todos">Todos los estados</option>
+          <option value="abierto">Abiertos</option>
+          <option value="en_progreso">En progreso</option>
+          <option value="resuelto">Resueltos</option>
+          <option value="cerrado">Cerrados</option>
+        </select>
+        <select id="ticketFiltroPrioridad" onchange="cargarTicketsAsesor()" style="background:var(--surface);border:1px solid var(--border2);border-radius:10px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:.82rem;">
+          <option value="todos">Todas las prioridades</option>
+          <option value="baja">Baja</option>
+          <option value="media">Media</option>
+          <option value="alta">Alta</option>
+          <option value="urgente">Urgente</option>
+        </select>
+        <div class="search-box" style="flex:1;min-width:160px;">
+          <span>🔍</span>
+          <input type="text" id="ticketSearch" placeholder="Buscar ticket..." oninput="cargarTicketsAsesor()">
+        </div>
+      </div>
+      <div class="table-wrap">
+        <div class="tbl-head" style="grid-template-columns:110px 2fr 1fr 110px 110px 130px 80px;">
+          <div>Nº</div><div>Asunto</div><div>Cliente</div><div>Estado</div><div>Prioridad</div><div>Última actividad</div><div>Ver</div>
+        </div>
+        <div class="tbl-body" id="ticketsListaBodyAsesor">
+          <div class="empty-state"><div class="ei">🎫</div><p>Sin tickets</p></div>
+        </div>
+      </div>
+    </div>
 
   </main>
 </div>
@@ -1272,7 +1309,6 @@ async function renderAll() {
 // 15. SECCIONES DE NAVEGACIÓN
 // ──────────────────────────────────────────────────────────────────────────
 function showSection(name) {
-  var ids = { ref:'refSection', ctas:'cuentasSection', com:'misComisionesSection', leg:'legajoSection' };
   var elements = {
     statsRow:       document.getElementById('statsRow'),
     comisionPanel:  document.getElementById('comisionPanel'),
@@ -1283,17 +1319,19 @@ function showSection(name) {
     refSection:     document.getElementById('refSection'),
     cuentasSection: document.getElementById('cuentasSection'),
     misComisionesSection: document.getElementById('misComisionesSection'),
-    legajoSection:  document.getElementById('legajoSection')
+    legajoSection:  document.getElementById('legajoSection'),
+    ticketsSection: document.getElementById('ticketsSection')
   };
-  var isSpecial = (name==='referidos'||name==='cuentas'||name==='miscomisiones'||name==='legajo');
+  var isSpecial = (name==='referidos'||name==='cuentas'||name==='miscomisiones'||name==='legajo'||name==='tickets');
   var mainEls = [elements.statsRow, elements.comisionPanel, elements.priorityBanner, elements.filterBar, elements.legend, elements.tableWrap];
   mainEls.forEach(function(el){ if(el) el.style.display = isSpecial?'none':''; });
-  [elements.refSection, elements.cuentasSection, elements.misComisionesSection, elements.legajoSection].forEach(function(el){ if(el){ el.style.display='none'; } });
+  [elements.refSection, elements.cuentasSection, elements.misComisionesSection, elements.legajoSection, elements.ticketsSection].forEach(function(el){ if(el){ el.style.display='none'; } });
 
   if (name==='referidos')    { if(elements.refSection) elements.refSection.style.display='block'; renderRefList(); }
   else if (name==='cuentas') { if(elements.cuentasSection) elements.cuentasSection.style.display='block'; renderCuentasList(); }
   else if (name==='miscomisiones') { if(elements.misComisionesSection) elements.misComisionesSection.style.display='block'; renderMisComisionesAdmin(); }
   else if (name==='legajo')  { if(elements.legajoSection) elements.legajoSection.style.display='block'; renderMiLegajo(); }
+  else if (name==='tickets') { if(elements.ticketsSection) elements.ticketsSection.style.display='block'; cargarTicketsAsesor(); }
   else {
     // Restaurar visibilidad tabla
     mainEls.forEach(function(el){ if(el) el.style.display=''; });
@@ -2399,6 +2437,280 @@ function addClient() {
 // 32. INICIALIZACIÓN
 // ──────────────────────────────────────────────────────────────────────────
 setInterval(refreshAdminNotifBadge, 30000);
+
+// ===================== TICKETS (ASESOR) =====================
+var _ticketsCacheAsesor = [];
+
+function _fdrA(iso) {
+  var d = new Date(iso), now = new Date(), diff = Math.floor((now - d)/1000);
+  if (diff < 60)    return 'Hace '+diff+' seg';
+  if (diff < 3600)  return 'Hace '+Math.floor(diff/60)+' min';
+  if (diff < 86400) return 'Hace '+Math.floor(diff/3600)+' h';
+  return d.toLocaleDateString('es-AR');
+}
+
+function cargarTicketsAsesor() {
+  if (!sbClient || !_currentProfile) return;
+  var estado    = (document.getElementById('ticketFiltroEstado')    || {}).value || 'todos';
+  var prioridad = (document.getElementById('ticketFiltroPrioridad') || {}).value || 'todos';
+  var search    = ((document.getElementById('ticketSearch')         || {}).value || '').toLowerCase();
+
+  var query = sbClient.from('notificaciones')
+    .select('*, cliente:clientes(nombre, email)')
+    .in('tipo', ['incidencia','soporte','mejora','falla_tecnica'])
+    .eq('remitente_id', _currentProfile.user_id)
+    .order('created_at', { ascending: false });
+
+  if (estado    !== 'todos') query = query.eq('estado', estado);
+  if (prioridad !== 'todos') query = query.eq('prioridad', prioridad);
+
+  query.then(function(res) {
+    if (res.error) throw res.error;
+    var tickets = res.data || [];
+    if (search) {
+      tickets = tickets.filter(function(t) {
+        return (t.numero_ticket||'').toLowerCase().includes(search) ||
+               (t.mensaje||'').toLowerCase().includes(search) ||
+               (t.cliente && t.cliente.nombre ? t.cliente.nombre.toLowerCase().includes(search) : false);
+      });
+    }
+    _ticketsCacheAsesor = tickets;
+    renderListaTicketsAsesor(tickets);
+  }).catch(function() { showToast('❌ Error al cargar tickets'); });
+}
+
+function renderListaTicketsAsesor(tickets) {
+  var container = document.getElementById('ticketsListaBodyAsesor');
+  if (!container) return;
+  if (!tickets.length) {
+    container.innerHTML = '<div class="empty-state"><div class="ei">🎫</div><p>Sin tickets</p></div>';
+    return;
+  }
+  var html = '';
+  for (var i = 0; i < tickets.length; i++) {
+    var t = tickets[i];
+    var estadoClase = t.estado === 'abierto' ? 'badge atraso'
+      : t.estado === 'en_progreso' ? 'badge atraso_gestion'
+      : t.estado === 'resuelto'    ? 'badge completo'
+      : 'badge baja';
+    var prioColor = t.prioridad === 'urgente' ? 'var(--red)'
+      : t.prioridad === 'alta'   ? 'var(--orange)'
+      : t.prioridad === 'media'  ? 'var(--yellow)'
+      : 'var(--green)';
+    var clienteN = (t.cliente && t.cliente.nombre) ? t.cliente.nombre : '—';
+    html += '<div class="tbl-row" style="grid-template-columns:110px 2fr 1fr 110px 110px 130px 80px;cursor:pointer;" onclick="verTicketAsesor('+t.id+')">' +
+      '<div class="tbl-cell" style="font-family:monospace;font-size:.82rem;">'+(t.numero_ticket||'LK-??')+'</div>' +
+      '<div class="tbl-cell"><div style="font-weight:700;">'+esc(t.tipo)+'</div><div class="cli-email">'+esc((t.mensaje||'').substring(0,55))+'...</div></div>' +
+      '<div class="tbl-cell">'+esc(clienteN)+'</div>' +
+      '<div class="tbl-cell"><span class="'+estadoClase+'">'+(t.estado||'abierto').toUpperCase()+'</span></div>' +
+      '<div class="tbl-cell"><span style="font-weight:700;color:'+prioColor+';font-size:.8rem;">'+(t.prioridad||'media').toUpperCase()+'</span></div>' +
+      '<div class="tbl-cell" style="font-size:.78rem;">'+_fdrA(t.updated_at||t.created_at)+'</div>' +
+      '<div class="tbl-cell"><button class="act-btn" onclick="event.stopPropagation();verTicketAsesor('+t.id+')">👁️</button></div>' +
+      '</div>';
+  }
+  container.innerHTML = html;
+}
+
+function abrirNuevoTicketAsesor() {
+  if (!_currentProfile) { showToast('⚠️ Perfil no cargado'); return; }
+  var clientesOpt = '<option value="">Sin cliente</option>';
+  (allClients || []).forEach(function(c) {
+    clientesOpt += '<option value="'+c.id+'">'+esc(c.nombre)+'</option>';
+  });
+  var modalHtml =
+    '<div class="modal-head">' +
+      '<div><h2>🎫 Nuevo Ticket</h2><p>Reportar incidencia o solicitar soporte</p></div>' +
+      '<button class="modal-close" onclick="closeModal()">✕</button>' +
+    '</div>' +
+    '<div class="modal-body">' +
+      '<div class="modal-grid">' +
+        '<div><div class="m-label">Categoría</div>' +
+          '<select id="tktCatA" class="edit-input" style="width:100%;">' +
+            '<option value="falla_tecnica">Falla técnica</option>' +
+            '<option value="error_datos">Error en datos</option>' +
+            '<option value="soporte">Soporte</option>' +
+            '<option value="mejora">Mejora</option>' +
+          '</select></div>' +
+        '<div><div class="m-label">Prioridad</div>' +
+          '<select id="tktPriorA" class="edit-input" style="width:100%;">' +
+            '<option value="baja">Baja</option>' +
+            '<option value="media" selected>Media</option>' +
+            '<option value="alta">Alta</option>' +
+            '<option value="urgente">Urgente</option>' +
+          '</select></div>' +
+        '<div><div class="m-label">Cliente relacionado</div>' +
+          '<select id="tktCliA" class="edit-input" style="width:100%;">'+clientesOpt+'</select></div>' +
+        '<div style="display:flex;align-items:flex-end;">' +
+          '<div style="font-size:.75rem;color:var(--muted);padding-bottom:6px;">El ticket quedará registrado a tu nombre y será visible para gerencia.</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="m-item" style="margin-top:14px;">' +
+        '<div class="m-label">Descripción del problema *</div>' +
+        '<textarea id="tktDescA" rows="4" class="edit-input" style="width:100%;resize:vertical;" placeholder="Describí el problema con el mayor detalle posible..."></textarea>' +
+      '</div>' +
+      '<div class="modal-actions">' +
+        '<button class="m-btn primary" onclick="guardarTicketAsesor()">✅ Enviar ticket</button>' +
+        '<button class="m-btn ghost" onclick="closeModal()">Cancelar</button>' +
+      '</div>' +
+    '</div>';
+  document.getElementById('modalBox').innerHTML = modalHtml;
+  document.getElementById('modal').classList.add('open');
+}
+
+function guardarTicketAsesor() {
+  if (!_currentProfile) return;
+  var categoria = document.getElementById('tktCatA').value;
+  var prioridad = document.getElementById('tktPriorA').value;
+  var desc      = document.getElementById('tktDescA').value.trim();
+  var clienteIdRaw = document.getElementById('tktCliA').value;
+  var clienteId = clienteIdRaw ? parseInt(clienteIdRaw) : null;
+  if (!desc) { showToast('⚠️ La descripción es obligatoria'); return; }
+  var btn = document.querySelector('#modal .m-btn.primary');
+  if (btn) btn.disabled = true;
+  sbClient.rpc('crear_ticket', {
+    p_tipo:         categoria,
+    p_mensaje:      desc,
+    p_remitente_id: _currentProfile.user_id,
+    p_cliente_id:   clienteId,
+    p_vendedor_id:  _currentProfile.id,
+    p_region_id:    _currentProfile.region_id || null,
+    p_asignado_a:   null,
+    p_prioridad:    prioridad,
+    p_categoria:    categoria
+  }).then(function() {
+    closeModal();
+    cargarTicketsAsesor();
+    showToast('✅ Ticket enviado. Gerencia fue notificada.');
+  }).catch(function(e) {
+    showToast('❌ Error: ' + (e.message || 'No se pudo crear el ticket'));
+  }).finally(function() { if (btn) btn.disabled = false; });
+}
+
+function verTicketAsesor(id) {
+  var ticket = _ticketsCacheAsesor.find(function(t) { return t.id === id; });
+  if (!ticket) return;
+  sbClient.from('notificaciones').select('*').eq('respuesta_a', id).order('created_at').then(function(res) {
+    renderDetalleTicketAsesor(ticket, res.data || []);
+  });
+}
+
+function renderDetalleTicketAsesor(ticket, comentarios) {
+  var clienteN = (ticket.cliente && ticket.cliente.nombre) ? ticket.cliente.nombre : '—';
+  var comentariosHtml = comentarios.map(function(c) {
+    return '<div style="padding:8px;border-bottom:1px solid var(--border);">' +
+      '<strong style="font-size:.82rem;">'+(c.remitente_nombre||'Usuario')+'</strong>' +
+      '<div style="margin-top:4px;">'+esc(c.mensaje)+'</div>' +
+      '<div class="cli-email" style="margin-top:4px;">'+_fdrA(c.created_at)+'</div>' +
+      '</div>';
+  }).join('');
+  var estadoBadge = ticket.estado === 'abierto' ? 'badge atraso'
+    : ticket.estado === 'en_progreso' ? 'badge atraso_gestion'
+    : ticket.estado === 'resuelto'    ? 'badge completo' : 'badge baja';
+  // Adjuntos existentes
+  var adjuntosHtml = '';
+  if (ticket.adjuntos && ticket.adjuntos.length) {
+    adjuntosHtml = '<div class="m-item" style="margin-top:14px;"><div class="m-label">📎 Adjuntos</div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;">';
+    for (var ai = 0; ai < ticket.adjuntos.length; ai++) {
+      var adjUrl = ticket.adjuntos[ai];
+      var esImagen = /\.(jpg|jpeg|png|gif|webp)$/i.test(adjUrl);
+      adjuntosHtml += '<a href="'+adjUrl+'" target="_blank" style="display:inline-flex;align-items:center;gap:4px;padding:5px 10px;background:rgba(255,255,255,.05);border:1px solid var(--border2);border-radius:8px;text-decoration:none;color:var(--text);font-size:.78rem;">'+(esImagen?'🖼️':'📄')+' Ver archivo '+(ai+1)+'</a>';
+    }
+    adjuntosHtml += '</div></div>';
+  }
+  var modalHtml =
+    '<div class="modal-head">' +
+      '<div><h2>🎫 '+(ticket.numero_ticket||'#'+ticket.id)+'</h2>' +
+      '<p>'+esc(ticket.tipo)+' · Creado '+_fdrA(ticket.created_at)+'</p></div>' +
+      '<button class="modal-close" onclick="closeModal()">✕</button>' +
+    '</div>' +
+    '<div class="modal-body">' +
+      '<div class="modal-grid">' +
+        '<div><div class="m-label">Cliente</div><div>'+esc(clienteN)+'</div></div>' +
+        '<div><div class="m-label">Estado</div><div><span class="'+estadoBadge+'">'+(ticket.estado||'abierto').toUpperCase()+'</span></div></div>' +
+        '<div><div class="m-label">Prioridad</div><div style="font-weight:700;text-transform:uppercase;">'+(ticket.prioridad||'media')+'</div></div>' +
+        '<div><div class="m-label">Última actualización</div><div>'+_fdrA(ticket.updated_at||ticket.created_at)+'</div></div>' +
+      '</div>' +
+      '<div class="m-item" style="margin-top:14px;">' +
+        '<div class="m-label">Descripción</div>' +
+        '<div style="white-space:pre-wrap;font-size:.88rem;margin-top:6px;">'+esc(ticket.mensaje)+'</div>' +
+      '</div>' +
+      adjuntosHtml +
+      '<div style="margin-top:14px;">' +
+        '<div class="m-label" style="margin-bottom:8px;">Historial de comentarios</div>' +
+        '<div style="max-height:200px;overflow-y:auto;background:rgba(255,255,255,.02);border:1px solid var(--border);border-radius:10px;">' +
+          (comentariosHtml || '<div style="padding:12px;font-size:.82rem;color:var(--muted);">Sin comentarios aún</div>') +
+        '</div>' +
+      '</div>' +
+      '<div class="m-item" style="margin-top:14px;">' +
+        '<div class="m-label" style="margin-bottom:6px;">📎 Agregar adjunto</div>' +
+        '<input type="file" id="nuevoAdjuntoTicketAsesor" accept="image/*,application/pdf" style="width:100%;color:var(--muted);font-size:.82rem;">' +
+        '<button class="m-btn ghost" style="margin-top:8px;font-size:.78rem;" onclick="subirAdjuntoATicketAsesor('+ticket.id+')">➕ Subir adjunto</button>' +
+      '</div>' +
+      '<div style="margin-top:14px;">' +
+        '<div class="m-label" style="margin-bottom:6px;">Agregar comentario</div>' +
+        '<textarea id="nuevoComentarioAsesor" class="edit-input" rows="2" style="width:100%;resize:vertical;" placeholder="Escribí tu comentario o actualización..."></textarea>' +
+      '</div>' +
+      '<div class="modal-actions">' +
+        '<button class="m-btn primary" onclick="agregarComentarioAsesor('+ticket.id+')">💬 Enviar comentario</button>' +
+        '<button class="m-btn ghost" onclick="closeModal()">Cerrar</button>' +
+      '</div>' +
+    '</div>';
+  document.getElementById('modalBox').innerHTML = modalHtml;
+  document.getElementById('modal').classList.add('open');
+}
+
+function agregarComentarioAsesor(id) {
+  if (!_currentProfile) return;
+  var texto = (document.getElementById('nuevoComentarioAsesor') || {}).value;
+  if (!texto || !texto.trim()) { showToast('⚠️ Escribí un comentario'); return; }
+  texto = texto.trim();
+  sbClient.from('notificaciones')
+    .insert({ tipo:'comentario', mensaje:texto, remitente_id:_currentProfile.user_id, respuesta_a:id, created_at:new Date() })
+    .then(function() { return sbClient.from('notificaciones').update({ updated_at:new Date() }).eq('id', id); })
+    .then(function() {
+      var el = document.getElementById('nuevoComentarioAsesor');
+      if (el) el.value = '';
+      verTicketAsesor(id);
+      cargarTicketsAsesor();
+      showToast('✅ Comentario enviado');
+    })
+    .catch(function(e) { showToast('❌ Error: '+(e.message||'No se pudo enviar')); });
+}
+
+async function subirAdjuntoATicketAsesor(ticketId) {
+  var fileInput = document.getElementById('nuevoAdjuntoTicketAsesor');
+  if (!fileInput || !fileInput.files.length) { showToast('⚠️ Seleccioná un archivo primero'); return; }
+  var file = fileInput.files[0];
+  var btn = document.querySelector('#modal .m-btn.ghost[onclick*="subirAdjunto"]');
+  if (btn) btn.disabled = true;
+  try {
+    var fileName = 'ticket_adjuntos/' + _currentProfile.user_id + '/' + Date.now() + '_' + file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+    var upRes = await sbClient.storage.from('ticket_adjuntos').upload(fileName, file);
+    if (upRes.error) throw upRes.error;
+    var urlRes = sbClient.storage.from('ticket_adjuntos').getPublicUrl(fileName);
+    var tktRes = await sbClient.from('notificaciones').select('adjuntos').eq('id', ticketId).single();
+    if (tktRes.error) throw tktRes.error;
+    var adjuntos = (tktRes.data && tktRes.data.adjuntos) ? tktRes.data.adjuntos : [];
+    adjuntos.push(urlRes.data.publicUrl);
+    var updRes = await sbClient.from('notificaciones').update({ adjuntos: adjuntos }).eq('id', ticketId);
+    if (updRes.error) throw updRes.error;
+    showToast('✅ Adjunto agregado');
+    fileInput.value = '';
+    verTicketAsesor(ticketId);
+  } catch (err) {
+    console.error(err);
+    showToast('❌ Error: ' + (err.message || err));
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+window.cargarTicketsAsesor      = cargarTicketsAsesor;
+window.abrirNuevoTicketAsesor   = abrirNuevoTicketAsesor;
+window.guardarTicketAsesor      = guardarTicketAsesor;
+window.verTicketAsesor          = verTicketAsesor;
+window.agregarComentarioAsesor  = agregarComentarioAsesor;
+window.subirAdjuntoATicketAsesor = subirAdjuntoATicketAsesor;
 
 document.addEventListener('DOMContentLoaded', function() {
   if (sbClient) {
