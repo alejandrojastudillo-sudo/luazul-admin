@@ -3488,47 +3488,150 @@ function verDetalleStaff(staffId) {
     var vs = _cacheVendedores || [];
     var rs = _cacheRegiones || [];
 
-    // Construir opciones de asesores
     var vendOpts = '<option value="">— Seleccionar asesor —</option>';
     for (var i = 0; i < vs.length; i++) {
       var v = vs[i];
       vendOpts += '<option value="' + v.user_id + '">' + (v.nombre || v.user_id) + '</option>';
     }
 
-    // Construir opciones de regiones
     var regOpts = '<option value="">— Seleccionar región —</option>';
     for (var j = 0; j < rs.length; j++) {
       var r = rs[j];
       regOpts += '<option value="' + r.id + '">' + r.bandera + ' ' + r.nombre + '</option>';
     }
 
-    var modalContent = '<div class="mhead"><div><h2>➕ Nuevo Cliente</h2><p>Completá los datos del nuevo cliente</p></div><button class="mclose" onclick="closeModal()">✕</button></div>'
+    var modalContent = '<div class="mhead">'
+      + '<div><h2>➕ Nuevo Cliente</h2><p>Completá los datos del nuevo plan</p></div>'
+      + '<button class="mclose" onclick="closeModal()">✕</button>'
+      + '</div>'
       + '<div class="mbody">'
-      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">'
-      + '<div class="manager-input-group"><label>Nombre completo *</label><input id="nNombre" placeholder="Ej: Juan Pérez" autocomplete="off" /></div>'
-      + '<div class="manager-input-group"><label>Email</label><input id="nEmail" type="email" placeholder="cliente@email.com" autocomplete="off" /></div>'
-      + '<div class="manager-input-group"><label>Teléfono</label><input id="nTelefono" placeholder="+54 9 11 1234-5678" /></div>'
-      + '<div class="manager-input-group"><label>Documento (DNI/CI)</label><input id="nDocumento" placeholder="Ej: 30123456" /></div>'
-      + '<div class="manager-input-group"><label>Domicilio</label><input id="nDomicilio" placeholder="Calle 123, Ciudad" /></div>'
-      + '<div class="manager-input-group"><label>Destino</label><input id="nDestino" placeholder="Ej: Cancún 2026" /></div>'
-      + '<div class="manager-input-group"><label>Paquete</label><input id="nPaquete" placeholder="Ej: Paquete Premium" /></div>'
-      + '<div class="manager-input-group"><label>Total USD *</label><input id="nTotalUsd" type="number" min="0" placeholder="0.00" /></div>'
-      + '<div class="manager-input-group"><label>Monto cuota USD</label><input id="nMontoCuota" type="number" min="0" placeholder="0.00" /></div>'
-      + '<div class="manager-input-group"><label>Cuotas totales</label><input id="nCuotasTotal" type="number" min="1" value="12" /></div>'
-      + '<div class="manager-input-group"><label>Fecha de viaje</label><input id="nFechaViaje" type="date" /></div>'
-      + '<div class="manager-input-group"><label>Asesor asignado</label><select id="nSeller" class="msel" style="width:100%;padding:10px 14px;background:rgba(0,0,0,.35);border:1px solid var(--border2);border-radius:10px;color:var(--text);font-size:.85rem;">' + vendOpts + '</select></div>'
-      + '<div class="manager-input-group"><label>Región</label><select id="nRegion" class="msel" style="width:100%;padding:10px 14px;background:rgba(0,0,0,.35);border:1px solid var(--border2);border-radius:10px;color:var(--text);font-size:.85rem;">' + regOpts + '</select></div>'
-      + '<div class="manager-input-group"><label>Notas</label><input id="nNotas" placeholder="Observaciones adicionales..." /></div>'
+      + '<div class="manager-modal-grid" style="grid-template-columns:1fr 1fr;">'
+
+      // Columna izquierda
+      + '<div class="manager-modal-col">'
+      + '<div class="manager-modal-section"><h3>👤 Datos personales</h3>'
+      + '<div class="manager-input-group"><label>Nombre completo *</label><input id="nNombre" class="normalize-upper" placeholder="Ej: Juan Pérez"></div>'
+      + '<div class="manager-input-group"><label>Email *</label><input id="nEmail" type="email" placeholder="cliente@email.com"></div>'
+      + '<div class="manager-input-group"><label>Documento (DNI/CI)</label><input id="nDocumento" placeholder="Ej: 30123456"></div>'
+      + '<div class="manager-input-group"><label>Teléfono principal</label><input id="nTelefono" placeholder="+54 9 11 1234-5678"></div>'
+      + '<div class="manager-input-group"><label>Domicilio</label><input id="nDomicilio" placeholder="Calle 123, Ciudad"></div>'
+      + '</div></div>'
+
+      // Columna derecha
+      + '<div class="manager-modal-col">'
+      + '<div class="manager-modal-section"><h3>🌍 Datos del viaje</h3>'
+      + '<div class="manager-input-group"><label>Destino</label>'
+      + '<select id="nDest" class="msel" onchange="calcCuotaCeo()">'
+      + '<option value="Cabo Frío, Brasil">🏖️ Cabo Frío</option>'
+      + '<option value="Arraial do Cabo, Brasil">🌊 Arraial do Cabo</option>'
+      + '<option value="Búzios, Brasil">⛵ Búzios</option>'
+      + '<option value="Río de Janeiro – Copacabana, Brasil">🏙️ Río de Janeiro</option>'
+      + '</select></div>'
+      + '<div class="manager-input-group"><label>Paquete</label>'
+      + '<select id="nPkg" class="msel" onchange="calcCuotaCeo()">'
+      + '<option value="Escapada en Pareja">Escapada en Pareja · USD 870</option>'
+      + '<option value="Paquete 4 Amigos">Paquete 4 Amigos · USD 1.450</option>'
+      + '<option value="Paquete 6 Amigos">Paquete 6 Amigos · USD 1.740</option>'
+      + '</select></div>'
+      + '<div class="manager-input-group"><label>Cuotas totales</label>'
+      + '<select id="nCuotas" class="msel" onchange="calcCuotaCeo()">'
+      + '<option value="6">6 cuotas</option>'
+      + '<option value="10" selected>10 cuotas</option>'
+      + '<option value="12">12 cuotas</option>'
+      + '<option value="18">18 cuotas</option>'
+      + '</select></div>'
+      + '<div class="manager-input-group"><label>Fecha de viaje (opcional)</label><input id="nFechaViaje" type="date"></div>'
+      + '<div class="manager-input-group"><label>Notas</label><input id="nNotas" placeholder="Observaciones adicionales..."></div>'
+      + '</div></div>'
+      + '</div>'
+
+      // Resumen del plan
+      + '<div style="background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:12px;padding:16px;margin:10px 0 16px;">'
+      + '<div style="display:flex;gap:20px;flex-wrap:wrap;justify-content:space-between;">'
+      + '<div><div class="ml">Total plan</div><div class="mv" id="nTotalDisplay" style="font-size:1.2rem;font-weight:800;color:var(--gold);">USD 870</div></div>'
+      + '<div><div class="ml">Cuota mensual</div><div class="mv" id="nCuotaDisplay" style="font-size:1.2rem;font-weight:800;color:var(--green);">USD 87</div></div>'
+      + '<div><div class="ml">Personas</div><div class="mv" id="nPersDisplay" style="font-size:1.2rem;font-weight:800;color:var(--purple);">2</div></div>'
+      + '<div><div class="ml">Noches</div><div class="mv" id="nNochesDisplay">7</div></div>'
+      + '</div>'
+      + '<div id="nBreakdown" style="margin-top:8px;font-size:.78rem;color:var(--muted);"></div>'
+      + '</div>'
+
+      // Asignación y referido
+      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">'
+      + '<div class="manager-input-group"><label>Asesor asignado</label><select id="nSeller" class="msel">' + vendOpts + '</select></div>'
+      + '<div class="manager-input-group"><label>Región</label><select id="nRegion" class="msel">' + regOpts + '</select></div>'
       + '<div class="manager-input-group" style="grid-column:span 2;">'
       + '<label>🎁 Código de referido (opcional)</label>'
-      + '<input id="nRefCodigo" placeholder="Ej: LUA-JUANPEREZ" />'
+      + '<input id="nRefCodigo" placeholder="Ej: LUA-JUANPEREZ" oninput="buscarReferidorCeo(this.value)">'
+      + '<div id="nRefInfo" style="margin-top:6px;font-size:.78rem;color:#fbbf24;"></div>'
       + '</div>'
       + '</div>'
-      + '</div>'
-      + '<div class="mact"><button class="mbtn gold" onclick="saveNewClienteCeo()">✅ Crear Cliente</button><button class="mbtn ghost" onclick="closeModal()">Cancelar</button></div>';
+
+      + '<div class="mact"><button class="mbtn gold" onclick="saveNewClienteCeo()">✅ Crear Cliente</button><button class="mbtn ghost" onclick="closeModal()">Cancelar</button></div>'
+      + '</div>';
 
     document.getElementById('mbox').innerHTML = modalContent;
     document.getElementById('modal').classList.add('open');
+    setTimeout(calcCuotaCeo, 50);
+  }
+
+  function calcCuotaCeo() {
+    var pkgSel = document.getElementById('nPkg');
+    var cuotasSel = document.getElementById('nCuotas');
+    var cuotas = parseInt(cuotasSel ? cuotasSel.value : 10, 10) || 10;
+    var pkgKey = pkgSel ? pkgSel.value : 'Escapada en Pareja';
+    var PKG = {
+      'Escapada en Pareja': { price: 870,  pers: 2, noches: 7 },
+      'Paquete 4 Amigos':   { price: 1450, pers: 4, noches: 7 },
+      'Paquete 6 Amigos':   { price: 1740, pers: 6, noches: 7 }
+    };
+    var pkg = PKG[pkgKey] || { price: 870, pers: 2, noches: 7 };
+    var cuotaBase = Math.floor(pkg.price / cuotas * 100) / 100;
+    var ultimaCuota = Math.round((pkg.price - cuotaBase * (cuotas - 1)) * 100) / 100;
+
+    var td = document.getElementById('nTotalDisplay');
+    if (td) td.textContent = 'USD ' + pkg.price.toLocaleString('es-AR');
+    var cd = document.getElementById('nCuotaDisplay');
+    if (cd) cd.textContent = 'USD ' + cuotaBase.toLocaleString('es-AR');
+    var pd = document.getElementById('nPersDisplay');
+    if (pd) pd.textContent = pkg.pers;
+    var nd = document.getElementById('nNochesDisplay');
+    if (nd) nd.textContent = pkg.noches;
+    var bd = document.getElementById('nBreakdown');
+    if (bd) {
+      bd.innerHTML = '<span style="color:var(--muted);">USD ' + pkg.price.toLocaleString('es-AR') +
+        ' en ' + cuotas + ' cuotas de </span><strong style="color:#60a5fa;">USD ' +
+        cuotaBase.toLocaleString('es-AR') + '</strong>' +
+        (ultimaCuota !== cuotaBase ? ' <span style="font-size:.78rem;color:var(--muted);">(última: USD ' + ultimaCuota.toLocaleString('es-AR') + ')</span>' : '');
+    }
+
+    var mbody = document.querySelector('.mbody');
+    if (!mbody) return;
+    ['nTotalUsd', 'nMontoCuota', 'nCuotasTotal'].forEach(function(id, idx) {
+      var vals = [pkg.price, cuotaBase, cuotas];
+      var el = document.getElementById(id);
+      if (!el) {
+        el = document.createElement('input');
+        el.type = 'hidden';
+        el.id = id;
+        mbody.appendChild(el);
+      }
+      el.value = vals[idx];
+    });
+  }
+
+  function buscarReferidorCeo(codigo) {
+    var info = document.getElementById('nRefInfo');
+    if (!info || !codigo || codigo.length < 4) { if (info) info.innerHTML = ''; return; }
+    var term = codigo.trim().toUpperCase();
+    var match = (_cacheClientes || []).find(function(c) {
+      if (c.codigo_referido && c.codigo_referido.toUpperCase() === term) return true;
+      if (c.email && c.email.toUpperCase() === codigo.trim().toUpperCase()) return true;
+      var codGen = 'LUA-' + (c.nombre || '').split(' ')[0].toUpperCase();
+      return codGen === term;
+    });
+    if (match) info.innerHTML = '✅ Referidor encontrado: <strong>' + esc(match.nombre) + '</strong> (' + esc(match.email) + ')';
+    else info.innerHTML = '⚠️ No se encontró cliente con ese código o email';
   }
 
   function saveNewClienteCeo() {
@@ -3537,8 +3640,8 @@ function verDetalleStaff(staffId) {
     var telefono   = (document.getElementById('nTelefono')    || {}).value.trim();
     var documento  = (document.getElementById('nDocumento')   || {}).value.trim();
     var domicilio  = (document.getElementById('nDomicilio')   || {}).value.trim();
-    var destino    = (document.getElementById('nDestino')     || {}).value.trim();
-    var paquete    = (document.getElementById('nPaquete')     || {}).value.trim();
+    var destino    = (document.getElementById('nDest')        || {}).value.trim();
+    var paquete    = (document.getElementById('nPkg')         || {}).value.trim();
     var totalUsd   = parseFloat((document.getElementById('nTotalUsd')    || {}).value || 0);
     var montoCuota = parseFloat((document.getElementById('nMontoCuota')  || {}).value || 0);
     var cuotasTotal= parseInt((document.getElementById('nCuotasTotal')   || {}).value || 12, 10);
