@@ -2290,19 +2290,25 @@ function openAddModal() {
   setTimeout(calcCuota,50);
 }
 
+var _tempReferidorId = null; // Persiste el ID del referidor encontrado para reuso en addClient
+
 function buscarReferidor(codigo) {
   var info=document.getElementById('nRefInfo'); if (!info) return;
+  _tempReferidorId = null;
   if (!codigo||codigo.length<4) { info.textContent=''; return; }
   var term = codigo.trim().toUpperCase();
-  // FIX 8: Buscar por codigo_referido guardado en BD, por email exacto, o por código generado LUA-NOMBRE
   var match = allClients.find(function(c) {
     if (c.codigo_referido && c.codigo_referido.toUpperCase()===term) return true;
     if (c.email && c.email.toUpperCase()===codigo.trim().toUpperCase()) return true;
     var codGen = 'LUA-'+(c.nombre||'').split(' ')[0].toUpperCase();
     return codGen===term;
   });
-  if (match) info.innerHTML='✅ Referidor encontrado: <strong>'+esc(match.nombre)+'</strong> ('+esc(match.email)+')';
-  else info.innerHTML='⚠️ No se encontró cliente con ese código o email';
+  if (match) {
+    _tempReferidorId = match.id;
+    info.innerHTML='✅ Referidor encontrado: <strong>'+esc(match.nombre)+'</strong> ('+esc(match.email)+')';
+  } else {
+    info.innerHTML='⚠️ No se encontró cliente con ese código o email';
+  }
 }
 
 function addClient() {
@@ -2333,6 +2339,11 @@ function addClient() {
   var telefono1 = document.getElementById('nTel1').value.trim() || null;
   var telefono2 = (document.getElementById('nTel2') || {}).value.trim() || null;
   var domicilio = (document.getElementById('nDomicilio') || {}).value.trim() || null;
+  var personas  = parseInt((document.getElementById('nPersonas') || {}).value, 10) || null;
+  var noches    = parseInt((document.getElementById('nNoches')   || {}).value, 10) || null;
+  var destino   = (document.getElementById('nDest')  || {}).value || null;
+  var paquete   = (document.getElementById('nPkg')   || {}).value || null;
+  var fechaViaje= (document.getElementById('nFecha') || {}).value || null;
 
   fetch('https://yunvqgaljopirzvjrntc.supabase.co/functions/v1/crear_usuario_staff_v2', {
     method: 'POST',
@@ -2356,7 +2367,12 @@ function addClient() {
       p_seller_id: sellerId,
       p_total_usd: total,
       p_monto_cuota: montoCuota,
-      p_cuotas_total: cuotas
+      p_cuotas_total: cuotas,
+      p_destino: destino,
+      p_paquete: paquete,
+      p_fecha_viaje: fechaViaje,
+      p_personas: personas,
+      p_noches: noches
     })
   })
   .then(function(response) { return response.json(); })
@@ -2367,13 +2383,13 @@ function addClient() {
     var camposExtra = {
       documento: (document.getElementById('nDoc') || {}).value.trim() || null,
       telefono: telefono1,
-      destino: (document.getElementById('nDest') || {}).value || null,
-      paquete: (document.getElementById('nPkg') || {}).value || null,
-      fecha_viaje: (document.getElementById('nFecha') || {}).value || null,
+      destino: destino,
+      paquete: paquete,
+      fecha_viaje: fechaViaje,
       domicilio: domicilio,
       notas: (document.getElementById('nNotas') || {}).value && document.getElementById('nNotas').value.trim() || null,
-      personas: parseInt((document.getElementById('nPersDisplay') || {}).innerText, 10) || null,
-      noches: parseInt((document.getElementById('nNoches') || {}).value, 10) || null
+      personas: personas,
+      noches: noches
     };
 
     return sbClient.from('clientes').update(camposExtra).eq('id', nuevoClienteId)
@@ -2391,25 +2407,17 @@ function addClient() {
     allClients.push(nuevoCliente);
     notificarAccion('nuevo_cliente', 'Nuevo cliente creado: ' + nuevoCliente.nombre, nuevoCliente.id, null);
 
-    if (codigoReferido && nuevoCliente.id) {
-      var referidor = allClients.find(function(c) {
-        var codGen = 'LUA-' + (c.nombre ? c.nombre.split(' ')[0].toUpperCase() : '');
-        return (c.codigo_referido && c.codigo_referido.toUpperCase() === codigoReferido.toUpperCase()) ||
-               (c.email && c.email.toUpperCase() === codigoReferido.toUpperCase()) ||
-               codGen === codigoReferido.toUpperCase();
-      });
-      if (referidor) {
-        sbClient.from('referidos').insert({
-          cliente_referidor_id: referidor.id,
-          cliente_referido_id: nuevoCliente.id,
-          referido_nombre: nuevoCliente.nombre,
-          referido_email: nuevoCliente.email,
-          referido_tel: nuevoCliente.telefono || null,
-          estado: 'pendiente',
-          vendedor_id: sellerId,
-          created_at: new Date().toISOString()
-        }).catch(function(e) { console.warn('Error al registrar referido:', e); });
-      }
+    if (codigoReferido && nuevoCliente.id && _tempReferidorId) {
+      sbClient.from('referidos').insert({
+        cliente_referidor_id: _tempReferidorId,
+        cliente_referido_id: nuevoCliente.id,
+        referido_nombre: nuevoCliente.nombre,
+        referido_email: nuevoCliente.email,
+        referido_tel: nuevoCliente.telefono || null,
+        estado: 'pendiente',
+        vendedor_id: sellerId,
+        created_at: new Date().toISOString()
+      }).catch(function(e) { console.warn('Error al registrar referido:', e); });
     }
 
     closeModal();
