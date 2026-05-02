@@ -10,6 +10,171 @@
 <title>Luazul Smart Travel · Asesor de Viajes</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+// ==================== crm-core (inline) ====================
+// Versión 1.0 – Unificación de utilidades, mapeadores, carga centralizada
+
+// ── 1. CONSTANTES DE ROLES ───────────────────────────────────
+const ROLE_CEO     = 1;
+const ROLE_MANAGER = 2;
+const ROLE_SELLER  = 3;
+const ROLE_CLIENT  = 4;
+
+// ── 2. UTILIDADES PURAS ──────────────────────────────────────
+function esc(s) {
+  if (s === null || s === undefined) return '';
+  return String(s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#x27;');
+}
+
+function fmtUSD(v) {
+  return 'USD ' + (parseFloat(v) || 0).toLocaleString('es-AR', {
+    minimumFractionDigits: 0, maximumFractionDigits: 0
+  });
+}
+
+function fmtTs(ts) {
+  var d = Math.round((Date.now() - new Date(ts)) / 60000);
+  if (d < 60)   return 'Hace ' + d + ' min';
+  if (d < 1440) return 'Hace ' + Math.round(d / 60) + ' h';
+  return 'Hace ' + Math.round(d / 1440) + ' días';
+}
+
+function normalizarTelefono(tel) {
+  if (!tel) return '';
+  var digits = String(tel).replace(/\D/g, '');
+  if (digits.charAt(0) === '0') digits = '54' + digits.slice(1);
+  if (!digits.startsWith('54')) digits = '54' + digits;
+  return digits;
+}
+
+function formatDateLocal(iso) {
+  if (!iso) return '—';
+  var d = new Date(iso);
+  if (isNaN(d)) return '—';
+  return d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
+// ── 3. MAPEADORES ────────────────────────────────────────────
+function mapStaffFromSB(v) {
+  var comps = [];
+  if (v.comprobantes_json) { try { comps = JSON.parse(v.comprobantes_json); } catch(e) {} }
+  return {
+    id: v.id, user_id: v.user_id,
+    nombre: (v.nombre || '') + (v.apellido ? ' ' + v.apellido : ''),
+    email: v.email || v.badge || '', role_id: v.role_id, role_name: v.role_name || '',
+    activo: v.activo !== false, fechaAlta: v.fecha_alta || '',
+    telefono1: v.telefono1 || '', telefono2: v.telefono2 || '',
+    domicilio: v.domicilio || '', cbu: v.cbu || '', ciudad: v.ciudad || '',
+    region_id: v.region_id || '', region_name: v.region_name || '',
+    manager_id: v.manager_id || null, com_pct: v.com_pct || 0, pct_bonus: v.com_pct || 0,
+    region_ids: [], comprobantes: comps, _raw: v
+  };
+}
+
+function mapClientFromSB(c) {
+  return {
+    id: c.id, user_id: c.user_id, seller_id: c.seller_id || '', region_id: c.region_id || '',
+    nombre: c.nombre || '', email: c.email || '', telefono: c.telefono || '',
+    documento: c.documento || '', domicilio: c.domicilio || '', estado: c.estado || 'activo',
+    destino: c.destino || '', paquete: c.paquete || '', fecha_viaje: c.fecha_viaje || '',
+    monto_cuota: parseFloat(c.monto_cuota) || 0, cuotas_total: parseInt(c.cuotas_total) || 10,
+    cuotas_pagadas: parseInt(c.cuotas_pagadas) || 0, total_usd: parseFloat(c.total_usd) || 0,
+    fechaAlta: c.fecha_alta ? c.fecha_alta.slice(0, 10) : '', notas: c.notas || '',
+    mora_json: c.mora_json || '[]'
+  };
+}
+
+function mapPagoToNotif(p) {
+  return {
+    id: p.id, tipo: 'payment',
+    ts: p.created_at ? new Date(p.created_at).getTime() : Date.now(),
+    leida: p.estado !== 'pendiente', aprobada: p.estado === 'aprobado',
+    cliente: p.cliente_nombre || '', cid: p.cliente_id || '', cuota: p.numero_cuota || 1,
+    monto: p.monto_usd || 0, vendedor: p.vendedor_nombre || '',
+    comp: p.comprobante_url || null, aprobadoPor: p.aprobado_por || '', vid: p.seller_id || ''
+  };
+}
+
+// ── 4. ENRICH ────────────────────────────────────────────────
+function enrich(c) {
+  var total = parseInt(c.cuotas_total) || 10;
+  var pagadas = parseInt(c.cuotas_pagadas) || 0;
+  var pct = Math.round((pagadas / total) * 100);
+  c._pct = pct; c._pendientes = total - pagadas;
+  if (c.estado === 'baja')                                    { c._semaforo = 'baja';     c._prioridad = 99; }
+  else if (c.estado === 'completo')                           { c._semaforo = 'verde';    c._prioridad = 50; }
+  else if (c.estado === 'atraso' || c.estado === 'atraso_gestion') { c._semaforo = 'rojo'; c._prioridad = 1; }
+  else if (pct >= 80)                                         { c._semaforo = 'rojo';     c._prioridad = 2; }
+  else if (pct >= 60)                                         { c._semaforo = 'naranja';  c._prioridad = 3; }
+  else if (pct >= 40)                                         { c._semaforo = 'amarillo'; c._prioridad = 4; }
+  else                                                        { c._semaforo = 'verde';    c._prioridad = 5; }
+  if (!c.mora) { try { c.mora = c.mora_json ? JSON.parse(c.mora_json) : []; } catch(e) { c.mora = []; } }
+  if (c.fecha_viaje) {
+    var parts = String(c.fecha_viaje).split('-');
+    var fv = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+    var today = new Date(); today.setHours(0, 0, 0, 0);
+    c._dias = Math.ceil((fv - today) / 86400000);
+  } else { c._dias = 9999; }
+  return c;
+}
+
+// ── 5. CARGA CENTRALIZADA ────────────────────────────────────
+const LZ_LOAD = {
+  async loadData(profile, userRole, sbClient, options = {}) {
+    const { data: regiones, error: regError } = await sbClient
+      .from('regiones').select('id, nombre, bandera, pais, color, activo')
+      .eq('activo', true).order('pais, nombre');
+    if (regError) throw regError;
+
+    let staffQuery = sbClient.from('staff_profiles_view').select('*');
+    if (userRole === ROLE_SELLER)       staffQuery = staffQuery.eq('user_id', profile.user_id);
+    else if (userRole === ROLE_MANAGER) staffQuery = staffQuery.or(`manager_id.eq.${profile.id},user_id.eq.${profile.user_id}`);
+    const { data: staffData, error: staffError } = await staffQuery;
+    if (staffError) throw staffError;
+    const staff = staffData.map(mapStaffFromSB);
+
+    let clientesQuery = sbClient.from('clientes').select('*');
+    if (userRole === ROLE_SELLER) {
+      clientesQuery = clientesQuery.eq('seller_id', profile.id);
+    } else if (userRole === ROLE_MANAGER) {
+      const { data: gr } = await sbClient.from('gerente_regiones').select('region_id').eq('gerente_id', profile.user_id);
+      const rIds = (gr || []).map(r => r.region_id);
+      clientesQuery = rIds.length ? clientesQuery.in('region_id', rIds) : clientesQuery.eq('region_id', -1);
+    }
+    const { data: clientesData, error: clientesError } = await clientesQuery.order('nombre');
+    if (clientesError) throw clientesError;
+    const clientes = clientesData.map(mapClientFromSB);
+
+    const clientIds = clientes.map(c => c.id);
+    let pagos = [];
+    if (clientIds.length) {
+      const { data: pagosData, error: pagosError } = await sbClient
+        .from('pagos').select('*').in('cliente_id', clientIds)
+        .order('created_at', { ascending: false }).limit(500);
+      if (!pagosError) pagos = pagosData.map(mapPagoToNotif);
+    }
+
+    let notifQuery = sbClient.from('notificaciones').select('*');
+    if (userRole === ROLE_SELLER)       notifQuery = notifQuery.eq('destinatario_id', profile.id);
+    else if (userRole === ROLE_MANAGER) notifQuery = notifQuery.or(`destinatario_id.eq.${profile.id},destinatario_rol.eq.manager`);
+    else                                notifQuery = notifQuery.or(`destinatario_id.eq.${profile.id},destinatario_rol.eq.ceo`);
+    const { data: notificaciones, error: notifError } = await notifQuery
+      .order('created_at', { ascending: false }).limit(200);
+    if (notifError) throw notifError;
+
+    return { regiones, staff, clientes, pagos, notificaciones };
+  }
+};
+
+// ── 6. NAMESPACE GLOBAL window.LZ ────────────────────────────
+window.LZ = {
+  ROLE_CEO, ROLE_MANAGER, ROLE_SELLER, ROLE_CLIENT,
+  esc, fmtUSD, fmtTs, normalizarTelefono, formatDateLocal,
+  enrich, mapStaffFromSB, mapClientFromSB, mapPagoToNotif, LZ_LOAD
+};
+</script>
 <style>
 /* ═══════════════════════════════════════════════════════════════════════════
    LUAZUL SMART TRAVEL — PANEL ASESOR
@@ -778,16 +943,7 @@ var countdownTimer = null;
 // ──────────────────────────────────────────────────────────────────────────
 // 3. UTILIDADES UI
 // ──────────────────────────────────────────────────────────────────────────
-function esc(s) {
-  if (s === null || s === undefined) return '';
-  return String(s)
-    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
-    .replace(/"/g,'&quot;').replace(/'/g,'&#x27;');
-}
-
-function formatUSD(v) {
-  return 'USD ' + (parseFloat(v)||0).toLocaleString('es-AR',{minimumFractionDigits:0,maximumFractionDigits:0});
-}
+// ── LZ.esc() y LZ.fmtUSD() → LZ.esc() / LZ.fmtUSD() desde crm-core.js ──────
 
 function showToast(msg, duration) {
   var t = document.getElementById('toast');
@@ -962,68 +1118,31 @@ function adminLogout() {
 // ──────────────────────────────────────────────────────────────────────────
 // 7. ENRICH (calcula _pct, _semaforo, _prioridad, etc.)
 // ──────────────────────────────────────────────────────────────────────────
-function enrich(c) {
-  var total   = parseInt(c.cuotas_total)   || 10;
-  var pagadas = parseInt(c.cuotas_pagadas) || 0;
-  var pct     = Math.round((pagadas / total) * 100);
-  c._pct        = pct;
-  c._pendientes = total - pagadas;
-
-  if (c.estado === 'baja') {
-    c._semaforo = 'baja'; c._prioridad = 99;
-  } else if (c.estado === 'completo') {
-    c._semaforo = 'verde'; c._prioridad = 50;
-  } else if (c.estado === 'atraso' || c.estado === 'atraso_gestion') {
-    c._semaforo = 'rojo'; c._prioridad = 1;
-  } else if (pct >= 80) {
-    c._semaforo = 'rojo'; c._prioridad = 2;
-  } else if (pct >= 60) {
-    c._semaforo = 'naranja'; c._prioridad = 3;
-  } else if (pct >= 40) {
-    c._semaforo = 'amarillo'; c._prioridad = 4;
-  } else {
-    c._semaforo = 'verde'; c._prioridad = 5;
-  }
-
-  if (!c.mora) {
-    try { c.mora = c.mora_json ? JSON.parse(c.mora_json) : []; } catch(e) { c.mora = []; }
-  }
-
-  // FIX: Cálculo de días sin ambigüedad de zona horaria
-  if (c.fecha_viaje) {
-    var parts = String(c.fecha_viaje).split('-');
-    var fv = new Date(parseInt(parts[0]), parseInt(parts[1])-1, parseInt(parts[2]));
-    var today = new Date(); today.setHours(0,0,0,0);
-    c._dias = Math.ceil((fv - today) / 86400000);
-  } else {
-    c._dias = 9999;
-  }
-  return c;
-}
+// ── LZ.enrich() → LZ.enrich() desde crm-core.js ─────────────────────────────
 
 // ──────────────────────────────────────────────────────────────────────────
 // 8. CARGA DE CLIENTES
 // ──────────────────────────────────────────────────────────────────────────
-function loadClients() {
-  if (!sbClient || !_currentProfile) { showToast('⚠️ Sin conexión o perfil no cargado'); return Promise.resolve(); }
+async function loadClients() {
+  if (!sbClient || !_currentProfile) { showToast('⚠️ Sin conexión o perfil no cargado'); return; }
   showToast('⏳ Cargando clientes...');
-  return sbClient
-    .from('clientes')
-    .select('*')
-    .eq('seller_id', _currentProfile.id)
-    .order('nombre')
-    .then(function(res) {
-      if (res.error) throw res.error;
-      allClients = (res.data||[]).map(enrich);
-      renderAll();
-      showToast('✅ ' + allClients.length + ' clientes cargados');
-    })
-    .catch(function(err) {
-      console.warn('loadClients error:', err.message);
-      showToast('⚠️ Error al cargar clientes: ' + err.message);
-      allClients = [];
-      renderAll();
-    });
+  console.log('loadClients: usando LZ_LOAD.loadData');
+  try {
+    const { clientes, staff: _staff, notificaciones } = await LZ.LZ_LOAD.loadData(
+      _currentProfile,
+      LZ.ROLE_SELLER,
+      sbClient
+    );
+    allClients = clientes.map(LZ.enrich);
+    renderAll();
+    showToast('✅ ' + allClients.length + ' clientes cargados');
+    refreshAdminNotifBadge();
+  } catch (err) {
+    console.error('loadClients error:', err);
+    showToast('⚠️ Error al cargar clientes: ' + (err.message || err));
+    allClients = [];
+    renderAll();
+  }
 }
 
 async function syncData() {
@@ -1035,9 +1154,11 @@ async function syncData() {
 // 9. COMISIONES
 // ──────────────────────────────────────────────────────────────────────────
 function getClientMonth(c) {
-  if (c.fecha_alta) {
-    var d = new Date(c.fecha_alta + 'T00:00:00');
-    return d.getFullYear() + '-' + d.getMonth();
+  // fechaAlta = campo normalizado por mapClientFromSB; fallback a fecha_alta raw o mes actual
+  var fecha = c.fechaAlta || c.fecha_alta || null;
+  if (fecha) {
+    var d = new Date(fecha + 'T00:00:00');
+    if (!isNaN(d)) return d.getFullYear() + '-' + d.getMonth();
   }
   var n = new Date(); return n.getFullYear() + '-' + n.getMonth();
 }
@@ -1176,11 +1297,11 @@ function renderPriorityBanner() {
   var html='';
   if (moraTemp.length) {
     html += '<div class="priority-banner" style="border-color:var(--red-bd);"><h3>⚠️ En atraso — Primeros 3 meses · Contactar urgente</h3>'
-      +'<div class="priority-list">'+moraTemp.map(function(c){ return '<div class="pri-chip rojo" onclick="openModal(\''+c.id+'\')">'+esc(c.nombre)+' · '+c._pendientes+' cuotas pendientes</div>'; }).join('')+'</div></div>';
+      +'<div class="priority-list">'+moraTemp.map(function(c){ return '<div class="pri-chip rojo" onclick="openModal(\''+c.id+'\')">'+LZ.esc(c.nombre)+' · '+c._pendientes+' cuotas pendientes</div>'; }).join('')+'</div></div>';
   }
   if (sinPagar.length) {
     html += '<div class="priority-banner" style="border-color:var(--orange-bd);"><h3>🆕 Nuevos sin abonar primera cuota</h3>'
-      +'<div class="priority-list">'+sinPagar.map(function(c){ return '<div class="pri-chip naranja" onclick="openModal(\''+c.id+'\')">'+esc(c.nombre)+' — Sin primer pago</div>'; }).join('')+'</div></div>';
+      +'<div class="priority-list">'+sinPagar.map(function(c){ return '<div class="pri-chip naranja" onclick="openModal(\''+c.id+'\')">'+LZ.esc(c.nombre)+' — Sin primer pago</div>'; }).join('')+'</div></div>';
   }
   container.innerHTML = html;
 }
@@ -1267,8 +1388,8 @@ function renderTable() {
     rowsHtml += '<div class="tbl-row pr-'+c._semaforo+'" onclick="openModal(\''+c.id+'\')">'+
       '<div class="tbl-cell" style="display:flex;align-items:center;"><div class="sem '+c._semaforo+'"></div></div>'+
       '<div class="tbl-cell">'+
-        '<div class="cli-name">'+esc(c.nombre)+((parseInt(c.cuotas_pagadas)||0)<=3&&c.estado!=='baja'&&c.estado!=='completo'?' <span style="font-size:.62rem;background:rgba(245,158,11,.2);color:#f59e0b;border:1px solid rgba(245,158,11,.3);border-radius:10px;padding:1px 7px;font-weight:700;vertical-align:middle;">🎯 seguimiento</span>':'')+'</div>'+
-        '<div class="cli-email" title="'+esc(c.email)+'">'+esc(c.email)+'</div>'+
+        '<div class="cli-name">'+LZ.esc(c.nombre)+((parseInt(c.cuotas_pagadas)||0)<=3&&c.estado!=='baja'&&c.estado!=='completo'?' <span style="font-size:.62rem;background:rgba(245,158,11,.2);color:#f59e0b;border:1px solid rgba(245,158,11,.3);border-radius:10px;padding:1px 7px;font-weight:700;vertical-align:middle;">🎯 seguimiento</span>':'')+'</div>'+
+        '<div class="cli-email" title="'+LZ.esc(c.email)+'">'+LZ.esc(c.email)+'</div>'+
       '</div>'+
       '<div class="tbl-cell tc-dest">'+
         '<div class="cli-dest">'+(c.destino||'—')+'</div>'+
@@ -1371,8 +1492,8 @@ function openModal(clientId) {
 
   document.getElementById('modalBox').innerHTML =
     '<div class="modal-head">'+
-    '<div><h2>'+esc(c.nombre)+'</h2>'+
-    '<p>'+esc(c.email)+' · '+esc(c.documento||'—')+' · '+esc(c.domicilio||'—')+'</p></div>'+
+    '<div><h2>'+LZ.esc(c.nombre)+'</h2>'+
+    '<p>'+LZ.esc(c.email)+' · '+LZ.esc(c.documento||'—')+' · '+LZ.esc(c.domicilio||'—')+'</p></div>'+
     '<div style="display:flex;align-items:center;gap:10px;"><span class="badge '+(c.estado||'')+'">'+c.estado.toUpperCase()+'</span>'+
     '<button class="modal-close" onclick="closeModal()">✕</button></div></div>'+
     '<div class="modal-body">'+
@@ -1395,10 +1516,10 @@ function openModal(clientId) {
     '<div style="margin-top:16px;padding:16px;background:rgba(167,139,250,.04);border:1px solid rgba(167,139,250,.15);border-radius:12px;">'+
     '<div style="font-size:.72rem;font-weight:700;text-transform:uppercase;color:#a78bfa;margin-bottom:12px;">✏️ Editar datos del cliente</div>'+
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">'+
-    '<div><label style="font-size:.68rem;color:var(--muted);display:block;margin-bottom:4px;">Nombre completo</label><input class="edit-input" id="efNombre" value="'+esc(c.nombre||'')+'"></div>'+
-    '<div><label style="font-size:.68rem;color:var(--muted);display:block;margin-bottom:4px;">Email</label><input class="edit-input" id="efEmail" type="email" value="'+esc(c.email||'')+'"></div>'+
-    '<div><label style="font-size:.68rem;color:var(--muted);display:block;margin-bottom:4px;">Documento</label><input class="edit-input" id="efDoc" value="'+esc(c.documento||'')+'"></div>'+
-    '<div><label style="font-size:.68rem;color:var(--muted);display:block;margin-bottom:4px;">Teléfono</label><input class="edit-input" id="efTel" value="'+esc(c.telefono||'')+'"></div>'+
+    '<div><label style="font-size:.68rem;color:var(--muted);display:block;margin-bottom:4px;">Nombre completo</label><input class="edit-input" id="efNombre" value="'+LZ.esc(c.nombre||'')+'"></div>'+
+    '<div><label style="font-size:.68rem;color:var(--muted);display:block;margin-bottom:4px;">Email</label><input class="edit-input" id="efEmail" type="email" value="'+LZ.esc(c.email||'')+'"></div>'+
+    '<div><label style="font-size:.68rem;color:var(--muted);display:block;margin-bottom:4px;">Documento</label><input class="edit-input" id="efDoc" value="'+LZ.esc(c.documento||'')+'"></div>'+
+    '<div><label style="font-size:.68rem;color:var(--muted);display:block;margin-bottom:4px;">Teléfono</label><input class="edit-input" id="efTel" value="'+LZ.esc(c.telefono||'')+'"></div>'+
     '<div><label style="font-size:.68rem;color:var(--muted);display:block;margin-bottom:4px;">Destino</label>'+
     '<select class="edit-input" id="efDest">'+
     '<option value="Cabo Frío, Brasil"'+(c.destino==='Cabo Frío, Brasil'?' selected':'')+'>🏖️ Cabo Frío</option>'+
@@ -1453,7 +1574,7 @@ function updateClient(clientId) {
   var nuevoEstado  = document.getElementById('editEstado').value;
   c.cuotas_pagadas = nuevasCuotas;
   c.estado = nuevoEstado;
-  allClients[allClients.indexOf(c)] = enrich(c);
+  allClients[allClients.indexOf(c)] = LZ.enrich(c);
 
   if (!sbClient) { closeModal(); renderAll(); showToast('✅ Guardado localmente'); return; }
 
@@ -1488,7 +1609,7 @@ function updateClientFull(clientId) {
 
   // Actualizar local
   Object.assign(c, campos);
-  allClients[allClients.indexOf(c)] = enrich(c);
+  allClients[allClients.indexOf(c)] = LZ.enrich(c);
 
   if (!sbClient) { closeModal(); renderAll(); showToast('✅ Datos actualizados localmente'); return; }
 
@@ -1525,7 +1646,7 @@ function openMoraModal(clientId) {
 
   document.getElementById('modalBox').innerHTML = '<div class="modal-head">'+
     '<div><h2>'+(hasMora?'⚠️':'📋')+' Gestión de Mora</h2>'+
-    '<p style="font-size:.78rem;color:var(--muted);">'+esc(c.nombre)+' · '+esc(c.email)+'</p></div>'+
+    '<p style="font-size:.78rem;color:var(--muted);">'+LZ.esc(c.nombre)+' · '+LZ.esc(c.email)+'</p></div>'+
     '<button class="modal-close" onclick="closeModal()">✕</button></div>'+
     '<div class="modal-body">'+
     (hasMora?'<div style="margin-bottom:16px;padding:10px 14px;background:var(--orange-bg);border:1px solid var(--orange-bd);border-radius:10px;display:flex;align-items:center;gap:8px;"><span>⚠️</span><span style="font-weight:600;color:var(--orange);">'+mora.filter(function(m){ return !m.resuelta; }).length+' mora(s) activa(s)</span></div>':'')+
@@ -1568,7 +1689,7 @@ function saveMora(clientId) {
   if (!c.mora) c.mora = [];
   c.mora.push(entry);
   if (newEstado) c.estado = newEstado;
-  allClients[allClients.indexOf(c)] = enrich(c);
+  allClients[allClients.indexOf(c)] = LZ.enrich(c);
   if (!sbClient) { closeModal(); renderAll(); showToast('📋 Gestión registrada'); return; }
   var updateData = { mora_json:JSON.stringify(c.mora) };
   if (newEstado) updateData.estado = newEstado;
@@ -1577,6 +1698,7 @@ function saveMora(clientId) {
       if (r.error) throw r.error;
       if (newEstado==='atraso_gestion'||newEstado==='atraso') notificarAccion('gestion_mora','Gestión de mora: '+motivo,c.id,JSON.stringify({motivo:motivo,compromiso:compromiso}));
       closeModal(); renderAll(); showToast('📋 Gestión registrada');
+      refreshAdminNotifBadge();
     })
     .catch(function(e){ showToast('❌ Error: '+e.message); })
     .finally(function(){ if(btn){ btn.disabled=false; btn.textContent='📋 Guardar gestión'; } });
@@ -1587,7 +1709,7 @@ function resolverMora(clientId, idx) {
   var c = allClients.find(function(x){ return x.id==clientId; });
   if (!c||!c.mora||!c.mora[idx]) return;
   c.mora[idx].resuelta = true;
-  allClients[allClients.indexOf(c)] = enrich(c);
+  allClients[allClients.indexOf(c)] = LZ.enrich(c);
   if (!sbClient) { closeModal(); renderAll(); openMoraModal(clientId); showToast('✅ Mora resuelta'); return; }
   sbClient.from('clientes').update({ mora_json:JSON.stringify(c.mora) }).eq('id',parseInt(clientId,10))
     .then(function(){ closeModal(); renderAll(); openMoraModal(clientId); showToast('✅ Mora resuelta'); })
@@ -1598,22 +1720,13 @@ function resolverMora(clientId, idx) {
 // 19. WHATSAPP
 // ──────────────────────────────────────────────────────────────────────────
 // FIX 1: WhatsApp usa teléfono del cliente, no número fijo
-function normalizarTelefono(tel) {
-  // Elimina todo excepto dígitos
-  var digits = String(tel).replace(/\D/g, '');
-  // Si empieza con +, ya está implícito en replace
-  // Si empieza en 0 (ej: 0297...), quitamos el 0 inicial y agregamos 54
-  if (digits.charAt(0) === '0') digits = '54' + digits.slice(1);
-  // Si no tiene código de país (menos de 12 dígitos y no empieza con 54)
-  if (digits.length < 10) return null;
-  return digits;
-}
+// ── LZ.normalizarTelefono() → LZ.normalizarTelefono() desde crm-core.js ──────
 
 function waMensaje(clientId) {
   var c = allClients.find(function(x){ return x.id==clientId; });
   if (!c) return;
   if (!c.telefono) { showToast('⚠️ Este cliente no tiene teléfono registrado'); return; }
-  var tel = normalizarTelefono(c.telefono);
+  var tel = LZ.normalizarTelefono(c.telefono);
   if (!tel || tel.length < 8 || tel.length > 15) { showToast('⚠️ Número de teléfono inválido: ' + c.telefono); return; }
   var msg = '¡Hola '+c.nombre.split(' ')[0]+'! 👋 Te contactamos desde Luazul Smart Travel. ¿En qué te podemos ayudar?';
   window.open('https://wa.me/'+tel+'?text='+encodeURIComponent(msg),'_blank');
@@ -1623,7 +1736,7 @@ function waRecordatorio(clientId) {
   var c = allClients.find(function(x){ return x.id==clientId; });
   if (!c) return;
   if (!c.telefono) { showToast('⚠️ Este cliente no tiene teléfono registrado'); return; }
-  var tel = normalizarTelefono(c.telefono);
+  var tel = LZ.normalizarTelefono(c.telefono);
   if (!tel || tel.length < 8 || tel.length > 15) { showToast('⚠️ Número de teléfono inválido: ' + c.telefono); return; }
   var next = (parseInt(c.cuotas_pagadas)||0)+1;
   var msg = '¡Hola '+c.nombre.split(' ')[0]+'! 👋 Te recordamos que la *cuota N°'+next+'* de tu plan Luazul está próxima a vencer. Total: *USD '+c.monto_cuota+'*. ¡Seguís avanzando hacia tu viaje! ✈️';
@@ -1682,7 +1795,7 @@ function openAdminNotifs() {
     .limit(50)
     .then(function(r){
       var ns = r.data||[];
-      function fmtTs(ts){ var d=Math.round((Date.now()-new Date(ts))/60000); return d<60?'Hace '+d+' min':d<1440?'Hace '+Math.round(d/60)+' h':'Hace '+Math.round(d/1440)+' días'; }
+      function fmtTs(ts){ return LZ.fmtTs(ts); }
       var rows='';
       for (var i=0;i<ns.length;i++) {
         var n=ns[i];
@@ -1733,7 +1846,7 @@ function renderRefList() {
       var r=refs[i]; var col=COL[r.estado]||'#60a5fa'; var ref=r.cliente?r.cliente.nombre:'—';
       html+='<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:10px;flex-wrap:wrap;gap:8px;">'+
         '<div>'+
-        '<div style="font-weight:600;font-size:.9rem;">'+esc(r.referido_nombre)+'</div>'+
+        '<div style="font-weight:600;font-size:.9rem;">'+LZ.esc(r.referido_nombre)+'</div>'+
         '<div style="font-size:.77rem;color:var(--muted);margin-top:2px;">'+(r.referido_email||'—')+(r.referido_tel?' · '+r.referido_tel:'')+' · Ref. por: <strong style="color:#fbbf24;">'+ref+'</strong></div>'+
         (r.notas?'<div style="font-size:.72rem;color:rgba(180,200,240,.5);margin-top:2px;">📝 '+r.notas+'</div>':'')+
         '</div>'+
@@ -1788,7 +1901,7 @@ function abrirCargaReferido(clientId) {
   if (!c) return;
   var codigoActual = 'LUA-'+c.nombre.split(' ')[0].toUpperCase();
   document.getElementById('modalBox').innerHTML=
-    '<div class="modal-head"><div><h2>🎁 Cargar Referido</h2><p>'+esc(c.nombre)+' · '+c.email+'</p></div>'+
+    '<div class="modal-head"><div><h2>🎁 Cargar Referido</h2><p>'+LZ.esc(c.nombre)+' · '+c.email+'</p></div>'+
     '<button class="modal-close" onclick="closeModal()">✕</button></div>'+
     '<div class="modal-body">'+
     '<div style="background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.2);border-radius:12px;padding:14px;margin-bottom:16px;">'+
@@ -1838,7 +1951,7 @@ function abrirRegistroPago(clientId) {
   modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(8px);';
   modal.innerHTML='<div style="background:linear-gradient(160deg,rgba(5,20,65,.98),rgba(2,10,30,.99));border:1px solid rgba(100,160,255,.25);border-radius:20px;padding:32px;width:100%;max-width:480px;">'+
     '<h3 style="font-size:1rem;font-weight:900;margin-bottom:6px;">📤 Enviar Comprobante de Pago</h3>'+
-    '<div style="font-size:.78rem;color:rgba(200,220,255,.7);margin-bottom:22px;">'+esc(c.nombre)+' · Cuota '+proxima+' de '+c.cuotas_total+'</div>'+
+    '<div style="font-size:.78rem;color:rgba(200,220,255,.7);margin-bottom:22px;">'+LZ.esc(c.nombre)+' · Cuota '+proxima+' de '+c.cuotas_total+'</div>'+
     '<div style="margin-bottom:14px;"><label style="display:block;font-size:.65rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:rgba(150,190,255,.5);margin-bottom:7px;">Número de cuota *</label>'+
     '<input id="pCuotaNum" type="number" min="1" max="'+c.cuotas_total+'" value="'+proxima+'" class="edit-input">'+
     '<div style="font-size:.65rem; color:var(--muted); margin-top:3px;">📌 Debe coincidir con la cuota que el cliente está pagando actualmente</div></div>'+
@@ -1857,44 +1970,91 @@ function abrirRegistroPago(clientId) {
   document.body.appendChild(modal);
 }
 
-function enviarComprobante(clientId) {
-  var cuotaNum = parseInt(document.getElementById('pCuotaNum').value,10);
+async function enviarComprobante(clientId) {
+  var cuotaNum = parseInt(document.getElementById('pCuotaNum').value, 10);
   var monto    = parseFloat(document.getElementById('pMonto').value);
   var fecha    = document.getElementById('pFecha').value;
-  var obs      = document.getElementById('pObs').value.trim();
   var fileInput= document.getElementById('pFile');
-  if (!cuotaNum||isNaN(monto)||monto<=0) { showToast('⚠️ Completá cuota y monto'); return; }
-  var c = allClients.find(function(x){ return x.id==clientId; });
-  if (!c||!sbClient) { showToast('❌ Sin conexión'); return; }
-  // FIX 9 + 10: Anti-doble-clic y catch mejorado
+  if (!cuotaNum || isNaN(monto) || monto <= 0) { showToast('⚠️ Completá cuota y monto'); return; }
+  var c = allClients.find(function(x) { return x.id == clientId; });
+  if (!c || !sbClient) { showToast('❌ Sin conexión'); return; }
+
   var btn = document.querySelector('#payModal button[onclick*="enviarComprobante"]');
-  if (btn) { btn.disabled=true; btn.textContent='⏳ Enviando...'; }
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Enviando...'; }
   var asesor = _currentProfile ? (_currentProfile.nombre || 'Asesor') : 'Asesor';
 
-  function procesarEnvio(url) {
-    sbClient.from('pagos').insert([{ cliente_id:parseInt(c.id,10), cliente_nombre:c.nombre, vendedor_nombre:asesor, numero_cuota:cuotaNum, monto_usd:monto, estado:'pendiente', fecha_pago:fecha||new Date().toISOString().slice(0,10), comprobante_url:url||null, seller_id:_currentProfile?(parseInt(_currentProfile.id,10)||null):null }])
-      .then(function(r){
-        if (r.error) throw r.error;
-        return notificarAccion('pago_pendiente','Comprobante enviado: Cuota '+cuotaNum+' - USD '+monto,c.id,JSON.stringify({cuota:cuotaNum,monto:monto}));
-      })
-      .then(function(){ closePayModal(); renderTable(); showToast('✅ Comprobante enviado · Cuota '+cuotaNum); })
-      .catch(function(e){ showToast('❌ Error al enviar comprobante: '+e.message); })
-      .finally(function(){ if(btn){ btn.disabled=false; btn.textContent='✅ Confirmar Pago'; } });
-  }
+  try {
+    var publicUrl = null;
 
-  if (fileInput.files&&fileInput.files[0]) {
-    var reader=new FileReader();
-    reader.onload=function(ev){ procesarEnvio(ev.target.result); };
-    reader.onerror=function(){ showToast('❌ Error al leer el archivo'); if(btn){btn.disabled=false;btn.textContent='✅ Confirmar Pago';} };
-    reader.readAsDataURL(fileInput.files[0]);
-  } else { procesarEnvio(''); }
+    // ── Subir archivo a Storage (nunca Base64) ───────────────
+    if (fileInput.files && fileInput.files[0]) {
+      var file = fileInput.files[0];
+
+      // Validar tipo y tamaño (máx 5 MB)
+      var tiposPermitidos = ['image/jpeg','image/png','image/webp','application/pdf'];
+      if (!tiposPermitidos.includes(file.type)) {
+        showToast('⚠️ Solo se permiten imágenes JPG/PNG/WEBP o PDF');
+        if (btn) { btn.disabled = false; btn.textContent = '✅ Confirmar Pago'; }
+        return;
+      }
+      if (file.size > 5 * 1024 * 1024) {
+        showToast('⚠️ El archivo no puede superar los 5 MB');
+        if (btn) { btn.disabled = false; btn.textContent = '✅ Confirmar Pago'; }
+        return;
+      }
+
+      var ext      = file.name.split('.').pop().toLowerCase();
+      var fileName = 'comp_' + clientId + '_c' + cuotaNum + '_' + Date.now() + '.' + ext;
+      var filePath = 'comprobantes/' + fileName;
+
+      var uploadRes = await sbClient.storage.from('comprobantes').upload(filePath, file, {
+        cacheControl: '3600', upsert: false, contentType: file.type
+      });
+      if (uploadRes.error) throw new Error('Storage: ' + uploadRes.error.message);
+
+      var urlRes = sbClient.storage.from('comprobantes').getPublicUrl(filePath);
+      publicUrl  = urlRes.data ? urlRes.data.publicUrl : null;
+    }
+
+    // ── Insertar registro de pago con URL pública ─────────────
+    var insRes = await sbClient.from('pagos').insert([{
+      cliente_id:      parseInt(c.id, 10),
+      cliente_nombre:  c.nombre,
+      vendedor_nombre: asesor,
+      numero_cuota:    cuotaNum,
+      monto_usd:       monto,
+      estado:          'pendiente',
+      fecha_pago:      fecha || new Date().toISOString().slice(0, 10),
+      comprobante_url: publicUrl || null,
+      seller_id:       _currentProfile ? (parseInt(_currentProfile.id, 10) || null) : null
+    }]);
+    if (insRes.error) throw insRes.error;
+
+    await notificarAccion(
+      'pago_pendiente',
+      'Comprobante enviado: Cuota ' + cuotaNum + ' - USD ' + monto,
+      c.id,
+      JSON.stringify({ cuota: cuotaNum, monto: monto })
+    );
+
+    closePayModal();
+    renderTable();
+    refreshAdminNotifBadge();
+    showToast('✅ Comprobante enviado · Cuota ' + cuotaNum);
+
+  } catch(e) {
+    console.error('[enviarComprobante]', e);
+    showToast('❌ Error al enviar comprobante: ' + (e.message || e));
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '✅ Confirmar Pago'; }
+  }
 }
 
 function verComprobantes(clientId) {
   var c=allClients.find(function(x){ return x.id==clientId; });
   if (!c) return;
   document.getElementById('modalBox').innerHTML=
-    '<div class="modal-head"><div><h2>📎 Comprobantes · '+esc(c.nombre)+'</h2></div>'+
+    '<div class="modal-head"><div><h2>📎 Comprobantes · '+LZ.esc(c.nombre)+'</h2></div>'+
     '<button class="modal-close" onclick="closeModal()">✕</button></div>'+
     '<div class="modal-body"><p style="text-align:center;padding:20px;color:var(--muted);">⏳ Cargando...</p></div>';
   document.getElementById('modal').classList.add('open');
@@ -1902,7 +2062,7 @@ function verComprobantes(clientId) {
     .then(function(r){
       var items=r.data||[];
       if (!items.length) {
-        document.getElementById('modalBox').innerHTML='<div class="modal-head"><div><h2>📎 Comprobantes · '+esc(c.nombre)+'</h2></div>'+
+        document.getElementById('modalBox').innerHTML='<div class="modal-head"><div><h2>📎 Comprobantes · '+LZ.esc(c.nombre)+'</h2></div>'+
           '<button class="modal-close" onclick="closeModal()">✕</button></div>'+
           '<div class="modal-body"><p style="text-align:center;color:var(--muted);padding:30px;">Sin comprobantes registrados</p>'+
           '<div class="modal-actions"><button class="m-btn ghost" onclick="closeModal()">Cerrar</button></div></div>';
@@ -1916,10 +2076,14 @@ function verComprobantes(clientId) {
           '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;"><span style="font-weight:700;">Cuota '+p.numero_cuota+' · USD '+p.monto_usd+'</span>'+
           '<span style="font-size:.7rem;color:rgba(200,220,255,.6);">'+(p.fecha_pago?p.fecha_pago.slice(0,10):'—')+'</span></div>'+
           '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;">'+
-          (p.comprobante_url?'<a href="'+p.comprobante_url+'" target="_blank" style="font-size:.72rem;color:#7eb8ff;">📄 Ver comprobante</a>':'<span style="color:var(--muted);font-size:.72rem;">Sin imagen</span>')+
+          (p.comprobante_url
+            ? (p.comprobante_url.startsWith('data:')
+                ? '<span style="color:#fbbf24;font-size:.72rem;">⚠️ Comprobante legacy (Base64)</span>'
+                : '<a href="'+p.comprobante_url+'" target="_blank" style="font-size:.72rem;color:#7eb8ff;">📄 Ver comprobante</a>')
+            : '<span style="color:var(--muted);font-size:.72rem;">Sin imagen</span>')+
           eb+'</div></div>';
       }
-      document.getElementById('modalBox').innerHTML='<div class="modal-head"><div><h2>📎 Comprobantes · '+esc(c.nombre)+'</h2></div>'+
+      document.getElementById('modalBox').innerHTML='<div class="modal-head"><div><h2>📎 Comprobantes · '+LZ.esc(c.nombre)+'</h2></div>'+
         '<button class="modal-close" onclick="closeModal()">✕</button></div>'+
         '<div class="modal-body" style="max-height:400px;overflow-y:auto;">'+rows+'</div>'+
         '<div class="modal-actions"><button class="m-btn ghost" onclick="closeModal()">Cerrar</button></div>';
@@ -2059,16 +2223,16 @@ function generarContratoPDF(clientId) {
     '<h1>LUAZUL Smart Travel</h1><div class="subtitle">Contrato de Adhesión · Plan de Viaje en Cuotas</div>'+
     '<div>N° '+numContrato+' · Fecha: '+fechaStr+'</div>'+
     '<h2>1. Datos del Pasajero</h2>'+
-    '<div class="row"><span class="lbl">Nombre:</span><span>'+esc(c.nombre)+'</span></div>'+
-    '<div class="row"><span class="lbl">Documento:</span><span>'+esc(c.documento||'—')+'</span></div>'+
-    '<div class="row"><span class="lbl">Email:</span><span>'+esc(c.email)+'</span></div>'+
-    '<div class="row"><span class="lbl">Domicilio:</span><span>'+esc(c.domicilio||'—')+'</span></div>'+
+    '<div class="row"><span class="lbl">Nombre:</span><span>'+LZ.esc(c.nombre)+'</span></div>'+
+    '<div class="row"><span class="lbl">Documento:</span><span>'+LZ.esc(c.documento||'—')+'</span></div>'+
+    '<div class="row"><span class="lbl">Email:</span><span>'+LZ.esc(c.email)+'</span></div>'+
+    '<div class="row"><span class="lbl">Domicilio:</span><span>'+LZ.esc(c.domicilio||'—')+'</span></div>'+
     '<h2>2. Detalle del Paquete</h2>'+
-    '<div class="row"><span class="lbl">Destino:</span><span>'+esc(c.destino||'—')+'</span></div>'+
-    '<div class="row"><span class="lbl">Paquete:</span><span>'+esc(c.paquete||'—')+'</span></div>'+
-    '<div class="row"><span class="lbl">Personas:</span><span>'+esc(c.personas||'—')+'</span></div>'+
-    '<div class="row"><span class="lbl">Noches:</span><span>'+esc(c.noches||'—')+'</span></div>'+
-    '<div class="row"><span class="lbl">Fecha de viaje:</span><span>'+esc(c.fecha_viaje||'—')+'</span></div>'+
+    '<div class="row"><span class="lbl">Destino:</span><span>'+LZ.esc(c.destino||'—')+'</span></div>'+
+    '<div class="row"><span class="lbl">Paquete:</span><span>'+LZ.esc(c.paquete||'—')+'</span></div>'+
+    '<div class="row"><span class="lbl">Personas:</span><span>'+LZ.esc(c.personas||'—')+'</span></div>'+
+    '<div class="row"><span class="lbl">Noches:</span><span>'+LZ.esc(c.noches||'—')+'</span></div>'+
+    '<div class="row"><span class="lbl">Fecha de viaje:</span><span>'+LZ.esc(c.fecha_viaje||'—')+'</span></div>'+
     '<h2>3. Plan de Pago</h2>'+
     '<div class="row"><span class="lbl">Valor total:</span><span>USD '+Number(c.total_usd||0).toLocaleString()+'</span></div>'+
     '<div class="row"><span class="lbl">Cantidad de cuotas:</span><span>'+c.cuotas_total+'</span></div>'+
@@ -2080,7 +2244,7 @@ function generarContratoPDF(clientId) {
     '<div class="clause"><strong>Art. 3 – Fecha de viaje:</strong> Se confirma una vez abonadas al menos el 60% de las cuotas totales.</div>'+
     '<div class="clause"><strong>Art. 4 – Cancelación:</strong> Cancelaciones con menos de 30 días implican pérdida total.</div>'+
     '<div class="signs"><div class="sign-box">LUAZUL Smart Travel<br/>Comodoro Rivadavia, Argentina</div>'+
-    '<div class="sign-box">'+firmaSrc+'<br/>'+esc(c.nombre)+'<br/>DNI: '+esc(c.documento||'—')+'</div></div>'+
+    '<div class="sign-box">'+firmaSrc+'<br/>'+LZ.esc(c.nombre)+'<br/>DNI: '+LZ.esc(c.documento||'—')+'</div></div>'+
     '<div class="footer">LUAZUL Smart Travel · Contrato generado electrónicamente el '+fechaStr+'</div>'+
     '</body></html>';
   var blob=new Blob([html],{type:'text/html;charset=utf-8'});
@@ -2233,18 +2397,23 @@ function calcSim() {
 function calcCuota() {
   var pkgSel   = document.getElementById('nPkg');
   var cuotasSel= document.getElementById('nCuotas');
-  var cuotas   = parseInt(cuotasSel?cuotasSel.value:10,10)||10;
-  var pkgKey   = pkgSel?pkgSel.value:'Escapada en Pareja';
-  var pkg      = PKG_PRICES[pkgKey]||{price:870,pers:2};
-  // FIX 7: Math.floor para que la suma de cuotas no supere el total
-  var cuota    = Math.floor(pkg.price/cuotas * 100) / 100;
+  var cuotas   = parseInt(cuotasSel ? cuotasSel.value : 10, 10) || 10;
+  var pkgKey   = pkgSel ? pkgSel.value : 'Escapada en Pareja';
+  var pkg      = PKG_PRICES[pkgKey] || { price: 870, pers: 2 };
+
+  // Cuota base con 2 decimales exactos; última cuota absorbe diferencia de centavos
+  var cuota       = Math.floor(pkg.price / cuotas * 100) / 100;
   var ultimaCuota = Math.round((pkg.price - cuota * (cuotas - 1)) * 100) / 100;
-  var td=document.getElementById('nTotalDisplay'); if(td) td.textContent='USD '+pkg.price.toLocaleString('es-AR');
-  var cd=document.getElementById('nCuotaDisplay'); if(cd) cd.textContent='USD '+cuota.toLocaleString('es-AR');
-  var pd=document.getElementById('nPersDisplay');  if(pd) pd.textContent=pkg.pers+(pkg.pers===1?' persona':' personas');
-  var tf=document.getElementById('nTotal');        if(tf) tf.value=pkg.price;
-  var pf=document.getElementById('nPersonas');     if(pf) pf.value=pkg.pers;
-  var bd=document.getElementById('nBreakdown');    if(bd) bd.innerHTML='<span style="color:var(--muted);">USD '+pkg.price.toLocaleString('es-AR')+' en '+cuotas+' cuotas de </span><strong style="color:#60a5fa;">USD '+cuota.toLocaleString('es-AR')+'</strong>'+(ultimaCuota!==cuota?' <span style="font-size:.78rem;color:var(--muted);">(última: USD '+ultimaCuota+')</span>':'');
+
+  var td = document.getElementById('nTotalDisplay');  if (td) td.textContent = 'USD ' + pkg.price.toLocaleString('es-AR');
+  var cd = document.getElementById('nCuotaDisplay');  if (cd) cd.textContent = 'USD ' + cuota.toLocaleString('es-AR');
+  var pd = document.getElementById('nPersDisplay');   if (pd) pd.textContent = pkg.pers + (pkg.pers === 1 ? ' persona' : ' personas');
+  var tf = document.getElementById('nTotal');         if (tf) tf.value = pkg.price;
+  var pf = document.getElementById('nPersonas');      if (pf) pf.value = pkg.pers;
+  // Guardar última cuota para que addClient la use en el cálculo real
+  var uf = document.getElementById('nUltimaCuota');   if (uf) uf.value = ultimaCuota;
+  var bd = document.getElementById('nBreakdown');
+  if (bd) bd.innerHTML = '<span style="color:var(--muted);">USD ' + pkg.price.toLocaleString('es-AR') + ' en ' + cuotas + ' cuotas de </span><strong style="color:#60a5fa;">USD ' + cuota.toLocaleString('es-AR') + '</strong>' + (ultimaCuota !== cuota ? ' <span style="font-size:.78rem;color:var(--muted);">(última: USD ' + ultimaCuota + ')</span>' : '');
 }
 
 function openAddModal() {
@@ -2276,7 +2445,7 @@ function openAddModal() {
     '<div><div class="m-label">Total plan</div><div id="nTotalDisplay" style="font-size:1.3rem;font-weight:800;">USD 870</div></div>'+
     '<div><div class="m-label">Cuota</div><div id="nCuotaDisplay" style="font-size:1.3rem;font-weight:800;color:#60a5fa;">USD 87</div></div>'+
     '<div><div class="m-label">Personas</div><div id="nPersDisplay" style="font-size:1.3rem;font-weight:800;">2</div></div></div></div>'+
-    '<input type="hidden" id="nTotal" value="870"><input type="hidden" id="nPersonas" value="2">'+
+    '<input type="hidden" id="nTotal" value="870"><input type="hidden" id="nPersonas" value="2"><input type="hidden" id="nUltimaCuota" value="87">'+
     '<div class="m-item"><div class="m-label">Fecha de viaje</div><input class="edit-input" id="nFecha" type="date" /></div>'+
     '<div class="m-item"><div class="m-label">Noches</div><input class="edit-input" id="nNoches" placeholder="7" value="7" /></div>'+
     '<div class="m-item" style="grid-column:span 2;"><div class="m-label">🎁 Código de referido</div>'+
@@ -2290,28 +2459,22 @@ function openAddModal() {
   setTimeout(calcCuota,50);
 }
 
-var _tempReferidorId = null; // Persiste el ID del referidor encontrado para reuso en addClient
-
 function buscarReferidor(codigo) {
   var info=document.getElementById('nRefInfo'); if (!info) return;
-  _tempReferidorId = null;
   if (!codigo||codigo.length<4) { info.textContent=''; return; }
   var term = codigo.trim().toUpperCase();
+  // FIX 8: Buscar por codigo_referido guardado en BD, por email exacto, o por código generado LUA-NOMBRE
   var match = allClients.find(function(c) {
     if (c.codigo_referido && c.codigo_referido.toUpperCase()===term) return true;
     if (c.email && c.email.toUpperCase()===codigo.trim().toUpperCase()) return true;
     var codGen = 'LUA-'+(c.nombre||'').split(' ')[0].toUpperCase();
     return codGen===term;
   });
-  if (match) {
-    _tempReferidorId = match.id;
-    info.innerHTML='✅ Referidor encontrado: <strong>'+esc(match.nombre)+'</strong> ('+esc(match.email)+')';
-  } else {
-    info.innerHTML='⚠️ No se encontró cliente con ese código o email';
-  }
+  if (match) info.innerHTML='✅ Referidor encontrado: <strong>'+LZ.esc(match.nombre)+'</strong> ('+LZ.esc(match.email)+')';
+  else info.innerHTML='⚠️ No se encontró cliente con ese código o email';
 }
 
-function addClient() {
+async function addClient() {
   var nombre = document.getElementById('nNombre').value.trim();
   var email = document.getElementById('nEmail').value.trim().toLowerCase();
   var pass = document.getElementById('nPass').value.trim();
@@ -2325,25 +2488,31 @@ function addClient() {
   if (!sbClient) { showToast('❌ Sin conexión'); return; }
   if (!total || total <= 0) { showToast('⚠️ El total del plan debe ser mayor a 0'); return; }
 
-  // Opcional: evitar duplicados locales antes de la RPC
+  // ── Verificación local de caché ────────────────────────────
   var yaExiste = allClients.some(function(c) { return c.email === email; });
   if (yaExiste) { showToast('❌ Ya existe un cliente con ese email'); return; }
 
   var btn = document.querySelector('#modal .m-btn.primary');
   var originalText = btn ? btn.textContent : '✅ Agregar cliente';
-  if (btn) { btn.disabled = true; btn.textContent = '⏳ Creando...'; }
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Verificando...'; }
 
-  var montoCuota = Math.floor(total / cuotas * 100) / 100;
+  // ── Verificación remota: email ya en Supabase (otro panel/vendedor) ──
+  var checkRes = await sbClient.from('clientes').select('id').eq('email', email).limit(1);
+  if (checkRes.data && checkRes.data.length > 0) {
+    showToast('❌ Ya existe un usuario registrado con ese email');
+    if (btn) { btn.disabled = false; btn.textContent = originalText; }
+    return;
+  }
+  if (btn) btn.textContent = '⏳ Creando...';
+
+  // Cuota base; última cuota ajustada para que suma exacta == total (sin diferencias de centavos)
+  var montoCuota  = Math.floor(total / cuotas * 100) / 100;
+  var ultimaCuota = parseFloat((document.getElementById('nUltimaCuota') || {}).value) || Math.round((total - montoCuota * (cuotas - 1)) * 100) / 100;
   var sellerId = parseInt(_currentProfile.id, 10);
   var regionId = _currentProfile.region_id ? parseInt(_currentProfile.region_id, 10) : null;
   var telefono1 = document.getElementById('nTel1').value.trim() || null;
   var telefono2 = (document.getElementById('nTel2') || {}).value.trim() || null;
   var domicilio = (document.getElementById('nDomicilio') || {}).value.trim() || null;
-  var personas  = parseInt((document.getElementById('nPersonas') || {}).value, 10) || null;
-  var noches    = parseInt((document.getElementById('nNoches')   || {}).value, 10) || null;
-  var destino   = (document.getElementById('nDest')  || {}).value || null;
-  var paquete   = (document.getElementById('nPkg')   || {}).value || null;
-  var fechaViaje= (document.getElementById('nFecha') || {}).value || null;
 
   fetch('https://yunvqgaljopirzvjrntc.supabase.co/functions/v1/crear_usuario_staff_v2', {
     method: 'POST',
@@ -2367,12 +2536,7 @@ function addClient() {
       p_seller_id: sellerId,
       p_total_usd: total,
       p_monto_cuota: montoCuota,
-      p_cuotas_total: cuotas,
-      p_destino: destino,
-      p_paquete: paquete,
-      p_fecha_viaje: fechaViaje,
-      p_personas: personas,
-      p_noches: noches
+      p_cuotas_total: cuotas
     })
   })
   .then(function(response) { return response.json(); })
@@ -2383,13 +2547,13 @@ function addClient() {
     var camposExtra = {
       documento: (document.getElementById('nDoc') || {}).value.trim() || null,
       telefono: telefono1,
-      destino: destino,
-      paquete: paquete,
-      fecha_viaje: fechaViaje,
+      destino: (document.getElementById('nDest') || {}).value || null,
+      paquete: (document.getElementById('nPkg') || {}).value || null,
+      fecha_viaje: (document.getElementById('nFecha') || {}).value || null,
       domicilio: domicilio,
       notas: (document.getElementById('nNotas') || {}).value && document.getElementById('nNotas').value.trim() || null,
-      personas: personas,
-      noches: noches
+      personas: parseInt((document.getElementById('nPersDisplay') || {}).innerText, 10) || null,
+      noches: parseInt((document.getElementById('nNoches') || {}).value, 10) || null
     };
 
     return sbClient.from('clientes').update(camposExtra).eq('id', nuevoClienteId)
@@ -2403,26 +2567,35 @@ function addClient() {
   })
   .then(function(clienteRes) {
     if (clienteRes.error) throw clienteRes.error;
-    var nuevoCliente = enrich(clienteRes.data);
+    var nuevoCliente = LZ.enrich(clienteRes.data);
     allClients.push(nuevoCliente);
     notificarAccion('nuevo_cliente', 'Nuevo cliente creado: ' + nuevoCliente.nombre, nuevoCliente.id, null);
 
-    if (codigoReferido && nuevoCliente.id && _tempReferidorId) {
-      sbClient.from('referidos').insert({
-        cliente_referidor_id: _tempReferidorId,
-        cliente_referido_id: nuevoCliente.id,
-        referido_nombre: nuevoCliente.nombre,
-        referido_email: nuevoCliente.email,
-        referido_tel: nuevoCliente.telefono || null,
-        estado: 'pendiente',
-        vendedor_id: sellerId,
-        created_at: new Date().toISOString()
-      }).catch(function(e) { console.warn('Error al registrar referido:', e); });
+    if (codigoReferido && nuevoCliente.id) {
+      var referidor = allClients.find(function(c) {
+        var codGen = 'LUA-' + (c.nombre ? c.nombre.split(' ')[0].toUpperCase() : '');
+        return (c.codigo_referido && c.codigo_referido.toUpperCase() === codigoReferido.toUpperCase()) ||
+               (c.email && c.email.toUpperCase() === codigoReferido.toUpperCase()) ||
+               codGen === codigoReferido.toUpperCase();
+      });
+      if (referidor) {
+        sbClient.from('referidos').insert({
+          cliente_referidor_id: referidor.id,
+          cliente_referido_id: nuevoCliente.id,
+          referido_nombre: nuevoCliente.nombre,
+          referido_email: nuevoCliente.email,
+          referido_tel: nuevoCliente.telefono || null,
+          estado: 'pendiente',
+          vendedor_id: sellerId,
+          created_at: new Date().toISOString()
+        }).catch(function(e) { console.warn('Error al registrar referido:', e); });
+      }
     }
 
     closeModal();
     renderAll();
     showToast('✅ Cliente ' + nombre + ' creado exitosamente');
+    refreshAdminNotifBadge();
   })
   .catch(function(err) {
     console.error('[addClient] Error:', err);
@@ -2508,8 +2681,8 @@ function renderListaTicketsAsesor(tickets) {
     var clienteN = (t.cliente && t.cliente.nombre) ? t.cliente.nombre : '—';
     html += '<div class="tbl-row" style="grid-template-columns:110px 2fr 1fr 110px 110px 130px 80px;cursor:pointer;" onclick="verTicketAsesor('+t.id+')">' +
       '<div class="tbl-cell" style="font-family:monospace;font-size:.82rem;">'+(t.numero_ticket||'LK-??')+'</div>' +
-      '<div class="tbl-cell"><div style="font-weight:700;">'+esc(t.tipo)+'</div><div class="cli-email">'+esc((t.mensaje||'').substring(0,55))+'...</div></div>' +
-      '<div class="tbl-cell">'+esc(clienteN)+'</div>' +
+      '<div class="tbl-cell"><div style="font-weight:700;">'+LZ.esc(t.tipo)+'</div><div class="cli-email">'+LZ.esc((t.mensaje||'').substring(0,55))+'...</div></div>' +
+      '<div class="tbl-cell">'+LZ.esc(clienteN)+'</div>' +
       '<div class="tbl-cell"><span class="'+estadoClase+'">'+(t.estado||'abierto').toUpperCase()+'</span></div>' +
       '<div class="tbl-cell"><span style="font-weight:700;color:'+prioColor+';font-size:.8rem;">'+(t.prioridad||'media').toUpperCase()+'</span></div>' +
       '<div class="tbl-cell" style="font-size:.78rem;">'+_fdrA(t.updated_at||t.created_at)+'</div>' +
@@ -2523,7 +2696,7 @@ function abrirNuevoTicketAsesor() {
   if (!_currentProfile) { showToast('⚠️ Perfil no cargado'); return; }
   var clientesOpt = '<option value="">Sin cliente</option>';
   (allClients || []).forEach(function(c) {
-    clientesOpt += '<option value="'+c.id+'">'+esc(c.nombre)+'</option>';
+    clientesOpt += '<option value="'+c.id+'">'+LZ.esc(c.nombre)+'</option>';
   });
   var modalHtml =
     '<div class="modal-head">' +
@@ -2607,7 +2780,7 @@ function renderDetalleTicketAsesor(ticket, comentarios) {
   var comentariosHtml = comentarios.map(function(c) {
     return '<div style="padding:8px;border-bottom:1px solid var(--border);">' +
       '<strong style="font-size:.82rem;">'+(c.remitente_nombre||'Usuario')+'</strong>' +
-      '<div style="margin-top:4px;">'+esc(c.mensaje)+'</div>' +
+      '<div style="margin-top:4px;">'+LZ.esc(c.mensaje)+'</div>' +
       '<div class="cli-email" style="margin-top:4px;">'+_fdrA(c.created_at)+'</div>' +
       '</div>';
   }).join('');
@@ -2628,19 +2801,19 @@ function renderDetalleTicketAsesor(ticket, comentarios) {
   var modalHtml =
     '<div class="modal-head">' +
       '<div><h2>🎫 '+(ticket.numero_ticket||'#'+ticket.id)+'</h2>' +
-      '<p>'+esc(ticket.tipo)+' · Creado '+_fdrA(ticket.created_at)+'</p></div>' +
+      '<p>'+LZ.esc(ticket.tipo)+' · Creado '+_fdrA(ticket.created_at)+'</p></div>' +
       '<button class="modal-close" onclick="closeModal()">✕</button>' +
     '</div>' +
     '<div class="modal-body">' +
       '<div class="modal-grid">' +
-        '<div><div class="m-label">Cliente</div><div>'+esc(clienteN)+'</div></div>' +
+        '<div><div class="m-label">Cliente</div><div>'+LZ.esc(clienteN)+'</div></div>' +
         '<div><div class="m-label">Estado</div><div><span class="'+estadoBadge+'">'+(ticket.estado||'abierto').toUpperCase()+'</span></div></div>' +
         '<div><div class="m-label">Prioridad</div><div style="font-weight:700;text-transform:uppercase;">'+(ticket.prioridad||'media')+'</div></div>' +
         '<div><div class="m-label">Última actualización</div><div>'+_fdrA(ticket.updated_at||ticket.created_at)+'</div></div>' +
       '</div>' +
       '<div class="m-item" style="margin-top:14px;">' +
         '<div class="m-label">Descripción</div>' +
-        '<div style="white-space:pre-wrap;font-size:.88rem;margin-top:6px;">'+esc(ticket.mensaje)+'</div>' +
+        '<div style="white-space:pre-wrap;font-size:.88rem;margin-top:6px;">'+LZ.esc(ticket.mensaje)+'</div>' +
       '</div>' +
       adjuntosHtml +
       '<div style="margin-top:14px;">' +

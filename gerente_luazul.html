@@ -245,188 +245,200 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;back
   var _memCache = {};
   var VK = 'vendors', DB_KEY = 'clients', NK = 'notifications';
 
-  function esc(s) {
-    return String(s == null ? '' : s)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;');
-  }
-  function safeUUID(id) { return String(id == null ? '' : id); }
+// ==================== crm-core (inline) v1.0 ====================
+// Unificación de utilidades, mapeadores y carga centralizada
 
-  // Funciones de mapeo
-  // ── Mapper unificado (staff_profiles_view) — idéntico en CEO y Gerente ──
-  function mapStaffFromSB(v) {
-    var comps = [];
-    if (v.comprobantes_json) try { comps = JSON.parse(v.comprobantes_json); } catch(e) {}
-    return {
-      id:           v.id,
-      user_id:      v.user_id,
-      nombre:       (v.nombre || '') + (v.apellido ? ' ' + v.apellido : ''),
-      email:        v.email || v.badge || '',
-      role_id:      v.role_id || null,
-      role_name:    v.role_name || '',
-      activo:       v.activo !== false,
-      fechaAlta:    v.fecha_alta || '',
-      telefono1:    v.telefono1 || '',
-      telefono2:    v.telefono2 || '',
-      domicilio:    v.domicilio || '',
-      cbu:          v.cbu || '',
-      ciudad:       v.ciudad || '',
-      region_id:    v.region_id || '',
-      region_name:  v.region_name || '',
-      manager_id:   v.manager_id || null,
-      com_pct:      v.com_pct || 0,
-      pct_bonus:    v.com_pct || 0,
-      region_ids:   [],
-      comprobantes: comps,
-      _sbId:        v.id,
-      _raw:         v
-    };
-  }
-  // Alias para compatibilidad con código existente
-  var mapVendorFromSB = mapStaffFromSB;
-  function mapClientFromSB(c) {
-    return {
-      id: c.id, vid: String(c.seller_id||''), nombre: c.nombre||'', email: c.email||'', telefono: c.telefono||'',
-      documento: c.documento||'', domicilio: c.domicilio||'', estado: c.estado||'activo', destino: c.destino||'',
-      paquete: c.paquete||'', fecha_viaje: c.fecha_viaje||'', noches: c.noches||null, personas: c.personas||null,
-      monto_cuota: c.monto_cuota||0, cuotas_total: c.cuotas_total||10, cuotas_pagadas: c.cuotas_pagadas||0,
-      total_usd: c.total_usd||0, fechaAlta: c.fecha_alta||'', notas: c.notas||'', region_id: c.region_id||'',
-      mora: (function(){ try{ return c.mora_json?JSON.parse(c.mora_json):[]; }catch(e){ return []; } })(),
-      comprobantes: {}
-    };
-  }
+// ── 1. CONSTANTES DE ROLES ───────────────────────────────────────
+const ROLE_CEO     = 1;
+const ROLE_MANAGER = 2;
+const ROLE_SELLER  = 3;
+const ROLE_CLIENT  = 4;
 
-  function mapPagoToNotif(p) {
-    return {
-      id:          p.id,
-      tipo:        'payment',
-      ts:          p.created_at ? new Date(p.created_at).getTime() : Date.now(),
-      leida:       false,
-      aprobada:    p.estado === 'aprobado',
-      cliente:     p.cliente_nombre || '',
-      cid:         p.cliente_id || '',
-      cuota:       p.numero_cuota || 1,
-      monto:       p.monto_usd || 0,
-      vendedor:    p.vendedor_nombre || '',
-      comp:        p.comprobante_url || null,
-      aprobadoPor: p.aprobado_por || '',
-      vid:         p.seller_id || ''
-    };
-  }
-
-function _sbLoad() {
-  function fallback() { 
-    console.warn("⚠️ Fallback: limpiando caché por error");
-    _memCache[VK]=[]; 
-    _memCache[DB_KEY]=[]; 
-    _memCache[NK]=[]; 
-  }
-  var step1 = Promise.resolve();
-  if(sbClient && !window._gerenteProfile){
-    step1 = sbClient.auth.getUser().then(function(res){
-      var user = res.data?.user;
-      if(!user) return;
-      return sbClient.from('staff_profiles_view').select('id,user_id,role_id,role_name,nombre,region_id,region_name').eq('user_id',user.id).single().then(function(p){ 
-        if(p.data) {
-          window._gerenteProfile = p.data;
-          console.log("✅ Perfil gerente cargado:", window._gerenteProfile.nombre);
-        }
-      });
-    });
-  }
-  return step1.then(function(){
-    if(!window._gerenteProfile || !sbClient) {
-      console.log("❌ No hay perfil gerente o sbClient");
-      return Promise.resolve([]);
-    }
-    var gerenteUid = String(window._gerenteProfile.user_id);
-    return sbClient.from('gerente_regiones').select('region_id').eq('gerente_id', gerenteUid).then(function(res){
-      window._gerenteRegionIds = (res.data||[]).map(function(r){ return r.region_id; });
-      console.log("🌍 Regiones del gerente:", window._gerenteRegionIds);
-      return window._gerenteRegionIds;
-    });
-  }).then(function(regionIds){
-    regionIds = regionIds||[];
-    var p3 = sbClient ? sbClient.from('regiones').select('*').eq('activo',true).in('id',regionIds).then(function(r){
-      if(r.data) _memCache['luazul_regiones']=r.data;
-    }) : Promise.resolve();
-    var p4p5 = sbClient ? (function() {
-      var gerenteId = window._gerenteProfile ? parseInt(window._gerenteProfile.id,10) : null;
-      if(!gerenteId) { 
-        console.log("❌ gerenteId inválido");
-        _memCache[VK]=[]; _memCache[DB_KEY]=[]; _memCache[NK]=[]; 
-        return Promise.resolve(); 
-      }
-      // Ya no bloqueamos si regionIds está vacío; dejamos que la consulta por manager_id funcione sola
-      console.log("🔍 Buscando asesores vinculados por jerarquía (manager_id):", gerenteId);
-      return sbClient.from('staff_profiles_view')
-        .select('id,user_id,nombre,apellido,email,role_id,role_name,ciudad,telefono1,telefono2,domicilio,cbu,region_id,region_name,manager_id,com_pct,comprobantes_json,activo,fecha_alta')
-        .eq('role_id', 3)
-        .eq('manager_id', gerenteId)   // Filtro principal: relación jerárquica
-        .then(function(res) {
-          console.log("📦 Vendedores encontrados por manager_id:", res.data ? res.data.length : 0);
-          if (!res.data || res.data.length === 0) {
-            console.warn("⚠️ No se encontraron asesores con manager_id =", gerenteId);
-            // Si no hay por manager_id, intentamos por regiones (como respaldo)
-            if (regionIds.length > 0) {
-              console.log("🔄 Intentando búsqueda por regiones:", regionIds);
-              return sbClient.from('staff_profiles_view')
-                .select('id,user_id,nombre,apellido,email,role_id,role_name,ciudad,telefono1,telefono2,domicilio,cbu,region_id,region_name,manager_id,com_pct,comprobantes_json,activo,fecha_alta')
-                .eq('role_id', 3)
-                .in('region_id', regionIds)
-                .then(function(res2) {
-                  console.log("📦 Vendedores encontrados por regiones:", res2.data ? res2.data.length : 0);
-                  return res2;
-                });
-            }
-          }
-          return res;
-        })
-        .then(function(res) {
-          console.log("✅ Vendedores listos para procesar:", res.data ? res.data.length : 0);
-          _memCache[VK] = (res.data||[]).map(mapVendorFromSB);
-          console.log("💾 Contenido de Memoria VK (IDs numéricos):", _memCache[VK].map(function(v){ return {id: v.id, nombre: v.nombre}; }));
-          // Usamos el ID numérico (v.id) para vincular con clientes.seller_id
-          var sellerIds = _memCache[VK].map(function(v) { return v.id; }).filter(Boolean);
-          if(!sellerIds.length){ 
-            console.log("ℹ️ No hay sellerIds (IDs numéricos) para buscar clientes.");
-            _memCache[DB_KEY]=[]; 
-            return Promise.resolve({data:[]}); 
-          }
-          return sbClient.from('clientes')
-            .select('*')
-            .or('seller_id.in.(' + sellerIds.join(',') + '),seller_id.is.null')
-            .order('created_at', { ascending: false })
-            .limit(1000);
-        })
-        .then(function(res) {
-          if(res && !res.error && res.data) _memCache[DB_KEY] = res.data.map(mapClientFromSB).map(enrich);
-          var clientIds = _memCache[DB_KEY].map(function(c) { return c.id; });
-          if(!clientIds.length){ 
-            _memCache[NK]=[]; 
-            return Promise.resolve(); 
-          }
-          return sbClient.from('pagos')
-            .select('*')
-            .in('cliente_id', clientIds)
-            .order('created_at', { ascending: false })
-            .limit(500)
-            .then(function(pRes) {
-              if(!pRes.error && pRes.data) _memCache[NK] = pRes.data.map(mapPagoToNotif);
-            });
-        });
-    })() : Promise.resolve();
-    return Promise.all([p3, p4p5]);
-  }).then(function() {
-    console.log("🏁 Carga completada con éxito. Vendedores en memoria:", _memCache[VK] ? _memCache[VK].length : 0);
-  }).catch(function(e) { 
-    console.error("❌ Error real en _sbLoad:", e); 
-    fallback();
-  });
+// ── 2. UTILIDADES PURAS ──────────────────────────────────────────
+function _lzEsc(s) {
+  if (s === null || s === undefined) return '';
+  return String(s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#x27;');
 }
+function _lzFmtUSD(v) {
+  return 'USD ' + (parseFloat(v) || 0).toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+}
+function _lzFmtTs(ts) {
+  var d = Math.round((Date.now() - new Date(ts)) / 60000);
+  if (d < 60)   return 'Hace ' + d + ' min';
+  if (d < 1440) return 'Hace ' + Math.round(d / 60) + ' h';
+  return 'Hace ' + Math.round(d / 1440) + ' días';
+}
+function _lzNormTel(tel) {
+  if (!tel) return '';
+  var digits = String(tel).replace(/\D/g, '');
+  if (digits.charAt(0) === '0') digits = '54' + digits.slice(1);
+  if (!digits.startsWith('54')) digits = '54' + digits;
+  return digits;
+}
+function _lzFmtDateLocal(iso) {
+  if (!iso) return '—';
+  var d = new Date(iso);
+  if (isNaN(d)) return '—';
+  return d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
+// ── 3. MAPEADORES ────────────────────────────────────────────────
+function _lzMapStaff(v) {
+  var comps = [];
+  if (v.comprobantes_json) { try { comps = JSON.parse(v.comprobantes_json); } catch(e) {} }
+  return {
+    id: v.id, user_id: v.user_id,
+    nombre: (v.nombre || '') + (v.apellido ? ' ' + v.apellido : ''),
+    email: v.email || v.badge || '', role_id: v.role_id, role_name: v.role_name || '',
+    activo: v.activo !== false, fechaAlta: v.fecha_alta || '',
+    telefono1: v.telefono1 || '', telefono2: v.telefono2 || '',
+    domicilio: v.domicilio || '', cbu: v.cbu || '', ciudad: v.ciudad || '',
+    region_id: v.region_id || '', region_name: v.region_name || '',
+    manager_id: v.manager_id || null, com_pct: v.com_pct || 0, pct_bonus: v.com_pct || 0,
+    region_ids: [], comprobantes: comps, _sbId: v.id, _raw: v
+  };
+}
+function _lzMapClient(c) {
+  return {
+    id: c.id, vid: String(c.seller_id || ''), nombre: c.nombre || '', email: c.email || '',
+    telefono: c.telefono || '', documento: c.documento || '', domicilio: c.domicilio || '',
+    estado: c.estado || 'activo', destino: c.destino || '', paquete: c.paquete || '',
+    fecha_viaje: c.fecha_viaje || '', noches: c.noches || null, personas: c.personas || null,
+    monto_cuota: parseFloat(c.monto_cuota) || 0, cuotas_total: parseInt(c.cuotas_total) || 10,
+    cuotas_pagadas: parseInt(c.cuotas_pagadas) || 0, total_usd: parseFloat(c.total_usd) || 0,
+    fechaAlta: c.fecha_alta ? c.fecha_alta.slice(0, 10) : '', notas: c.notas || '',
+    region_id: c.region_id || '', mora_json: c.mora_json || '[]', comprobantes: {}
+  };
+}
+function _lzMapPago(p) {
+  return {
+    id: p.id, tipo: 'payment',
+    ts: p.created_at ? new Date(p.created_at).getTime() : Date.now(),
+    leida: p.estado !== 'pendiente', aprobada: p.estado === 'aprobado',
+    cliente: p.cliente_nombre || '', cid: p.cliente_id || '', cuota: p.numero_cuota || 1,
+    monto: p.monto_usd || 0, vendedor: p.vendedor_nombre || '',
+    comp: p.comprobante_url || null, aprobadoPor: p.aprobado_por || '', vid: p.seller_id || ''
+  };
+}
+
+// ── 4. ENRICH ────────────────────────────────────────────────────
+function _lzEnrich(c) {
+  var total = parseInt(c.cuotas_total) || 10;
+  var pagadas = parseInt(c.cuotas_pagadas) || 0;
+  c._pct = Math.round((pagadas / total) * 100);
+  c._pend = total - pagadas; c._pendientes = c._pend;
+  if      (c.estado === 'baja')                                    { c._semaforo = 'baja';     c._prioridad = 99; }
+  else if (c.estado === 'completo')                                { c._semaforo = 'verde';    c._prioridad = 50; }
+  else if (c.estado === 'atraso' || c.estado === 'atraso_gestion') { c._semaforo = 'rojo';     c._prioridad = 1;  }
+  else if (c._pct >= 80)                                           { c._semaforo = 'rojo';     c._prioridad = 2;  }
+  else if (c._pct >= 60)                                           { c._semaforo = 'naranja';  c._prioridad = 3;  }
+  else if (c._pct >= 40)                                           { c._semaforo = 'amarillo'; c._prioridad = 4;  }
+  else                                                             { c._semaforo = 'verde';    c._prioridad = 5;  }
+  // Compat backward → _s y _p
+  c._s = c._semaforo === 'rojo' ? 'r' : c._semaforo === 'naranja' ? 'n' : c._semaforo === 'amarillo' ? 'a' : c._semaforo === 'verde' ? 'v' : 'b';
+  c._p = c._prioridad;
+  if (!c.mora) { try { c.mora = c.mora_json ? JSON.parse(c.mora_json) : []; } catch(e) { c.mora = []; } }
+  if (c.fecha_viaje) {
+    var parts = String(c.fecha_viaje).split('-');
+    var fv = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+    var today = new Date(); today.setHours(0, 0, 0, 0);
+    c._dias = Math.ceil((fv - today) / 86400000);
+  } else { c._dias = 9999; }
+  return c;
+}
+
+// ── 5. CARGA CENTRALIZADA (LZ_LOAD) ──────────────────────────────
+const LZ_LOAD = {
+  loadData: async function(profile, userRole, sbClient) {
+    var regRes = await sbClient.from('regiones').select('id,nombre,bandera,pais,color,activo').eq('activo', true).order('pais,nombre');
+    if (regRes.error) throw regRes.error;
+    var regiones = regRes.data || [];
+
+    var staffRes = await sbClient.from('staff_profiles_view').select('*').or('manager_id.eq.' + profile.id + ',user_id.eq.' + profile.user_id);
+    if (staffRes.error) throw staffRes.error;
+    var staff = (staffRes.data || []).map(_lzMapStaff);
+
+    var grRes = await sbClient.from('gerente_regiones').select('region_id').eq('gerente_id', profile.user_id);
+    var rIds = ((grRes.data || []).map(function(r) { return r.region_id; }));
+    var cliQuery = sbClient.from('clientes').select('*');
+    if (rIds.length) cliQuery = cliQuery.in('region_id', rIds);
+    else {
+      var sIds = staff.filter(function(s) { return s.role_id === ROLE_SELLER; }).map(function(s) { return s.id; });
+      cliQuery = sIds.length ? cliQuery.in('seller_id', sIds) : cliQuery.eq('region_id', -1);
+    }
+    var cliRes = await cliQuery.order('nombre');
+    if (cliRes.error) throw cliRes.error;
+    var clientes = (cliRes.data || []).map(_lzMapClient);
+
+    var clientIds = clientes.map(function(c) { return c.id; });
+    var pagos = [];
+    if (clientIds.length) {
+      var pagRes = await sbClient.from('pagos').select('*').in('cliente_id', clientIds).order('created_at', { ascending: false }).limit(500);
+      if (!pagRes.error) pagos = (pagRes.data || []).map(_lzMapPago);
+    }
+
+    var notifRes = await sbClient.from('notificaciones').select('*')
+      .or('destinatario_id.eq.' + profile.id + ',destinatario_rol.eq.manager')
+      .order('created_at', { ascending: false }).limit(200);
+    if (notifRes.error) throw notifRes.error;
+    var notificaciones = notifRes.data || [];
+
+    return { regiones: regiones, staff: staff, clientes: clientes, pagos: pagos, notificaciones: notificaciones };
+  }
+};
+
+// ── 6. NAMESPACE GLOBAL window.LZ ────────────────────────────────
+window.LZ = {
+  ROLE_CEO: ROLE_CEO, ROLE_MANAGER: ROLE_MANAGER, ROLE_SELLER: ROLE_SELLER, ROLE_CLIENT: ROLE_CLIENT,
+  esc: _lzEsc, fmtUSD: _lzFmtUSD, fmtTs: _lzFmtTs,
+  normalizarTelefono: _lzNormTel, formatDateLocal: _lzFmtDateLocal,
+  enrich: _lzEnrich, mapStaffFromSB: _lzMapStaff, mapClientFromSB: _lzMapClient,
+  mapPagoToNotif: _lzMapPago, LZ_LOAD: LZ_LOAD
+};
+// ================================================================
+
+  // ── Shims locales → delegan a window.LZ (crm-core) ──────────────
+  function esc(s)              { return LZ.esc(s); }
+  function safeUUID(id)        { return String(id == null ? '' : id); }
+  function mapStaffFromSB(v)   { return LZ.mapStaffFromSB(v); }
+  var mapVendorFromSB = mapStaffFromSB;
+  function mapClientFromSB(c)  { return LZ.mapClientFromSB(c); }
+  function mapPagoToNotif(p)   { return LZ.mapPagoToNotif(p); }
+
+async function loadClients() {
+  if (!sbClient || !window._gerenteProfile) {
+    console.warn('⚠️ No hay perfil gerente o sbClient');
+    return;
+  }
+  showToast('⏳ Cargando datos...');
+  try {
+    var result = await LZ.LZ_LOAD.loadData(window._gerenteProfile, LZ.ROLE_MANAGER, sbClient);
+    var clientes = result.clientes, staff = result.staff,
+        notificaciones = result.notificaciones, regiones = result.regiones;
+    _memCache[DB_KEY] = clientes.map(LZ.enrich);
+    _memCache[VK]     = staff.filter(function(s) { return s.role_id === LZ.ROLE_SELLER; });
+    _memCache[NK]     = notificaciones;
+    window._cacheRegiones    = regiones;
+    window._gerenteRegionIds = regiones.map(function(r) { return r.id; });
+    console.log('📦 Datos cargados:', {
+      clientes: _memCache[DB_KEY].length,
+      staff:    _memCache[VK].length,
+      notificaciones: notificaciones.length
+    });
+    renderAll();
+    if (typeof renderPagos === 'function') renderPagos();
+    refreshNotifBadge();
+    showToast('✅ ' + _memCache[DB_KEY].length + ' clientes cargados');
+  } catch (err) {
+    console.error('❌ Error en loadClients:', err);
+    showToast('❌ Error al cargar datos: ' + (err.message || err));
+    _memCache[VK] = []; _memCache[DB_KEY] = []; _memCache[NK] = [];
+  }
+}
+// Alias backward-compat para llamadas post-acción internas
+function _sbLoad() { return loadClients(); }
 </script>
 </head>
 <body>
@@ -720,40 +732,8 @@ function calcComision(v, allClients) {
   };
 }
 
-function enrich(c) {
-  var total   = parseInt(c.cuotas_total)   || 10;
-  var pagadas = parseInt(c.cuotas_pagadas) || 0;
-  c._pct        = Math.round((pagadas / total) * 100);
-  c._pend       = total - pagadas;
-  c._pendientes = c._pend; // alias semántico
-
-  if (c.estado === 'baja') {
-    c._semaforo = 'baja';    c._prioridad = 99; c._s = 'b'; c._p = 9;
-  } else if (c.estado === 'completo') {
-    c._semaforo = 'verde';   c._prioridad = 50; c._s = 'v'; c._p = 5;
-  } else if (c.estado === 'atraso' || c.estado === 'atraso_gestion') {
-    c._semaforo = 'rojo';    c._prioridad = 1;  c._s = 'r'; c._p = 1;
-  } else if (c._pct >= 80) {
-    c._semaforo = 'rojo';    c._prioridad = 2;  c._s = 'r'; c._p = 2;
-  } else if (c._pct >= 60) {
-    c._semaforo = 'naranja'; c._prioridad = 3;  c._s = 'n'; c._p = 3;
-  } else if (c._pct >= 40) {
-    c._semaforo = 'amarillo';c._prioridad = 4;  c._s = 'a'; c._p = 4;
-  } else {
-    c._semaforo = 'verde';   c._prioridad = 5;  c._s = 'v'; c._p = 6;
-  }
-
-  // Días hasta el viaje — sin ambigüedad de zona horaria
-  if (c.fecha_viaje) {
-    var parts = String(c.fecha_viaje).split('-');
-    var fv = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
-    var today = new Date(); today.setHours(0, 0, 0, 0);
-    c._dias = Math.ceil((fv - today) / 86400000);
-  } else {
-    c._dias = 9999;
-  }
-  return c;
-}
+// Shim global → LZ.enrich (crm-core)
+function enrich(c) { return LZ.enrich(c); }
 
 function sc(s) { var o = { r: '#ef4444', n: '#f97316', a: '#eab308', v: '#22c55e', b: '#6b7280' }; return o[s] || '#6b7280'; }
 
@@ -769,10 +749,8 @@ function vby(uid) {
   return found || { nombre: 'Sin asignar', id: '', user_id: '', telefono1: '', telefono2: '', domicilio: '', cbu: '', comprobantes: [] };
 }
 
-function fmtTs(ts) {
-  var d = Math.round((Date.now() - ts) / 60000);
-  return d < 60 ? 'Hace ' + d + ' min' : d < 1440 ? 'Hace ' + Math.round(d / 60) + ' h' : 'Hace ' + Math.round(d / 1440) + ' días';
-}
+// Shim global → LZ.fmtTs (crm-core)
+function fmtTs(ts) { return LZ.fmtTs(ts); }
 
 // ══════════════════════════════════════════════════════
 //  LOGIN (GERENTE) – usa Supabase Auth y role_id=2
@@ -1013,7 +991,7 @@ function initApp() {
       + '<div style="width:44px;height:44px;border:3px solid rgba(245,158,11,.15);border-top-color:#f59e0b;border-radius:50%;animation:lzSpin .7s linear infinite;"></div>'
       + '<div style="font-size:.72rem;color:rgba(180,200,240,.4);">Conectando con Supabase</div>';
     document.getElementById('app').appendChild(overlay);
-    return _sbLoad();
+    return loadClients();
   })
   .then(function() {
     var lo = document.getElementById('sbLoadingOverlay');
@@ -1316,66 +1294,41 @@ function openAddVendor() {
 }
 
 async function saveVendor() {
-  var nombreRaw  = (document.getElementById('vN').value || '').trim();
-  var email      = (document.getElementById('vE').value || '').trim().toLowerCase();
-  var pass       = (document.getElementById('vP').value || '').trim();
-  var telefono1  = (document.getElementById('vT').value || '').trim();
-  var telefono2  = (document.getElementById('vT2').value || '').trim();
-  var domicilio  = (document.getElementById('vDom').value || '').trim();
-  var cbu        = (document.getElementById('vCBU').value || '').trim();
-  var regionId   = document.getElementById('vReg').value ? parseInt(document.getElementById('vReg').value, 10) : null;
-  var managerId  = window._gerenteProfile ? parseInt(window._gerenteProfile.id, 10) : null;
+  var nombre = (document.getElementById('vN').value || '').trim().toUpperCase();
+  var email = (document.getElementById('vE').value || '').trim().toLowerCase();
+  var pass = (document.getElementById('vP').value || '').trim();
+  var telefono1 = (document.getElementById('vT').value || '').trim();
+  var telefono2 = (document.getElementById('vT2').value || '').trim();
+  var domicilio = (document.getElementById('vDom').value || '').trim();
+  var cbu = (document.getElementById('vCBU').value || '').trim();
+  var regionId = document.getElementById('vReg').value ? parseInt(document.getElementById('vReg').value) : null;
+  var managerId = window._gerenteProfile ? parseInt(window._gerenteProfile.id) : null;
 
-  // Validaciones de campos obligatorios
-  if (!nombreRaw || !email || !pass) {
+  if (!nombre || !email || !pass) {
     showToast('⚠️ Nombre, email y contraseña son obligatorios');
     return;
   }
-
-  // Validación de email (formato básico)
   if (!email.includes('@') || !email.includes('.')) {
     showToast('⚠️ Ingresá un email válido');
     return;
   }
 
-  // Validación de contraseña (mínimo 6 caracteres)
-  if (pass.length < 6) {
-    showToast('⚠️ La contraseña debe tener al menos 6 caracteres');
-    return;
-  }
-
-  // Verificar managerId (sesión válida)
-  if (!managerId) {
-    showToast('❌ Error de sesión: no se pudo identificar al gerente');
-    return;
-  }
-
-  // Evitar duplicados por email (comprobación local en caché)
-  var existingVendor = (_memCache[VK] || []).find(function(v) { return v.email === email; });
-  if (existingVendor) {
-    showToast('❌ Ya existe un asesor con el email ' + email);
-    return;
-  }
-
-  // Capitalización correcta del nombre
-  var nombreCapitalizado = nombreRaw
-    .split(' ')
-    .map(function(palabra) {
-      if (!palabra) return '';
-      return palabra.charAt(0).toUpperCase() + palabra.slice(1).toLowerCase();
-    })
-    .join(' ');
-
-  // Separar nombre y apellido
-  var partes      = nombreCapitalizado.split(' ');
-  var primerNombre = partes[0];
-  var apellidoStr  = partes.slice(1).join(' ') || '';
-
   var btn = document.querySelector('#modal .mbtn.gold');
   var originalText = btn ? btn.textContent : '✅ Crear Vendedor';
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Creando...'; }
 
+  var nombresArr = nombre.split(' ');
+  var primerNombre = nombresArr[0];
+  var apellidoStr = nombresArr.slice(1).join(' ') || '';
+
   try {
+    // Verificación remota de email duplicado (evita conflictos entre paneles)
+    var checkRes = await sbClient.from('staff_profiles').select('id').eq('email', email).limit(1);
+    if (checkRes.data && checkRes.data.length > 0) {
+      showToast('❌ Ya existe un asesor con ese email');
+      if (btn) { btn.disabled = false; btn.textContent = originalText; }
+      return;
+    }
     const response = await fetch('https://yunvqgaljopirzvjrntc.supabase.co/functions/v1/crear_usuario_staff_v2', {
       method: 'POST',
       headers: {
@@ -1399,7 +1352,7 @@ async function saveVendor() {
     });
     const data = await response.json();
     if (data.error) throw new Error(data.error);
-    showToast('✅ Asesor ' + nombreCapitalizado + ' creado exitosamente');
+    showToast('✅ Asesor ' + nombre + ' creado exitosamente');
     closeModal();
     await _sbLoad();
     renderAll();
@@ -1407,12 +1360,8 @@ async function saveVendor() {
     if (typeof populateVendDashSel === 'function') populateVendDashSel();
     if (typeof renderPasswords === 'function') renderPasswords();
   } catch (err) {
-    console.error('[saveVendor]', err);
-    let errorMsg = err.message || 'Error desconocido';
-    if (errorMsg.toLowerCase().includes('duplicate') || errorMsg.toLowerCase().includes('already exists')) {
-      errorMsg = 'Ya existe un usuario con ese email';
-    }
-    showToast('❌ Error al crear asesor: ' + errorMsg);
+    console.error(err);
+    showToast('❌ Error: ' + err.message);
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = originalText; }
   }
@@ -1768,6 +1717,7 @@ function openClientDetail(id) {
         <button class="m-btn green" onclick="waMensajeGerente('${c.id}')">💬 WhatsApp</button>
         <button class="m-btn ghost" onclick="waRecordatorioGerente('${c.id}')">📲 Recordatorio</button>
         <button class="m-btn ghost" onclick="verComprobantesGerente('${c.id}')">📎 Ver pagos</button>
+        <button class="m-btn ghost" onclick="abrirRegistroPagoGerente('${c.id}')" style="color:#34d399;">💳 Registrar pago</button>
         <button class="m-btn ghost" onclick="abrirCargaReferidoGerente('${c.id}')" style="color:#fbbf24;">🎁 Referido</button>
         <button class="m-btn ghost" onclick="closeModal()">Cerrar</button>
       </div>
@@ -1778,13 +1728,8 @@ function openClientDetail(id) {
 }
 
 // Normalización de números de teléfono (igual que el asesor)
-function normalizarTelefono(tel) {
-  if (!tel) return '';
-  var digits = String(tel).replace(/\D/g, '');
-  if (digits.charAt(0) === '0') digits = '54' + digits.slice(1);
-  if (!digits.startsWith('54')) digits = '54' + digits;
-  return digits;
-}
+// Shim global → LZ.normalizarTelefono (crm-core)
+function normalizarTelefono(tel) { return LZ.normalizarTelefono(tel); }
 
 // WhatsApp para gerente
 function waMensajeGerente(clientId) {
@@ -1810,6 +1755,33 @@ function waRecordatorioGerente(clientId) {
   var msg = '¡Hola ' + (c.nombre || '').split(' ')[0] + '! 👋 Te recordamos que la *cuota N°' + next + '* de tu plan Luazul está próxima a vencer. Total: *USD ' + (c.monto_cuota || 0) + '*. ¡Seguís avanzando hacia tu viaje! ✈️';
   window.open('https://wa.me/' + tel + '?text=' + encodeURIComponent(msg), '_blank');
 }
+
+// Abrir modal de registro de pago (Storage)
+function abrirRegistroPagoGerente(clientId) {
+  var cs = _memCache[DB_KEY] || [];
+  var c = cs.find(function(x) { return x.id == clientId; });
+  if (!c) return;
+  var nextCuota = (parseInt(c.cuotas_pagadas) || 0) + 1;
+  document.getElementById('mbox').innerHTML =
+    '<div class="mhead"><div><h2>💳 Registrar Pago · ' + esc(c.nombre) + '</h2></div><button class="mclose" onclick="closeModal()">✕</button></div>' +
+    '<div class="mbody">' +
+      '<div class="mgrid" style="grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;">' +
+        '<div><label class="ml">Nº de Cuota</label><input class="medit" id="pCuotaNum" type="number" min="1" max="' + (c.cuotas_total || 12) + '" value="' + nextCuota + '"/></div>' +
+        '<div><label class="ml">Monto USD</label><input class="medit" id="pMonto" type="number" min="1" step="0.01" value="' + (c.monto_cuota || '') + '" placeholder="0.00"/></div>' +
+        '<div><label class="ml">Fecha de pago</label><input class="medit" id="pFecha" type="date" value="' + new Date().toISOString().slice(0, 10) + '"/></div>' +
+        '<div><label class="ml">📎 Comprobante (opcional)</label><input class="medit" id="pFile" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" style="font-size:.78rem;cursor:pointer;"/></div>' +
+      '</div>' +
+      '<div style="background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.2);border-radius:10px;padding:10px 14px;margin-bottom:14px;font-size:.78rem;color:var(--muted);">' +
+        '⚠️ El pago quedará en estado <strong style="color:var(--gold);">Pendiente</strong> hasta ser aprobado.' +
+      '</div>' +
+      '<div class="mact">' +
+        '<button class="mbtn gold" onclick="enviarComprobante(\'' + clientId + '\')">✅ Confirmar Pago</button>' +
+        '<button class="mbtn ghost" onclick="closeModal()">Cancelar</button>' +
+      '</div>' +
+    '</div>';
+  document.getElementById('modal').classList.add('open');
+}
+window.abrirRegistroPagoGerente = abrirRegistroPagoGerente;
 
 // Ver comprobantes (pagos)
 function verComprobantesGerente(clientId) {
@@ -2324,7 +2296,7 @@ function viewPagoComp(nid) {
 function aprobarPago(nid) {
   _sbApprovePayment(nid).then(function(ok) {
     if (!ok) { showToast('❌ Error al aprobar el pago'); return; }
-    return _sbLoad().then(function() { renderAll(); renderPagos(); showToast('✅ Pago aprobado en Supabase'); });
+    return _sbLoad().then(function() { renderAll(); renderPagos(); refreshNotifBadge(); showToast('✅ Pago aprobado en Supabase'); });
   });
 }
 
@@ -2346,6 +2318,7 @@ async function aprobarTodos() {
   await _sbLoad();
   renderAll();
   renderPagos();
+  refreshNotifBadge();
   showToast('✅ ' + count + ' pagos aprobados');
 }
 
@@ -2922,23 +2895,112 @@ window.verVoucherGerente = function(clientId) {
     .catch(function() { showToast('Error al verificar voucher'); });
 };
 
+// ===================== NOTIF BADGE =====================
+function refreshNotifBadge() {
+  if (!sbClient || !window._gerenteProfile) return;
+  sbClient.from('notificaciones')
+    .select('id', { count: 'exact', head: true })
+    .eq('leida', false)
+    .eq('destinatario_id', window._gerenteProfile.id)
+    .then(function(r) {
+      var count = r.count || 0;
+      var dot = document.getElementById('notifDot') || document.getElementById('notifBadge');
+      if (dot) dot.style.display = count ? 'flex' : 'none';
+    }).catch(function() {});
+}
+
+// ===================== NOTIFICAR ACCIÓN =====================
+function notificarAccion(tipo, mensaje, clienteId, destinatarioId) {
+  if (!sbClient || !window._gerenteProfile) return Promise.resolve();
+  return sbClient.from('notificaciones').insert([{
+    tipo: tipo,
+    mensaje: mensaje,
+    cliente_id: clienteId || null,
+    remitente_id: window._gerenteProfile.user_id,
+    destinatario_id: destinatarioId || null,
+    leida: false,
+    created_at: new Date().toISOString()
+  }]).then(function() {}).catch(function(e) { console.warn('notificarAccion:', e); });
+}
+
+// ===================== ENVIAR COMPROBANTE (con Storage) =====================
+async function enviarComprobante(clientId) {
+  var cuotaNum  = parseInt((document.getElementById('pCuotaNum') || {}).value, 10);
+  var monto     = parseFloat((document.getElementById('pMonto')   || {}).value);
+  var fecha     = (document.getElementById('pFecha')  || {}).value || new Date().toISOString().slice(0, 10);
+  var fileInput = document.getElementById('pFile');
+  if (!cuotaNum || isNaN(monto) || monto <= 0) { showToast('⚠️ Completá cuota y monto'); return; }
+  var cs = (_memCache[DB_KEY] || []);
+  var c = cs.find(function(x) { return String(x.id) === String(clientId); });
+  if (!c || !sbClient) { showToast('❌ Sin conexión o cliente no encontrado'); return; }
+
+  var btn = document.querySelector('#modal .mbtn.gold[onclick*="enviarComprobante"]');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Enviando...'; }
+  var asesor = window._gerenteProfile ? (window._gerenteProfile.nombre || 'Gerente') : 'Gerente';
+
+  try {
+    var publicUrl = null;
+    if (fileInput && fileInput.files && fileInput.files[0]) {
+      var file = fileInput.files[0];
+      var tiposPermitidos = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+      if (!tiposPermitidos.includes(file.type)) {
+        showToast('⚠️ Solo JPG / PNG / WEBP / PDF'); return;
+      }
+      if (file.size > 5 * 1024 * 1024) { showToast('⚠️ Máximo 5 MB'); return; }
+      var ext = file.name.split('.').pop().toLowerCase();
+      var filePath = 'comprobantes/comp_' + clientId + '_c' + cuotaNum + '_' + Date.now() + '.' + ext;
+      var upRes = await sbClient.storage.from('comprobantes').upload(filePath, file);
+      if (upRes.error) throw upRes.error;
+      var urlRes = sbClient.storage.from('comprobantes').getPublicUrl(filePath);
+      publicUrl = urlRes.data.publicUrl;
+    }
+    var sellerId = window._gerenteProfile ? (parseInt(window._gerenteProfile.id, 10) || null) : null;
+    var insRes = await sbClient.from('pagos').insert([{
+      cliente_id:     parseInt(c.id, 10),
+      cliente_nombre: c.nombre,
+      vendedor_nombre: asesor,
+      numero_cuota:   cuotaNum,
+      monto_usd:      monto,
+      estado:         'pendiente',
+      fecha_pago:     fecha,
+      comprobante_url: publicUrl || null,
+      seller_id:      sellerId
+    }]);
+    if (insRes.error) throw insRes.error;
+    await notificarAccion('pago_pendiente', 'Comprobante enviado: Cuota ' + cuotaNum, c.id, null);
+    closeModal();
+    await _sbLoad();
+    renderAll();
+    refreshNotifBadge();
+    showToast('✅ Comprobante enviado · Cuota ' + cuotaNum);
+  } catch (e) {
+    console.error(e);
+    showToast('❌ Error: ' + (e.message || e));
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '✅ Confirmar Pago'; }
+  }
+}
+window.enviarComprobante = enviarComprobante;
+window.notificarAccion   = notificarAccion;
+window.refreshNotifBadge = refreshNotifBadge;
+
 // ===================== TICKETS (GERENTE) =====================
 var _ticketsCacheGerente = [];
 
 function cargarTicketsGerente() {
   if (!sbClient || !window._gerenteProfile) return;
   var regionIds = window._gerenteRegionIds || [];
-  var estado = document.getElementById('ticketFiltroEstado').value;
-  var prioridad = document.getElementById('ticketFiltroPrioridad').value;
-  var search = (document.getElementById('ticketSearch').value || '').toLowerCase();
+  var estado    = (document.getElementById('ticketFiltroEstado')    || {}).value || 'todos';
+  var prioridad = (document.getElementById('ticketFiltroPrioridad') || {}).value || 'todos';
+  var search    = ((document.getElementById('ticketSearch')         || {}).value || '').toLowerCase();
 
   var query = sbClient.from('notificaciones')
-    .select('*, cliente:clientes(nombre, email), vendedor:staff_profiles!vendedor_id(nombre)')
-    .in('tipo', ['incidencia','soporte','mejora','falla_tecnica'])
+    .select('*, cliente:clientes(nombre, email, region_id), vendedor:staff_profiles!vendedor_id(nombre, region_id)')
+    .in('tipo', ['incidencia', 'soporte', 'mejora', 'falla_tecnica'])
     .order('created_at', { ascending: false });
 
   if (regionIds.length) query = query.in('region_id', regionIds);
-  if (estado !== 'todos') query = query.eq('estado', estado);
+  if (estado    !== 'todos') query = query.eq('estado', estado);
   if (prioridad !== 'todos') query = query.eq('prioridad', prioridad);
 
   query.then(function(res) {

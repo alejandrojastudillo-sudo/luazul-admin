@@ -536,7 +536,245 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
     var sbClient = (typeof supabase !== 'undefined')
       ? supabase.createClient(SUPABASE_URL, SUPABASE_KEY)
       : null;
+
   </script>
+
+<!-- ==================== crm-core (inline) ==================== -->
+<script>
+// ── Constantes de roles ──────────────────────────────────────────────
+var ROLE_CEO     = 1;
+var ROLE_MANAGER = 2;
+var ROLE_SELLER  = 3;
+var ROLE_CLIENT  = 4;
+
+window.LZ = (function() {
+  'use strict';
+
+  // ── esc ─────────────────────────────────────────────────────────────
+  function esc(s) {
+    if (s === null || s === undefined) return '';
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#x27;');
+  }
+
+  // ── safeUUID ─────────────────────────────────────────────────────────
+  function safeUUID(id) {
+    return String(id == null ? '' : id);
+  }
+
+  // ── fmtUSD ───────────────────────────────────────────────────────────
+  function fmtUSD(n) {
+    return 'USD ' + Math.round(n || 0).toLocaleString('es-AR');
+  }
+
+  // ── fmtTs ────────────────────────────────────────────────────────────
+  function fmtTs(ts) {
+    var d = Math.round((Date.now() - ts) / 60000);
+    return d < 60 ? 'Hace ' + d + ' min'
+         : d < 1440 ? 'Hace ' + Math.round(d / 60) + ' h'
+         : 'Hace ' + Math.round(d / 1440) + ' días';
+  }
+
+  // ── normalizarTelefono ───────────────────────────────────────────────
+  function normalizarTelefono(tel) {
+    if (!tel) return '';
+    var digits = String(tel).replace(/\D/g, '');
+    if (digits.charAt(0) === '0') digits = '54' + digits.slice(1);
+    if (!digits.startsWith('54')) digits = '54' + digits;
+    return digits;
+  }
+
+  // ── formatDateLocal ──────────────────────────────────────────────────
+  function formatDateLocal(iso) {
+    if (!iso) return '';
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return iso;
+    return d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  }
+
+  // ── mapStaffFromSB ───────────────────────────────────────────────────
+  function mapStaffFromSB(v) {
+    var comps = [];
+    if (v.comprobantes_json) {
+      try { comps = JSON.parse(v.comprobantes_json); } catch(e) {}
+    }
+    return {
+      id:           v.id,
+      user_id:      v.user_id,
+      nombre:       (v.nombre || '') + (v.apellido ? ' ' + v.apellido : ''),
+      email:        v.email || v.badge || '',
+      role_id:      v.role_id || null,
+      role_name:    v.role_name || '',
+      activo:       v.activo !== false,
+      fechaAlta:    v.fecha_alta || '',
+      telefono1:    v.telefono1 || '',
+      telefono2:    v.telefono2 || '',
+      domicilio:    v.domicilio || '',
+      cbu:          v.cbu || '',
+      ciudad:       v.ciudad || '',
+      region_id:    v.region_id || '',
+      region_name:  v.region_name || '',
+      manager_id:   v.manager_id || null,
+      com_pct:      v.com_pct || 0,
+      pct_bonus:    v.com_pct || 0,
+      region_ids:   [],
+      comprobantes: comps,
+      _sbId:        v.id,
+      _raw:         v
+    };
+  }
+
+  // ── mapClientFromSB ──────────────────────────────────────────────────
+  function mapClientFromSB(c) {
+    return {
+      id:             c.id,
+      user_id:        c.user_id,
+      seller_id:      c.seller_id || '',
+      region_id:      c.region_id || '',
+      nombre:         c.nombre || '',
+      email:          c.email || '',
+      telefono:       c.telefono || '',
+      documento:      c.documento || '',
+      domicilio:      c.domicilio || '',
+      estado:         c.estado || 'activo',
+      destino:        c.destino || '',
+      paquete:        c.paquete || '',
+      fecha_viaje:    c.fecha_viaje || '',
+      monto_cuota:    parseFloat(c.monto_cuota) || 0,
+      cuotas_total:   parseInt(c.cuotas_total) || 10,
+      cuotas_pagadas: parseInt(c.cuotas_pagadas) || 0,
+      total_usd:      parseFloat(c.total_usd) || 0,
+      fechaAlta:      c.fecha_alta ? c.fecha_alta.slice(0,10) : '',
+      notas:          c.notas || '',
+      mora_json:      c.mora_json || '[]',
+      noches:         c.noches || null,
+      personas:       c.personas || null,
+      _raw:           c
+    };
+  }
+
+  // ── mapPagoToNotif ───────────────────────────────────────────────────
+  function mapPagoToNotif(p) {
+    return {
+      id:          p.id,
+      tipo:        'payment',
+      ts:          p.created_at ? new Date(p.created_at).getTime() : Date.now(),
+      leida:       p.estado !== 'pendiente',
+      aprobada:    p.estado === 'aprobado',
+      cliente:     p.cliente_nombre || '',
+      cid:         p.cliente_id || '',
+      cuota:       p.numero_cuota || 1,
+      monto:       p.monto_usd || 0,
+      vendedor:    p.vendedor_nombre || (p.clientes ? p.clientes.nombre : ''),
+      comp:        p.comprobante_url || null,
+      aprobadoPor: p.aprobado_por || '',
+      vid:         p.seller_id || ''
+    };
+  }
+
+  // ── enrich ───────────────────────────────────────────────────────────
+  function enrich(c) {
+    var t = parseInt(c.cuotas_total) || 10;
+    var p = parseInt(c.cuotas_pagadas) || 0;
+    c._pct = Math.round(p / t * 100);
+    c._pend = t - p;
+    if (c.estado === 'baja')        { c._s = 'b'; c._prioridad = 9; }
+    else if (c.estado === 'completo'){ c._s = 'v'; c._prioridad = 5; }
+    else if (c.estado === 'atraso') { c._s = 'r'; c._prioridad = 1; }
+    else if (c._pct >= 80)          { c._s = 'r'; c._prioridad = 2; }
+    else if (c._pct >= 60)          { c._s = 'n'; c._prioridad = 3; }
+    else if (c._pct >= 40)          { c._s = 'a'; c._prioridad = 4; }
+    else                            { c._s = 'v'; c._prioridad = 6; }
+    return c;
+  }
+
+  // ── LZ_LOAD (cargador unificado) ─────────────────────────────────────
+  var LZ_LOAD = {
+    loadData: function(profile, roleId, sbClient) {
+      var ROLE_MANAGER_L = 2;
+      var ROLE_SELLER_L  = 3;
+      return new Promise(function(resolve, reject) {
+        var result = { clientes: [], staff: [], notificaciones: [], regiones: [] };
+
+        sbClient.from('regiones')
+          .select('id,nombre,bandera,pais,color,activo')
+          .eq('activo', true).order('pais').order('nombre')
+          .then(function(res) {
+            if (res.error) throw res.error;
+            result.regiones = (res.data || []).map(function(r) {
+              return { id: r.id, nombre: r.nombre, bandera: r.bandera || '🌎',
+                       pais: r.pais || '', color: r.color || '#a78bfa', activo: r.activo };
+            });
+            return sbClient.from('staff_profiles_view')
+              .select('id,user_id,nombre,apellido,email,role_id,role_name,ciudad,telefono1,telefono2,domicilio,cbu,region_id,region_name,manager_id,com_pct,comprobantes_json,activo,fecha_alta');
+          })
+          .then(function(res) {
+            if (res.error) throw res.error;
+            result.staff = (res.data || []).map(mapStaffFromSB);
+            return sbClient.from('gerente_regiones').select('gerente_id,region_id');
+          })
+          .then(function(grRes) {
+            var grData = grRes.data || [];
+            result.staff.forEach(function(g) {
+              if (g.role_id === ROLE_MANAGER_L) {
+                g.region_ids = grData.filter(function(x) {
+                  return String(x.gerente_id) === String(g.user_id);
+                }).map(function(x) { return x.region_id; });
+              }
+            });
+            return sbClient.from('clientes')
+              .select('id,user_id,seller_id,nombre,email,telefono,documento,domicilio,estado,destino,paquete,fecha_viaje,monto_cuota,cuotas_total,cuotas_pagadas,total_usd,fecha_alta,notas,region_id,mora_json')
+              .order('id', { ascending: false });
+          })
+          .then(function(cRes) {
+            if (cRes.error) throw cRes.error;
+            result.clientes = (cRes.data || []).map(mapClientFromSB);
+            return sbClient.from('pagos')
+              .select('*, cliente:clientes(region_id)')
+              .order('created_at', { ascending: false }).limit(500);
+          })
+          .then(function(pRes) {
+            if (pRes.error) throw pRes.error;
+            var pagos = (pRes.data || []).map(mapPagoToNotif);
+            return sbClient.from('contratos').select('*').order('created_at', { ascending: false })
+              .then(function(ctRes) {
+                var contratos = (ctRes.data || []).map(function(ct) {
+                  return { id: ct.id, tipo: 'contrato', ts: ct.created_at ? new Date(ct.created_at).getTime() : Date.now(),
+                           leida: true, aprobada: false, cliente: ct.cliente_nombre || '', cid: ct.cliente_id || '',
+                           _raw: ct };
+                });
+                result.notificaciones = pagos.concat(contratos);
+                resolve(result);
+              });
+          })
+          .catch(function(e) { reject(e); });
+      });
+    }
+  };
+
+  return {
+    ROLE_CEO:            1,
+    ROLE_MANAGER:        2,
+    ROLE_SELLER:         3,
+    ROLE_CLIENT:         4,
+    esc:                 esc,
+    safeUUID:            safeUUID,
+    fmtUSD:              fmtUSD,
+    fmtTs:               fmtTs,
+    normalizarTelefono:  normalizarTelefono,
+    formatDateLocal:     formatDateLocal,
+    mapStaffFromSB:      mapStaffFromSB,
+    mapClientFromSB:     mapClientFromSB,
+    mapPagoToNotif:      mapPagoToNotif,
+    enrich:              enrich,
+    LZ_LOAD:             LZ_LOAD
+  };
+})();
+</script>
 </head>
 <body>
   <!-- LOGIN -->
@@ -975,9 +1213,7 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
 
 var ROLE_MANAGER = 2;   // Gerente (según tabla staff_profiles.role_id)
 var ROLE_SELLER  = 3;   // Vendedor / Asesor
-var ROLE_CEO     = 1;   // CEO
-
-var RK = 'luazul_ceo_regiones';
+// ROLE_CEO = LZ.ROLE_CEO (definido en window.LZ)
 var _cacheGerentes = null;
 var _cacheVendedores = null;
 var _cacheClientes = null;
@@ -985,20 +1221,7 @@ var _cachePagos = null;
 var _cacheRegiones = null;
 var _ceoUid = null;     // UUID del CEO autenticado (staff_profiles.user_id)
 
-// ── SEGURIDAD: esc() y safeUUID (compatibilidad ES5) ──
-function esc(s) {
-  if (s === null || s === undefined) return '';
-  return String(s)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#x27;');
-}
-
-function safeUUID(id) {
-  return String(id == null ? '' : id);
-}
+// esc y safeUUID movidos a window.LZ
 
 // ── HELPERS DE SESIÓN ────────────────────────────────
 function validarSesionActiva(callback) {
@@ -1020,177 +1243,40 @@ function validarSesionActiva(callback) {
   }).catch(function(e) { showToast('❌ Error de verificación de sesión'); });
 }
 
-// ── MAPEADORES UNIFICADOS (IDEM GERENTE) ─────────────
-// ── Mapper unificado (staff_profiles_view) — idéntico en CEO y Gerente ──
-function mapStaffFromSB(v) {
-  var comps = [];
-  if (v.comprobantes_json) {
-    try { comps = JSON.parse(v.comprobantes_json); } catch(e) {}
+// mapStaffFromSB, mapClienteFromSB, mapPagoToNotif → movidos a window.LZ
+// Aliases de compatibilidad
+var mapVendedorFromSB = function(v) { return LZ.mapStaffFromSB(v); };
+var mapGerenteFromSB  = function(v) { return LZ.mapStaffFromSB(v); };
+var mapClienteFromSB  = function(c) { return LZ.mapClientFromSB(c); };
+
+// ── LOAD DATA FROM SUPABASE — reemplazada por loadClients (usa window.LZ) ──
+async function loadClients() {
+  if (!sbClient || !_ceoUid) {
+    showToast('⚠️ Sin sesión de CEO');
+    return;
   }
-  return {
-    id:           v.id,
-    user_id:      v.user_id,
-    nombre:       (v.nombre || '') + (v.apellido ? ' ' + v.apellido : ''),
-    email:        v.email || v.badge || '',
-    role_id:      v.role_id || null,
-    role_name:    v.role_name || '',
-    activo:       v.activo !== false,
-    fechaAlta:    v.fecha_alta || '',
-    telefono1:    v.telefono1 || '',
-    telefono2:    v.telefono2 || '',
-    domicilio:    v.domicilio || '',
-    cbu:          v.cbu || '',
-    ciudad:       v.ciudad || '',
-    region_id:    v.region_id || '',
-    region_name:  v.region_name || '',
-    manager_id:   v.manager_id || null,
-    com_pct:      v.com_pct || 0,
-    pct_bonus:    v.com_pct || 0,   // alias para gerentes
-    region_ids:   [],               // se llena desde gerente_regiones
-    comprobantes: comps,
-    _sbId:        v.id,
-    _raw:         v
-  };
-}
-// Aliases para compatibilidad con código existente
-var mapVendedorFromSB = mapStaffFromSB;
-var mapGerenteFromSB  = mapStaffFromSB;
-
-function mapClienteFromSB(c) {
-  return {
-    id:            c.id,
-    user_id:       c.user_id,
-    seller_id:     c.seller_id || '',
-    region_id:     c.region_id || '',
-    nombre:        c.nombre || '',
-    email:         c.email || '',
-    telefono:      c.telefono || '',
-    documento:     c.documento || '',
-    domicilio:     c.domicilio || '',
-    estado:        c.estado || 'activo',
-    destino:       c.destino || '',
-    paquete:       c.paquete || '',
-    fecha_viaje:   c.fecha_viaje || '',
-    monto_cuota:   parseFloat(c.monto_cuota) || 0,
-    cuotas_total:  parseInt(c.cuotas_total) || 10,
-    cuotas_pagadas: parseInt(c.cuotas_pagadas) || 0,
-    total_usd:     parseFloat(c.total_usd) || 0,
-    fechaAlta:     c.fecha_alta ? c.fecha_alta.slice(0,10) : '',
-    notas:         c.notas || '',
-    mora_json:     c.mora_json || '[]',
-    _raw:          c
-  };
+  showToast('⏳ Cargando datos ejecutivos...');
+  try {
+    var profile = { user_id: _ceoUid, id: _ceoUid, role_id: LZ.ROLE_CEO };
+    var loaded = await LZ.LZ_LOAD.loadData(profile, LZ.ROLE_CEO, sbClient);
+    _cacheClientes    = loaded.clientes.map(LZ.enrich);
+    _cacheVendedores  = loaded.staff.filter(function(s) { return s.role_id === LZ.ROLE_SELLER; });
+    _cacheGerentes    = loaded.staff.filter(function(s) { return s.role_id === LZ.ROLE_MANAGER; });
+    _cacheRegiones    = loaded.regiones;
+    _cachePagos       = loaded.notificaciones.filter(function(n) { return n.tipo === 'payment'; });
+    window._cacheContratos = loaded.notificaciones.filter(function(n) { return n.tipo === 'contrato'; });
+    renderAll();
+    populateAllFilters();
+    showToast('✅ ' + _cacheClientes.length + ' clientes cargados');
+  } catch (err) {
+    console.error('loadClients error:', err);
+    showToast('❌ Error: ' + err.message);
+  }
 }
 
-function mapPagoToNotif(p) {
-  return {
-    id:          p.id,
-    tipo:        'payment',
-    ts:          p.created_at ? new Date(p.created_at).getTime() : Date.now(),
-    leida:       p.estado !== 'pendiente',
-    aprobada:    p.estado === 'aprobado',
-    cliente:     p.cliente_nombre || '',
-    cid:         p.cliente_id || '',
-    cuota:       p.numero_cuota || 1,
-    monto:       p.monto_usd || 0,
-    vendedor:    p.vendedor_nombre || (p.clientes ? p.clientes.nombre : ''),
-    comp:        p.comprobante_url || null,
-    aprobadoPor: p.aprobado_por || '',
-    vid:         p.seller_id || ''
-  };
-}
-
-// ── LOAD DATA FROM SUPABASE (cadenas .then, sin async) ──
+// Alias de compatibilidad para código antiguo que llama cargarDatosSupabase()
 function cargarDatosSupabase() {
-  showToast('⏳ Cargando datos...');
-  var errores = [];
-
-  function onError(e) {
-    console.error('Error cargando Supabase:', e);
-    errores.push(e);
-    showToast('⚠️ Error al cargar datos — usando caché local');
-  }
-
-  // Helper para capturar errores en cada paso
-  function handleError(step) {
-    return function(e) {
-      console.warn('Step ' + step + ' error:', e);
-      onError(e);
-      return { data: [] };
-    };
-  }
-
-  // 1. Regiones
-  var step1 = sbClient.from('regiones')
-    .select('id,nombre,bandera,pais,color,activo')
-    .eq('activo', true).order('pais').order('nombre')
-    .then(function(res) {
-      if (res.error) throw res.error;
-      _cacheRegiones = (res.data || []).map(function(r) {
-        return { id: r.id, nombre: r.nombre, bandera: r.bandera || '🌎', pais: r.pais || '', color: r.color || '#a78bfa', activo: r.activo };
-      });
-      try { localStorage.setItem(RK, JSON.stringify(_cacheRegiones)); } catch(e) {}
-      return sbClient.from('staff_profiles_view')
-        .select('id,user_id,nombre,apellido,email,role_id,role_name,ciudad,telefono1,telefono2,domicilio,cbu,region_id,region_name,com_pct,comprobantes_json,activo,fecha_alta')
-        .eq('role_id', ROLE_MANAGER);
-    })
-    .catch(handleError(1));
-
-  // 2. Gerentes
-  var step2 = step1.then(function(gRes) {
-    if (gRes.error) throw gRes.error;
-    _cacheGerentes = (gRes.data || []).map(mapGerenteFromSB);
-    return sbClient.from('gerente_regiones').select('gerente_id,region_id');
-  }).catch(handleError(2));
-
-  // 3. Relaciones gerente_regiones
-  var step3 = step2.then(function(grRes) {
-    var grData = grRes.data || [];
-    _cacheGerentes.forEach(function(g) {
-      g.region_ids = grData.filter(function(x) {
-        return String(x.gerente_id) === String(g.user_id);
-      }).map(function(x) { return x.region_id; });
-    });
-    return sbClient.from('staff_profiles_view')
-      .select('id,user_id,nombre,apellido,email,role_id,role_name,ciudad,telefono1,telefono2,domicilio,cbu,region_id,region_name,manager_id,com_pct,comprobantes_json,activo,fecha_alta')
-      .eq('role_id', ROLE_SELLER);
-  }).catch(handleError(3));
-
-  // 4. Vendedores
-  var step4 = step3.then(function(vRes) {
-    if (vRes.error) throw vRes.error;
-    _cacheVendedores = (vRes.data || []).map(mapVendedorFromSB);
-    return sbClient.from('clientes')
-      .select('id,user_id,seller_id,nombre,email,telefono,documento,domicilio,estado,destino,paquete,fecha_viaje,monto_cuota,cuotas_total,cuotas_pagadas,total_usd,fecha_alta,notas,region_id,mora_json')
-      .order('id', { ascending: false });
-  }).catch(handleError(4));
-
-  // 5. Clientes
-  var step5 = step4.then(function(cRes) {
-    if (cRes.error) throw cRes.error;
-    _cacheClientes = (cRes.data || []).map(mapClienteFromSB);
-    return sbClient.from('pagos')
-      .select('*, cliente:clientes(region_id)')
-      .order('created_at', { ascending: false }).limit(500);
-  }).catch(handleError(5));
-
-  // 6. Pagos
-  var step6 = step5.then(function(pRes) {
-    if (pRes.error) throw pRes.error;
-    _cachePagos = pRes.data || [];
-    return sbClient.from('contratos').select('*').order('created_at', { ascending: false });
-  }).catch(handleError(6));
-
-  // 7. Contratos (opcional)
-  return step6.then(function(ctRes) {
-    window._cacheContratos = ctRes.data || [];
-    if (errores.length === 0) showToast('✅ Datos cargados desde Supabase');
-    else showToast('⚠️ Datos cargados con algunos errores');
-    return Promise.resolve();
-  }).catch(function(e) {
-    console.warn('Final catch:', e);
-    showToast('⚠️ Error general al cargar datos');
-  });
+  return loadClients();
 }
 
 // ── FUNCIONES DE AYUDA (vby, gby, etc.) usando user_id ──
@@ -1224,37 +1310,14 @@ function vby(uid) {
   return found || { nombre: 'Sin asesor', id: '', user_id: '' };
 }
 
-function normalizarTelefono(tel) {
-  if (!tel) return '';
-  var digits = String(tel).replace(/\D/g, '');
-  if (digits.charAt(0) === '0') digits = '54' + digits.slice(1);
-  if (!digits.startsWith('54')) digits = '54' + digits;
-  return digits;
-}
-
-function enrich(c) {
-  var t = parseInt(c.cuotas_total) || 10;
-  var p = parseInt(c.cuotas_pagadas) || 0;
-  c._pct = Math.round(p / t * 100);
-  c._pend = t - p;
-  if (c.estado === 'baja') { c._s = 'b'; c._prioridad = 9; }
-  else if (c.estado === 'completo') { c._s = 'v'; c._prioridad = 5; }
-  else if (c.estado === 'atraso') { c._s = 'r'; c._prioridad = 1; }
-  else if (c._pct >= 80) { c._s = 'r'; c._prioridad = 2; }
-  else if (c._pct >= 60) { c._s = 'n'; c._prioridad = 3; }
-  else if (c._pct >= 40) { c._s = 'a'; c._prioridad = 4; }
-  else { c._s = 'v'; c._prioridad = 6; }
-  return c;
-}
-
-function fmtUSD(n) {
-  return 'USD ' + Math.round(n || 0).toLocaleString('es-AR');
-}
-
-function fmtTs(ts) {
-  var d = Math.round((Date.now() - ts) / 60000);
-  return d < 60 ? 'Hace ' + d + ' min' : d < 1440 ? 'Hace ' + Math.round(d / 60) + ' h' : 'Hace ' + Math.round(d / 1440) + ' días';
-}
+// normalizarTelefono, enrich, fmtUSD, fmtTs → movidos a window.LZ
+// Aliases globales para compatibilidad con código existente
+function normalizarTelefono(tel) { return LZ.normalizarTelefono(tel); }
+function enrich(c)               { return LZ.enrich(c); }
+function fmtUSD(n)               { return LZ.fmtUSD(n); }
+function fmtTs(ts)               { return LZ.fmtTs(ts); }
+function esc(s)                  { return LZ.esc(s); }
+function safeUUID(id)            { return LZ.safeUUID(id); }
 
 function showToast(msg, dur) {
   var t = document.getElementById('toast');
@@ -1402,13 +1465,28 @@ function initApp() {
     + '<div style="font-size:.72rem;color:rgba(180,200,240,.4);">Conectando con Supabase</div>';
   appDiv.appendChild(overlay);
 
-  cargarDatosSupabase().then(function() {
+  loadClients().then(function() {
     var lo = document.getElementById('ceoLoadingSkeleton');
     if (lo) lo.parentNode.removeChild(lo);
     document.documentElement.style.visibility = 'visible';
     renderAll();
     populateAllFilters();
   });
+}
+
+
+function notificarAccion(tipo, mensaje, clienteId, datosExtra) {
+  if (!sbClient || !_ceoUid) return Promise.resolve();
+  return sbClient.from('notificaciones').insert([{
+    tipo: tipo,
+    mensaje: mensaje,
+    destinatario_rol: 'manager',
+    remitente_id: _ceoUid,
+    cliente_id: clienteId || null,
+    datos_extra: datosExtra || null,
+    leida: false,
+    created_at: new Date().toISOString()
+  }]).catch(function(e) { console.warn('[notificarAccion]', e); });
 }
 
 function renderAll() {
@@ -2184,7 +2262,6 @@ function saveEditGerente(gid) {
     .catch(function(e) { showToast('❌ Error: ' + (e.message || '')); });
 }
 // ── OTRAS FUNCIONES (DASHBOARD, PAGOS, MORA, EQUIPO, CLIENTES, BACKUP) ──
-// (Resto del código sin la etiqueta <script>)
   function populateVendDashSel() {
     var rfilt = document.getElementById('vdRegFilt') ? document.getElementById('vdRegFilt').value : '';
     var vs = _cacheVendedores || [];
@@ -2679,14 +2756,28 @@ function saveEditGerente(gid) {
       estado:      document.getElementById('editEstado').value,
       seller_id:   parseInt(document.getElementById('editSeller').value) || null
     };
+
+    if (!upd.nombre) { showToast('⚠️ El nombre es obligatorio'); return; }
+    if (!upd.email)  { showToast('⚠️ El email es obligatorio'); return; }
+
+    var btn = document.querySelector('#modal .m-btn.gold');
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Guardando...'; }
+
     sbClient.from('clientes').update(upd).eq('id', clientId)
       .then(function(res) {
         if (res.error) throw res.error;
-        showToast('✅ Cliente actualizado');
+        // Actualizar caché local inmediatamente (sin esperar recarga completa)
+        var cached = (_cacheClientes || []).find(function(x) { return String(x.id) === String(clientId); });
+        if (cached) { Object.assign(cached, upd); enrich(cached); }
+        notificarAccion('edicion_cliente', 'Cliente editado por CEO', clientId, JSON.stringify(upd));
+        showToast('✅ Cliente actualizado correctamente');
         closeModal();
+        renderClientes();
+        // Recarga completa en background para mantener consistencia
         cargarDatosSupabase().then(function() { renderAll(); populateAllFilters(); renderClientes(); });
       })
-      .catch(function(e) { showToast('❌ Error: ' + e.message); });
+      .catch(function(e) { showToast('❌ Error: ' + e.message); })
+      .finally(function() { if (btn) { btn.disabled = false; btn.textContent = '💾 Guardar cambios'; } });
   }
 
   function openVendPerfilCeo() {
@@ -3074,7 +3165,81 @@ function verDetalleStaff(staffId) {
   // (Se mantienen las funciones originales adaptadas a ES5 y UUID. Por brevedad se incluyen resumidas,
   //  pero en la práctica se copiarían las versiones ya corregidas del archivo original)
   function getPendingPayments() { return []; } // stub
-  function renderPagosAprobacion() { document.getElementById('pagosAprobacionList').innerHTML = '<div style="padding:20px;text-align:center;">Funcionalidad en desarrollo</div>'; }
+  function renderPagosAprobacion() {
+    var container = document.getElementById('pagosAprobacionList');
+    if (!container) return;
+    container.innerHTML = '<div style="text-align:center;padding:24px;color:var(--muted);">⏳ Cargando pagos pendientes...</div>';
+
+    sbClient.from('pagos')
+      .select('*, clientes(nombre, email, region_id)')
+      .eq('estado', 'pendiente')
+      .order('created_at', { ascending: false })
+      .then(function(res) {
+        if (res.error) throw res.error;
+        var pagos = res.data || [];
+        if (!pagos.length) {
+          container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted);">✅ No hay pagos pendientes de aprobación</div>';
+          return;
+        }
+        var html = '<div class="twrap">';
+        html += '<div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1.5fr 120px;gap:8px;padding:10px 16px;background:rgba(255,255,255,.03);border-bottom:1px solid var(--border);font-size:.68rem;font-weight:700;text-transform:uppercase;color:var(--muted);">' +
+          '<div>Cliente</div><div>Cuota</div><div>Monto</div><div>Fecha</div><div>Comprobante</div><div>Acciones</div></div>';
+        for (var i = 0; i < pagos.length; i++) {
+          var p = pagos[i];
+          var nombreCli = (p.clientes && p.clientes.nombre) ? p.clientes.nombre : (p.cliente_nombre || 'ID: ' + p.cliente_id);
+          var emailCli  = (p.clientes && p.clientes.email)  ? p.clientes.email  : '';
+          var reg = rby(p.clientes && p.clientes.region_id);
+          var regLabel = reg ? reg.bandera + ' ' + reg.nombre : '—';
+          html += '<div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1.5fr 120px;gap:8px;padding:12px 16px;border-bottom:1px solid var(--border);align-items:center;">' +
+            '<div><div style="font-weight:700;font-size:.85rem;">' + esc(nombreCli) + '</div>' +
+              '<div style="font-size:.7rem;color:var(--muted);">' + esc(emailCli) + ' · ' + regLabel + '</div></div>' +
+            '<div style="font-weight:700;">Nº ' + (p.numero_cuota || '—') + '</div>' +
+            '<div style="color:var(--gold);font-weight:700;">USD ' + (p.monto_usd || 0) + '</div>' +
+            '<div style="font-size:.78rem;color:var(--muted);">' + (p.fecha_pago ? p.fecha_pago.slice(0,10) : '—') + '</div>' +
+            '<div>' + (p.comprobante_url
+              ? '<a href="' + esc(p.comprobante_url) + '" target="_blank" style="color:#7eb8ff;font-size:.75rem;text-decoration:none;">📄 Ver comprobante</a>'
+              : '<span style="color:var(--muted);font-size:.75rem;">Sin comprobante</span>') + '</div>' +
+            '<div style="display:flex;gap:6px;">' +
+              '<button onclick="aprobarPagoDesdePanel(' + p.id + ')" style="padding:5px 10px;background:rgba(34,197,94,.15);border:1px solid rgba(34,197,94,.3);color:#4ade80;border-radius:7px;cursor:pointer;font-size:.75rem;font-weight:700;">✅ Aprobar</button>' +
+              '<button onclick="rechazarPagoDesdePanel(' + p.id + ')" style="padding:5px 10px;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.25);color:#f87171;border-radius:7px;cursor:pointer;font-size:.75rem;font-weight:700;">❌</button>' +
+            '</div>' +
+            '</div>';
+        }
+        html += '</div>';
+        html += '<div style="padding:12px 16px;font-size:.75rem;color:var(--muted);">Total pendientes: <strong style="color:var(--text);">' + pagos.length + '</strong></div>';
+        container.innerHTML = html;
+      })
+      .catch(function(e) {
+        console.error('Error cargando pagos aprobación:', e);
+        container.innerHTML = '<div style="text-align:center;padding:24px;color:#f87171;">❌ Error al cargar: ' + esc(e.message) + '</div>';
+      });
+  }
+
+  function aprobarPagoDesdePanel(pagoId) {
+    if (!_ceoUid) { showToast('⚠️ Sesión CEO no identificada'); return; }
+    sbClient.rpc('aprobar_pago_ceo', { p_pago_id: parseInt(pagoId), p_ceo_uid: _ceoUid })
+      .then(function(res) {
+        if (res.error) throw res.error;
+        notificarAccion('pago_aprobado', 'Pago aprobado por CEO', null, JSON.stringify({pago_id: pagoId}));
+        showToast('✅ Pago aprobado y cuota acreditada');
+        renderPagosAprobacion();
+        cargarDatosSupabase().then(function() { renderAll(); });
+      })
+      .catch(function(e) { showToast('❌ Error: ' + (e.message || e)); });
+  }
+
+  function rechazarPagoDesdePanel(pagoId) {
+    if (!confirm('¿Rechazar este pago? El cliente deberá reenviar el comprobante.')) return;
+    sbClient.from('pagos')
+      .update({ estado: 'rechazado', aprobado_por: _ceoUid, updated_at: new Date().toISOString() })
+      .eq('id', pagoId)
+      .then(function(res) {
+        if (res.error) throw res.error;
+        showToast('❌ Pago rechazado');
+        renderPagosAprobacion();
+      })
+      .catch(function(e) { showToast('❌ Error: ' + (e.message || e)); });
+  }
   function renderPagoComisiones() {
     var vs = _cacheVendedores || [];
     var cs = _cacheClientes || [];
@@ -3320,6 +3485,11 @@ function verDetalleStaff(staffId) {
           </div>
           <button class="m-btn gold" onclick="guardarEdicionCliente('${c.id}')">💾 Guardar cambios</button>
         </div>
+        <!-- Pagos pendientes de aprobación -->
+        <div style="margin-top:16px;padding:14px;background:rgba(251,146,60,.05);border:1px solid rgba(251,146,60,.2);border-radius:12px;" id="pagosInlineContainer_${c.id}">
+          <div style="font-size:.72rem;font-weight:700;text-transform:uppercase;color:#fb923c;margin-bottom:8px;">💳 Pagos pendientes de aprobación</div>
+          <div id="pagosInlineList_${c.id}" style="font-size:.78rem;color:var(--muted);">⏳ Cargando...</div>
+        </div>
         <!-- Botones de acción -->
         <div class="mact" style="margin-top:16px;">
           <button class="m-btn green" onclick="waMensajeCEO('${c.id}')">💬 WhatsApp</button>
@@ -3331,6 +3501,69 @@ function verDetalleStaff(staffId) {
     `;
     document.getElementById('mbox').innerHTML = modalHtml;
     document.getElementById('modal').classList.add('open');
+
+    // Cargar pagos pendientes del cliente en el panel inline
+    (function(clienteId) {
+      sbClient.from('pagos').select('*').eq('cliente_id', clienteId).eq('estado', 'pendiente').order('numero_cuota')
+        .then(function(res) {
+          var listEl = document.getElementById('pagosInlineList_' + clienteId);
+          var contEl = document.getElementById('pagosInlineContainer_' + clienteId);
+          if (!listEl) return;
+          var pendientes = res.data || [];
+          if (!pendientes.length) { if (contEl) contEl.style.display = 'none'; return; }
+          var html = '';
+          for (var pi = 0; pi < pendientes.length; pi++) {
+            var p = pendientes[pi];
+            html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.06);">' +
+              '<span>Cuota <strong>' + (p.numero_cuota || '—') + '</strong> · USD ' + (p.monto_usd || 0) +
+              (p.comprobante_url ? ' · <a href="' + esc(p.comprobante_url) + '" target="_blank" style="color:#7eb8ff;font-size:.72rem;">📄 Ver</a>' : '') + '</span>' +
+              '<div style="display:flex;gap:6px;">' +
+                '<button onclick="aprobarPagoInline(' + p.id + ',' + clienteId + ',' + (p.numero_cuota || 1) + ')" style="padding:4px 10px;background:rgba(34,197,94,.15);border:1px solid rgba(34,197,94,.3);color:#4ade80;border-radius:7px;cursor:pointer;font-size:.75rem;font-weight:700;">✅ Aprobar</button>' +
+                '<button onclick="rechazarPagoInline(' + p.id + ',' + clienteId + ')" style="padding:4px 8px;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.25);color:#f87171;border-radius:7px;cursor:pointer;font-size:.75rem;">❌</button>' +
+              '</div></div>';
+          }
+          listEl.innerHTML = html;
+        })
+        .catch(function() {
+          var listEl = document.getElementById('pagosInlineList_' + clienteId);
+          if (listEl) listEl.innerHTML = '<span style="color:var(--muted);">No se pudieron cargar</span>';
+        });
+    })(c.id);
+  }
+
+  // Aprobar/Rechazar pago inline desde ficha de cliente
+  function aprobarPagoInline(pagoId, clienteId, cuotaNum) {
+    if (!_ceoUid) { showToast('⚠️ Sesión CEO no identificada'); return; }
+    var btn = event.target;
+    if (btn) btn.disabled = true;
+    sbClient.rpc('aprobar_pago_ceo', { p_pago_id: parseInt(pagoId), p_ceo_uid: _ceoUid })
+      .then(function(res) {
+        if (res.error) throw res.error;
+        notificarAccion('pago_aprobado', 'Cuota ' + cuotaNum + ' aprobada por CEO', clienteId, JSON.stringify({pago_id: pagoId, cuota: cuotaNum}));
+        showToast('✅ Cuota ' + cuotaNum + ' aprobada');
+        // Recargar ficha del cliente para reflejar el cambio
+        cargarDatosSupabase().then(function() {
+          renderAll();
+          verFichaCliente(clienteId);
+        });
+      })
+      .catch(function(e) {
+        showToast('❌ Error: ' + (e.message || e));
+        if (btn) btn.disabled = false;
+      });
+  }
+
+  function rechazarPagoInline(pagoId, clienteId) {
+    if (!confirm('¿Rechazar este pago? El cliente deberá reenviar el comprobante.')) return;
+    sbClient.from('pagos')
+      .update({ estado: 'rechazado', aprobado_por: _ceoUid, updated_at: new Date().toISOString() })
+      .eq('id', pagoId)
+      .then(function(res) {
+        if (res.error) throw res.error;
+        showToast('❌ Pago rechazado');
+        verFichaCliente(clienteId);
+      })
+      .catch(function(e) { showToast('❌ Error: ' + (e.message || e)); });
   }
 
   // WhatsApp para CEO
@@ -3565,6 +3798,11 @@ function verDetalleStaff(staffId) {
     if (tabId === 'mensual') renderMensual();
     if (tabId === 'backup') initBackupTab();
     if (tabId === 'tickets') cargarTickets();
+    if (tabId === 'pagos_aprobacion') renderPagosAprobacion();
+    if (tabId === 'contratos_pend') renderContratosPendientes();
+    if (tabId === 'comisiones_bloq') renderComisionesBloqueadas();
+    if (tabId === 'premios_referidos') renderPremiosReferidos();
+    if (tabId === 'pagocomisiones') renderPagoComisiones();
   }
 
   function closeModal() { document.getElementById('modal').classList.remove('open'); }
@@ -3843,6 +4081,8 @@ function verDetalleStaff(staffId) {
       + '<option value="18">18 cuotas</option>'
       + '</select></div>'
       + '<div class="manager-input-group"><label>Fecha de viaje (opcional)</label><input id="nFechaViaje" type="date"></div>'
+      + '<div class="manager-input-group"><label>Personas</label><input id="nPersonas" type="number" min="1" max="20" placeholder="Ej: 2"></div>'
+      + '<div class="manager-input-group"><label>Noches</label><input id="nNoches" type="number" min="1" max="30" placeholder="Ej: 7"></div>'
       + '<div class="manager-input-group"><label>Notas</label><input id="nNotas" placeholder="Observaciones adicionales..."></div>'
       + '</div></div>'
       + '</div>'
@@ -3989,8 +4229,8 @@ function verDetalleStaff(staffId) {
         p_destino: destino || null,
         p_paquete: paquete || null,
         p_fecha_viaje: fechaViaje || null,
-        p_personas: null,
-        p_noches: null
+        p_personas: (document.getElementById('nPersonas') || {}).value ? parseInt((document.getElementById('nPersonas') || {}).value, 10) : null,
+        p_noches: (document.getElementById('nNoches') || {}).value ? parseInt((document.getElementById('nNoches') || {}).value, 10) : null
       })
     })
     .then(function(response) { return response.json(); })
@@ -4000,7 +4240,9 @@ function verDetalleStaff(staffId) {
 
       var camposExtra = {
         documento: documento || null,
-        notas: notas || null
+        notas: notas || null,
+        personas: (document.getElementById('nPersonas') || {}).value ? parseInt((document.getElementById('nPersonas') || {}).value, 10) : null,
+        noches:   (document.getElementById('nNoches')   || {}).value ? parseInt((document.getElementById('nNoches')   || {}).value, 10) : null
       };
       return sbClient.from('clientes').update(camposExtra).eq('id', nuevoClienteId)
         .then(function(updRes) {
@@ -4029,6 +4271,7 @@ function verDetalleStaff(staffId) {
           }).catch(function(e) { console.warn('Error al registrar referido:', e); });
         }
       }
+      notificarAccion('nuevo_cliente', 'Nuevo cliente creado por CEO: ' + nombre, null, JSON.stringify({nombre: nombre, email: email}));
       showToast('✅ Cliente ' + nombre + ' creado exitosamente. Contraseña temporal: ' + passwordTemp);
       closeModal();
       cargarDatosSupabase().then(function() {
@@ -4046,7 +4289,10 @@ function verDetalleStaff(staffId) {
       if (btn) { btn.disabled = false; btn.textContent = originalText; }
     });
   }
-  function approvePayment() { alert("Aprobación de pago - pendiente de implementación"); }
+  function approvePayment(pagoId) {
+    if (!pagoId) { showToast('⚠️ ID de pago no válido'); return; }
+    aprobarPagoSb(pagoId);
+  }
 
   // Alias para toggle password
   // ===================== TICKETS =====================
@@ -4167,6 +4413,11 @@ function verDetalleStaff(staffId) {
       '</div>' +
       '</div>' +
       '<div class="mitem"><div class="ml">Asunto / descripción *</div><textarea id="ticketDesc" rows="4" class="medit" style="width:100%;resize:vertical;" placeholder="Describí detalladamente la incidencia o solicitud..."></textarea></div>' +
+      '<div class="mitem" style="margin-top:12px;">' +
+      '<div class="ml">📎 Adjuntar archivos (opcional)</div>' +
+      '<input type="file" id="ticketAdjuntos" multiple accept="image/*,application/pdf" style="width:100%;padding:8px 0;font-size:.82rem;color:var(--text);">' +
+      '<div id="ticketAdjuntosPreview" style="margin-top:6px;font-size:.75rem;color:var(--muted);"></div>' +
+      '</div>' +
       '<div class="mact">' +
       '<button class="mbtn gold" onclick="guardarTicket()">✅ Crear ticket</button>' +
       '<button class="mbtn ghost" onclick="closeModal()">Cancelar</button>' +
@@ -4174,6 +4425,17 @@ function verDetalleStaff(staffId) {
 
     document.getElementById('mbox').innerHTML = modalHtml;
     document.getElementById('modal').classList.add('open');
+
+    // Preview de archivos seleccionados
+    document.getElementById('ticketAdjuntos').addEventListener('change', function() {
+      var preview = document.getElementById('ticketAdjuntosPreview');
+      if (!preview) return;
+      var names = [];
+      for (var i = 0; i < this.files.length; i++) {
+        names.push('📄 ' + this.files[i].name + ' (' + (this.files[i].size / 1024).toFixed(1) + ' KB)');
+      }
+      preview.innerHTML = names.length ? names.join('<br>') : '';
+    });
 
     // Cargar lista de posibles asignados
     sbClient.from('staff_profiles').select('user_id, nombre, role_id').in('role_id', [1, 2]).then(function(res) {
@@ -4189,42 +4451,66 @@ function verDetalleStaff(staffId) {
     }).catch(console.warn);
   }
 
-  function guardarTicket() {
-    var categoria = document.getElementById('ticketCategoria').value;
-    var prioridad = document.getElementById('ticketPrioridad').value;
-    var desc = document.getElementById('ticketDesc').value.trim();
-    var clienteId = document.getElementById('ticketCliente').value ? parseInt(document.getElementById('ticketCliente').value) : null;
+  async function guardarTicket() {
+    var categoria  = document.getElementById('ticketCategoria').value;
+    var prioridad  = document.getElementById('ticketPrioridad').value;
+    var desc       = document.getElementById('ticketDesc').value.trim();
+    var clienteId  = document.getElementById('ticketCliente').value  ? parseInt(document.getElementById('ticketCliente').value)  : null;
     var vendedorId = document.getElementById('ticketVendedor').value ? parseInt(document.getElementById('ticketVendedor').value) : null;
-    var regionId = document.getElementById('ticketRegion').value ? parseInt(document.getElementById('ticketRegion').value) : null;
-    var asignadoA = document.getElementById('ticketAsignado').value || null;
+    var regionId   = document.getElementById('ticketRegion').value   ? parseInt(document.getElementById('ticketRegion').value)   : null;
+    var asignadoA  = document.getElementById('ticketAsignado').value || null;
+    var filesInput = document.getElementById('ticketAdjuntos');
+    var files      = filesInput ? filesInput.files : [];
 
     if (!desc) { showToast('⚠️ La descripción es obligatoria'); return; }
     if (!sbClient || !_ceoUid) { showToast('⚠️ Sesión no válida'); return; }
 
     var btn = document.querySelector('#modal .mbtn.gold');
-    if (btn) { btn.disabled = true; btn.textContent = '⏳ Creando...'; }
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Procesando...'; }
 
-    sbClient.rpc('crear_ticket', {
-      p_tipo: categoria,
-      p_mensaje: desc,
-      p_remitente_id: _ceoUid,
-      p_cliente_id: clienteId,
-      p_vendedor_id: vendedorId,
-      p_region_id: regionId,
-      p_asignado_a: asignadoA,
-      p_prioridad: prioridad,
-      p_categoria: categoria
-    }).then(function(res) {
-      if (res.error) throw res.error;
-      showToast('✅ Ticket creado exitosamente');
+    try {
+      // 1. Subir archivos adjuntos al bucket ticket_adjuntos
+      var adjuntosUrls = [];
+      for (var i = 0; i < files.length; i++) {
+        var file = files[i];
+        var ext = file.name.split('.').pop();
+        var fileName = 'ticket_adjuntos/' + _ceoUid + '/' + Date.now() + '_' + i + '.' + ext;
+        var uploadRes = await sbClient.storage.from('ticket_adjuntos').upload(fileName, file);
+        if (uploadRes.error) throw uploadRes.error;
+        var urlRes = sbClient.storage.from('ticket_adjuntos').getPublicUrl(fileName);
+        adjuntosUrls.push(urlRes.data.publicUrl);
+      }
+
+      // 2. Crear el ticket vía RPC
+      var rpcRes = await sbClient.rpc('crear_ticket', {
+        p_tipo:        categoria,
+        p_mensaje:     desc,
+        p_remitente_id: _ceoUid,
+        p_cliente_id:  clienteId,
+        p_vendedor_id: vendedorId,
+        p_region_id:   regionId,
+        p_asignado_a:  asignadoA,
+        p_prioridad:   prioridad,
+        p_categoria:   categoria
+      });
+      if (rpcRes.error) throw rpcRes.error;
+      var ticketId = rpcRes.data;
+
+      // 3. Si hay adjuntos, vincularlos al registro del ticket
+      if (adjuntosUrls.length && ticketId) {
+        var updRes = await sbClient.from('notificaciones').update({ adjuntos: adjuntosUrls }).eq('id', ticketId);
+        if (updRes.error) console.warn('No se pudieron guardar adjuntos:', updRes.error);
+      }
+
+      showToast('✅ Ticket creado' + (adjuntosUrls.length ? ' con ' + adjuntosUrls.length + ' adjunto(s)' : ' exitosamente'));
       closeModal();
       cargarTickets();
-    }).catch(function(err) {
+    } catch (err) {
       console.error('Error creating ticket:', err);
       showToast('❌ Error al crear ticket: ' + (err.message || err));
-    }).finally(function() {
+    } finally {
       if (btn) { btn.disabled = false; btn.textContent = '✅ Crear ticket'; }
-    });
+    }
   }
 
   function verTicket(ticketId) {
@@ -4253,6 +4539,19 @@ function verDetalleStaff(staffId) {
     var clienteNombre = ticket.cliente ? ticket.cliente.nombre : (ticket.cliente_id ? 'ID: ' + ticket.cliente_id : '—');
     var vendedorNombre = ticket.vendedor ? ticket.vendedor.nombre : (ticket.vendedor_id ? 'ID: ' + ticket.vendedor_id : '—');
 
+    // Bloque de adjuntos existentes
+    var adjuntosHtml = '';
+    if (ticket.adjuntos && ticket.adjuntos.length) {
+      adjuntosHtml = '<div class="mi" style="margin-bottom:12px;"><div class="ml">📎 Adjuntos</div>' +
+        '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;">';
+      for (var a = 0; a < ticket.adjuntos.length; a++) {
+        var adjUrl = ticket.adjuntos[a];
+        var adjName = adjUrl.split('/').pop() || 'Archivo ' + (a + 1);
+        adjuntosHtml += '<a href="' + adjUrl + '" target="_blank" style="display:inline-flex;align-items:center;gap:5px;padding:5px 10px;background:rgba(255,255,255,.05);border:1px solid var(--border2);border-radius:8px;text-decoration:none;color:var(--text);font-size:.75rem;transition:all .15s;" onmouseover="this.style.borderColor=\'var(--gold)\'" onmouseout="this.style.borderColor=\'var(--border2)\'">📄 ' + esc(adjName.substring(0, 30)) + '</a>';
+      }
+      adjuntosHtml += '</div></div>';
+    }
+
     var comentariosHtml = '';
     for (var i = 0; i < comentarios.length; i++) {
       var cm = comentarios[i];
@@ -4271,7 +4570,13 @@ function verDetalleStaff(staffId) {
       '<div class="mi"><div class="ml">Prioridad</div><div><select id="detPrioridad" class="msel" style="width:auto;">' + prioridadOpts + '</select></div></div>' +
       '</div>' +
       '<div class="mi" style="margin-bottom:12px;"><div class="ml">Descripción</div><div class="mv" style="white-space:pre-wrap;">' + esc(ticket.mensaje || '') + '</div></div>' +
-      '<div style="margin-top:16px;"><div class="ml" style="margin-bottom:8px;">Historial / Comentarios</div>' +
+      adjuntosHtml +
+      '<div class="mi" style="margin-bottom:16px;padding:12px;background:rgba(255,255,255,.02);border:1px solid var(--border);border-radius:10px;">' +
+      '<div class="ml" style="margin-bottom:8px;">📎 Agregar adjunto</div>' +
+      '<input type="file" id="nuevoAdjuntoTicket" accept="image/*,application/pdf" style="width:100%;font-size:.8rem;color:var(--text);margin-bottom:6px;">' +
+      '<button class="mbtn ghost" style="font-size:.78rem;padding:6px 14px;" onclick="subirAdjuntoATicket(' + ticket.id + ')">➕ Subir adjunto</button>' +
+      '</div>' +
+      '<div style="margin-top:4px;"><div class="ml" style="margin-bottom:8px;">Historial / Comentarios</div>' +
       '<div style="max-height:200px;overflow-y:auto;background:rgba(255,255,255,.02);border:1px solid var(--border);border-radius:8px;">' +
       (comentariosHtml || '<div style="color:var(--muted);padding:12px;font-size:.82rem;">Sin comentarios aún</div>') +
       '</div></div>' +
@@ -4279,6 +4584,7 @@ function verDetalleStaff(staffId) {
       '<div class="mact">' +
       '<button class="mbtn gold" onclick="agregarComentario(' + ticket.id + ')">💬 Comentar</button>' +
       '<button class="mbtn purple" onclick="actualizarTicket(' + ticket.id + ')">💾 Guardar cambios</button>' +
+      (ticket.estado !== 'cerrado' ? '<button class="mbtn" style="background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.25);color:#f87171;" onclick="cerrarTicket(' + ticket.id + ')">🔒 Cerrar ticket</button>' : '') +
       '<button class="mbtn ghost" onclick="closeModal()">Cerrar</button>' +
       '</div></div>';
 
@@ -4320,6 +4626,61 @@ function verDetalleStaff(staffId) {
       verTicket(ticketId);
       cargarTickets();
     }).catch(function(e) { showToast('❌ Error: ' + e.message); });
+  }
+
+  async function subirAdjuntoATicket(ticketId) {
+    var fileInput = document.getElementById('nuevoAdjuntoTicket');
+    if (!fileInput || !fileInput.files.length) { showToast('⚠️ Seleccioná un archivo primero'); return; }
+    if (!sbClient || !_ceoUid) { showToast('⚠️ Sesión no válida'); return; }
+
+    var file = fileInput.files[0];
+    var btnEl = document.querySelector('[onclick="subirAdjuntoATicket(' + ticketId + ')"]');
+    if (btnEl) { btnEl.disabled = true; btnEl.textContent = '⏳ Subiendo...'; }
+
+    try {
+      var ext = file.name.split('.').pop();
+      var fileName = 'ticket_adjuntos/' + _ceoUid + '/' + Date.now() + '_' + file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+      var uploadRes = await sbClient.storage.from('ticket_adjuntos').upload(fileName, file);
+      if (uploadRes.error) throw uploadRes.error;
+
+      var urlRes = sbClient.storage.from('ticket_adjuntos').getPublicUrl(fileName);
+      var nuevaUrl = urlRes.data.publicUrl;
+
+      // Leer adjuntos existentes y hacer push
+      var ticketRes = await sbClient.from('notificaciones').select('adjuntos').eq('id', ticketId).single();
+      if (ticketRes.error) throw ticketRes.error;
+      var adjuntos = ticketRes.data.adjuntos || [];
+      adjuntos.push(nuevaUrl);
+
+      var updRes = await sbClient.from('notificaciones').update({ adjuntos: adjuntos }).eq('id', ticketId);
+      if (updRes.error) throw updRes.error;
+
+      showToast('✅ Adjunto agregado correctamente');
+      fileInput.value = '';
+      verTicket(ticketId); // recargar vista del ticket
+    } catch (err) {
+      console.error('Error subiendo adjunto:', err);
+      showToast('❌ Error: ' + (err.message || err));
+    } finally {
+      if (btnEl) { btnEl.disabled = false; btnEl.textContent = '➕ Subir adjunto'; }
+    }
+  }
+
+  async function cerrarTicket(ticketId) {
+    if (!sbClient) return;
+    try {
+      var res = await sbClient.from('notificaciones').update({
+        estado: 'cerrado',
+        fecha_cierre: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }).eq('id', ticketId);
+      if (res.error) throw res.error;
+      showToast('🔒 Ticket cerrado correctamente');
+      closeModal();
+      cargarTickets();
+    } catch (e) {
+      showToast('❌ Error al cerrar: ' + (e.message || e));
+    }
   }
 
   // ═══════════════════════════════════════════════════════
@@ -4400,7 +4761,6 @@ for (var k = 0; k < allRs.length; k++) {
   window.procesarPagoComision = procesarPagoComision;
   window.verComprobantesVendedor = verComprobantesVendedor;
   window.verComprobanteVend = verComprobanteVend;
-  window.verFichaCliente = verFichaCliente;
   window.approvePayment = approvePayment;
   window.aprobarTodos = aprobarTodos;
   window.escanearMora = escanearMora;
@@ -4412,6 +4772,17 @@ for (var k = 0; k < allRs.length; k++) {
   window.verTicket = verTicket;
   window.agregarComentario = agregarComentario;
   window.actualizarTicket = actualizarTicket;
+  window.subirAdjuntoATicket = subirAdjuntoATicket;
+  window.cerrarTicket = cerrarTicket;
+  window.renderPagosAprobacion = renderPagosAprobacion;
+  window.aprobarPagoDesdePanel = aprobarPagoDesdePanel;
+  window.rechazarPagoDesdePanel = rechazarPagoDesdePanel;
+  window.aprobarPagoInline = aprobarPagoInline;
+  window.rechazarPagoInline = rechazarPagoInline;
+  window.guardarEdicionCliente = guardarEdicionCliente;
+  window.verFichaCliente = verFichaCliente;
+  window.calcCuotaCeo = calcCuotaCeo;
+  window.buscarReferidorCeo = buscarReferidorCeo;
   // ... más según necesidad
 </script>
 </body>
