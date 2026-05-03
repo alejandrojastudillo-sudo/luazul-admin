@@ -745,6 +745,7 @@ body::after {
         <div class="ftab" data-f="miscomisiones"     onclick="activarSeccion('miscomisiones')" style="color:#4ade80;">💰 Comisiones</div>
         <div class="ftab" data-f="legajo"            onclick="activarSeccion('legajo')" style="color:#a78bfa;">🪪 Mi Legajo</div>
         <div class="ftab" data-f="tickets"           onclick="activarSeccion('tickets')" style="color:#fbbf24;">🎫 Tickets</div>
+        <div class="ftab" data-f="comunicaciones"    onclick="activarSeccion('comunicaciones')" style="color:#38bdf8;">📩 Comunicaciones</div>
       </div>
       <select class="sort-select" id="sortSelect" onchange="renderTable()">
         <option value="prioridad">Ordenar: Prioridad</option>
@@ -870,13 +871,18 @@ body::after {
         </div>
       </div>
       <div class="table-wrap">
-        <div class="tbl-head" style="grid-template-columns:110px 2fr 1fr 110px 110px 130px 80px;">
-          <div>Nº</div><div>Asunto</div><div>Cliente</div><div>Estado</div><div>Prioridad</div><div>Última actividad</div><div>Ver</div>
+        <div class="tbl-head" style="grid-template-columns:110px 2fr 1fr 110px 110px 80px 130px 80px;">
+          <div>Nº</div><div>Asunto</div><div>Cliente</div><div>Estado</div><div>Prioridad</div><div>Nivel</div><div>Última actividad</div><div>Ver</div>
         </div>
         <div class="tbl-body" id="ticketsListaBodyAsesor">
           <div class="empty-state"><div class="ei">🎫</div><p>Sin tickets</p></div>
         </div>
       </div>
+    </div>
+
+    <!-- ── SECCIÓN COMUNICACIONES ────────────────────────────────────────── -->
+    <div id="comunicacionesSection" class="section-container">
+      <div id="comunicacionesContainer"></div>
     </div>
 
   </main>
@@ -1441,18 +1447,20 @@ function showSection(name) {
     cuentasSection: document.getElementById('cuentasSection'),
     misComisionesSection: document.getElementById('misComisionesSection'),
     legajoSection:  document.getElementById('legajoSection'),
-    ticketsSection: document.getElementById('ticketsSection')
+    ticketsSection: document.getElementById('ticketsSection'),
+    comunicacionesSection: document.getElementById('comunicacionesSection')
   };
-  var isSpecial = (name==='referidos'||name==='cuentas'||name==='miscomisiones'||name==='legajo'||name==='tickets');
+  var isSpecial = (name==='referidos'||name==='cuentas'||name==='miscomisiones'||name==='legajo'||name==='tickets'||name==='comunicaciones');
   var mainEls = [elements.statsRow, elements.comisionPanel, elements.priorityBanner, elements.filterBar, elements.legend, elements.tableWrap];
   mainEls.forEach(function(el){ if(el) el.style.display = isSpecial?'none':''; });
-  [elements.refSection, elements.cuentasSection, elements.misComisionesSection, elements.legajoSection, elements.ticketsSection].forEach(function(el){ if(el){ el.style.display='none'; } });
+  [elements.refSection, elements.cuentasSection, elements.misComisionesSection, elements.legajoSection, elements.ticketsSection, elements.comunicacionesSection].forEach(function(el){ if(el){ el.style.display='none'; } });
 
   if (name==='referidos')    { if(elements.refSection) elements.refSection.style.display='block'; renderRefList(); }
   else if (name==='cuentas') { if(elements.cuentasSection) elements.cuentasSection.style.display='block'; renderCuentasList(); }
   else if (name==='miscomisiones') { if(elements.misComisionesSection) elements.misComisionesSection.style.display='block'; renderMisComisionesAdmin(); }
   else if (name==='legajo')  { if(elements.legajoSection) elements.legajoSection.style.display='block'; renderMiLegajo(); }
   else if (name==='tickets') { if(elements.ticketsSection) elements.ticketsSection.style.display='block'; cargarTicketsAsesor(); }
+  else if (name==='comunicaciones') { if(elements.comunicacionesSection) elements.comunicacionesSection.style.display='block'; renderComunicaciones(); }
   else {
     // Restaurar visibilidad tabla
     mainEls.forEach(function(el){ if(el) el.style.display=''; });
@@ -1761,25 +1769,32 @@ function notificarAccion(tipo, mensaje, clienteId, datosExtra) {
 
 function refreshAdminNotifBadge() {
   if (!sbClient||!_currentProfile) return;
-  sbClient.from('notificaciones')
+  // Notificaciones estándar
+  var notifPromise = sbClient.from('notificaciones')
     .select('id', { count: 'exact', head: true })
     .eq('leida', false)
-    .eq('destinatario_id', _currentProfile.id)
-    .then(function(r) {
-      var count = r.count || 0;
-      var dot = document.getElementById('adminNotifDot');
-      var lbl = document.getElementById('adminNotifLabel');
-      if (!dot || !lbl) return;
-      if (count > 0) {
-        dot.style.display = 'flex';
-        dot.textContent = count;
-        lbl.textContent = 'Alertas (' + count + ')';
-      } else {
-        dot.style.display = 'none';
-        lbl.textContent = 'Alertas';
-      }
-    })
-    .catch(function(e) { console.warn('[refreshAdminNotifBadge]', e.message); });
+    .eq('destinatario_id', _currentProfile.id);
+  // Menciones / mensajes internos no leídos
+  var mensajesPromise = sbClient.from('mensajes_equipo_menciones')
+    .select('id', { count: 'exact', head: true })
+    .eq('usuario_id', _currentProfile.user_id)
+    .eq('leido', false);
+  Promise.all([notifPromise, mensajesPromise]).then(function(results) {
+    var countNotif = results[0].count || 0;
+    var countMsg   = results[1].count || 0;
+    var total = countNotif + countMsg;
+    var dot = document.getElementById('adminNotifDot');
+    var lbl = document.getElementById('adminNotifLabel');
+    if (!dot || !lbl) return;
+    if (total > 0) {
+      dot.style.display = 'flex';
+      dot.textContent = total;
+      lbl.textContent = 'Alertas (' + total + ')' + (countMsg > 0 ? ' · 📩' + countMsg : '');
+    } else {
+      dot.style.display = 'none';
+      lbl.textContent = 'Alertas';
+    }
+  }).catch(function(e) { console.warn('[refreshAdminNotifBadge]', e.message); });
 }
 
 function openAdminNotifs() {
@@ -2679,12 +2694,13 @@ function renderListaTicketsAsesor(tickets) {
       : t.prioridad === 'media'  ? 'var(--yellow)'
       : 'var(--green)';
     var clienteN = (t.cliente && t.cliente.nombre) ? t.cliente.nombre : '—';
-    html += '<div class="tbl-row" style="grid-template-columns:110px 2fr 1fr 110px 110px 130px 80px;cursor:pointer;" onclick="verTicketAsesor('+t.id+')">' +
-      '<div class="tbl-cell" style="font-family:monospace;font-size:.82rem;">'+(t.numero_ticket||'LK-??')+'</div>' +
+    html += '<div class="tbl-row" style="grid-template-columns:110px 2fr 1fr 110px 110px 80px 130px 80px;cursor:pointer;" onclick="verTicketAsesor('+t.id+')">' +
+      '<div class="tbl-cell" style="font-family:monospace;font-size:.82rem;">'+(t.numero_ticket||'LK-??')+'<button class="copiar-ticket" data-numero="'+(t.numero_ticket||'LK-??')+'" style="background:none;border:none;cursor:pointer;margin-left:6px;padding:0;font-size:.85rem;" title="Copiar número" onclick="event.stopPropagation()">📋</button></div>' +
       '<div class="tbl-cell"><div style="font-weight:700;">'+LZ.esc(t.tipo)+'</div><div class="cli-email">'+LZ.esc((t.mensaje||'').substring(0,55))+'...</div></div>' +
       '<div class="tbl-cell">'+LZ.esc(clienteN)+'</div>' +
       '<div class="tbl-cell"><span class="'+estadoClase+'">'+(t.estado||'abierto').toUpperCase()+'</span></div>' +
       '<div class="tbl-cell"><span style="font-weight:700;color:'+prioColor+';font-size:.8rem;">'+(t.prioridad||'media').toUpperCase()+'</span></div>' +
+      '<div class="tbl-cell" style="font-weight:800;font-size:.92rem;color:var(--accent2);">'+(t.nivel_actual||1)+'</div>' +
       '<div class="tbl-cell" style="font-size:.78rem;">'+_fdrA(t.updated_at||t.created_at)+'</div>' +
       '<div class="tbl-cell"><button class="act-btn" onclick="event.stopPropagation();verTicketAsesor('+t.id+')">👁️</button></div>' +
       '</div>';
@@ -2810,6 +2826,7 @@ function renderDetalleTicketAsesor(ticket, comentarios) {
         '<div><div class="m-label">Estado</div><div><span class="'+estadoBadge+'">'+(ticket.estado||'abierto').toUpperCase()+'</span></div></div>' +
         '<div><div class="m-label">Prioridad</div><div style="font-weight:700;text-transform:uppercase;">'+(ticket.prioridad||'media')+'</div></div>' +
         '<div><div class="m-label">Última actualización</div><div>'+_fdrA(ticket.updated_at||ticket.created_at)+'</div></div>' +
+        '<div><div class="m-label">Nivel actual</div><div style="font-weight:900;font-size:1.1rem;color:var(--accent2);">'+(ticket.nivel_actual||1)+'</div></div>' +
       '</div>' +
       '<div class="m-item" style="margin-top:14px;">' +
         '<div class="m-label">Descripción</div>' +
@@ -2885,6 +2902,186 @@ async function subirAdjuntoATicketAsesor(ticketId) {
     if (btn) btn.disabled = false;
   }
 }
+
+// ──────────────────────────────────────────────────────────────────────────
+// 33. MÓDULO DE MENSAJERÍA INTERNA (ASESOR)
+// ──────────────────────────────────────────────────────────────────────────
+
+async function cargarCanales() {
+  // Panel Asesor: solo canales donde el rol 'asesor' está en miembros
+  var query = sbClient.from('canales_equipo').select('*');
+  query = query.filter('miembros->>roles', 'cs', '{"asesor"}');
+  var { data, error } = await query;
+  if (error) { console.warn('[cargarCanales]', error.message); return []; }
+  return data || [];
+}
+
+async function renderComunicaciones() {
+  var container = document.getElementById('comunicacionesContainer');
+  if (!container) return;
+  container.innerHTML = '<div style="padding:30px;text-align:center;color:var(--muted);">⏳ Cargando canales...</div>';
+  try {
+    var canales = await cargarCanales();
+    if (!canales.length) {
+      container.innerHTML = '<div style="padding:40px;text-align:center;color:var(--muted);"><div style="font-size:2rem;margin-bottom:12px;">📭</div><p>No tenés canales asignados aún.</p></div>';
+      return;
+    }
+    var html = '<div style="display:flex;gap:0;background:var(--surface);border:1px solid var(--border);border-radius:18px;overflow:hidden;min-height:500px;">';
+    // Panel izquierdo: lista de canales
+    html += '<div style="width:240px;flex-shrink:0;border-right:1px solid var(--border);padding:12px 0;">';
+    html += '<div style="font-size:.65rem;font-weight:800;text-transform:uppercase;letter-spacing:1.2px;color:var(--muted);padding:8px 16px 12px;">Canales</div>';
+    canales.forEach(function(c) {
+      html += '<div class="canal-item" data-canal="' + esc(String(c.id)) + '" style="padding:10px 16px;cursor:pointer;border-radius:0;transition:background .15s;font-size:.88rem;font-weight:600;display:flex;align-items:center;gap:8px;" onmouseenter="this.style.background=\'rgba(255,255,255,.04)\'" onmouseleave="this.style.background=\'\'">&#128172; ' + esc(c.nombre) + '</div>';
+    });
+    html += '</div>';
+    // Panel derecho: mensajes
+    html += '<div id="mensajesPanel" style="flex:1;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:.9rem;">Seleccioná un canal para ver los mensajes</div>';
+    html += '</div>';
+    container.innerHTML = html;
+    // Event listeners para canales
+    document.querySelectorAll('.canal-item').forEach(function(el) {
+      el.addEventListener('click', function() {
+        document.querySelectorAll('.canal-item').forEach(function(x){ x.style.background=''; x.style.color=''; });
+        el.style.background = 'rgba(59,130,246,.12)';
+        el.style.color = 'var(--accent2)';
+        cargarMensajesCanal(el.getAttribute('data-canal'));
+      });
+    });
+  } catch(e) {
+    container.innerHTML = '<div style="padding:30px;text-align:center;color:var(--red);">❌ Error al cargar comunicaciones: ' + esc(e.message) + '</div>';
+  }
+}
+
+async function cargarMensajesCanal(canalId) {
+  var panel = document.getElementById('mensajesPanel');
+  if (!panel) return;
+  panel.innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted);">⏳ Cargando mensajes...</div>';
+  try {
+    var { data: mensajes, error } = await sbClient
+      .from('mensajes_equipo')
+      .select('*')
+      .eq('canal_id', canalId)
+      .is('respuesta_a', null)
+      .order('created_at', { ascending: true });
+    if (error) throw error;
+    var html = '<div style="display:flex;flex-direction:column;height:100%;">';
+    html += '<div style="flex:1;overflow-y:auto;padding:20px;max-height:420px;">';
+    if (!mensajes || !mensajes.length) {
+      html += '<div style="text-align:center;color:var(--muted);padding:40px;font-size:.88rem;">Sin mensajes en este canal todavía.</div>';
+    } else {
+      for (var i = 0; i < mensajes.length; i++) {
+        html += await renderMensaje(mensajes[i]);
+      }
+    }
+    html += '</div>';
+    // Área de nuevo mensaje
+    html += '<div style="padding:16px;border-top:1px solid var(--border);">';
+    html += '<textarea id="nuevoMensaje" rows="3" class="edit-input" placeholder="Escribí tu mensaje..." style="width:100%;resize:vertical;margin-bottom:10px;"></textarea>';
+    html += '<div style="display:flex;gap:10px;">';
+    html += '<input id="nuevoAsunto" class="edit-input" placeholder="Asunto..." style="flex:1;" />';
+    html += '<button class="m-btn primary" onclick="enviarMensaje(\'' + canalId + '\')">📨 Enviar</button>';
+    html += '</div></div></div>';
+    panel.innerHTML = html;
+  } catch(e) {
+    panel.innerHTML = '<div style="padding:20px;color:var(--red);">❌ Error: ' + esc(e.message) + '</div>';
+  }
+}
+
+async function renderMensaje(m) {
+  var remitente = m.remitente_nombre || m.remitente_id || 'Usuario';
+  // Cargar respuestas anidadas
+  var respuestasHtml = '';
+  try {
+    var { data: hijos } = await sbClient.from('mensajes_equipo').select('*').eq('respuesta_a', m.id).order('created_at');
+    if (hijos && hijos.length) {
+      for (var i = 0; i < hijos.length; i++) {
+        respuestasHtml += await renderMensaje(hijos[i]);
+      }
+    }
+  } catch(e) {}
+  var tipoColor = m.tipo_mensaje === 'urgente' ? 'var(--red)' : m.tipo_mensaje === 'aviso' ? 'var(--accent2)' : 'var(--muted)';
+  return '<div style="border-left:3px solid var(--border2);padding-left:14px;margin-bottom:16px;">' +
+    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">' +
+    '<strong style="font-size:.85rem;">' + esc(remitente) + '</strong>' +
+    '<span style="font-size:.72rem;color:var(--muted);">' + new Date(m.created_at).toLocaleString('es-AR') + '</span>' +
+    '<span style="font-size:.65rem;font-weight:700;padding:2px 7px;border-radius:20px;background:rgba(255,255,255,.05);color:' + tipoColor + ';">' + esc(m.tipo_mensaje||'aviso') + '</span>' +
+    '</div>' +
+    (m.asunto ? '<div style="font-weight:700;font-size:.85rem;margin-bottom:4px;">' + esc(m.asunto) + '</div>' : '') +
+    '<div style="font-size:.88rem;color:rgba(220,235,255,.85);">' + esc(m.cuerpo||'') + '</div>' +
+    '<button onclick="mostrarRespuesta(' + m.id + ')" style="margin-top:6px;background:none;border:none;cursor:pointer;color:var(--muted);font-size:.75rem;padding:0;">↩️ Responder</button>' +
+    '<div id="resp-' + m.id + '" style="display:none;margin-top:8px;">' +
+      '<textarea id="respuestaTexto-' + m.id + '" rows="2" class="edit-input" placeholder="Escribí tu respuesta..." style="width:100%;resize:vertical;margin-bottom:6px;"></textarea>' +
+      '<button class="m-btn primary" style="font-size:.78rem;padding:6px 14px;" onclick="enviarRespuesta(' + m.id + ',' + m.canal_id + ')">Enviar respuesta</button>' +
+    '</div>' +
+    (respuestasHtml ? '<div style="margin-left:16px;margin-top:12px;">' + respuestasHtml + '</div>' : '') +
+    '</div>';
+}
+
+function mostrarRespuesta(msgId) {
+  var el = document.getElementById('resp-' + msgId);
+  if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+
+async function enviarMensaje(canalId, respuestaA) {
+  if (!_currentProfile || !sbClient) { showToast('❌ Sin sesión'); return; }
+  var cuerpo, asunto;
+  if (respuestaA) {
+    var el = document.getElementById('respuestaTexto-' + respuestaA);
+    cuerpo = el ? el.value.trim() : '';
+    asunto = 'Re: mensaje';
+  } else {
+    var cuerpoEl = document.getElementById('nuevoMensaje');
+    var asuntoEl = document.getElementById('nuevoAsunto');
+    cuerpo = cuerpoEl ? cuerpoEl.value.trim() : '';
+    asunto = asuntoEl ? asuntoEl.value.trim() : 'Sin asunto';
+  }
+  if (!cuerpo) { showToast('⚠️ Escribí un mensaje antes de enviar'); return; }
+  try {
+    var { error } = await sbClient.from('mensajes_equipo').insert({
+      remitente_id: _currentProfile.user_id,
+      remitente_nombre: _currentProfile.nombre || 'Asesor',
+      asunto: asunto || 'Sin asunto',
+      cuerpo: cuerpo,
+      canal_id: parseInt(canalId),
+      respuesta_a: respuestaA || null,
+      tipo_mensaje: 'aviso'
+    });
+    if (error) throw error;
+    showToast('✅ Mensaje enviado');
+    cargarMensajesCanal(canalId);
+  } catch(e) {
+    showToast('❌ Error al enviar: ' + (e.message || e));
+  }
+}
+
+async function enviarRespuesta(msgId, canalId) {
+  await enviarMensaje(String(canalId), msgId);
+}
+
+// Event listener global para botones "Copiar número de ticket" (.copiar-ticket)
+document.addEventListener('click', function(e) {
+  var btn = e.target.closest('.copiar-ticket');
+  if (!btn) return;
+  e.stopPropagation();
+  var numero = btn.getAttribute('data-numero');
+  if (!numero) return;
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(numero).then(function() {
+      showToast('✅ Número copiado: ' + numero);
+    }).catch(function() {
+      showToast('📋 ' + numero);
+    });
+  } else {
+    // Fallback para navegadores sin clipboard API
+    var ta = document.createElement('textarea');
+    ta.value = numero;
+    ta.style.cssText = 'position:fixed;opacity:0;pointer-events:none;';
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); showToast('✅ Número copiado: ' + numero); } catch(e) { showToast('📋 ' + numero); }
+    document.body.removeChild(ta);
+  }
+});
 
 window.cargarTicketsAsesor      = cargarTicketsAsesor;
 window.abrirNuevoTicketAsesor   = abrirNuevoTicketAsesor;

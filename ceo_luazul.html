@@ -843,6 +843,7 @@ window.LZ = (function() {
       <div class="tab" onclick="showTab('premios_referidos')" id="tab-premios_referidos" style="color:#fbbf24;">🎁 Premios Referidos</div>
       <div class="tab" onclick="showTab('vouchers')" id="tab-vouchers">🎟️ Gestión Vouchers</div>
       <div class="tab" onclick="showTab('tickets')" id="tab-tickets" style="color:#fbbf24;">🎫 Tickets</div>
+      <div class="tab" onclick="showTab('comunicaciones'); renderComunicaciones();" id="tab-comunicaciones" style="color:#06b6d4;">📩 Comunicaciones</div>
     </div>
         <!-- ══ OVERVIEW ══ -->
     <div class="tabpg active" id="tabpg-overview">
@@ -1187,11 +1188,20 @@ window.LZ = (function() {
         </div>
       </div>
       <div id="ticketsLista" class="twrap" style="overflow-x:auto;">
-        <div class="thead-ceo" style="grid-template-columns: 100px 2fr 1fr 100px 100px 120px 80px; gap:8px; padding:12px 16px;">
-          <div>Nº Ticket</div><div>Asunto / Descripción</div><div>Cliente / Vendedor</div><div>Estado</div><div>Prioridad</div><div>Última actividad</div><div>Acciones</div>
+        <div class="thead-ceo" style="grid-template-columns: 100px 2fr 1fr 100px 100px 120px 60px 80px; gap:8px; padding:12px 16px;">
+          <div>Nº Ticket</div><div>Asunto / Descripción</div><div>Cliente / Vendedor</div><div>Estado</div><div>Prioridad</div><div>Última actividad</div><div>Nivel</div><div>Acciones</div>
         </div>
         <div id="ticketsListaBody"></div>
       </div>
+    </div>
+
+    <!-- ══ COMUNICACIONES INTERNAS ══ -->
+    <div class="tabpg" id="tabpg-comunicaciones">
+      <div class="sec-head">
+        <h2>📩 Comunicaciones Internas</h2>
+        <button onclick="renderComunicaciones()" style="padding:8px 16px;border-radius:9px;background:rgba(6,182,212,.1);border:1px solid rgba(6,182,212,.25);color:#06b6d4;font-family:inherit;font-size:.78rem;font-weight:700;cursor:pointer;">🔄 Actualizar</button>
+      </div>
+      <div id="comunicacionesContainer" style="min-height:300px;"></div>
     </div>
 
   </main>
@@ -4350,18 +4360,42 @@ function verDetalleStaff(staffId) {
       var vendedorNombre = t.vendedor ? t.vendedor.nombre : (t.vendedor_id ? 'ID: ' + t.vendedor_id : '—');
       var diasInactivos = calcularDiasInactivos(t.updated_at || t.created_at);
       var highlight = (diasInactivos > 7 && estadoTexto !== 'cerrado') ? '⚠️ ' : '';
+      var nivelActual = t.nivel_actual || 1;
+      var nivelColor = nivelActual >= 3 ? 'var(--red)' : nivelActual === 2 ? 'var(--orange)' : 'var(--muted)';
+      var numTicket = esc(t.numero_ticket || 'LK-????');
 
-      html += '<div class="trow" style="display:grid;grid-template-columns: 100px 2fr 1fr 100px 100px 120px 80px; gap:8px; padding:12px 16px; border-bottom:1px solid var(--border); cursor:pointer;" onclick="verTicket(' + t.id + ')">' +
-        '<div style="font-family:monospace;font-weight:700;font-size:.8rem;">' + esc(t.numero_ticket || 'LK-????') + '</div>' +
+      html += '<div class="trow" style="display:grid;grid-template-columns: 100px 2fr 1fr 100px 100px 120px 60px 80px; gap:8px; padding:12px 16px; border-bottom:1px solid var(--border); cursor:pointer;" onclick="verTicket(' + t.id + ')">' +
+        '<div style="display:flex;align-items:center;gap:4px;">' +
+          '<span style="font-family:monospace;font-weight:700;font-size:.8rem;">' + numTicket + '</span>' +
+          '<button class="copiar-ticket" data-numero="' + numTicket + '" title="Copiar número" style="background:none;border:none;cursor:pointer;padding:2px;font-size:.85rem;line-height:1;color:var(--muted);transition:color .15s;" onclick="event.stopPropagation();">📋</button>' +
+        '</div>' +
         '<div><div style="font-weight:600;">' + highlight + esc(t.tipo || 'Incidencia') + '</div><div style="font-size:.75rem;color:var(--muted);">' + esc((t.mensaje || '').substring(0, 60)) + (t.mensaje && t.mensaje.length > 60 ? '…' : '') + '</div></div>' +
         '<div><div style="font-size:.82rem;">' + esc(clienteNombre) + '</div><div style="font-size:.7rem;color:var(--muted);">' + esc(vendedorNombre) + '</div></div>' +
         '<div><span class="' + estadoClase + '" style="font-size:.65rem;">' + estadoTexto.toUpperCase() + '</span></div>' +
         '<div><span style="font-size:.72rem;font-weight:700;color:' + prioridadColor + ';">' + prioridadTexto.toUpperCase() + '</span></div>' +
         '<div style="font-size:.75rem;color:var(--muted);">' + formatDateRelative(t.updated_at || t.created_at) + (diasInactivos > 7 ? ' <span style="color:var(--red);">⏰ ' + diasInactivos + 'd</span>' : '') + '</div>' +
+        '<div style="text-align:center;"><span style="font-size:.78rem;font-weight:800;color:' + nivelColor + ';">Nv.' + nivelActual + '</span></div>' +
         '<div><button style="padding:4px 8px;background:var(--card);border:1px solid var(--border2);border-radius:6px;cursor:pointer;font-size:.8rem;" onclick="event.stopPropagation();verTicket(' + t.id + ')">👁️</button></div>' +
         '</div>';
     }
     container.innerHTML = html;
+
+    // Event listeners para botones Copiar número
+    document.querySelectorAll('.copiar-ticket').forEach(function(btn) {
+      btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        var numero = btn.getAttribute('data-numero');
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(numero).then(function() {
+            showToast('✅ Número copiado: ' + numero);
+          }).catch(function() {
+            showToast('📋 ' + numero + ' — copiá manualmente');
+          });
+        } else {
+          showToast('📋 ' + numero + ' — copiá manualmente');
+        }
+      });
+    });
   }
 
   function calcularDiasInactivos(fechaISO) {
@@ -4568,6 +4602,7 @@ function verDetalleStaff(staffId) {
       '<div class="mi"><div class="ml">Vendedor reportante</div><div class="mv">' + esc(vendedorNombre) + '</div></div>' +
       '<div class="mi"><div class="ml">Estado</div><div><select id="detEstado" class="msel" style="width:auto;">' + estadoOpts + '</select></div></div>' +
       '<div class="mi"><div class="ml">Prioridad</div><div><select id="detPrioridad" class="msel" style="width:auto;">' + prioridadOpts + '</select></div></div>' +
+      '<div class="mi"><div class="ml">Nivel de escalamiento</div><div class="mv" style="font-weight:800;color:' + ((ticket.nivel_actual || 1) >= 3 ? 'var(--red)' : (ticket.nivel_actual || 1) === 2 ? 'var(--orange)' : 'var(--muted)') + ';">Nivel ' + (ticket.nivel_actual || 1) + '</div></div>' +
       '</div>' +
       '<div class="mi" style="margin-bottom:12px;"><div class="ml">Descripción</div><div class="mv" style="white-space:pre-wrap;">' + esc(ticket.mensaje || '') + '</div></div>' +
       adjuntosHtml +
@@ -4746,6 +4781,220 @@ for (var k = 0; k < allRs.length; k++) {
     populatePagoFiltros();
     renderPasswords();
   }
+
+  // ═══════════════════════════════════════════════════════
+  // ══  MÓDULO DE COMUNICACIONES INTERNAS (CEO — sin filtros de canal)
+  // ═══════════════════════════════════════════════════════
+
+  var _canalActivo = null; // ID del canal actualmente seleccionado
+
+  // CEO ve todos los canales sin restricciones de rol
+  async function cargarCanales() {
+    if (!sbClient) return [];
+    var res = await sbClient.from('canales_equipo').select('*').order('nombre');
+    if (res.error) { console.warn('[cargarCanales]', res.error); return []; }
+    return res.data || [];
+  }
+
+  async function getUserName(userId) {
+    if (!userId) return 'Sistema';
+    // Buscar primero en caches locales
+    var enVend = _cacheVendedores || [];
+    var enGer  = _cacheGerentes  || [];
+    for (var i = 0; i < enVend.length; i++) { if (String(enVend[i].user_id) === String(userId)) return enVend[i].nombre; }
+    for (var i = 0; i < enGer.length;  i++) { if (String(enGer[i].user_id)  === String(userId)) return enGer[i].nombre; }
+    // Fallback a DB
+    try {
+      var r = await sbClient.from('staff_profiles').select('nombre').eq('user_id', userId).single();
+      return (r.data && r.data.nombre) ? r.data.nombre : 'Usuario';
+    } catch(e) { return 'Usuario'; }
+  }
+
+  async function renderComunicaciones() {
+    var container = document.getElementById('comunicacionesContainer');
+    if (!container) return;
+    container.innerHTML = '<div style="color:var(--muted);padding:20px;">⏳ Cargando canales...</div>';
+    try {
+      var canales = await cargarCanales();
+      if (!canales.length) {
+        container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted);">No hay canales disponibles.<br><small style="font-size:.75rem;">Creá canales en la tabla <code>canales_equipo</code> en Supabase.</small></div>';
+        return;
+      }
+      var html = '<div style="display:flex;gap:0;border:1px solid var(--border);border-radius:16px;overflow:hidden;min-height:500px;">';
+      // Panel izquierdo — lista de canales
+      html += '<div style="width:240px;flex-shrink:0;border-right:1px solid var(--border);background:rgba(255,255,255,.02);">';
+      html += '<div style="padding:14px 16px;font-family:Syne,sans-serif;font-size:.78rem;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--cyan);border-bottom:1px solid var(--border);">📡 Canales</div>';
+      for (var i = 0; i < canales.length; i++) {
+        var c = canales[i];
+        var isActive = _canalActivo && String(_canalActivo) === String(c.id);
+        html += '<div class="canal-item" data-canal="' + c.id + '" style="padding:12px 16px;cursor:pointer;border-bottom:1px solid var(--border);font-size:.85rem;font-weight:600;transition:background .15s;' + (isActive ? 'background:rgba(6,182,212,.12);color:var(--cyan);border-left:3px solid var(--cyan);' : 'color:var(--text);border-left:3px solid transparent;') + '">' +
+          '# ' + esc(c.nombre) +
+          (c.descripcion ? '<div style="font-size:.68rem;color:var(--muted);font-weight:400;margin-top:2px;">' + esc(c.descripcion) + '</div>' : '') +
+          '</div>';
+      }
+      html += '</div>';
+      // Panel derecho — mensajes
+      html += '<div id="mensajesPanel" style="flex:1;display:flex;flex-direction:column;">';
+      html += '<div style="padding:20px;color:var(--muted);text-align:center;margin:auto;">← Seleccioná un canal para ver los mensajes</div>';
+      html += '</div>';
+      html += '</div>';
+      container.innerHTML = html;
+
+      // Event listeners para selección de canal
+      document.querySelectorAll('#comunicacionesContainer .canal-item').forEach(function(el) {
+        el.addEventListener('click', function() {
+          _canalActivo = el.getAttribute('data-canal');
+          // Marcar activo visualmente
+          document.querySelectorAll('#comunicacionesContainer .canal-item').forEach(function(x) {
+            x.style.background = '';
+            x.style.color = 'var(--text)';
+            x.style.borderLeft = '3px solid transparent';
+          });
+          el.style.background = 'rgba(6,182,212,.12)';
+          el.style.color = 'var(--cyan)';
+          el.style.borderLeft = '3px solid var(--cyan)';
+          cargarMensajesCanal(_canalActivo);
+        });
+      });
+
+      // Auto-abrir canal activo si ya hay uno seleccionado
+      if (_canalActivo) cargarMensajesCanal(_canalActivo);
+
+    } catch (err) {
+      console.error('[renderComunicaciones]', err);
+      container.innerHTML = '<div style="padding:20px;color:var(--red);">❌ Error al cargar comunicaciones: ' + esc(err.message || err) + '</div>';
+    }
+  }
+
+  async function cargarMensajesCanal(canalId) {
+    var panel = document.getElementById('mensajesPanel');
+    if (!panel) return;
+    panel.innerHTML = '<div style="padding:20px;color:var(--muted);">⏳ Cargando mensajes...</div>';
+    try {
+      var res = await sbClient.from('mensajes_equipo')
+        .select('*')
+        .eq('canal_id', canalId)
+        .is('respuesta_a', null)
+        .order('created_at', { ascending: true });
+      if (res.error) throw res.error;
+      var mensajes = res.data || [];
+
+      var msgsHtml = '';
+      for (var i = 0; i < mensajes.length; i++) {
+        msgsHtml += await renderMensaje(mensajes[i]);
+      }
+      if (!msgsHtml) {
+        msgsHtml = '<div style="text-align:center;padding:40px;color:var(--muted);">Sin mensajes en este canal. ¡Sé el primero en escribir!</div>';
+      }
+
+      panel.innerHTML =
+        '<div id="msgsScrollArea" style="flex:1;overflow-y:auto;padding:16px;max-height:420px;">' + msgsHtml + '</div>' +
+        '<div style="padding:12px 16px;border-top:1px solid var(--border);background:rgba(255,255,255,.02);">' +
+          '<div style="display:flex;gap:8px;align-items:flex-end;">' +
+            '<textarea id="nuevoMensaje" rows="2" placeholder="Escribí tu mensaje..." style="flex:1;background:rgba(255,255,255,.04);border:1px solid var(--border2);border-radius:10px;color:var(--text);font-family:Mulish,sans-serif;font-size:.85rem;padding:10px;resize:none;transition:border-color .2s;" onfocus="this.style.borderColor=\'var(--cyan)\'" onblur="this.style.borderColor=\'var(--border2)\'"></textarea>' +
+            '<button onclick="enviarMensaje(\'' + canalId + '\')" style="padding:10px 18px;background:linear-gradient(135deg,#0891b2,#06b6d4);border:none;border-radius:10px;color:white;font-family:Mulish,sans-serif;font-size:.82rem;font-weight:700;cursor:pointer;white-space:nowrap;">✉️ Enviar</button>' +
+          '</div>' +
+        '</div>';
+
+      // Scroll al final
+      var scrollEl = document.getElementById('msgsScrollArea');
+      if (scrollEl) scrollEl.scrollTop = scrollEl.scrollHeight;
+
+    } catch (err) {
+      console.error('[cargarMensajesCanal]', err);
+      panel.innerHTML = '<div style="padding:20px;color:var(--red);">❌ Error al cargar mensajes: ' + esc(err.message || err) + '</div>';
+    }
+  }
+
+  async function renderMensaje(m) {
+    var remitente = await getUserName(m.remitente_id);
+    var fecha = m.created_at ? new Date(m.created_at).toLocaleString('es-AR', { day:'2-digit', month:'2-digit', year:'2-digit', hour:'2-digit', minute:'2-digit' }) : '—';
+    var tipoColor = m.tipo_mensaje === 'urgente' ? 'var(--red)' : m.tipo_mensaje === 'aviso' ? 'var(--gold)' : 'var(--blue)';
+
+    // Cargar respuestas (hijos)
+    var respuestasHtml = '';
+    try {
+      var hijosRes = await sbClient.from('mensajes_equipo').select('*').eq('respuesta_a', m.id).order('created_at', { ascending: true });
+      if (!hijosRes.error && hijosRes.data) {
+        for (var i = 0; i < hijosRes.data.length; i++) {
+          respuestasHtml += await renderMensaje(hijosRes.data[i]);
+        }
+      }
+    } catch(e) { /* sin respuestas */ }
+
+    var esMio = _ceoUid && String(m.remitente_id) === String(_ceoUid);
+    var idMsg = m.id;
+    var idCanal = m.canal_id;
+
+    return '<div style="margin-bottom:16px;padding-left:' + (m.respuesta_a ? '24px' : '0') + ';border-left:' + (m.respuesta_a ? '3px solid var(--border2)' : 'none') + ';">' +
+      '<div style="background:' + (esMio ? 'rgba(6,182,212,.07)' : 'rgba(255,255,255,.03)') + ';border:1px solid ' + (esMio ? 'rgba(6,182,212,.2)' : 'var(--border)') + ';border-radius:12px;padding:12px 14px;">' +
+        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap;">' +
+          '<span style="font-weight:700;font-size:.82rem;color:' + (esMio ? 'var(--cyan)' : 'var(--text)') + ';">' + esc(remitente) + '</span>' +
+          '<span style="font-size:.65rem;color:var(--muted);">' + fecha + '</span>' +
+          (m.tipo_mensaje ? '<span style="font-size:.62rem;padding:2px 7px;border-radius:6px;background:rgba(255,255,255,.06);color:' + tipoColor + ';font-weight:700;text-transform:uppercase;">' + esc(m.tipo_mensaje) + '</span>' : '') +
+        '</div>' +
+        (m.asunto ? '<div style="font-weight:700;font-size:.85rem;margin-bottom:4px;">' + esc(m.asunto) + '</div>' : '') +
+        '<div style="font-size:.85rem;line-height:1.5;white-space:pre-wrap;">' + esc(m.cuerpo || '') + '</div>' +
+        '<div style="margin-top:8px;">' +
+          '<button onclick="mostrarRespuesta(\'' + idMsg + '\')" style="background:none;border:none;cursor:pointer;font-size:.72rem;color:var(--muted);padding:0;font-family:Mulish,sans-serif;transition:color .15s;" onmouseover="this.style.color=\'var(--cyan)\'" onmouseout="this.style.color=\'var(--muted)\'">↩️ Responder</button>' +
+        '</div>' +
+        '<div id="resp-' + idMsg + '" style="display:none;margin-top:10px;">' +
+          '<textarea id="respuestaTexto-' + idMsg + '" rows="2" placeholder="Escribí tu respuesta..." style="width:100%;background:rgba(255,255,255,.04);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-family:Mulish,sans-serif;font-size:.82rem;padding:8px;resize:none;"></textarea>' +
+          '<button onclick="enviarRespuesta(\'' + idMsg + '\', \'' + idCanal + '\')" style="margin-top:6px;padding:6px 14px;background:linear-gradient(135deg,#0891b2,#06b6d4);border:none;border-radius:8px;color:white;font-family:Mulish,sans-serif;font-size:.78rem;font-weight:700;cursor:pointer;">Enviar respuesta</button>' +
+        '</div>' +
+      '</div>' +
+      (respuestasHtml ? '<div style="margin-top:8px;">' + respuestasHtml + '</div>' : '') +
+    '</div>';
+  }
+
+  function mostrarRespuesta(msgId) {
+    var el = document.getElementById('resp-' + msgId);
+    if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
+  }
+
+  async function enviarMensaje(canalId, respuestaA) {
+    if (!sbClient || !_ceoUid) { showToast('⚠️ Sesión no válida'); return; }
+    var cuerpo, asunto;
+    if (respuestaA) {
+      var el = document.getElementById('respuestaTexto-' + respuestaA);
+      cuerpo = el ? el.value.trim() : '';
+      asunto = 'Re: mensaje';
+    } else {
+      var el = document.getElementById('nuevoMensaje');
+      cuerpo = el ? el.value.trim() : '';
+      asunto = 'Mensaje CEO';
+    }
+    if (!cuerpo) { showToast('⚠️ Escribí algo antes de enviar'); return; }
+
+    try {
+      var ins = await sbClient.from('mensajes_equipo').insert({
+        remitente_id: _ceoUid,
+        asunto: asunto,
+        cuerpo: cuerpo,
+        canal_id: canalId,
+        respuesta_a: respuestaA || null,
+        tipo_mensaje: 'aviso',
+        created_at: new Date().toISOString()
+      });
+      if (ins.error) throw ins.error;
+      showToast('✅ Mensaje enviado');
+      cargarMensajesCanal(canalId);
+    } catch (err) {
+      console.error('[enviarMensaje]', err);
+      showToast('❌ Error al enviar: ' + (err.message || err));
+    }
+  }
+
+  async function enviarRespuesta(msgId, canalId) {
+    await enviarMensaje(canalId, msgId);
+  }
+
+  // Exportar funciones de comunicaciones al scope global
+  window.renderComunicaciones = renderComunicaciones;
+  window.cargarMensajesCanal  = cargarMensajesCanal;
+  window.enviarMensaje        = enviarMensaje;
+  window.enviarRespuesta      = enviarRespuesta;
+  window.mostrarRespuesta     = mostrarRespuesta;
 
   // Exportar funciones globales necesarias
   window.cLogin = cLogin;
