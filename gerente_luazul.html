@@ -352,37 +352,48 @@ function _lzEnrich(c) {
 // ── 5. CARGA CENTRALIZADA (LZ_LOAD) ──────────────────────────────
 const LZ_LOAD = {
   loadData: async function(profile, userRole, sbClient) {
-    var regRes = await sbClient.from('regiones').select('id,nombre,bandera,pais,color,activo').eq('activo', true).order('pais,nombre');
-    if (regRes.error) throw regRes.error;
-    var regiones = regRes.data || [];
 
-    var staffRes = await sbClient.from('staff_profiles_view').select('*').or('manager_id.eq.' + profile.id + ',user_id.eq.' + profile.user_id);
+    // ── RONDA 1: regiones + staff + gerente_regiones en paralelo ──
+    var ronda1 = await Promise.all([
+      sbClient.from('regiones').select('id,nombre,bandera,pais,color,activo').eq('activo', true).order('pais,nombre'),
+      sbClient.from('staff_profiles_view').select('*').or('manager_id.eq.' + profile.id + ',user_id.eq.' + profile.user_id),
+      sbClient.from('gerente_regiones').select('region_id').eq('gerente_id', profile.user_id)
+    ]);
+    var regRes = ronda1[0], staffRes = ronda1[1], grRes = ronda1[2];
+    if (regRes.error)   throw regRes.error;
     if (staffRes.error) throw staffRes.error;
-    var staff = (staffRes.data || []).map(_lzMapStaff);
 
-    var grRes = await sbClient.from('gerente_regiones').select('region_id').eq('gerente_id', profile.user_id);
-    var rIds = ((grRes.data || []).map(function(r) { return r.region_id; }));
+    var regiones = regRes.data || [];
+    var staff    = (staffRes.data || []).map(_lzMapStaff);
+    var rIds     = (grRes.data || []).map(function(r) { return r.region_id; });
+
     var cliQuery = sbClient.from('clientes').select('*');
     if (rIds.length) cliQuery = cliQuery.in('region_id', rIds);
     else {
       var sIds = staff.filter(function(s) { return s.role_id === ROLE_SELLER; }).map(function(s) { return s.id; });
       cliQuery = sIds.length ? cliQuery.in('seller_id', sIds) : cliQuery.eq('region_id', -1);
     }
+
+    // ── RONDA 2: clientes (necesita rIds de gerente_regiones) ──
     var cliRes = await cliQuery.order('nombre');
     if (cliRes.error) throw cliRes.error;
-    var clientes = (cliRes.data || []).map(_lzMapClient);
-
+    var clientes  = (cliRes.data || []).map(_lzMapClient);
     var clientIds = clientes.map(function(c) { return c.id; });
-    var pagos = [];
-    if (clientIds.length) {
-      var pagRes = await sbClient.from('pagos').select('*').in('cliente_id', clientIds).order('created_at', { ascending: false }).limit(500);
-      if (!pagRes.error) pagos = (pagRes.data || []).map(_lzMapPago);
-    }
 
-    var notifRes = await sbClient.from('notificaciones').select('*')
+    // ── RONDA 3: pagos + notificaciones en paralelo ──
+    var pagosPromise = clientIds.length
+      ? sbClient.from('pagos').select('*').in('cliente_id', clientIds).order('created_at', { ascending: false }).limit(500)
+      : Promise.resolve({ data: [], error: null });
+
+    var notifPromise = sbClient.from('notificaciones').select('*')
       .or('destinatario_id.eq.' + profile.id + ',destinatario_rol.eq.manager')
       .order('created_at', { ascending: false }).limit(200);
+
+    var ronda3 = await Promise.all([pagosPromise, notifPromise]);
+    var pagRes = ronda3[0], notifRes = ronda3[1];
     if (notifRes.error) throw notifRes.error;
+
+    var pagos         = (!pagRes.error && pagRes.data) ? pagRes.data.map(_lzMapPago) : [];
     var notificaciones = notifRes.data || [];
 
     return { regiones: regiones, staff: staff, clientes: clientes, pagos: pagos, notificaciones: notificaciones };
@@ -3004,7 +3015,7 @@ function cargarTicketsGerente() {
   var search    = ((document.getElementById('ticketSearch')         || {}).value || '').toLowerCase();
 
   var query = sbClient.from('notificaciones')
-    .select('*, cliente:clientes(nombre, email, region_id)')
+    .select('*, cliente:clientes(nombre, email, region_id), vendedor:staff_profiles!vendedor_id(nombre, region_id)')
     .in('tipo', ['incidencia', 'soporte', 'mejora', 'falla_tecnica'])
     .order('created_at', { ascending: false });
 
@@ -3037,7 +3048,7 @@ function renderListaTicketsGerente(tickets) {
     var estadoClase = t.estado === 'abierto' ? 'badge atraso' : (t.estado === 'en_progreso' ? 'badge atraso_gestion' : (t.estado === 'resuelto' ? 'badge completo' : 'badge baja'));
     var prioridadClase = t.prioridad === 'urgente' ? 'pri-chip rojo' : (t.prioridad === 'alta' ? 'pri-chip naranja' : (t.prioridad === 'media' ? 'pri-chip amarillo' : 'pri-chip verde'));
     var clienteNombre = (t.cliente && t.cliente.nombre) ? t.cliente.nombre : (t.cliente_id ? 'ID: '+t.cliente_id : '—');
-    var vendedorNombre = t.vendedor_nombre || (t.vendedor_id ? 'ID: '+t.vendedor_id : '—');
+    var vendedorNombre = (t.vendedor && t.vendedor.nombre) ? t.vendedor.nombre : (t.vendedor_id ? 'ID: '+t.vendedor_id : '—');
     var diasInactivos = Math.floor((new Date() - new Date(t.updated_at || t.created_at)) / (1000*3600*24));
     var highlight = diasInactivos > 7 && t.estado !== 'cerrado' ? '⚠️ ' : '';
     var nivelActual = t.nivel_actual || 1;
@@ -3223,7 +3234,7 @@ function renderDetalleTicketGerente(ticket, comentarios) {
     return '<div style="padding:8px; border-bottom:1px solid var(--border);"><strong>'+(c.remitente_nombre || 'Usuario')+'</strong><div>'+esc(c.mensaje)+'</div><div class="cemail">'+formatDateRelativeT(c.created_at)+'</div></div>';
   }).join('');
   var clienteN = (ticket.cliente && ticket.cliente.nombre) ? ticket.cliente.nombre : '—';
-  var vendedorN = ticket.vendedor_nombre || (ticket.vendedor_id ? 'ID: ' + ticket.vendedor_id : '—');
+  var vendedorN = (ticket.vendedor && ticket.vendedor.nombre) ? ticket.vendedor.nombre : '—';
   var modalHtml =
     '<div class="mhead"><div><h2>🎫 '+(ticket.numero_ticket || '#'+ticket.id)+'</h2><p>'+esc(ticket.tipo)+' · Creado '+formatDateRelativeT(ticket.created_at)+'</p></div><button class="mclose" onclick="closeModal()">✕</button></div>' +
     '<div class="mbody">' +

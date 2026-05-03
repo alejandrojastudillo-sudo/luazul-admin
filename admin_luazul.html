@@ -123,18 +123,21 @@ function enrich(c) {
 // ── 5. CARGA CENTRALIZADA ────────────────────────────────────
 const LZ_LOAD = {
   async loadData(profile, userRole, sbClient, options = {}) {
-    const { data: regiones, error: regError } = await sbClient
-      .from('regiones').select('id, nombre, bandera, pais, color, activo')
-      .eq('activo', true).order('pais, nombre');
-    if (regError) throw regError;
 
+    // ── RONDA 1: regiones + staff en paralelo (siempre independientes) ──
     let staffQuery = sbClient.from('staff_profiles_view').select('*');
     if (userRole === ROLE_SELLER)       staffQuery = staffQuery.eq('user_id', profile.user_id);
     else if (userRole === ROLE_MANAGER) staffQuery = staffQuery.or(`manager_id.eq.${profile.id},user_id.eq.${profile.user_id}`);
-    const { data: staffData, error: staffError } = await staffQuery;
+
+    const [{ data: regiones, error: regError }, { data: staffData, error: staffError }] = await Promise.all([
+      sbClient.from('regiones').select('id, nombre, bandera, pais, color, activo').eq('activo', true).order('pais, nombre'),
+      staffQuery
+    ]);
+    if (regError)   throw regError;
     if (staffError) throw staffError;
     const staff = staffData.map(mapStaffFromSB);
 
+    // ── RONDA 2: clientes (para ROLE_MANAGER necesita gerente_regiones primero) ──
     let clientesQuery = sbClient.from('clientes').select('*');
     if (userRole === ROLE_SELLER) {
       clientesQuery = clientesQuery.eq('seller_id', profile.id);
@@ -147,22 +150,25 @@ const LZ_LOAD = {
     if (clientesError) throw clientesError;
     const clientes = clientesData.map(mapClientFromSB);
 
+    // ── RONDA 3: pagos + notificaciones en paralelo ──
     const clientIds = clientes.map(c => c.id);
-    let pagos = [];
-    if (clientIds.length) {
-      const { data: pagosData, error: pagosError } = await sbClient
-        .from('pagos').select('*').in('cliente_id', clientIds)
-        .order('created_at', { ascending: false }).limit(500);
-      if (!pagosError) pagos = pagosData.map(mapPagoToNotif);
-    }
 
     let notifQuery = sbClient.from('notificaciones').select('*');
     if (userRole === ROLE_SELLER)       notifQuery = notifQuery.eq('destinatario_id', profile.id);
     else if (userRole === ROLE_MANAGER) notifQuery = notifQuery.or(`destinatario_id.eq.${profile.id},destinatario_rol.eq.manager`);
     else                                notifQuery = notifQuery.or(`destinatario_id.eq.${profile.id},destinatario_rol.eq.ceo`);
-    const { data: notificaciones, error: notifError } = await notifQuery
-      .order('created_at', { ascending: false }).limit(200);
+
+    const pagosPromise = clientIds.length
+      ? sbClient.from('pagos').select('*').in('cliente_id', clientIds).order('created_at', { ascending: false }).limit(500)
+      : Promise.resolve({ data: [], error: null });
+
+    const [pagosRes, { data: notificaciones, error: notifError }] = await Promise.all([
+      pagosPromise,
+      notifQuery.order('created_at', { ascending: false }).limit(200)
+    ]);
     if (notifError) throw notifError;
+
+    const pagos = (!pagosRes.error && pagosRes.data) ? pagosRes.data.map(mapPagoToNotif) : [];
 
     return { regiones, staff, clientes, pagos, notificaciones };
   }
@@ -1464,7 +1470,6 @@ function showSection(name) {
   else {
     // Restaurar visibilidad tabla
     mainEls.forEach(function(el){ if(el) el.style.display=''; });
-    renderTable();
   }
 }
 
