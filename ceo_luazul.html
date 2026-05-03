@@ -3182,9 +3182,17 @@ function verDetalleStaff(staffId) {
     if (!container) return;
     container.innerHTML = '<div style="text-align:center;padding:24px;color:var(--muted);">⏳ Cargando pagos pendientes...</div>';
 
+    var now = new Date();
+    var startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    var endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+    var startISO = startOfMonth.toISOString();
+    var endISO = endOfMonth.toISOString();
+
     sbClient.from('pagos')
       .select('*, clientes(nombre, email, region_id)')
       .eq('estado', 'pendiente')
+      .gte('created_at', startISO)
+      .lt('created_at', endISO)
       .order('created_at', { ascending: false })
       .then(function(res) {
         if (res.error) throw res.error;
@@ -3679,7 +3687,7 @@ function verDetalleStaff(staffId) {
     document.getElementById('comisionesBloqBody').innerHTML = html;
   }
   function renderPremiosReferidos() {
-    sbClient.from('referidos').select('*, cliente:clientes(nombre, email, seller_id)').order('created_at', { ascending: false }).limit(200)
+    sbClient.from('referidos').select('*, cliente:clientes!cliente_referidor_id(nombre, email, seller_id)').order('created_at', { ascending: false }).limit(200)
       .then(function(res) {
         if (res.error) throw res.error;
         var refs = res.data || [];
@@ -3687,20 +3695,30 @@ function verDetalleStaff(staffId) {
           document.getElementById('premiosReferidosBody').innerHTML = '<div class="empty-state">🎁 No hay referidos registrados aún.</div>';
           return;
         }
-        var html = '<div class="twrap">' + refs.map(function(r) {
-          var v = vby(r.vendedor_id);
-          var montoPremio = r.estado === 'confirmado' ? 15000 : 0;
-          return '<div class="pago-row" style="padding:12px;border-bottom:1px solid var(--border);">' +
-            '<div><div style="font-weight:700;">' + esc(r.referido_nombre || '—') + '</div><div style="font-size:.7rem;">' + esc(r.referido_email || '—') + '</div></div>' +
-            '<div style="font-size:.75rem;">Referido por: ' + esc((r.cliente && r.cliente.nombre) || '—') + '<br>Asesor: ' + esc(v.nombre || '—') + '</div>' +
-            '<div><span class="ref-badge ' + esc(r.estado) + '">' + (r.estado === 'confirmado' ? '✅ Confirmado' : '⏳ Pendiente') + '</span>' +
-            (montoPremio > 0 ? '<div style="color:var(--gold);">Premio: $' + montoPremio.toLocaleString('es-AR') + '</div>' : '') + '</div>' +
-            (r.estado !== 'confirmado' ? '<button onclick="confirmarReferido(\'' + r.id + '\')" class="mbtn gold" style="padding:2px 8px;">💰 Confirmar premio</button>' : '') +
-            '</div>';
-        }).join('') + '</div>';
-        document.getElementById('premiosReferidosBody').innerHTML = html;
+        try {
+          var html = '<div class="twrap">' + refs.map(function(r) {
+            var v = vby(r.vendedor_id);
+            var montoPremio = r.estado === 'confirmado' ? 15000 : 0;
+            var clienteNombre = (r.cliente && r.cliente.nombre) ? r.cliente.nombre : '—';
+            return '<div class="pago-row" style="padding:12px;border-bottom:1px solid var(--border);">' +
+              '<div><div style="font-weight:700;">' + esc(r.referido_nombre || '—') + '</div><div style="font-size:.7rem;">' + esc(r.referido_email || '—') + '</div></div>' +
+              '<div style="font-size:.75rem;">Referido por: ' + esc(clienteNombre) + '<br>Asesor: ' + esc(v.nombre || '—') + '</div>' +
+              '<div><span class="ref-badge ' + esc(r.estado) + '">' + (r.estado === 'confirmado' ? '✅ Confirmado' : '⏳ Pendiente') + '</span>' +
+              (montoPremio > 0 ? '<div style="color:var(--gold);">Premio: $' + montoPremio.toLocaleString('es-AR') + '</div>' : '') + '</div>' +
+              (r.estado !== 'confirmado' ? '<button onclick="confirmarReferido(\'' + r.id + '\')" class="mbtn gold" style="padding:2px 8px;">💰 Confirmar premio</button>' : '') +
+              '</div>';
+          }).join('') + '</div>';
+          document.getElementById('premiosReferidosBody').innerHTML = html;
+        } catch (err) {
+          console.error('Error renderizando referidos:', err);
+          document.getElementById('premiosReferidosBody').innerHTML = '<div class="empty-state">❌ Error al mostrar los referidos.</div>';
+        }
       })
-      .catch(function(e) { showToast('Error al cargar referidos: ' + e.message); });
+      .catch(function(e) {
+        console.error('Error cargando referidos:', e);
+        document.getElementById('premiosReferidosBody').innerHTML = '<div class="empty-state">⚠️ No se pudieron cargar los referidos.</div>';
+        showToast('Error al cargar referidos: ' + e.message);
+      });
   }
   function confirmarReferido(refId) {
     if (!confirm('¿Confirmar este referido y registrar el premio?')) return;
