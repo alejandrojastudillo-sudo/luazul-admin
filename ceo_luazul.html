@@ -3815,6 +3815,7 @@ function verDetalleStaff(staffId) {
     if (tabId === 'comisiones_bloq') renderComisionesBloqueadas();
     if (tabId === 'premios_referidos') renderPremiosReferidos();
     if (tabId === 'pagocomisiones') renderPagoComisiones();
+    if (tabId === 'clientes') renderClientes();
   }
 
   function closeModal() { document.getElementById('modal').classList.remove('open'); }
@@ -4318,7 +4319,7 @@ function verDetalleStaff(staffId) {
     var search = ((document.getElementById('ticketSearch') || {}).value || '').toLowerCase();
 
     var query = sbClient.from('notificaciones')
-      .select('*, cliente:clientes(nombre, email), vendedor:staff_profiles!vendedor_id(nombre)')
+      .select('*, cliente:clientes(nombre, email)')
       .in('tipo', ['incidencia', 'soporte', 'mejora', 'falla_tecnica'])
       .order('created_at', { ascending: false });
 
@@ -4359,7 +4360,7 @@ function verDetalleStaff(staffId) {
       var prioridadTexto = t.prioridad || 'media';
       var prioridadColor = prioridadTexto === 'urgente' ? '#ef4444' : prioridadTexto === 'alta' ? '#f97316' : prioridadTexto === 'media' ? '#eab308' : '#22c55e';
       var clienteNombre = t.cliente ? t.cliente.nombre : (t.cliente_id ? 'ID: ' + t.cliente_id : '—');
-      var vendedorNombre = t.vendedor ? t.vendedor.nombre : (t.vendedor_id ? 'ID: ' + t.vendedor_id : '—');
+      var vendedorNombre = t.vendedor_nombre || (t.vendedor_id ? 'ID: ' + t.vendedor_id : '—');
       var diasInactivos = calcularDiasInactivos(t.updated_at || t.created_at);
       var highlight = (diasInactivos > 7 && estadoTexto !== 'cerrado') ? '⚠️ ' : '';
       var nivelActual = t.nivel_actual || 1;
@@ -4573,7 +4574,7 @@ function verDetalleStaff(staffId) {
       '<option value="alta"' + (ticket.prioridad === 'alta' ? ' selected' : '') + '>Alta</option>' +
       '<option value="urgente"' + (ticket.prioridad === 'urgente' ? ' selected' : '') + '>Urgente</option>';
     var clienteNombre = ticket.cliente ? ticket.cliente.nombre : (ticket.cliente_id ? 'ID: ' + ticket.cliente_id : '—');
-    var vendedorNombre = ticket.vendedor ? ticket.vendedor.nombre : (ticket.vendedor_id ? 'ID: ' + ticket.vendedor_id : '—');
+    var vendedorNombre = ticket.vendedor_nombre || (ticket.vendedor_id ? 'ID: ' + ticket.vendedor_id : '—');
 
     // Bloque de adjuntos existentes
     var adjuntosHtml = '';

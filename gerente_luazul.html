@@ -2510,6 +2510,7 @@ function showTab(id) {
   if (id === 'miscomisiones') { renderMisComisionesGerente(); }
   if (id === 'mensual') { renderMensual(); }
   if (id === 'tickets') { cargarTicketsGerente(); }
+  if (id === 'clients') { renderClients(); }
 }
 
 // ── RECAUDACIÓN MENSUAL ─────────────────────────────────────
@@ -3015,7 +3016,7 @@ function cargarTicketsGerente() {
   var search    = ((document.getElementById('ticketSearch')         || {}).value || '').toLowerCase();
 
   var query = sbClient.from('notificaciones')
-    .select('*, cliente:clientes(nombre, email, region_id), vendedor:staff_profiles!vendedor_id(nombre, region_id)')
+    .select('*, cliente:clientes(nombre, email, region_id)')
     .in('tipo', ['incidencia', 'soporte', 'mejora', 'falla_tecnica'])
     .order('created_at', { ascending: false });
 
@@ -3048,7 +3049,7 @@ function renderListaTicketsGerente(tickets) {
     var estadoClase = t.estado === 'abierto' ? 'badge atraso' : (t.estado === 'en_progreso' ? 'badge atraso_gestion' : (t.estado === 'resuelto' ? 'badge completo' : 'badge baja'));
     var prioridadClase = t.prioridad === 'urgente' ? 'pri-chip rojo' : (t.prioridad === 'alta' ? 'pri-chip naranja' : (t.prioridad === 'media' ? 'pri-chip amarillo' : 'pri-chip verde'));
     var clienteNombre = (t.cliente && t.cliente.nombre) ? t.cliente.nombre : (t.cliente_id ? 'ID: '+t.cliente_id : '—');
-    var vendedorNombre = (t.vendedor && t.vendedor.nombre) ? t.vendedor.nombre : (t.vendedor_id ? 'ID: '+t.vendedor_id : '—');
+    var vendedorNombre = t.vendedor_nombre || (t.vendedor_id ? 'ID: '+t.vendedor_id : '—');
     var diasInactivos = Math.floor((new Date() - new Date(t.updated_at || t.created_at)) / (1000*3600*24));
     var highlight = diasInactivos > 7 && t.estado !== 'cerrado' ? '⚠️ ' : '';
     var nivelActual = t.nivel_actual || 1;
@@ -3234,7 +3235,7 @@ function renderDetalleTicketGerente(ticket, comentarios) {
     return '<div style="padding:8px; border-bottom:1px solid var(--border);"><strong>'+(c.remitente_nombre || 'Usuario')+'</strong><div>'+esc(c.mensaje)+'</div><div class="cemail">'+formatDateRelativeT(c.created_at)+'</div></div>';
   }).join('');
   var clienteN = (ticket.cliente && ticket.cliente.nombre) ? ticket.cliente.nombre : '—';
-  var vendedorN = (ticket.vendedor && ticket.vendedor.nombre) ? ticket.vendedor.nombre : '—';
+  var vendedorN = ticket.vendedor_nombre || (ticket.vendedor_id ? 'ID: ' + ticket.vendedor_id : '—');
   var modalHtml =
     '<div class="mhead"><div><h2>🎫 '+(ticket.numero_ticket || '#'+ticket.id)+'</h2><p>'+esc(ticket.tipo)+' · Creado '+formatDateRelativeT(ticket.created_at)+'</p></div><button class="mclose" onclick="closeModal()">✕</button></div>' +
     '<div class="mbody">' +
