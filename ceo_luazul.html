@@ -2427,46 +2427,59 @@ function saveEditGerente(gid) {
   }
 
   function renderPagos() {
+    var container = document.getElementById('pagosBody');
+    if (!container) return;
+
     if (!_cachePagos || !Array.isArray(_cachePagos)) {
-      var elBody = document.getElementById('pagosBody');
-      if (elBody) elBody.innerHTML = '<div style="text-align:center;padding:40px;">⏳ Cargando pagos...</div>';
+      container.innerHTML = '<div style="text-align:center;padding:40px;">⏳ Cargando pagos...</div>';
+      if (!_cacheClientes) loadClients().then(function() { renderPagos(); });
       return;
     }
-    var pays = (_cachePagos || []).filter(function(n) { return true; });
+
+    var pays = _cachePagos.slice();
     var ef = (document.getElementById('pagoEstFilt') || {}).value || '';
     if (ef === 'pendiente') pays = pays.filter(function(n) { return n.estado === 'pendiente'; });
-    if (ef === 'aprobado') pays = pays.filter(function(n) { return n.estado === 'aprobado'; });
-    var el = document.getElementById('pagosBody');
-    if (!el) return;
-    var pend = (_cachePagos || []).filter(function(n) { return n.estado === 'pendiente'; }).length;
-    var aprob = (_cachePagos || []).filter(function(n) { return n.estado === 'aprobado'; }).length;
-    var totalUSD = (_cachePagos || []).filter(function(n) { return n.estado === 'aprobado'; }).reduce(function(s, n) { return s + (parseFloat(n.monto_usd) || 0); }, 0);
-    el.innerHTML =
-      '<div class="kpi-grid" style="margin-bottom:16px;">'
+    if (ef === 'aprobado')  pays = pays.filter(function(n) { return n.estado === 'aprobado'; });
+
+    var pend     = (_cachePagos || []).filter(function(n) { return n.estado === 'pendiente'; }).length;
+    var aprob    = (_cachePagos || []).filter(function(n) { return n.estado === 'aprobado'; }).length;
+    var totalUSD = (_cachePagos || []).filter(function(n) { return n.estado === 'aprobado'; })
+                    .reduce(function(s, n) { return s + (parseFloat(n.monto_usd) || 0); }, 0);
+
+    var html = '<div class="kpi-grid" style="margin-bottom:16px;">'
       + '<div class="kpi"><span>⏳</span><div class="kpi-v" style="color:var(--gold);">' + pend + '</div><div class="kpi-l">Pendientes</div></div>'
       + '<div class="kpi"><span>✅</span><div class="kpi-v" style="color:var(--green);">' + aprob + '</div><div class="kpi-l">Aprobados</div></div>'
       + '<div class="kpi"><span>💵</span><div class="kpi-v" style="color:var(--gold);font-size:1.2rem;">' + totalUSD.toLocaleString('es-AR') + '</div><div class="kpi-l">USD confirmados</div></div>'
-      + '</div>'
-      + (pays.length
-        ? '<div class="twrap">'
-          + '<div class="thead-ceo" style="grid-template-columns:30px 2fr 1.2fr 80px 80px 100px 80px 90px;">'
-          + '<div></div><div>Cliente</div><div>Asesor</div><div>Cuota</div><div>Monto</div><div>Tiempo</div><div>Estado</div><div>Acc.</div>'
-          + '</div>'
-          + pays.map(function(n) {
-              var aprobado = n.estado === 'aprobado';
-              var ts = n.created_at ? new Date(n.created_at).getTime() : Date.now();
-              return '<div class="trow-ceo" style="grid-template-columns:30px 2fr 1.2fr 80px 80px 100px 80px 90px;">'
-                + '<span style="font-size:1rem;">' + (aprobado ? '✅' : '⏳') + '</span>'
-                + '<div><div style="font-size:.84rem;font-weight:600;">' + (n.cliente_nombre || '—') + '</div></div>'
-                + '<div style="font-size:.76rem;color:var(--muted);">' + (n.vendedor_nombre || '—') + '</div>'
-                + '<div style="text-align:center;">#' + n.numero_cuota + '</div>'
-                + '<div style="font-weight:700;color:' + (aprobado ? 'var(--green)' : 'var(--gold)') + ';">USD ' + n.monto_usd + '</div>'
-                + '<div style="font-size:.7rem;color:var(--muted);">' + fmtTs(ts) + '</div>'
-                + '<div><span style="font-size:.68rem;font-weight:700;padding:2px 7px;border-radius:6px;' + (aprobado ? 'background:var(--green-bg);color:var(--green);' : 'background:var(--gold-bg);color:var(--gold);') + '">' + (aprobado ? 'OK' : 'Pend.') + '</span></div>'
-                + '<div>' + (!aprobado ? '<button onclick="aprobarPagoSb(\'' + n.id + '\')" style="padding:3px 7px;background:var(--green-bg);border:1px solid var(--green-bd);color:var(--green);border-radius:5px;font-size:.66rem;font-weight:700;cursor:pointer;">✅</button>' : '') + '</div>'
-                + '</div>';
-            }).join('') + '</div>'
-        : '<div style="text-align:center;padding:40px;color:var(--muted);">Sin pagos para mostrar</div>');
+      + '</div>';
+
+    if (!pays.length) {
+      html += '<div style="text-align:center;padding:40px;color:var(--muted);">Sin pagos para mostrar</div>';
+      container.innerHTML = html;
+      return;
+    }
+
+    html += '<div class="twrap">'
+      + '<div class="thead-ceo" style="grid-template-columns:30px 2fr 1.2fr 80px 80px 100px 80px 90px;">'
+      + '<div></div><div>Cliente</div><div>Asesor</div><div>Cuota</div><div>Monto</div><div>Tiempo</div><div>Estado</div><div>Acc.</div>'
+      + '</div>';
+
+    for (var i = 0; i < pays.length; i++) {
+      var n = pays[i];
+      var aprobado = n.estado === 'aprobado';
+      var ts = n.created_at ? new Date(n.created_at).getTime() : Date.now();
+      html += '<div class="trow-ceo" style="grid-template-columns:30px 2fr 1.2fr 80px 80px 100px 80px 90px;">'
+        + '<span style="font-size:1rem;">' + (aprobado ? '✅' : '⏳') + '</span>'
+        + '<div><div style="font-size:.84rem;font-weight:600;">' + esc(n.cliente_nombre || '—') + '</div></div>'
+        + '<div style="font-size:.76rem;color:var(--muted);">' + esc(n.vendedor_nombre || '—') + '</div>'
+        + '<div style="text-align:center;">#' + (n.numero_cuota || '—') + '</div>'
+        + '<div style="font-weight:700;color:' + (aprobado ? 'var(--green)' : 'var(--gold)') + ';">USD ' + (n.monto_usd || 0) + '</div>'
+        + '<div style="font-size:.7rem;color:var(--muted);">' + fmtTs(ts) + '</div>'
+        + '<div><span style="font-size:.68rem;font-weight:700;padding:2px 7px;border-radius:6px;' + (aprobado ? 'background:var(--green-bg);color:var(--green);' : 'background:var(--gold-bg);color:var(--gold);') + '">' + (aprobado ? 'OK' : 'Pend.') + '</span></div>'
+        + '<div>' + (!aprobado ? '<button onclick="aprobarPagoSb(\'' + n.id + '\')" style="padding:3px 7px;background:var(--green-bg);border:1px solid var(--green-bd);color:var(--green);border-radius:5px;font-size:.66rem;font-weight:700;cursor:pointer;">✅</button>' : '') + '</div>'
+        + '</div>';
+    }
+    html += '</div>';
+    container.innerHTML = html;
   }
 
   function aprobarPagoSb(pagoId) {
@@ -3180,13 +3193,13 @@ function verDetalleStaff(staffId) {
   function renderPagosAprobacion() {
     var container = document.getElementById('pagosAprobacionList');
     if (!container) return;
-    container.innerHTML = '<div style="text-align:center;padding:24px;color:var(--muted);">⏳ Cargando pagos pendientes...</div>';
+    container.innerHTML = '<div style="text-align:center;padding:24px;color:var(--muted);">⏳ Cargando pagos pendientes del mes actual...</div>';
 
     var now = new Date();
     var startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    var endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+    var endOfMonth   = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
     var startISO = startOfMonth.toISOString();
-    var endISO = endOfMonth.toISOString();
+    var endISO   = endOfMonth.toISOString();
 
     sbClient.from('pagos')
       .select('*, clientes(nombre, email, region_id)')
@@ -3198,40 +3211,39 @@ function verDetalleStaff(staffId) {
         if (res.error) throw res.error;
         var pagos = res.data || [];
         if (!pagos.length) {
-          container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted);">✅ No hay pagos pendientes de aprobación</div>';
+          container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted);">✅ No hay pagos pendientes en el mes actual</div>';
           return;
         }
         var html = '<div class="twrap">';
-        html += '<div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1.5fr 120px;gap:8px;padding:10px 16px;background:rgba(255,255,255,.03);border-bottom:1px solid var(--border);font-size:.68rem;font-weight:700;text-transform:uppercase;color:var(--muted);">' +
-          '<div>Cliente</div><div>Cuota</div><div>Monto</div><div>Fecha</div><div>Comprobante</div><div>Acciones</div></div>';
+        html += '<div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1.5fr 120px;gap:8px;padding:10px 16px;background:rgba(255,255,255,.03);border-bottom:1px solid var(--border);font-size:.68rem;font-weight:700;text-transform:uppercase;color:var(--muted);">'
+          + '<div>Cliente</div><div>Cuota</div><div>Monto</div><div>Fecha</div><div>Comprobante</div><div>Acciones</div></div>';
         for (var i = 0; i < pagos.length; i++) {
           var p = pagos[i];
           var nombreCli = (p.clientes && p.clientes.nombre) ? p.clientes.nombre : (p.cliente_nombre || 'ID: ' + p.cliente_id);
           var emailCli  = (p.clientes && p.clientes.email)  ? p.clientes.email  : '';
-          var reg = rby(p.clientes && p.clientes.region_id);
-          var regLabel = reg ? reg.bandera + ' ' + reg.nombre : '—';
-          html += '<div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1.5fr 120px;gap:8px;padding:12px 16px;border-bottom:1px solid var(--border);align-items:center;">' +
-            '<div><div style="font-weight:700;font-size:.85rem;">' + esc(nombreCli) + '</div>' +
-              '<div style="font-size:.7rem;color:var(--muted);">' + esc(emailCli) + ' · ' + regLabel + '</div></div>' +
-            '<div style="font-weight:700;">Nº ' + (p.numero_cuota || '—') + '</div>' +
-            '<div style="color:var(--gold);font-weight:700;">USD ' + (p.monto_usd || 0) + '</div>' +
-            '<div style="font-size:.78rem;color:var(--muted);">' + (p.fecha_pago ? p.fecha_pago.slice(0,10) : '—') + '</div>' +
-            '<div>' + (p.comprobante_url
-              ? '<a href="' + esc(p.comprobante_url) + '" target="_blank" style="color:#7eb8ff;font-size:.75rem;text-decoration:none;">📄 Ver comprobante</a>'
-              : '<span style="color:var(--muted);font-size:.75rem;">Sin comprobante</span>') + '</div>' +
-            '<div style="display:flex;gap:6px;">' +
-              '<button onclick="aprobarPagoDesdePanel(' + p.id + ')" style="padding:5px 10px;background:rgba(34,197,94,.15);border:1px solid rgba(34,197,94,.3);color:#4ade80;border-radius:7px;cursor:pointer;font-size:.75rem;font-weight:700;">✅ Aprobar</button>' +
-              '<button onclick="rechazarPagoDesdePanel(' + p.id + ')" style="padding:5px 10px;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.25);color:#f87171;border-radius:7px;cursor:pointer;font-size:.75rem;font-weight:700;">❌</button>' +
-            '</div>' +
-            '</div>';
+          var reg       = rby(p.clientes && p.clientes.region_id);
+          var regLabel  = reg ? reg.bandera + ' ' + reg.nombre : '—';
+          html += '<div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1.5fr 120px;gap:8px;padding:12px 16px;border-bottom:1px solid var(--border);align-items:center;">'
+            + '<div><div style="font-weight:700;font-size:.85rem;">' + esc(nombreCli) + '</div>'
+            +   '<div style="font-size:.7rem;color:var(--muted);">' + esc(emailCli) + ' · ' + regLabel + '</div></div>'
+            + '<div style="font-weight:700;">Nº ' + (p.numero_cuota || '—') + '</div>'
+            + '<div style="color:var(--gold);font-weight:700;">USD ' + (p.monto_usd || 0) + '</div>'
+            + '<div style="font-size:.78rem;color:var(--muted);">' + (p.fecha_pago ? p.fecha_pago.slice(0,10) : '—') + '</div>'
+            + '<div>' + (p.comprobante_url
+                ? '<a href="' + esc(p.comprobante_url) + '" target="_blank" style="color:#7eb8ff;font-size:.75rem;text-decoration:none;">📄 Ver comprobante</a>'
+                : '<span style="color:var(--muted);font-size:.75rem;">Sin comprobante</span>') + '</div>'
+            + '<div style="display:flex;gap:6px;">'
+            +   '<button onclick="aprobarPagoDesdePanel(' + p.id + ')" style="padding:5px 10px;background:rgba(34,197,94,.15);border:1px solid rgba(34,197,94,.3);color:#4ade80;border-radius:7px;cursor:pointer;font-size:.75rem;font-weight:700;">✅ Aprobar</button>'
+            +   '<button onclick="rechazarPagoDesdePanel(' + p.id + ')" style="padding:5px 10px;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.25);color:#f87171;border-radius:7px;cursor:pointer;font-size:.75rem;font-weight:700;">❌</button>'
+            + '</div></div>';
         }
         html += '</div>';
-        html += '<div style="padding:12px 16px;font-size:.75rem;color:var(--muted);">Total pendientes: <strong style="color:var(--text);">' + pagos.length + '</strong></div>';
+        html += '<div style="padding:12px 16px;font-size:.75rem;color:var(--muted);">Total pendientes en el mes actual: <strong style="color:var(--text);">' + pagos.length + '</strong></div>';
         container.innerHTML = html;
       })
       .catch(function(e) {
-        console.error('Error cargando pagos aprobación:', e);
-        container.innerHTML = '<div style="text-align:center;padding:24px;color:#f87171;">❌ Error al cargar: ' + esc(e.message) + '</div>';
+        console.error('Error en renderPagosAprobacion:', e);
+        container.innerHTML = '<div style="text-align:center;padding:24px;color:#f87171;">❌ Error al cargar pagos: ' + esc(e.message) + '</div>';
       });
   }
 
