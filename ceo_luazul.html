@@ -1504,6 +1504,7 @@ function renderAll() {
   renderRegiones();
   renderMora();
   renderEquipoDash();
+  renderClientes();
 }
 
 function populateAllFilters() {
@@ -4316,7 +4317,7 @@ function verDetalleStaff(staffId) {
     var search = ((document.getElementById('ticketSearch') || {}).value || '').toLowerCase();
 
     var query = sbClient.from('notificaciones')
-      .select('*, cliente:clientes(nombre, email)')
+      .select('*, cliente:clientes(nombre, email), vendedor:staff_profiles!vendedor_id(nombre)')
       .in('tipo', ['incidencia', 'soporte', 'mejora', 'falla_tecnica'])
       .order('created_at', { ascending: false });
 
@@ -4357,7 +4358,7 @@ function verDetalleStaff(staffId) {
       var prioridadTexto = t.prioridad || 'media';
       var prioridadColor = prioridadTexto === 'urgente' ? '#ef4444' : prioridadTexto === 'alta' ? '#f97316' : prioridadTexto === 'media' ? '#eab308' : '#22c55e';
       var clienteNombre = t.cliente ? t.cliente.nombre : (t.cliente_id ? 'ID: ' + t.cliente_id : '—');
-      var vendedorNombre = t.vendedor_nombre || (t.vendedor_id ? 'ID: ' + t.vendedor_id : '—');
+      var vendedorNombre = t.vendedor ? t.vendedor.nombre : (t.vendedor_id ? 'ID: ' + t.vendedor_id : '—');
       var diasInactivos = calcularDiasInactivos(t.updated_at || t.created_at);
       var highlight = (diasInactivos > 7 && estadoTexto !== 'cerrado') ? '⚠️ ' : '';
       var nivelActual = t.nivel_actual || 1;
@@ -4571,7 +4572,7 @@ function verDetalleStaff(staffId) {
       '<option value="alta"' + (ticket.prioridad === 'alta' ? ' selected' : '') + '>Alta</option>' +
       '<option value="urgente"' + (ticket.prioridad === 'urgente' ? ' selected' : '') + '>Urgente</option>';
     var clienteNombre = ticket.cliente ? ticket.cliente.nombre : (ticket.cliente_id ? 'ID: ' + ticket.cliente_id : '—');
-    var vendedorNombre = ticket.vendedor_nombre || (ticket.vendedor_id ? 'ID: ' + ticket.vendedor_id : '—');
+    var vendedorNombre = ticket.vendedor ? ticket.vendedor.nombre : (ticket.vendedor_id ? 'ID: ' + ticket.vendedor_id : '—');
 
     // Bloque de adjuntos existentes
     var adjuntosHtml = '';
@@ -4736,6 +4737,7 @@ function verDetalleStaff(staffId) {
     renderRegiones();
     renderMora();
     renderEquipoDash();
+    renderClientes();
     // también renderizar otras secciones según pestaña activa
   }
 
@@ -4989,6 +4991,83 @@ for (var k = 0; k < allRs.length; k++) {
     await enviarMensaje(canalId, msgId);
   }
 
+  function actualizarRegionPorVendedor() {
+    var sellerId = document.getElementById('nSeller').value;
+    var regionDisplay = document.getElementById('nRegionDisplay');
+    if (!sellerId) {
+      document.getElementById('nRegionId').value = '';
+      if (regionDisplay) regionDisplay.innerText = '— Seleccioná un asesor —';
+      return;
+    }
+    var vendedor = (_cacheVendedores || []).find(function(v) { return String(v.user_id) === String(sellerId); });
+    if (vendedor && vendedor.region_id) {
+      document.getElementById('nRegionId').value = vendedor.region_id;
+      var region = (_cacheRegiones || []).find(function(r) { return r.id == vendedor.region_id; });
+      if (regionDisplay) regionDisplay.innerText = region ? region.bandera + ' ' + region.nombre : '—';
+    } else {
+      document.getElementById('nRegionId').value = '';
+      if (regionDisplay) regionDisplay.innerText = 'No asignada';
+    }
+  }
+
+  function generarContratoPDF(clienteId) {
+    var c = (_cacheClientes || []).find(function(x) { return String(x.id) === String(clienteId); });
+    if (!c) { showToast('⚠️ Cliente no encontrado'); return; }
+    var nombre  = c.nombre || '—';
+    var email   = c.email  || '—';
+    var tel     = c.telefono1 || c.telefono || '—';
+    var doc     = c.documento || '—';
+    var dest    = c.destino   || '—';
+    var pkg     = c.paquete   || '—';
+    var total   = c.total_usd || 0;
+    var cuota   = c.monto_cuota || 0;
+    var cuotas  = c.cuotas_total || 0;
+    var noches  = c.noches   || '—';
+    var pers    = c.personas || '—';
+    var fecha   = c.fecha_viaje ? new Date(c.fecha_viaje).toLocaleDateString('es-AR') : '—';
+    var hoy     = new Date().toLocaleDateString('es-AR');
+    var html = '<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">'
+      + '<title>Contrato Luazul – ' + nombre + '</title>'
+      + '<style>body{font-family:Arial,sans-serif;margin:40px;color:#111;font-size:13px;line-height:1.6;}'
+      + 'h1{color:#0B3D91;font-size:20px;margin-bottom:4px;}h2{color:#0B3D91;font-size:14px;border-bottom:1px solid #ccc;padding-bottom:4px;margin-top:24px;}'
+      + '.logo{font-size:24px;font-weight:900;color:#0B3D91;letter-spacing:2px;}.sub{font-size:11px;color:#666;margin-bottom:24px;}'
+      + 'table{width:100%;border-collapse:collapse;margin-top:10px;}td{padding:6px 10px;border:1px solid #ddd;}'
+      + 'td:first-child{font-weight:700;width:35%;background:#f7f7f7;}'
+      + '.firma{margin-top:60px;display:flex;justify-content:space-between;}'
+      + '.firma-box{text-align:center;width:40%;border-top:1px solid #333;padding-top:6px;font-size:12px;}'
+      + '</style></head><body>'
+      + '<div class="logo">🌊 LUAZUL SMART TRAVEL</div>'
+      + '<div class="sub">Turismo inteligente · Contrato de Plan Vacacional</div>'
+      + '<h1>CONTRATO DE SERVICIOS TURÍSTICOS</h1><p>Buenos Aires, ' + hoy + '</p>'
+      + '<h2>DATOS DEL CLIENTE</h2><table>'
+      + '<tr><td>Nombre completo</td><td>' + nombre + '</td></tr>'
+      + '<tr><td>Documento</td><td>' + doc + '</td></tr>'
+      + '<tr><td>Email</td><td>' + email + '</td></tr>'
+      + '<tr><td>Teléfono</td><td>' + tel + '</td></tr></table>'
+      + '<h2>DETALLES DEL PAQUETE</h2><table>'
+      + '<tr><td>Destino</td><td>' + dest + '</td></tr>'
+      + '<tr><td>Paquete</td><td>' + pkg + '</td></tr>'
+      + '<tr><td>Noches</td><td>' + noches + '</td></tr>'
+      + '<tr><td>Personas</td><td>' + pers + '</td></tr>'
+      + '<tr><td>Fecha de viaje estimada</td><td>' + fecha + '</td></tr></table>'
+      + '<h2>PLAN DE PAGO</h2><table>'
+      + '<tr><td>Total del plan</td><td>USD ' + Number(total).toLocaleString('es-AR') + '</td></tr>'
+      + '<tr><td>Cuotas</td><td>' + cuotas + ' cuotas de USD ' + Number(cuota).toLocaleString('es-AR') + '</td></tr></table>'
+      + '<h2>CONDICIONES GENERALES</h2>'
+      + '<p>El presente contrato establece el compromiso de pago del plan vacacional seleccionado. El cliente acepta abonar las cuotas mensuales acordadas en tiempo y forma.</p>'
+      + '<div class="firma">'
+      + '<div class="firma-box">Firma del Cliente<br><br>' + nombre + '</div>'
+      + '<div class="firma-box">Firma Luazul Smart Travel<br><br>Representante Autorizado</div>'
+      + '</div></body></html>';
+    var blob = new Blob([html], { type: 'text/html' });
+    var url  = URL.createObjectURL(blob);
+    var a    = document.createElement('a');
+    a.href = url; a.download = 'Contrato_Luazul_' + nombre.replace(/\s+/g, '_') + '.html';
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a); URL.revokeObjectURL(url);
+    showToast('📄 Contrato generado para ' + nombre);
+  }
+
   // Exportar funciones de comunicaciones al scope global
   window.renderComunicaciones = renderComunicaciones;
   window.cargarMensajesCanal  = cargarMensajesCanal;
@@ -5032,6 +5111,11 @@ for (var k = 0; k < allRs.length; k++) {
   window.verFichaCliente = verFichaCliente;
   window.calcCuotaCeo = calcCuotaCeo;
   window.buscarReferidorCeo = buscarReferidorCeo;
+  window.renderClientes = renderClientes;
+  window.renderAll = renderAll;
+  window.populateAllFilters = populateAllFilters;
+  window.actualizarRegionPorVendedor = actualizarRegionPorVendedor;
+  window.generarContratoPDF = generarContratoPDF;
   // ... más según necesidad
 </script>
 </body>
