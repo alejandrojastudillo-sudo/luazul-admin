@@ -2566,8 +2566,14 @@ async function addClient() {
   // Cuota base; última cuota ajustada para que suma exacta == total (sin diferencias de centavos)
   var montoCuota  = Math.floor(total / cuotas * 100) / 100;
   var ultimaCuota = parseFloat((document.getElementById('nUltimaCuota') || {}).value) || Math.round((total - montoCuota * (cuotas - 1)) * 100) / 100;
-  var sellerId = parseInt(_currentProfile.id, 10);
-  var regionId = _currentProfile.region_id ? parseInt(_currentProfile.region_id, 10) : null;
+  // Validar sellerId (evitar NaN)
+  var sellerId = (_currentProfile && _currentProfile.id && !isNaN(parseInt(_currentProfile.id, 10)))
+                ? parseInt(_currentProfile.id, 10)
+                : null;
+  // Validar regionId (evitar NaN)
+  var regionId = (_currentProfile && _currentProfile.region_id && !isNaN(parseInt(_currentProfile.region_id, 10)))
+                 ? parseInt(_currentProfile.region_id, 10)
+                 : null;
   var telefono1 = document.getElementById('nTel1').value.trim() || null;
   var telefono2 = (document.getElementById('nTel2') || {}).value.trim() || null;
   var domicilio = (document.getElementById('nDomicilio') || {}).value.trim() || null;
