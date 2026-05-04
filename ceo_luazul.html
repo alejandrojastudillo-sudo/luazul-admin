@@ -1287,14 +1287,16 @@ async function loadClients() {
 }
 
 async function obtenerPagosDelMes(estadoFiltro) {
+  // Fechas del mes actual en UTC
   var now = new Date();
-  var startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-  var endOfMonth   = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+  var startOfMonth = new Date(Date.UTC(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0));
+  var endOfMonth   = new Date(Date.UTC(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999));
   var startISO = startOfMonth.toISOString();
   var endISO   = endOfMonth.toISOString();
 
   var query = sbClient.from('pagos')
-    .select('id, cliente_id, numero_cuota, monto_usd, estado, fecha_pago, fecha_vencimiento, created_at, vendedor_nombre, aprobado_por, comprobante_url, clientes ( id, nombre, email, region_id )')
+    .select(`id, numero_cuota, monto_usd, estado, fecha_vencimiento, vendedor_nombre, aprobado_por,
+      clientes!cliente_id ( nombre, email, region_id )`)
     .gte('fecha_vencimiento', startISO)
     .lt('fecha_vencimiento', endISO)
     .order('fecha_vencimiento', { ascending: true });
@@ -1310,15 +1312,12 @@ async function obtenerPagosDelMes(estadoFiltro) {
       numero_cuota:     p.numero_cuota,
       monto_usd:        p.monto_usd,
       estado:           p.estado,
-      fecha_pago:       p.fecha_pago,
       fecha_vencimiento: p.fecha_vencimiento,
-      created_at:       p.created_at,
-      comprobante_url:  p.comprobante_url || null,
-      cliente_nombre:   (p.clientes && p.clientes.nombre) ? p.clientes.nombre : (p.cliente_nombre || '—'),
+      cliente_nombre:   (p.clientes && p.clientes.nombre) ? p.clientes.nombre : '—',
       cliente_email:    (p.clientes && p.clientes.email)  ? p.clientes.email  : '',
       region_id:        (p.clientes && p.clientes.region_id) ? p.clientes.region_id : null,
       vendedor_nombre:  p.vendedor_nombre || '—',
-      aprobado_por:     p.aprobado_por || ''
+      aprobado_por:     p.aprobado_por    || ''
     };
   });
 }
