@@ -666,7 +666,8 @@ window.LZ = (function() {
       id:          p.id,
       tipo:        'payment',
       ts:          p.created_at ? new Date(p.created_at).getTime() : Date.now(),
-      estado:      p.estado || 'pendiente',
+      estado:            p.estado || 'pendiente',
+      fecha_vencimiento: p.fecha_vencimiento || null,
       leida:       p.estado !== 'pendiente',
       aprobada:    p.estado === 'aprobado',
       cliente:     { nombre: p.cliente_nombre || '', region_id: (p.cliente && p.cliente.region_id) ? p.cliente.region_id : null },
@@ -1571,14 +1572,22 @@ function renderOverview() {
   var gs = _cacheGerentes || [];
   var ns = _cachePagos || [];
 
-  var pagosAprobados = ns.filter(function(p) { return p.estado === 'aprobado'; });
+  // Filtrar solo pagos del mes actual para KPIs del overview
+  var _now = new Date();
+  var _mesActual = _now.getFullYear() + '-' + String(_now.getMonth() + 1).padStart(2, '0');
+  var nsMes = ns.filter(function(p) {
+    if (!p.fecha_vencimiento) return false;
+    return p.fecha_vencimiento.slice(0, 7) === _mesActual;
+  });
+
+  var pagosAprobados = nsMes.filter(function(p) { return p.estado === 'aprobado'; });
   var rawRec = pagosAprobados.reduce(function(s,p) { return s + (parseFloat(p.monto_usd) || 0); }, 0);
   var totalRec = Number(rawRec.toFixed(2));
 
   var activos = cs.filter(function(c) { return c.estado === 'activo'; }).length;
   var atraso = cs.filter(function(c) { return c.estado === 'atraso' || c.estado === 'atraso_gestion'; }).length;
   var completos = cs.filter(function(c) { return c.estado === 'completo'; }).length;
-  var pending = ns.filter(function(n) { return n.estado === 'pendiente'; }).length;
+  var pending = nsMes.filter(function(n) { return n.estado === 'pendiente'; }).length;
 
   var statsHtml = '';
   var stats = [
