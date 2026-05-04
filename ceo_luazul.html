@@ -659,17 +659,22 @@ window.LZ = (function() {
 
   // ── mapPagoToNotif ───────────────────────────────────────────────────
   function mapPagoToNotif(p) {
+    // FIXED: preserve `estado` string (was missing — caused all renderOverview filters to fail)
+    // FIXED: expose `monto_usd` alias so renderOverview reduce() totals work
+    // FIXED: `cliente` is now an object with region_id for regional ranking
     return {
       id:          p.id,
       tipo:        'payment',
       ts:          p.created_at ? new Date(p.created_at).getTime() : Date.now(),
+      estado:      p.estado || 'pendiente',
       leida:       p.estado !== 'pendiente',
       aprobada:    p.estado === 'aprobado',
-      cliente:     p.cliente_nombre || '',
+      cliente:     { nombre: p.cliente_nombre || '', region_id: (p.cliente && p.cliente.region_id) ? p.cliente.region_id : null },
       cid:         p.cliente_id || '',
       cuota:       p.numero_cuota || 1,
       monto:       p.monto_usd || 0,
-      vendedor:    p.vendedor_nombre || (p.clientes ? p.clientes.nombre : ''),
+      monto_usd:   p.monto_usd || 0,
+      vendedor:    p.vendedor_nombre || '',
       comp:        p.comprobante_url || null,
       aprobadoPor: p.aprobado_por || '',
       vid:         p.seller_id || ''
@@ -1277,8 +1282,6 @@ async function loadClients() {
     _cacheRegiones    = loaded.regiones;
     _cachePagos       = loaded.notificaciones.filter(function(n) { return n.tipo === 'payment'; });
     window._cacheContratos = loaded.notificaciones.filter(function(n) { return n.tipo === 'contrato'; });
-    renderAll();
-    populateAllFilters();
     showToast('✅ ' + _cacheClientes.length + ' clientes cargados');
   } catch (err) {
     console.error('loadClients error:', err);
@@ -1538,13 +1541,7 @@ function notificarAccion(tipo, mensaje, clienteId, datosExtra) {
   }]).catch(function(e) { console.warn('[notificarAccion]', e); });
 }
 
-function renderAll() {
-  renderOverview();
-  renderRegiones();
-  renderMora();
-  renderEquipoDash();
-  renderPagos();
-}
+// renderAll() definida más abajo (versión completa con renderClientes)
 
 function populateAllFilters() {
   // Poblar selects de regiones (se implementa en siguientes bloques)
@@ -4790,8 +4787,10 @@ function verDetalleStaff(staffId) {
     renderRegiones();
     renderMora();
     renderEquipoDash();
-    // también renderizar otras secciones según pestaña activa
+    renderClientes();
+    renderPagos();
   }
+  window.renderAll = renderAll;
 
   function populateAllFilters() {
     var rs = getRegionesConActividad();
@@ -5079,6 +5078,7 @@ for (var k = 0; k < allRs.length; k++) {
   window.cerrarTicket = cerrarTicket;
   window.renderPagosAprobacion = renderPagosAprobacion;
   window.renderPagos = renderPagos;
+  window.renderClientes = renderClientes;
   window.aprobarPagoDesdePanel = aprobarPagoDesdePanel;
   window.rechazarPagoDesdePanel = rechazarPagoDesdePanel;
   window.aprobarPagoInline = aprobarPagoInline;
