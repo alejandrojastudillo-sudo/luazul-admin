@@ -1769,7 +1769,10 @@ function notificarAccion(tipo, mensaje, clienteId, datosExtra) {
   return sbClient.from('notificaciones').insert(inserciones).then(function() {
     // éxito silencioso
   }).catch(function(e) {
-    console.warn('[notificarAccion] Error al insertar notificaciones:', e.message);
+    // Silenciar error de permisos (las notificaciones no son críticas para la creación)
+    if (e.message !== 'Permission denied for table notificaciones') {
+      console.warn('[notificarAccion]', e.message);
+    }
   });
 }
 
@@ -2566,14 +2569,8 @@ async function addClient() {
   // Cuota base; última cuota ajustada para que suma exacta == total (sin diferencias de centavos)
   var montoCuota  = Math.floor(total / cuotas * 100) / 100;
   var ultimaCuota = parseFloat((document.getElementById('nUltimaCuota') || {}).value) || Math.round((total - montoCuota * (cuotas - 1)) * 100) / 100;
-  // Validar sellerId (evitar NaN)
-  var sellerId = (_currentProfile && _currentProfile.id && !isNaN(parseInt(_currentProfile.id, 10)))
-                ? parseInt(_currentProfile.id, 10)
-                : null;
-  // Validar regionId (evitar NaN)
-  var regionId = (_currentProfile && _currentProfile.region_id && !isNaN(parseInt(_currentProfile.region_id, 10)))
-                 ? parseInt(_currentProfile.region_id, 10)
-                 : null;
+  var sellerId = parseInt(_currentProfile.id, 10);
+  var regionId = _currentProfile.region_id ? parseInt(_currentProfile.region_id, 10) : null;
   var telefono1 = document.getElementById('nTel1').value.trim() || null;
   var telefono2 = (document.getElementById('nTel2') || {}).value.trim() || null;
   var domicilio = (document.getElementById('nDomicilio') || {}).value.trim() || null;
