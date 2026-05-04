@@ -2162,13 +2162,24 @@ function renderMisComisionesAdmin() {
   var el=document.getElementById('misComisionesSection'); if (!el) return;
   if (!sbClient||!_currentProfile) { el.innerHTML='<div style="text-align:center;padding:50px;color:var(--muted);">Sin datos</div>'; return; }
   var yo=_currentProfile;
-  // FIX 3: Historial de pagos de comisiones eliminado (comprobantes_json nunca se popula)
-  // Se muestra mensaje informativo en su lugar
-  var compsHTML = '<div style="text-align:center;padding:36px;background:rgba(255,255,255,.02);border:1px dashed rgba(255,255,255,.1);border-radius:14px;color:var(--muted);">'+
-    '<div style="font-size:1.8rem;margin-bottom:10px;">🔜</div>'+
-    '<div style="font-weight:700;color:rgba(200,220,255,.6);margin-bottom:6px;">Próximamente</div>'+
-    '<div style="font-size:.82rem;">Podrás ver aquí el registro de pagos de tus comisiones una vez que el sistema de liquidaciones esté habilitado.</div>'+
-    '</div>';
+  var comps = [];
+  if (yo.comprobantes_json) {
+    try { comps = JSON.parse(yo.comprobantes_json); } catch(e) {}
+  }
+  var compsHTML = '';
+  if (comps.length) {
+    compsHTML = '<div style="display:flex;flex-direction:column;gap:8px;">' +
+      comps.slice().reverse().map(function(c, idx) {
+        return '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);">' +
+          '<span style="font-size:.8rem;flex:1;">📎 ' + LZ.esc(c.nombre) + '</span>' +
+          '<span style="font-size:.7rem;color:var(--muted);">' + (c.fecha || '—') + '</span>' +
+          (c.monto ? '<span style="font-size:.78rem;font-weight:700;color:var(--green);">USD ' + c.monto + '</span>' : '') +
+          (c.data ? '<button onclick="verCompAdmin(' + (comps.length - 1 - idx) + ')" style="padding:3px 9px;background:rgba(59,130,246,.15);border:1px solid rgba(59,130,246,.3);color:#7eb8ff;border-radius:6px;font-size:.7rem;cursor:pointer;">Ver</button>' : '') +
+        '</div>';
+      }).join('') + '</div>';
+  } else {
+    compsHTML = '<div style="text-align:center;padding:36px;background:rgba(255,255,255,.02);border:1px dashed rgba(255,255,255,.1);border-radius:14px;color:var(--muted);">Sin pagos de comisiones registrados aún.</div>';
+  }
   var cbuBlock=yo.cbu
     ?'<div style="background:rgba(74,222,128,.07);border:1px solid rgba(74,222,128,.2);border-radius:14px;padding:16px 20px;margin-bottom:20px;display:flex;align-items:center;gap:16px;"><span style="font-size:1.6rem;">🏦</span><div><div style="font-size:.62rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:rgba(74,222,128,.7);">Tu CBU / Alias</div><div style="font-family:monospace;font-size:.95rem;font-weight:700;color:#4ade80;">'+yo.cbu+'</div></div></div>'
     :'<div style="background:rgba(255,255,255,.03);border:1px dashed rgba(255,255,255,.1);border-radius:14px;padding:16px;margin-bottom:20px;text-align:center;">⚠️ Sin cuenta de cobro. Andá a <strong>🏦 Cuentas</strong>.</div>';
@@ -2435,6 +2446,26 @@ function calcCuota() {
   var uf = document.getElementById('nUltimaCuota');   if (uf) uf.value = ultimaCuota;
   var bd = document.getElementById('nBreakdown');
   if (bd) bd.innerHTML = '<span style="color:var(--muted);">USD ' + pkg.price.toLocaleString('es-AR') + ' en ' + cuotas + ' cuotas de </span><strong style="color:#60a5fa;">USD ' + cuota.toLocaleString('es-AR') + '</strong>' + (ultimaCuota !== cuota ? ' <span style="font-size:.78rem;color:var(--muted);">(última: USD ' + ultimaCuota + ')</span>' : '');
+
+  // Asegurar que los campos ocultos existan
+  var mbody = document.querySelector('.modal-body');
+  if (mbody) {
+    var ids = ['nTotal', 'nMontoCuota', 'nCuotasTotal', 'nUltimaCuota', 'nPersonas'];
+    for (var i = 0; i < ids.length; i++) {
+      var el = document.getElementById(ids[i]);
+      if (!el) {
+        el = document.createElement('input');
+        el.type = 'hidden';
+        el.id = ids[i];
+        mbody.appendChild(el);
+      }
+    }
+  }
+  document.getElementById('nTotal').value        = pkg.price;
+  document.getElementById('nMontoCuota').value   = cuota;
+  document.getElementById('nCuotasTotal').value  = cuotas;
+  document.getElementById('nUltimaCuota').value  = ultimaCuota;
+  document.getElementById('nPersonas').value     = pkg.pers;
 }
 
 function openAddModal() {
@@ -2507,7 +2538,13 @@ async function addClient() {
   if (!pass || pass.length < 6) { showToast('⚠️ La contraseña debe tener al menos 6 caracteres'); return; }
   if (!_currentProfile) { showToast('⚠️ Sesión no cargada'); return; }
   if (!sbClient) { showToast('❌ Sin conexión'); return; }
-  if (!total || total <= 0) { showToast('⚠️ El total del plan debe ser mayor a 0'); return; }
+  if (!total || total <= 0) {
+    // fallback: calcular desde el paquete seleccionado
+    var pkgKeyFb = (document.getElementById('nPkg') || {}).value || 'Escapada en Pareja';
+    var pkgPricesFb = { 'Escapada en Pareja': 870, 'Paquete 4 Amigos': 1450, 'Paquete 6 Amigos': 1740 };
+    total = pkgPricesFb[pkgKeyFb] || 870;
+    if (!total) { showToast('⚠️ Error al calcular el total del plan'); return; }
+  }
 
   // ── Verificación local de caché ────────────────────────────
   var yaExiste = allClients.some(function(c) { return c.email === email; });
@@ -2543,6 +2580,7 @@ async function addClient() {
     },
     body: JSON.stringify({
       p_email: email,
+      p_documento: (document.getElementById('nDoc') || {}).value.trim() || null,
       p_password: pass,
       p_role_id: 4,
       p_nombre: nombre,
