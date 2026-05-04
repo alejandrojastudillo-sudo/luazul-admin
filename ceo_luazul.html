@@ -1286,6 +1286,44 @@ async function loadClients() {
   }
 }
 
+async function obtenerPagosDelMes(estadoFiltro) {
+  var now = new Date();
+  var startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  var endOfMonth   = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+  var startISO = startOfMonth.toISOString();
+  var endISO   = endOfMonth.toISOString();
+
+  var query = sbClient.from('pagos')
+    .select('id, cliente_id, numero_cuota, monto_usd, estado, fecha_pago, fecha_vencimiento, created_at, vendedor_nombre, aprobado_por, comprobante_url, clientes ( id, nombre, email, region_id )')
+    .gte('fecha_vencimiento', startISO)
+    .lt('fecha_vencimiento', endISO)
+    .order('fecha_vencimiento', { ascending: true });
+
+  if (estadoFiltro) query = query.eq('estado', estadoFiltro);
+
+  var res = await query;
+  if (res.error) throw res.error;
+
+  return (res.data || []).map(function(p) {
+    return {
+      id:               p.id,
+      numero_cuota:     p.numero_cuota,
+      monto_usd:        p.monto_usd,
+      estado:           p.estado,
+      fecha_pago:       p.fecha_pago,
+      fecha_vencimiento: p.fecha_vencimiento,
+      created_at:       p.created_at,
+      comprobante_url:  p.comprobante_url || null,
+      cliente_nombre:   (p.clientes && p.clientes.nombre) ? p.clientes.nombre : (p.cliente_nombre || '—'),
+      cliente_email:    (p.clientes && p.clientes.email)  ? p.clientes.email  : '',
+      region_id:        (p.clientes && p.clientes.region_id) ? p.clientes.region_id : null,
+      vendedor_nombre:  p.vendedor_nombre || '—',
+      aprobado_por:     p.aprobado_por || ''
+    };
+  });
+}
+
+
 // Alias de compatibilidad para código antiguo que llama cargarDatosSupabase()
 function cargarDatosSupabase() {
   return loadClients();
@@ -1591,24 +1629,29 @@ function renderOverview() {
   }
   document.getElementById('ovRegRanking').innerHTML = rankingHtml;
 
-  // Últimos pagos
-  var lastPays = ns.slice(0,6);
-  var paysHtml = '';
-  if (lastPays.length) {
-    for (var i = 0; i < lastPays.length; i++) {
-      var n = lastPays[i];
-      var aprobado = n.estado === 'aprobado';
-      paysHtml += '<div style="display:flex;align-items:center;gap:9px;padding:7px 0;border-bottom:1px solid var(--border);">'
-        + '<span>' + (aprobado ? '✅' : '⏳') + '</span>'
-        + '<div style="flex:1;min-width:0;"><div style="font-size:.83rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + (n.cliente_nombre || '—') + '</div>'
-        + '<div style="font-size:.68rem;color:var(--muted);">Cuota ' + (n.numero_cuota || n.cuota || '?') + ' · ' + (n.vendedor_nombre || '—') + '</div></div>'
-        + '<span style="font-weight:800;color:' + (aprobado ? 'var(--green)' : 'var(--gold)') + ';">USD ' + n.monto_usd + '</span>'
-        + '</div>';
+  // Últimos pagos del mes (consulta directa, sin depender de _cachePagos)
+  obtenerPagosDelMes(null).then(function(ultimosPagos) {
+    var topPagos = ultimosPagos.slice(0, 6);
+    var paysHtml = '';
+    if (topPagos.length) {
+      for (var i = 0; i < topPagos.length; i++) {
+        var n = topPagos[i];
+        var aprobado = n.estado === 'aprobado';
+        paysHtml += '<div style="display:flex;align-items:center;gap:9px;padding:7px 0;border-bottom:1px solid var(--border);">'
+          + '<span>' + (aprobado ? '✅' : '⏳') + '</span>'
+          + '<div style="flex:1;min-width:0;"><div style="font-size:.83rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + esc(n.cliente_nombre) + '</div>'
+          + '<div style="font-size:.68rem;color:var(--muted);">Cuota ' + (n.numero_cuota || '?') + ' · ' + esc(n.vendedor_nombre) + '</div></div>'
+          + '<span style="font-weight:800;color:' + (aprobado ? 'var(--green)' : 'var(--gold)') + ';">USD ' + (n.monto_usd || 0) + '</span>'
+          + '</div>';
+      }
+    } else {
+      paysHtml = '<div style="text-align:center;padding:24px;color:var(--muted);font-size:.82rem;">Sin pagos registrados este mes</div>';
     }
-  } else {
-    paysHtml = '<div style="text-align:center;padding:24px;color:var(--muted);font-size:.82rem;">Sin pagos registrados</div>';
-  }
-  document.getElementById('ovLastPays').innerHTML = paysHtml;
+    document.getElementById('ovLastPays').innerHTML = paysHtml;
+  }).catch(function(e) {
+    console.error('Error en últimos pagos:', e);
+    document.getElementById('ovLastPays').innerHTML = '<div style="text-align:center;padding:24px;color:var(--muted);">Error al cargar pagos</div>';
+  });
 
   // Ventas mensuales (gráfico simplificado)
   var byMonth = {};
@@ -2426,31 +2469,13 @@ function saveEditGerente(gid) {
     }
   }
 
-  function renderPagos() {
+  async function renderPagos() {
     var container = document.getElementById('pagosBody');
     if (!container) return;
     container.innerHTML = '<div style="text-align:center;padding:40px;">⏳ Cargando pagos del mes actual...</div>';
-
-    var now = new Date();
-    var startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    var endOfMonth   = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
-    var startISO = startOfMonth.toISOString();
-    var endISO   = endOfMonth.toISOString();
-
-    var query = sbClient.from('pagos')
-      .select('*, clientes(nombre, email, region_id)')
-      .gte('fecha_vencimiento', startISO)
-      .lt('fecha_vencimiento', endISO)
-      .order('fecha_vencimiento', { ascending: true })
-      .limit(500);
-
-    var ef = (document.getElementById('pagoEstFilt') || {}).value || '';
-    if (ef === 'pendiente')     query = query.eq('estado', 'pendiente');
-    else if (ef === 'aprobado') query = query.eq('estado', 'aprobado');
-
-    query.then(function(res) {
-      if (res.error) throw res.error;
-      var pagos = res.data || [];
+    try {
+      var ef = (document.getElementById('pagoEstFilt') || {}).value || '';
+      var pagos = await obtenerPagosDelMes(ef === '' ? null : ef);
 
       var pend     = pagos.filter(function(p) { return p.estado === 'pendiente'; }).length;
       var aprob    = pagos.filter(function(p) { return p.estado === 'aprobado'; }).length;
@@ -2471,32 +2496,30 @@ function saveEditGerente(gid) {
 
       html += '<div class="twrap">'
         + '<div class="thead-ceo" style="grid-template-columns:30px 2fr 1.2fr 80px 80px 100px 80px 90px;">'
-        + '<div></div><div>Cliente</div><div>Asesor</div><div>Cuota</div><div>Monto</div><div>Fecha</div><div>Estado</div><div>Acc.</div>'
+        + '<div></div><div>Cliente</div><div>Asesor</div><div>Cuota</div><div>Monto</div><div>Fecha venc.</div><div>Estado</div><div>Acc.</div>'
         + '</div>';
 
       for (var i = 0; i < pagos.length; i++) {
         var p = pagos[i];
         var aprobado  = p.estado === 'aprobado';
-        var nombreCli = (p.clientes && p.clientes.nombre) ? p.clientes.nombre : (p.cliente_nombre || 'ID: ' + p.cliente_id);
-        var vendedor  = p.vendedor_nombre || '—';
-        var fecha     = p.fecha_pago ? p.fecha_pago.slice(0,10) : (p.created_at ? new Date(p.created_at).toLocaleDateString('es-AR') : '—');
+        var fechaVenc = p.fecha_vencimiento ? p.fecha_vencimiento.slice(0,10) : '—';
         html += '<div class="trow-ceo" style="grid-template-columns:30px 2fr 1.2fr 80px 80px 100px 80px 90px;">'
           + '<span style="font-size:1rem;">' + (aprobado ? '✅' : '⏳') + '</span>'
-          + '<div><div style="font-size:.84rem;font-weight:600;">' + esc(nombreCli) + '</div></div>'
-          + '<div style="font-size:.76rem;color:var(--muted);">' + esc(vendedor) + '</div>'
-          + '<div style="text-align:center;">#' + (p.numero_cuota || '—') + '</div>'
+          + '<div><div style="font-size:.84rem;font-weight:600;">' + esc(p.cliente_nombre) + '</div></div>'
+          + '<div style="font-size:.76rem;color:var(--muted);">' + esc(p.vendedor_nombre) + '</div>'
+          + '<div style="text-align:center;">#' + (p.numero_cuota || '?') + '</div>'
           + '<div style="font-weight:700;color:' + (aprobado ? 'var(--green)' : 'var(--gold)') + ';">USD ' + (p.monto_usd || 0) + '</div>'
-          + '<div style="font-size:.7rem;color:var(--muted);">' + fecha + '</div>'
+          + '<div style="font-size:.7rem;color:var(--muted);">' + fechaVenc + '</div>'
           + '<div><span style="font-size:.68rem;font-weight:700;padding:2px 7px;border-radius:6px;' + (aprobado ? 'background:var(--green-bg);color:var(--green);' : 'background:var(--gold-bg);color:var(--gold);') + '">' + (aprobado ? 'Aprobado' : 'Pendiente') + '</span></div>'
           + '<div>' + (!aprobado ? '<button onclick="aprobarPagoSb(\'' + p.id + '\')" style="padding:3px 7px;background:var(--green-bg);border:1px solid var(--green-bd);color:var(--green);border-radius:5px;font-size:.66rem;font-weight:700;cursor:pointer;">✅ Aprobar</button>' : '') + '</div>'
           + '</div>';
       }
       html += '</div>';
       container.innerHTML = html;
-    }).catch(function(e) {
-      console.error('Error en renderPagos:', e);
-      container.innerHTML = '<div style="text-align:center;padding:24px;color:#f87171;">❌ Error al cargar pagos: ' + esc(e.message) + '</div>';
-    });
+    } catch (err) {
+      console.error('renderPagos error:', err);
+      container.innerHTML = '<div style="text-align:center;padding:24px;color:#f87171;">❌ Error al cargar pagos: ' + esc(err.message) + '</div>';
+    }
   }
 
   function aprobarPagoSb(pagoId) {
@@ -3207,61 +3230,42 @@ function verDetalleStaff(staffId) {
   // (Se mantienen las funciones originales adaptadas a ES5 y UUID. Por brevedad se incluyen resumidas,
   //  pero en la práctica se copiarían las versiones ya corregidas del archivo original)
   function getPendingPayments() { return []; } // stub
-  function renderPagosAprobacion() {
+  async function renderPagosAprobacion() {
     var container = document.getElementById('pagosAprobacionList');
     if (!container) return;
     container.innerHTML = '<div style="text-align:center;padding:24px;color:var(--muted);">⏳ Cargando pagos pendientes del mes actual...</div>';
-
-    var now = new Date();
-    var startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    var endOfMonth   = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
-    var startISO = startOfMonth.toISOString();
-    var endISO   = endOfMonth.toISOString();
-
-    sbClient.from('pagos')
-      .select('*, clientes(nombre, email, region_id)')
-      .eq('estado', 'pendiente')
-      .gte('fecha_vencimiento', startISO)
-      .lt('fecha_vencimiento', endISO)
-      .order('fecha_vencimiento', { ascending: true })
-      .then(function(res) {
-        if (res.error) throw res.error;
-        var pagos = res.data || [];
-        if (!pagos.length) {
-          container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted);">✅ No hay pagos pendientes en el mes actual</div>';
-          return;
-        }
-        var html = '<div class="twrap">';
-        html += '<div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1.5fr 120px;gap:8px;padding:10px 16px;background:rgba(255,255,255,.03);border-bottom:1px solid var(--border);font-size:.68rem;font-weight:700;text-transform:uppercase;color:var(--muted);">'
-          + '<div>Cliente</div><div>Cuota</div><div>Monto</div><div>Fecha</div><div>Comprobante</div><div>Acciones</div></div>';
-        for (var i = 0; i < pagos.length; i++) {
-          var p = pagos[i];
-          var nombreCli = (p.clientes && p.clientes.nombre) ? p.clientes.nombre : (p.cliente_nombre || 'ID: ' + p.cliente_id);
-          var emailCli  = (p.clientes && p.clientes.email)  ? p.clientes.email  : '';
-          var reg       = rby(p.clientes && p.clientes.region_id);
-          var regLabel  = reg ? reg.bandera + ' ' + reg.nombre : '—';
-          html += '<div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1.5fr 120px;gap:8px;padding:12px 16px;border-bottom:1px solid var(--border);align-items:center;">'
-            + '<div><div style="font-weight:700;font-size:.85rem;">' + esc(nombreCli) + '</div>'
-            +   '<div style="font-size:.7rem;color:var(--muted);">' + esc(emailCli) + ' · ' + regLabel + '</div></div>'
-            + '<div style="font-weight:700;">Nº ' + (p.numero_cuota || '—') + '</div>'
-            + '<div style="color:var(--gold);font-weight:700;">USD ' + (p.monto_usd || 0) + '</div>'
-            + '<div style="font-size:.78rem;color:var(--muted);">' + (p.fecha_pago ? p.fecha_pago.slice(0,10) : '—') + '</div>'
-            + '<div>' + (p.comprobante_url
-                ? '<a href="' + esc(p.comprobante_url) + '" target="_blank" style="color:#7eb8ff;font-size:.75rem;text-decoration:none;">📄 Ver comprobante</a>'
-                : '<span style="color:var(--muted);font-size:.75rem;">Sin comprobante</span>') + '</div>'
-            + '<div style="display:flex;gap:6px;">'
-            +   '<button onclick="aprobarPagoDesdePanel(' + p.id + ')" style="padding:5px 10px;background:rgba(34,197,94,.15);border:1px solid rgba(34,197,94,.3);color:#4ade80;border-radius:7px;cursor:pointer;font-size:.75rem;font-weight:700;">✅ Aprobar</button>'
-            +   '<button onclick="rechazarPagoDesdePanel(' + p.id + ')" style="padding:5px 10px;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.25);color:#f87171;border-radius:7px;cursor:pointer;font-size:.75rem;font-weight:700;">❌</button>'
-            + '</div></div>';
-        }
-        html += '</div>';
-        html += '<div style="padding:12px 16px;font-size:.75rem;color:var(--muted);">Total pendientes en el mes actual: <strong style="color:var(--text);">' + pagos.length + '</strong></div>';
-        container.innerHTML = html;
-      })
-      .catch(function(e) {
-        console.error('Error en renderPagosAprobacion:', e);
-        container.innerHTML = '<div style="text-align:center;padding:24px;color:#f87171;">❌ Error al cargar pagos: ' + esc(e.message) + '</div>';
-      });
+    try {
+      var pagos = await obtenerPagosDelMes('pendiente');
+      if (!pagos.length) {
+        container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted);">✅ No hay pagos pendientes en el mes actual</div>';
+        return;
+      }
+      var html = '<div class="twrap">'
+        + '<div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1.5fr 120px;gap:8px;padding:10px 16px;background:rgba(255,255,255,.03);border-bottom:1px solid var(--border);font-size:.68rem;font-weight:700;text-transform:uppercase;color:var(--muted);">'
+        + '<div>Cliente</div><div>Cuota</div><div>Monto</div><div>Fecha venc.</div><div>Comprobante</div><div>Acciones</div></div>';
+      for (var i = 0; i < pagos.length; i++) {
+        var p = pagos[i];
+        var fechaVenc = p.fecha_vencimiento ? p.fecha_vencimiento.slice(0,10) : '—';
+        html += '<div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1.5fr 120px;gap:8px;padding:12px 16px;border-bottom:1px solid var(--border);align-items:center;">'
+          + '<div><div style="font-weight:700;font-size:.85rem;">' + esc(p.cliente_nombre) + '</div>'
+          +   '<div style="font-size:.7rem;color:var(--muted);">' + esc(p.cliente_email) + '</div></div>'
+          + '<div style="font-weight:700;">Nº ' + (p.numero_cuota || '—') + '</div>'
+          + '<div style="color:var(--gold);font-weight:700;">USD ' + (p.monto_usd || 0) + '</div>'
+          + '<div style="font-size:.78rem;color:var(--muted);">' + fechaVenc + '</div>'
+          + '<div>' + (p.comprobante_url
+              ? '<a href="' + esc(p.comprobante_url) + '" target="_blank" style="color:#7eb8ff;font-size:.75rem;text-decoration:none;">📄 Ver</a>'
+              : '<span style="color:var(--muted);font-size:.75rem;">Sin comprobante</span>') + '</div>'
+          + '<div style="display:flex;gap:6px;">'
+          +   '<button onclick="aprobarPagoDesdePanel(\'' + p.id + '\')" style="padding:5px 10px;background:rgba(34,197,94,.15);border:1px solid rgba(34,197,94,.3);color:#4ade80;border-radius:7px;cursor:pointer;font-size:.75rem;font-weight:700;">✅ Aprobar</button>'
+          +   '<button onclick="rechazarPagoDesdePanel(\'' + p.id + '\')" style="padding:5px 10px;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.25);color:#f87171;border-radius:7px;cursor:pointer;font-size:.75rem;font-weight:700;">❌</button>'
+          + '</div></div>';
+      }
+      html += '<div style="padding:12px 16px;font-size:.75rem;color:var(--muted);">Total pendientes en el mes actual: <strong style="color:var(--text);">' + pagos.length + '</strong></div></div>';
+      container.innerHTML = html;
+    } catch (err) {
+      console.error('Error en renderPagosAprobacion:', err);
+      container.innerHTML = '<div style="text-align:center;padding:24px;color:#f87171;">❌ Error al cargar pagos: ' + esc(err.message) + '</div>';
+    }
   }
 
   function aprobarPagoDesdePanel(pagoId) {
