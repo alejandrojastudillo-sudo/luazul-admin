@@ -1601,7 +1601,7 @@ function renderOverview() {
       paysHtml += '<div style="display:flex;align-items:center;gap:9px;padding:7px 0;border-bottom:1px solid var(--border);">'
         + '<span>' + (aprobado ? '✅' : '⏳') + '</span>'
         + '<div style="flex:1;min-width:0;"><div style="font-size:.83rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + (n.cliente_nombre || '—') + '</div>'
-        + '<div style="font-size:.68rem;color:var(--muted);">Cuota ' + n.numero_cuota + ' · ' + (n.vendedor_nombre || '—') + '</div></div>'
+        + '<div style="font-size:.68rem;color:var(--muted);">Cuota ' + (n.numero_cuota || n.cuota || '?') + ' · ' + (n.vendedor_nombre || '—') + '</div></div>'
         + '<span style="font-weight:800;color:' + (aprobado ? 'var(--green)' : 'var(--gold)') + ';">USD ' + n.monto_usd + '</span>'
         + '</div>';
     }
