@@ -2501,7 +2501,8 @@ function openAddModal() {
     '<div><div class="m-label">Cuota</div><div id="nCuotaDisplay" style="font-size:1.3rem;font-weight:800;color:#60a5fa;">USD 87</div></div>'+
     '<div><div class="m-label">Personas</div><div id="nPersDisplay" style="font-size:1.3rem;font-weight:800;">2</div></div></div></div>'+
     '<input type="hidden" id="nTotal" value="870"><input type="hidden" id="nPersonas" value="2"><input type="hidden" id="nUltimaCuota" value="87">'+
-    '<div class="m-item"><div class="m-label">Fecha de viaje</div><input class="edit-input" id="nFecha" type="date" /></div>'+
+    '<!-- Fecha de viaje eliminada: la elige el cliente al 80% -->'+
+    '<input type="hidden" id="nFecha" value="">'+
     '<div class="m-item"><div class="m-label">Noches</div><input class="edit-input" id="nNoches" placeholder="7" value="7" /></div>'+
     '<div class="m-item" style="grid-column:span 2;"><div class="m-label">🎁 Código de referido</div>'+
     '<input class="edit-input" id="nRefCodigo" placeholder="Ej: LUA-VALENTINA" oninput="buscarReferidor(this.value)" />'+
@@ -2570,7 +2571,7 @@ async function addClient() {
   var montoCuota  = Math.floor(total / cuotas * 100) / 100;
   var ultimaCuota = parseFloat((document.getElementById('nUltimaCuota') || {}).value) || Math.round((total - montoCuota * (cuotas - 1)) * 100) / 100;
   var sellerId = parseInt(_currentProfile.id, 10);
-  var regionId = _currentProfile.region_id ? parseInt(_currentProfile.region_id, 10) : null;
+  // regionId eliminado (no se usa en nuevo cliente)
   var telefono1 = document.getElementById('nTel1').value.trim() || null;
   var telefono2 = (document.getElementById('nTel2') || {}).value.trim() || null;
   var domicilio = (document.getElementById('nDomicilio') || {}).value.trim() || null;
@@ -2588,7 +2589,7 @@ async function addClient() {
       p_role_id: 4,
       p_nombre: nombre,
       p_apellido: '',
-      p_region_ids: regionId ? [regionId] : null,
+      p_region_ids: [],   // enviar array vacío
       p_telefono1: telefono1,
       p_telefono2: telefono2,
       p_ciudad: null,
@@ -2611,7 +2612,7 @@ async function addClient() {
       telefono: telefono1,
       destino: (document.getElementById('nDest') || {}).value || null,
       paquete: (document.getElementById('nPkg') || {}).value || null,
-      fecha_viaje: (document.getElementById('nFecha') || {}).value || null,
+      // fecha_viaje eliminada: la elige el cliente cuando llega al 80%
       domicilio: domicilio,
       notas: (document.getElementById('nNotas') || {}).value && document.getElementById('nNotas').value.trim() || null,
       personas: parseInt((document.getElementById('nPersDisplay') || {}).innerText, 10) || null,

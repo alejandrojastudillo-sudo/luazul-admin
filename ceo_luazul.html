@@ -1372,6 +1372,13 @@ function fmtTs(ts)               { return LZ.fmtTs(ts); }
 function esc(s)                  { return LZ.esc(s); }
 function safeUUID(id)            { return LZ.safeUUID(id); }
 
+function capitalizarNombre(str) {
+  if (!str) return '';
+  return str.toLowerCase().replace(/\b\w/g, function(letra) {
+    return letra.toUpperCase();
+  });
+}
+
 function showToast(msg, dur) {
   var t = document.getElementById('toast');
   t.textContent = msg;
@@ -1931,7 +1938,7 @@ function openAddGerente() {
     + '<div class="manager-modal-col">'
     + '<div class="manager-modal-section">'
     + '<h3><span>👤</span> Datos personales</h3>'
-    + '<div class="manager-input-group"><label>Nombre completo</label><input id="gNombre" class="normalize-upper" placeholder="Ej: María Gómez" autocomplete="off" /></div>'
+    + '<div class="manager-input-group"><label>Nombre completo</label><input id="gNombre" placeholder="Ej: María Gómez" autocomplete="off" /></div>'
     + '<div class="manager-input-group"><label>Email</label><input id="gEmail" type="email" placeholder="gerente@luazul.com" autocomplete="off" /></div>'
     + '<div class="manager-input-group"><label>Contraseña</label><input id="gPass" type="password" placeholder="Contraseña de acceso" autocomplete="off" /></div>'
     + '<div class="manager-input-group"><label>Ciudad</label><input id="gCiudad" placeholder="Ej: Córdoba" /></div>'
@@ -1964,10 +1971,10 @@ function openAddGerente() {
     + '</div>';
   document.getElementById('mbox').innerHTML = modalContent;
   document.getElementById('modal').classList.add('open');
-  // Normalización en tiempo real
+  // Eliminado: ya no se normaliza a mayúsculas (se usa capitalizarNombre al guardar)
   var nombreInput = document.getElementById('gNombre');
   if (nombreInput) {
-    nombreInput.addEventListener('input', function() { this.value = this.value.toUpperCase(); });
+    // sin listener de normalización
   }
 }
 
@@ -2006,7 +2013,8 @@ function getSelectedRegionsFromModal() {
 }
 
 async function saveNewGerente() {
-  var nombre = (document.getElementById('gNombre').value || '').trim().toUpperCase();
+  var nombreRaw = (document.getElementById('gNombre').value || '').trim();
+  var nombre = capitalizarNombre(nombreRaw);
   var email = (document.getElementById('gEmail').value || '').trim().toLowerCase();
   var pass = (document.getElementById('gPass').value || '').trim();
   var ciudad = (document.getElementById('gCiudad').value || '').trim();
@@ -2259,7 +2267,8 @@ function saveEditGerente(gid) {
     if (String(_cacheGerentes[i].user_id) === String(gid)) { g = _cacheGerentes[i]; break; }
   }
   if (!g) { showToast('⚠️ Gerente no encontrado'); return; }
-  var nombre = (document.getElementById('egNombre').value || '').trim().toUpperCase();
+  var nombreRaw = (document.getElementById('egNombre').value || '').trim();
+  var nombre = capitalizarNombre(nombreRaw);
   var email = (document.getElementById('egEmail').value || '').trim().toLowerCase();
   var ciudad = (document.getElementById('egCiudad').value || '').trim();
   var tel1 = (document.getElementById('egTel1').value || '').trim();
@@ -3997,10 +4006,7 @@ function verDetalleStaff(staffId) {
   function renderPwCeoUsers() { document.getElementById('pwCeoUsers').innerHTML = '<div>Usuarios CEO: solo el usuario actual</div>'; }
   function openAddVendorCeo() {
     var rs = _cacheRegiones || [];
-    var regionesHtml = '<option value="">Sin región</option>';
-    for (var i = 0; i < rs.length; i++) {
-      regionesHtml += '<option value="' + rs[i].id + '">' + rs[i].bandera + ' ' + rs[i].nombre + '</option>';
-    }
+    // regionesHtml eliminado: región ya no se asigna al crear asesor
     var gerentes = _cacheGerentes || [];
     var gerentesHtml = '<option value="">Sin gerente asignado</option>';
     for (var j = 0; j < gerentes.length; j++) {
@@ -4019,7 +4025,7 @@ function verDetalleStaff(staffId) {
       '</div></div>' +
       '<div class="manager-modal-col"><div class="manager-modal-section">' +
       '<h3>🏢 Configuración</h3>' +
-      '<div class="manager-input-group"><label>Región</label><select id="vReg" class="msel">' + regionesHtml + '</select></div>' +
+      '<input type="hidden" id="vReg" value="">' +
       '<div class="manager-input-group"><label>Gerente a cargo</label><select id="vManager" class="msel">' + gerentesHtml + '</select></div>' +
       '<div class="manager-input-group"><label>💰 CBU / Alias</label><input id="vCBU" placeholder="CBU o Alias" style="font-family:monospace;" /></div>' +
       '<div class="manager-input-group"><label>% Comisión (opcional)</label><input id="vCom" type="number" value="0" step="1" min="0" max="100" /></div>' +
@@ -4036,7 +4042,7 @@ function verDetalleStaff(staffId) {
     var pass = document.getElementById('vP').value.trim();
     var telefono1 = document.getElementById('vT1').value.trim();
     var cbu = document.getElementById('vCBU').value.trim();
-    var regionId = document.getElementById('vReg').value ? parseInt(document.getElementById('vReg').value) : null;
+    // var regionId = ...; (eliminado – asesores no necesitan región)
     var managerId = document.getElementById('vManager').value ? parseInt(document.getElementById('vManager').value) : null;
 
     if (!nombre || !email || !pass) {
@@ -4069,7 +4075,7 @@ function verDetalleStaff(staffId) {
           p_role_id: 3,
           p_nombre: primerNombre,
           p_apellido: apellidoStr,
-          p_region_ids: regionId ? [regionId] : [],
+          p_region_ids: [],
           p_telefono1: telefono1 || null,
           p_telefono2: null,
           p_ciudad: null,
@@ -4104,11 +4110,7 @@ function verDetalleStaff(staffId) {
       vendOpts += '<option value="' + v.user_id + '">' + (v.nombre || v.user_id) + '</option>';
     }
 
-    var regOpts = '<option value="">— Seleccionar región —</option>';
-    for (var j = 0; j < rs.length; j++) {
-      var r = rs[j];
-      regOpts += '<option value="' + r.id + '">' + r.bandera + ' ' + r.nombre + '</option>';
-    }
+    // regOpts eliminado: región ya no se asigna al crear cliente
 
     var modalContent = '<div class="mhead">'
       + '<div><h2>➕ Nuevo Cliente</h2><p>Completá los datos del nuevo plan</p></div>'
@@ -4150,7 +4152,7 @@ function verDetalleStaff(staffId) {
       + '<option value="12">12 cuotas</option>'
       + '<option value="18">18 cuotas</option>'
       + '</select></div>'
-      + '<div class="manager-input-group"><label>Fecha de viaje (opcional)</label><input id="nFechaViaje" type="date"></div>'
+      + '<input type="hidden" id="nFechaViaje" value="">'
       + '<div class="manager-input-group"><label>Personas</label><input id="nPersonas" type="number" min="1" max="20" placeholder="Ej: 2"></div>'
       + '<div class="manager-input-group"><label>Noches</label><input id="nNoches" type="number" min="1" max="30" placeholder="Ej: 7"></div>'
       + '<div class="manager-input-group"><label>Notas</label><input id="nNotas" placeholder="Observaciones adicionales..."></div>'
@@ -4171,7 +4173,7 @@ function verDetalleStaff(staffId) {
       // Asignación y referido
       + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">'
       + '<div class="manager-input-group"><label>Asesor asignado</label><select id="nSeller" class="msel">' + vendOpts + '</select></div>'
-      + '<div class="manager-input-group"><label>Región</label><select id="nRegion" class="msel">' + regOpts + '</select></div>'
+      + '<input type="hidden" id="nRegion" value="">'
       + '<div class="manager-input-group" style="grid-column:span 2;">'
       + '<label>🎁 Código de referido (opcional)</label>'
       + '<input id="nRefCodigo" placeholder="Ej: LUA-JUANPEREZ" oninput="buscarReferidorCeo(this.value)">'
@@ -4257,9 +4259,9 @@ function verDetalleStaff(staffId) {
     var totalUsd   = parseFloat((document.getElementById('nTotalUsd')    || {}).value || 0);
     var montoCuota = parseFloat((document.getElementById('nMontoCuota')  || {}).value || 0);
     var cuotasTotal= parseInt((document.getElementById('nCuotasTotal')   || {}).value || 12, 10);
-    var fechaViaje = (document.getElementById('nFechaViaje') || {}).value || null;
+    // fechaViaje eliminada: la elige el cliente cuando llega al 80%
     var sellerId   = (document.getElementById('nSeller')      || {}).value || null;
-    var regionId   = (document.getElementById('nRegion')      || {}).value || null;
+    // regionId eliminada: los clientes no necesitan región
     var notas      = (document.getElementById('nNotas')       || {}).value.trim();
     var codigoReferido = (document.getElementById('nRefCodigo') || {}).value.trim();
 
@@ -4285,7 +4287,7 @@ function verDetalleStaff(staffId) {
         p_role_id: 4,
         p_nombre: nombre,
         p_apellido: '',
-        p_region_ids: regionId ? [parseInt(regionId)] : [],
+        p_region_ids: [],   // enviar array vacío
         p_telefono1: telefono || null,
         p_telefono2: null,
         p_ciudad: null,
@@ -4298,7 +4300,7 @@ function verDetalleStaff(staffId) {
         p_cuotas_total: cuotasTotal,
         p_destino: destino || null,
         p_paquete: paquete || null,
-        p_fecha_viaje: fechaViaje || null,
+        // p_fecha_viaje: eliminada (la elige el cliente al llegar al 80%)
         p_personas: (document.getElementById('nPersonas') || {}).value ? parseInt((document.getElementById('nPersonas') || {}).value, 10) : null,
         p_noches: (document.getElementById('nNoches') || {}).value ? parseInt((document.getElementById('nNoches') || {}).value, 10) : null
       })

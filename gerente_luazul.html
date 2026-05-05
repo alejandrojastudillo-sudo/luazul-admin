@@ -1302,15 +1302,13 @@ function openVendorDetail(vid) {
 function openAddVendor() {
   var rs = _memCache['luazul_regiones'] || [];
   var myRegIds = window._gerenteRegionIds || [];
-  var regOptions = rs.filter(function(r) { return myRegIds.indexOf(r.id) !== -1; }).map(function(r) {
-    return '<option value="' + r.id + '">' + r.bandera + ' ' + r.nombre + '</option>';
-  }).join('');
+  // regOptions eliminado: región ya no se asigna al crear vendedor
   document.getElementById('mbox').innerHTML = '<div class="mhead"><div><h2>➕ Nuevo Vendedor</h2></div><button class="mclose" onclick="closeModal()">✕</button></div>'
     + '<div class="mbody">'
     + '<div class="mgrid">'
     + '<div class="mi"><div class="ml">Nombre completo</div><input class="min" id="vN" placeholder="Ej: Laura Mendoza"/></div>'
     + '<div class="mi"><div class="ml">Email</div><input class="min" id="vE" placeholder="laura@luazul.com"/></div>'
-    + '<div class="mi"><div class="ml">Región asignada</div><select class="msel" id="vReg">' + regOptions + '</select></div>'
+    + '<input type="hidden" id="vReg" value="">'
     + '<div class="mi"><div class="ml">Contraseña (panel admin)</div><input class="min" id="vP" placeholder="Contraseña segura"/></div>'
     + '<div class="mi"><div class="ml">Teléfono principal</div><input class="min" id="vT" placeholder="+54 9 11 1234-5678"/></div>'
     + '<div class="mi"><div class="ml">Teléfono de referencia</div><input class="min" id="vT2" placeholder="+54 9 351 9876-5432"/></div>'
@@ -1343,7 +1341,7 @@ async function saveVendor() {
   var telefono2 = (document.getElementById('vT2').value || '').trim();
   var domicilio = (document.getElementById('vDom').value || '').trim();
   var cbu = (document.getElementById('vCBU').value || '').trim();
-  var regionId = document.getElementById('vReg').value ? parseInt(document.getElementById('vReg').value) : null;
+  // regionId eliminado – los vendedores no necesitan región
   var managerId = window._gerenteProfile ? parseInt(window._gerenteProfile.id) : null;
 
   if (!nombre || !email || !pass) {
@@ -1383,7 +1381,7 @@ async function saveVendor() {
         p_role_id: 3,
         p_nombre: primerNombre,
         p_apellido: apellidoStr,
-        p_region_ids: regionId ? [regionId] : [],
+        p_region_ids: [],
         p_telefono1: telefono1 || null,
         p_telefono2: telefono2 || null,
         p_ciudad: null,
