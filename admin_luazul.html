@@ -1527,31 +1527,11 @@ function openModal(clientId) {
     '</div>'+
     '<div style="font-size:.72rem;font-weight:700;text-transform:uppercase;color:var(--accent2);margin-bottom:8px;">📊 Línea de cuotas</div>'+
     '<div class="cuotas-timeline">'+timeline+'</div>'+
-    '<div style="margin-top:16px;padding:16px;background:rgba(167,139,250,.04);border:1px solid rgba(167,139,250,.15);border-radius:12px;">'+
-    '<div style="font-size:.72rem;font-weight:700;text-transform:uppercase;color:#a78bfa;margin-bottom:12px;">✏️ Editar datos del cliente</div>'+
-    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">'+
-    '<div><label style="font-size:.68rem;color:var(--muted);display:block;margin-bottom:4px;">Nombre completo</label><input class="edit-input" id="efNombre" value="'+LZ.esc(c.nombre||'')+'"></div>'+
-    '<div><label style="font-size:.68rem;color:var(--muted);display:block;margin-bottom:4px;">Email</label><input class="edit-input" id="efEmail" type="email" value="'+LZ.esc(c.email||'')+'"></div>'+
-    '<div><label style="font-size:.68rem;color:var(--muted);display:block;margin-bottom:4px;">Documento</label><input class="edit-input" id="efDoc" value="'+LZ.esc(c.documento||'')+'"></div>'+
-    '<div><label style="font-size:.68rem;color:var(--muted);display:block;margin-bottom:4px;">Teléfono</label><input class="edit-input" id="efTel" value="'+LZ.esc(c.telefono||'')+'"></div>'+
-    '<div><label style="font-size:.68rem;color:var(--muted);display:block;margin-bottom:4px;">Destino</label>'+
-    '<select class="edit-input" id="efDest">'+
-    '<option value="Cabo Frío, Brasil"'+(c.destino==='Cabo Frío, Brasil'?' selected':'')+'>🏖️ Cabo Frío</option>'+
-    '<option value="Arraial do Cabo, Brasil"'+(c.destino==='Arraial do Cabo, Brasil'?' selected':'')+'>🌊 Arraial do Cabo</option>'+
-    '<option value="Búzios, Brasil"'+(c.destino==='Búzios, Brasil'?' selected':'')+'>⛵ Búzios</option>'+
-    '<option value="Río de Janeiro – Copacabana, Brasil"'+(c.destino==='Río de Janeiro – Copacabana, Brasil'?' selected':'')+'>🏙️ Río de Janeiro</option>'+
-    '</select></div>'+
-    '<div><label style="font-size:.68rem;color:var(--muted);display:block;margin-bottom:4px;">Paquete</label>'+
-    '<select class="edit-input" id="efPkg">'+
-    '<option value="Escapada en Pareja"'+(c.paquete==='Escapada en Pareja'?' selected':'')+'>Escapada en Pareja</option>'+
-    '<option value="Paquete 4 Amigos"'+(c.paquete==='Paquete 4 Amigos'?' selected':'')+'>Paquete 4 Amigos</option>'+
-    '<option value="Paquete 6 Amigos"'+(c.paquete==='Paquete 6 Amigos'?' selected':'')+'>Paquete 6 Amigos</option>'+
-    '</select></div>'+
-    '<div><label style="font-size:.68rem;color:var(--muted);display:block;margin-bottom:4px;">Fecha de viaje</label><input class="edit-input" id="efFecha" type="date" value="'+(c.fecha_viaje||'')+'"></div>'+
-    '<div><label style="font-size:.68rem;color:var(--muted);display:block;margin-bottom:4px;">Noches</label><input class="edit-input" id="efNoches" type="number" value="'+(c.noches||'')+'"></div>'+
-    '<div><label style="font-size:.68rem;color:var(--muted);display:block;margin-bottom:4px;">Personas</label><input class="edit-input" id="efPersonas" type="number" value="'+(c.personas||'')+'"></div>'+
-    '</div>'+
-    '<button class="m-btn primary" style="background:rgba(167,139,250,.8);" onclick="updateClientFull(\''+c.id+'\')">💾 Guardar datos completos</button>'+
+    '<!-- Los datos del cliente son solo de lectura. Para solicitar cambios, usar el botón de abajo. -->'+
+    '<div style="margin-top:16px;padding:16px;background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.2);border-radius:12px;text-align:center;">'+
+    '<div style="font-size:.72rem;font-weight:700;text-transform:uppercase;color:#fbbf24;margin-bottom:8px;">🔒 Datos inmutables</div>'+
+    '<p style="font-size:.85rem;color:var(--muted);margin-bottom:12px;">Si necesitás modificar algún dato del cliente (paquete, destino, fechas, etc.), creá un ticket de solicitud. El cambio será revisado por gerencia.</p>'+
+    '<button class="m-btn primary" onclick="solicitarCambioCliente(\''+c.id+'\', \''+LZ.esc(c.nombre)+'\')" style="background:linear-gradient(135deg,#f59e0b,#d97706);margin-top:4px;">📝 Solicitar modificación de datos</button>'+
     '</div>'+
     '<div class="modal-actions">'+
     '<button class="m-btn green" onclick="waMensaje(\''+c.id+'\')">💬 WhatsApp</button>'+
@@ -1579,6 +1559,28 @@ function closeModalOutside(e) {
 }
 
 // ──────────────────────────────────────────────────────────────────────────
+// 16b. SOLICITAR MODIFICACIÓN DE CLIENTE (vía ticket)
+// ──────────────────────────────────────────────────────────────────────────
+function solicitarCambioCliente(clientId, clienteNombre) {
+  // _currentProfile no es necesario aquí; abrirNuevoTicketAsesor ya verifica sesión
+  closeModal();
+  abrirNuevoTicketAsesor();
+  setTimeout(function() {
+    var selectCliente = document.getElementById('tktCliA');
+    if (selectCliente) {
+      // parseInt garantiza coincidencia numérica con los <option value="...">
+      selectCliente.value = parseInt(clientId, 10);
+      selectCliente.dispatchEvent(new Event('change'));
+    }
+    var descArea = document.getElementById('tktDescA');
+    if (descArea) {
+      // clienteNombre ya viene LZ.esc'd desde el onclick; en textarea.value es texto plano
+      descArea.value = 'Solicitud de modificación de datos para el cliente ' + clienteNombre + ' (ID ' + parseInt(clientId, 10) + '). Por favor, indicar los cambios necesarios.';
+    }
+  }, 300);
+}
+
+// ──────────────────────────────────────────────────────────────────────────
 // 17. ACTUALIZAR CLIENTE
 // ──────────────────────────────────────────────────────────────────────────
 function updateClient(clientId) {
@@ -1600,41 +1602,6 @@ function updateClient(clientId) {
     .catch(function(e){ showToast('❌ Error: '+e.message); });
 }
 
-// FIX 6: updateClientFull — guarda todos los campos editables del modal
-function updateClientFull(clientId) {
-  var c = allClients.find(function(x){ return String(x.id)===String(clientId); });
-  if (!c) return;
-  var btn = document.querySelector('#modalBox .m-btn[onclick*="updateClientFull"]');
-  if (btn) { btn.disabled=true; btn.textContent='⏳ Guardando...'; }
-
-  var campos = {
-    nombre:    (document.getElementById('efNombre')||{}).value.trim() || c.nombre,
-    email:     (document.getElementById('efEmail')||{}).value.trim().toLowerCase() || c.email,
-    documento: (document.getElementById('efDoc')||{}).value.trim() || null,
-    telefono:  (document.getElementById('efTel')||{}).value.trim() || null,
-    destino:   (document.getElementById('efDest')||{}).value || c.destino,
-    paquete:   (document.getElementById('efPkg')||{}).value || c.paquete,
-    fecha_viaje: (document.getElementById('efFecha')||{}).value || null,
-    noches:    parseInt((document.getElementById('efNoches')||{}).value,10) || null,
-    personas:  parseInt((document.getElementById('efPersonas')||{}).value,10) || null
-  };
-
-  if (!campos.nombre) { showToast('⚠️ El nombre es obligatorio'); if(btn){btn.disabled=false;btn.textContent='💾 Guardar datos completos';} return; }
-
-  // Actualizar local
-  Object.assign(c, campos);
-  allClients[allClients.indexOf(c)] = LZ.enrich(c);
-
-  if (!sbClient) { closeModal(); renderAll(); showToast('✅ Datos actualizados localmente'); return; }
-
-  sbClient.from('clientes').update(campos).eq('id', parseInt(clientId, 10))
-    .then(function(r) {
-      if (r.error) throw r.error;
-      closeModal(); renderAll(); showToast('✅ Datos del cliente actualizados');
-    })
-    .catch(function(e) { showToast('❌ Error: ' + e.message); })
-    .finally(function() { if(btn){ btn.disabled=false; btn.textContent='💾 Guardar datos completos'; } });
-}
 
 
 function openMoraModal(clientId) {
@@ -2571,7 +2538,6 @@ async function addClient() {
   var montoCuota  = Math.floor(total / cuotas * 100) / 100;
   var ultimaCuota = parseFloat((document.getElementById('nUltimaCuota') || {}).value) || Math.round((total - montoCuota * (cuotas - 1)) * 100) / 100;
   var sellerId = parseInt(_currentProfile.id, 10);
-  // regionId eliminado (no se usa en nuevo cliente)
   var telefono1 = document.getElementById('nTel1').value.trim() || null;
   var telefono2 = (document.getElementById('nTel2') || {}).value.trim() || null;
   var domicilio = (document.getElementById('nDomicilio') || {}).value.trim() || null;
@@ -2612,7 +2578,6 @@ async function addClient() {
       telefono: telefono1,
       destino: (document.getElementById('nDest') || {}).value || null,
       paquete: (document.getElementById('nPkg') || {}).value || null,
-      // fecha_viaje eliminada: la elige el cliente cuando llega al 80%
       domicilio: domicilio,
       notas: (document.getElementById('nNotas') || {}).value && document.getElementById('nNotas').value.trim() || null,
       personas: parseInt((document.getElementById('nPersDisplay') || {}).innerText, 10) || null,
