@@ -214,8 +214,8 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
 .tbbtn.danger:hover{background:var(--red-bg);color:#fca5a5;border-color:var(--red-bd);}
 .main{padding:24px 24px 60px;max-width:1600px;margin:0 auto;}
 .tabs{display:flex;gap:4px;margin-bottom:24px;border-bottom:1px solid var(--border);flex-wrap:wrap;}
-.tab{padding:10px 18px;font-size:.82rem;font-weight:700;cursor:pointer;border-radius:10px 10px 0 0;color:var(--muted);border:1px solid transparent;border-bottom:none;position:relative;bottom:-1px;white-space:nowrap;transition:all .15s;}
-.tab:hover{color:var(--text);}
+.tab{padding:10px 18px;font-size:.82rem;font-weight:700;cursor:pointer;border-radius:10px 10px 0 0;color:var(--text);background:rgba(255,255,255,.02);border:1px solid transparent;border-bottom:none;position:relative;bottom:-1px;white-space:nowrap;transition:all .15s;}
+.tab:hover{background:rgba(255,255,255,.08);color:var(--purple);}
 .tab.active{background:var(--surface);color:var(--purple);border-color:var(--border);}
 .tabpg{display:none;animation:fi .3s ease;}
 .tabpg.active{display:block;}
@@ -835,13 +835,13 @@ window.LZ = (function() {
       <div class="tab active" onclick="showTab('overview')"  id="tab-overview">📊 Resumen Global</div>
       <div class="tab"        onclick="showTab('regiones')"  id="tab-regiones">🌎 Gerentes Regionales</div>
       <div class="tab"        onclick="showTab('venddash')"  id="tab-venddash">📈 Dashboard Asesor</div>
-      <div class="tab"        onclick="showTab('pagos')"     id="tab-pagos">💳 Pagos</div>
+      <div class="tab"        onclick="showTab('gestion_pagos')" id="tab-gestion_pagos">💳 Gestión de Pagos</div>
       <div class="tab"        onclick="showTab('mora')"      id="tab-mora">🚨 Mora Global</div>
       <div class="tab"        onclick="showTab('equipo')"    id="tab-equipo">🏆 Equipo &amp; Objetivos</div>
       <div class="tab"        onclick="showTab('clientes')"  id="tab-clientes">👥 Clientes</div>
       <div class="tab"        onclick="showTab('mensual')"   id="tab-mensual"   style="color:var(--cyan,#06b6d4);">📆 Recaudación Mensual</div>
       <div class="tab"        onclick="showTab('passwords')" id="tab-passwords" style="color:var(--purple);">🔑 Contraseñas</div>
-      <div class="tab" onclick="showTab('pagos_aprobacion')" id="tab-pagos_aprobacion" style="color:#fb923c;">💳 Aprobar Pagos</div>
+
       <div class="tab" onclick="window.open('https://luazul-smarttravel.vercel.app','_blank')" id="tab-tours" style="color:#34d399;">🌐 Web Luazul</div>
       <div class="tab" onclick="showTab('pagocomisiones')" id="tab-pagocomisiones" style="color:#4ade80;">💰 Pago de Comisiones</div>
       <div class="tab" onclick="showTab('backup')" id="tab-backup" style="color:#22d3ee;">📥 Backup Excel</div>
@@ -913,22 +913,19 @@ window.LZ = (function() {
     </div>
 
     <!-- ══ PAGOS ══ -->
-    <div class="tabpg" id="tabpg-pagos">
+    <!-- ══ NUEVA GESTIÓN DE PAGOS (unificada) ══ -->
+    <div class="tabpg" id="tabpg-gestion_pagos">
       <div class="sec-head">
         <h2>💳 Gestión de Pagos</h2>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-          <select class="msel" id="pagoRegFilt" onchange="renderPagos()" style="width:auto;">
-            <option value="">Todas las regiones</option>
-          </select>
-          <select class="msel" id="pagoEstFilt" onchange="renderPagos()" style="width:auto;">
-            <option value="">Todos</option>
-            <option value="pendiente">Pendientes</option>
-            <option value="aprobado">Aprobados</option>
-          </select>
-          <button class="addbtn" onclick="aprobarTodos()">✅ Aprobar todos</button>
+        <div style="display:flex; gap:12px;">
+          <button class="ftab active" onclick="mostrarSubseccionPagos('pendientes')">📌 Pendientes</button>
+          <button class="ftab" onclick="mostrarSubseccionPagos('aprobados')">✅ Aprobados</button>
         </div>
       </div>
-      <div id="pagosBody"></div>
+      <div id="subseccionPagos">
+        <!-- Se carga dinámicamente -->
+        <div style="text-align:center;padding:40px;">⏳ Cargando...</div>
+      </div>
     </div>
 
     <!-- ══ GESTIÓN DE MORA GLOBAL ══ -->
@@ -1023,22 +1020,7 @@ window.LZ = (function() {
     </div>
 
     <!-- ══ APROBACIÓN DE PAGOS (Exclusivo CEO) ══ -->
-    <div class="tabpg" id="tabpg-pagos_aprobacion">
-      <div class="sec-head">
-        <h2>💳 Aprobación de Pagos — Exclusivo CEO</h2>
-        <div style="display:flex;gap:8px;align-items:center;">
-          <button onclick="renderPagosAprobacion()" style="padding:8px 18px;background:rgba(11,61,145,.3);border:1px solid rgba(100,160,255,.25);border-radius:10px;font-family:inherit;font-size:.75rem;font-weight:700;color:#7eb8ff;cursor:pointer;">🔄 Actualizar</button>
-        </div>
-      </div>
-      <div style="background:rgba(251,146,60,.08);border:1px solid rgba(251,146,60,.2);border-radius:14px;padding:14px 20px;margin-bottom:24px;display:flex;align-items:center;gap:14px;">
-        <span style="font-size:1.4rem;">🔒</span>
-        <div>
-          <div style="font-size:.82rem;font-weight:700;color:#fb923c;">Función exclusiva del CEO</div>
-          <div style="font-size:.7rem;color:rgba(200,220,255,.7);margin-top:2px;">Los asesores envían los comprobantes. Vos los revisás y aprobás aquí. Solo al aprobar se actualiza el contador de cuotas del cliente.</div>
-        </div>
-      </div>
-      <div id="pagosAprobacionList"></div>
-    </div>
+    <!-- tabpg-pagos_aprobacion reemplazado por tabpg-gestion_pagos -->
 
     <!-- ══ PAGO DE COMISIONES ══ -->
     <div class="tabpg" id="tabpg-pagocomisiones">
@@ -3867,7 +3849,7 @@ function verDetalleStaff(staffId) {
 
     // Disparar inicializaciones o renders específicos de la pestaña
     if (tabId === 'venddash') populateVendDashSel();
-    if (tabId === 'pagos') { populatePagoFiltros(); renderPagos(); }
+    if (tabId === 'gestion_pagos') mostrarSubseccionPagos('pendientes');
     if (tabId === 'mora') renderMora();
     if (tabId === 'equipo') renderEquipoDash();
     if (tabId === 'passwords') renderPasswords();
@@ -5076,6 +5058,164 @@ for (var k = 0; k < allRs.length; k++) {
   window.aprobarTodos = aprobarTodos;
   window.escanearMora = escanearMora;
   window.exportarExcel = exportarExcel;
+  // ══ NUEVA GESTIÓN DE PAGOS (unificada) ══
+
+  // Subsección actual (pendientes o aprobados)
+  let _subseccionActualPagos = 'pendientes';
+
+  // Función para cambiar entre subpestañas
+  async function mostrarSubseccionPagos(subseccion) {
+    _subseccionActualPagos = subseccion;
+    const btns = document.querySelectorAll('#tabpg-gestion_pagos .ftab');
+    btns.forEach(btn => btn.classList.remove('active'));
+    if (subseccion === 'pendientes') {
+      btns[0].classList.add('active');
+      await renderPagosPendientes();
+    } else {
+      btns[1].classList.add('active');
+      await renderPagosAprobados();
+    }
+  }
+
+  // Renderizar pagos pendientes (con comprobante y contrato)
+  async function renderPagosPendientes() {
+    const container = document.getElementById('subseccionPagos');
+    if (!container) return;
+    container.innerHTML = '<div style="text-align:center;padding:40px;">⏳ Cargando pagos pendientes...</div>';
+    try {
+      const now = new Date();
+      const startOfMonth = new Date(Date.UTC(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0));
+      const endOfMonth = new Date(Date.UTC(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999));
+      const { data: pagos, error } = await sbClient
+        .from('pagos')
+        .select(`*, clientes!cliente_id(id, nombre, email, region_id)`)
+        .eq('estado', 'pendiente')
+        .gte('fecha_vencimiento', startOfMonth.toISOString())
+        .lt('fecha_vencimiento', endOfMonth.toISOString())
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+
+      if (!pagos.length) {
+        container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted);">✅ No hay pagos pendientes en el mes actual.</div>';
+        return;
+      }
+
+      let html = `<div class="twrap">
+        <div class="thead-ceo" style="grid-template-columns: 2fr 80px 100px 120px 1fr 1fr 100px;">
+          <div>Cliente</div><div>Cuota</div><div>Monto</div><div>Fecha venc.</div><div>Comprobante</div><div>Contrato (1ª cuota)</div><div>Acciones</div>
+        </div>`;
+      for (const p of pagos) {
+        const cliente = p.clientes;
+        const esPrimeraCuota = (p.numero_cuota === 1);
+        let comprobanteLink = p.comprobante_url ? `<a href="${p.comprobante_url}" target="_blank" class="btn-link" style="color:var(--blue-light);">📄 Ver</a>` : '<span class="text-muted">Sin comprobante</span>';
+        let contratoLink = '<span class="text-muted">—</span>';
+        if (esPrimeraCuota && cliente) {
+          const { data: contrato } = await sbClient.from('contratos').select('contrato_url').eq('cliente_id', cliente.id).maybeSingle();
+          if (contrato?.contrato_url) {
+            contratoLink = `<a href="${contrato.contrato_url}" target="_blank" class="btn-link" style="color:var(--gold);">📑 Ver contrato</a>`;
+          } else {
+            contratoLink = '<span class="text-muted">Sin contrato</span>';
+          }
+        }
+        html += `<div class="trow-ceo" style="grid-template-columns: 2fr 80px 100px 120px 1fr 1fr 100px; align-items:center;">
+          <div><strong>${esc(cliente?.nombre || '—')}</strong><br><small>${esc(cliente?.email || '')}</small></div>
+          <div>${p.numero_cuota}</div>
+          <div>USD ${p.monto_usd}</div>
+          <div>${LZ.formatDateLocal(p.fecha_vencimiento)}</div>
+          <div>${comprobanteLink}</div>
+          <div>${contratoLink}</div>
+          <div><button class="btn-approve" onclick="aprobarPagoYContrato(${p.id}, ${cliente?.id || 'null'})" style="background:var(--green-bg);color:var(--green);border:1px solid var(--green-bd);padding:6px 12px;border-radius:8px;cursor:pointer;">✅ Aprobar</button></div>
+        </div>`;
+      }
+      html += `</div>`;
+      container.innerHTML = html;
+    } catch (err) {
+      console.error(err);
+      container.innerHTML = '<div style="color:var(--red);padding:20px;">❌ Error al cargar pagos pendientes.</div>';
+    }
+  }
+
+  // Renderizar pagos aprobados (historial)
+  async function renderPagosAprobados() {
+    const container = document.getElementById('subseccionPagos');
+    if (!container) return;
+    container.innerHTML = '<div style="text-align:center;padding:40px;">⏳ Cargando historial...</div>';
+    try {
+      const { data: pagos, error } = await sbClient
+        .from('pagos')
+        .select(`*, clientes!cliente_id(id, nombre, email)`)
+        .eq('estado', 'aprobado')
+        .order('updated_at', { ascending: false })
+        .limit(200);
+      if (error) throw error;
+      if (!pagos.length) {
+        container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted);">No hay pagos aprobados aún.</div>';
+        return;
+      }
+      let html = `<div class="twrap">
+        <div class="thead-ceo" style="grid-template-columns: 2fr 80px 100px 120px 1fr 1fr;">
+          <div>Cliente</div><div>Cuota</div><div>Monto</div><div>Fecha aprobación</div><div>Comprobante</div><div>Contrato (si 1ª)</div>
+        </div>`;
+      for (const p of pagos) {
+        const cliente = p.clientes;
+        const esPrimeraCuota = (p.numero_cuota === 1);
+        const compLink = p.comprobante_url ? `<a href="${p.comprobante_url}" target="_blank">📄 Ver</a>` : '—';
+        let contratoLink = '—';
+        if (esPrimeraCuota && cliente) {
+          const { data: contrato } = await sbClient.from('contratos').select('contrato_url').eq('cliente_id', cliente.id).maybeSingle();
+          if (contrato?.contrato_url) contratoLink = `<a href="${contrato.contrato_url}" target="_blank">📑 Ver contrato</a>`;
+        }
+        html += `<div class="trow-ceo" style="grid-template-columns: 2fr 80px 100px 120px 1fr 1fr;">
+          <div><strong>${esc(cliente?.nombre || '—')}</strong><br><small>${esc(cliente?.email || '')}</small></div>
+          <div>${p.numero_cuota}</div>
+          <div>USD ${p.monto_usd}</div>
+          <div>${LZ.formatDateLocal(p.updated_at)}</div>
+          <div>${compLink}</div>
+          <div>${contratoLink}</div>
+        </div>`;
+      }
+      html += `</div>`;
+      container.innerHTML = html;
+    } catch (err) {
+      console.error(err);
+      container.innerHTML = '<div style="color:var(--red);padding:20px;">❌ Error al cargar pagos aprobados.</div>';
+    }
+  }
+
+  // Aprobar pago y (si es cuota 1) autorizar contrato automáticamente
+  async function aprobarPagoYContrato(pagoId, clienteId) {
+    if (!_ceoUid) { showToast('⚠️ Sesión CEO no identificada'); return; }
+    const btn = event.target;
+    if (btn) btn.disabled = true;
+    try {
+      const { data: pago, error: pagoError } = await sbClient
+        .from('pagos')
+        .select('numero_cuota, estado')
+        .eq('id', pagoId)
+        .single();
+      if (pagoError) throw pagoError;
+      if (pago.estado !== 'pendiente') {
+        showToast('⚠️ Este pago ya fue procesado.');
+        if (btn) btn.disabled = false;
+        return;
+      }
+      const esPrimeraCuota = (pago.numero_cuota === 1);
+      const { error: rpcError } = await sbClient.rpc('aprobar_pago_ceo', {
+        p_pago_id: pagoId,
+        p_ceo_uid: _ceoUid
+      });
+      if (rpcError) throw rpcError;
+      showToast('✅ Pago aprobado' + (esPrimeraCuota ? ' y contrato autorizado' : ''));
+      if (_subseccionActualPagos === 'pendientes') await renderPagosPendientes();
+      else await renderPagosAprobados();
+      renderAll();
+    } catch (err) {
+      console.error(err);
+      showToast('❌ Error: ' + (err.message || 'No se pudo aprobar'));
+      if (btn) btn.disabled = false;
+    }
+  }
+
   window.guardarVoucher = guardarVoucher;
   window.cargarTickets = cargarTickets;
   window.abrirNuevoTicket = abrirNuevoTicket;
