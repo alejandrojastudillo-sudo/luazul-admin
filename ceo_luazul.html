@@ -5090,8 +5090,6 @@ for (var k = 0; k < allRs.length; k++) {
         .from('pagos')
         .select(`*, clientes!cliente_id(id, nombre, email, region_id)`)
         .eq('estado', 'pendiente')
-        .gte('fecha_vencimiento', startOfMonth.toISOString())
-        .lt('fecha_vencimiento', endOfMonth.toISOString())
         .order('created_at', { ascending: false });
       if (error) throw error;
 
@@ -5107,24 +5105,52 @@ for (var k = 0; k < allRs.length; k++) {
       for (const p of pagos) {
         const cliente = p.clientes;
         const esPrimeraCuota = (p.numero_cuota === 1);
-        let comprobanteLink = p.comprobante_url ? `<a href="${p.comprobante_url}" target="_blank" class="btn-link" style="color:var(--blue-light);">📄 Ver</a>` : '<span class="text-muted">Sin comprobante</span>';
-        let contratoLink = '<span class="text-muted">—</span>';
+
+        // Comprobante
+        let comprobanteLink = p.comprobante_url
+          ? `<a href="${p.comprobante_url}" target="_blank" class="btn-link" style="color:var(--blue-light);">\ud83d\udcc4 Ver</a>`
+          : '<span class="text-muted">Sin comprobante</span>';
+
+        // Contrato (solo aplica para cuota 1)
+        let contratoLink = '<span class="text-muted">\u2014</span>';
+        let contratoUrl = null;
         if (esPrimeraCuota && cliente) {
-          const { data: contrato } = await sbClient.from('contratos').select('contrato_url').eq('cliente_id', cliente.id).maybeSingle();
+          const { data: contrato } = await sbClient
+            .from('contratos')
+            .select('contrato_url')
+            .eq('cliente_id', cliente.id)
+            .maybeSingle();
           if (contrato?.contrato_url) {
-            contratoLink = `<a href="${contrato.contrato_url}" target="_blank" class="btn-link" style="color:var(--gold);">📑 Ver contrato</a>`;
+            contratoUrl = contrato.contrato_url;
+            contratoLink = `<a href="${contratoUrl}" target="_blank" class="btn-link" style="color:var(--gold);">\ud83d\udcc1 Ver contrato</a>`;
           } else {
             contratoLink = '<span class="text-muted">Sin contrato</span>';
           }
         }
+
+        // Validacion: habilitar Aprobar solo si tiene lo necesario
+        let puedeAprobar = true;
+        let motivoBloqueo = '';
+        if (!p.comprobante_url) {
+          puedeAprobar = false;
+          motivoBloqueo = 'Falta comprobante de pago';
+        } else if (esPrimeraCuota && !contratoUrl) {
+          puedeAprobar = false;
+          motivoBloqueo = 'Falta contrato firmado (primera cuota)';
+        }
+
+        const botonAprobar = puedeAprobar
+          ? `<button class="btn-approve" onclick="aprobarPagoYContrato(${p.id}, ${cliente?.id || 'null'})" style="background:var(--green-bg);color:var(--green);border:1px solid var(--green-bd);padding:6px 12px;border-radius:8px;cursor:pointer;">\u2705 Aprobar</button>`
+          : `<button disabled title="${motivoBloqueo}" style="background:rgba(100,100,100,.2);color:var(--muted);border:1px solid var(--border);padding:6px 12px;border-radius:8px;cursor:not-allowed;">\u26d4 Bloqueado</button>`;
+
         html += `<div class="trow-ceo" style="grid-template-columns: 2fr 80px 100px 120px 1fr 1fr 100px; align-items:center;">
-          <div><strong>${esc(cliente?.nombre || '—')}</strong><br><small>${esc(cliente?.email || '')}</small></div>
+          <div><strong>${esc(cliente?.nombre || '\u2014')}</strong><br><small>${esc(cliente?.email || '')}</small></div>
           <div>${p.numero_cuota}</div>
           <div>USD ${p.monto_usd}</div>
           <div>${LZ.formatDateLocal(p.fecha_vencimiento)}</div>
           <div>${comprobanteLink}</div>
           <div>${contratoLink}</div>
-          <div><button class="btn-approve" onclick="aprobarPagoYContrato(${p.id}, ${cliente?.id || 'null'})" style="background:var(--green-bg);color:var(--green);border:1px solid var(--green-bd);padding:6px 12px;border-radius:8px;cursor:pointer;">✅ Aprobar</button></div>
+          <div>${botonAprobar}</div>
         </div>`;
       }
       html += `</div>`;
