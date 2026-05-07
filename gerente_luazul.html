@@ -3686,9 +3686,27 @@ window.enviarRespuestaGerente      = enviarRespuestaGerente;
     var primerNombre = nombresArr[0];
     var apellidoStr  = nombresArr.slice(1).join(' ') || '';
 
+    // Obtener el token de sesión actual
+    const { data: { session } } = await sbClient.auth.getSession();
+    const token = session?.access_token;
+
+    if (!token) {
+      showToast('❌ No se pudo obtener la sesión. Iniciá sesión nuevamente.');
+      if (btn) { btn.disabled = false; btn.textContent = originalText; }
+      return;
+    }
+
+    // Construir la URL explícitamente
+    const functionUrl = `${sbClient.supabaseUrl}/functions/v1/crear_usuario_staff_v2`;
+
     try {
-      const { data, error } = await sbClient.functions.invoke('crear_usuario_staff_v2', {
-        body: {
+      const response = await fetch(functionUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
           p_email:      email,
           p_password:   pass,
           p_role_id:    ROLE_SALES_LEADER,
@@ -3701,13 +3719,18 @@ window.enviarRespuestaGerente      = enviarRespuestaGerente;
           p_domicilio:  domicilio || null,
           p_cbu:        cbu || null,
           p_manager_id: window._gerenteProfile.id
-        }
+        })
       });
-      if (error) throw new Error(error.message);
-      if (data && data.error) throw new Error(data.error);
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || `Error ${response.status}: ${response.statusText}`);
+      }
+
       showToast('✅ Jefe de Ventas ' + nombre + ' creado exitosamente');
       closeModal();
-      await loadClients();   // recargar datos del panel
+      await loadClients();
       renderAll();
       if (typeof renderVendors === 'function') renderVendors();
     } catch (err) {
