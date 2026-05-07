@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="manifest" href="manifest_gerente.json">
   <meta name="theme-color" content="#0B3D91">
-<title>Luazul Smart Travel · Gerencia</title>
+<title>Luazul Smart Travel · Gerencia Regional</title>
 <!-- Mirror-Clean v1.0 — Auditoría 2026-04 · Correcciones integradas (versión completa) -->
   <script>
   (function() {
@@ -249,10 +249,11 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;back
 // Unificación de utilidades, mapeadores y carga centralizada
 
 // ── 1. CONSTANTES DE ROLES ───────────────────────────────────────
-const ROLE_CEO     = 1;
-const ROLE_MANAGER = 2;
-const ROLE_SELLER  = 3;
-const ROLE_CLIENT  = 4;
+const ROLE_CEO          = 1;
+const ROLE_MANAGER      = 2;
+const ROLE_SELLER       = 3;
+const ROLE_CLIENT       = 4;
+const ROLE_SALES_LEADER = 5;  // Jefe de Ventas
 
 // ── 2. UTILIDADES PURAS ──────────────────────────────────────────
 function _lzEsc(s) {
@@ -482,7 +483,7 @@ function _sbLoad() { return loadClients(); }
   <header class="topbar">
     <div style="display:flex;align-items:center;gap:10px;">
       <div class="brand">LUAZUL <span style="color:var(--gold);">SMART TRAVEL</span></div>
-      <div class="role-pill">👑 Gerencia</div>
+      <div class="role-pill">👑 Gerencia Regional</div>
     </div>
 <div class="tbr">
       <div class="notif-wrap">
@@ -531,7 +532,13 @@ function _sbLoad() { return loadClients(); }
 
     <!-- VENDORS -->
     <div class="tabpg" id="tabpg-vendors">
-      <div class="sec-head"><h2>👔 Gestión de Vendedores</h2><button class="addbtn" onclick="openAddVendor()">＋ Nuevo Vendedor</button></div>
+      <div class="sec-head">
+        <h2>👔 Gestión de Equipos</h2>
+        <div style="display:flex;gap:10px;">
+          <button class="addbtn" onclick="openAddVendor()">＋ Nuevo Vendedor</button>
+          <button class="addbtn" onclick="openAddSalesLeader()" style="background:linear-gradient(135deg,#059669,#10b981);">⭐ Nuevo Jefe de Ventas</button>
+        </div>
+      </div>
       <div class="vgrid" id="vGrid"></div>
     </div>
 
@@ -1084,7 +1091,9 @@ function renderAll() { renderOverview(); renderVendors(); renderClients(); rende
 // ══════════════════════════════════════════════════════
 function renderOverview() {
   var cs = ((_memCache[DB_KEY] || []) || []).map(enrich);
-  var vs = (_memCache[VK] || []) || [];
+  var vs = (_memCache[VK] || []).filter(function(s) {
+    return s.role_id === ROLE_SELLER || s.role_id === ROLE_SALES_LEADER;
+  });
   var ns = (_memCache[NK] || []) || [];
   var unread = ns.filter(function(n) { return !n.leida; }).length;
   var pending = ns.filter(function(n) { return n.tipo === 'payment' && !n.aprobada; }).length;
@@ -1156,7 +1165,9 @@ function renderOverview() {
 //  VENDORS (RENDER, ADD, EDIT, DELETE)
 // ══════════════════════════════════════════════════════
 function renderVendors() {
-  var vs = (_memCache[VK] || []) || [];
+  var vs = (_memCache[VK] || []).filter(function(s) {
+    return s.role_id === ROLE_SELLER || s.role_id === ROLE_SALES_LEADER;
+  });
   var cs = ((_memCache[DB_KEY] || []) || []).map(enrich);
   var ns = (_memCache[NK] || []) || [];
   document.getElementById('vGrid').innerHTML = vs.map(function(v) {
@@ -1171,7 +1182,7 @@ function renderVendors() {
       + '<div class="vavatar">' + ini + '</div>'
       + '<div style="flex:1;min-width:0;">'
       + '<div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;">'
-      + '<span style="font-weight:700;font-size:.92rem;">' + esc(v.nombre) + '</span>'
+      + '<span style="font-weight:700;font-size:.92rem;">' + esc(v.nombre) + (v.role_id === ROLE_SALES_LEADER ? ' <span style="font-size:.6rem;padding:2px 7px;border-radius:10px;background:rgba(245,158,11,.2);color:#f59e0b;font-weight:700;margin-left:4px;">⭐ Jefe</span>' : '') + '</span>'
       + '<span class="bpill ' + (v.activo ? 'on' : 'off') + '">' + (v.activo ? 'Activo' : 'Inactivo') + '</span>'
       + (al > 0 ? '<span style="background:var(--red);color:white;font-size:.62rem;padding:1px 7px;border-radius:20px;font-weight:700;">' + al + ' alertas</span>' : '')
       + '</div>'
@@ -3597,6 +3608,85 @@ window.renderComunicacionesGerente = renderComunicacionesGerente;
 window.cargarMensajesCanalGerente  = cargarMensajesCanalGerente;
 window.enviarMensajeGerente        = enviarMensajeGerente;
 window.enviarRespuestaGerente      = enviarRespuestaGerente;
+
+  // ══ JEFE DE VENTAS ══════════════════════════════════════════════
+  function openAddSalesLeader() {
+    var modalHtml = `
+      <div class="modal-head">
+        <div><h2>⭐ Nuevo Jefe de Ventas</h2><p>Crear un supervisor de equipo de ventas</p></div>
+        <button class="modal-close" onclick="closeModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="modal-grid">
+          <div class="m-item"><div class="m-label">Nombre completo *</div><input id="slNombre" class="edit-input" placeholder="Ej: Laura Gómez"></div>
+          <div class="m-item"><div class="m-label">Email *</div><input id="slEmail" type="email" class="edit-input" placeholder="jefe@luazul.com"></div>
+          <div class="m-item"><div class="m-label">Contraseña *</div><input id="slPass" type="password" class="edit-input" placeholder="Contraseña"></div>
+          <div class="m-item"><div class="m-label">Teléfono principal</div><input id="slTel1" class="edit-input" placeholder="+54 9 11 1234-5678"></div>
+          <div class="m-item"><div class="m-label">Teléfono de referencia</div><input id="slTel2" class="edit-input" placeholder="+54 9 351 9876-5432"></div>
+          <div class="m-item" style="grid-column:span 2;"><div class="m-label">Domicilio</div><input id="slDom" class="edit-input" placeholder="Av. Corrientes 1234"></div>
+          <div class="m-item" style="grid-column:span 2;"><div class="m-label">💰 CBU / Alias</div><input id="slCbu" class="edit-input" placeholder="CBU o Alias" style="font-family:monospace;"></div>
+        </div>
+        <div class="mact">
+          <button class="mbtn gold" onclick="saveSalesLeader()">✅ Crear Jefe de Ventas</button>
+          <button class="mbtn ghost" onclick="closeModal()">Cancelar</button>
+        </div>
+      </div>
+    `;
+    document.getElementById('mbox').innerHTML = modalHtml;
+    document.getElementById('modal').classList.add('open');
+  }
+
+  async function saveSalesLeader() {
+    var nombre    = document.getElementById('slNombre').value.trim().toUpperCase();
+    var email     = document.getElementById('slEmail').value.trim().toLowerCase();
+    var pass      = document.getElementById('slPass').value.trim();
+    var telefono1 = document.getElementById('slTel1').value.trim();
+    var telefono2 = document.getElementById('slTel2').value.trim();
+    var domicilio = document.getElementById('slDom').value.trim();
+    var cbu       = document.getElementById('slCbu').value.trim();
+
+    if (!nombre || !email || !pass) { showToast('⚠️ Nombre, email y contraseña son obligatorios'); return; }
+    if (!_currentProfile) { showToast('⚠️ Sesión no válida'); return; }
+
+    var btn = document.querySelector('#modal .mbtn.gold');
+    if (btn) btn.disabled = true;
+    try {
+      var partes       = nombre.split(' ');
+      var primerNombre = partes[0];
+      var apellidoStr  = partes.slice(1).join(' ') || '';
+
+      const response = await fetch('https://yunvqgaljopirzvjrntc.supabase.co/functions/v1/crear_usuario_staff_v2', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + SUPABASE_KEY },
+        body: JSON.stringify({
+          p_email:      email,
+          p_password:   pass,
+          p_role_id:    ROLE_SALES_LEADER,
+          p_nombre:     primerNombre,
+          p_apellido:   apellidoStr,
+          p_region_ids: [],
+          p_telefono1:  telefono1 || null,
+          p_telefono2:  telefono2 || null,
+          p_ciudad:     null,
+          p_domicilio:  domicilio || null,
+          p_cbu:        cbu || null,
+          p_manager_id: _currentProfile.id
+        })
+      });
+      const data = await response.json();
+      if (data.error) throw new Error(data.error);
+      showToast('✅ Jefe de Ventas creado exitosamente');
+      closeModal();
+      await loadClients();
+      renderAll();
+      if (typeof renderVendors === 'function') renderVendors();
+    } catch (err) {
+      showToast('❌ Error: ' + err.message);
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  }
+
 window.mostrarRespuestaGerente     = mostrarRespuestaGerente;
 </script>
 </body>
