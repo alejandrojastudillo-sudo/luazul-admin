@@ -2168,10 +2168,34 @@ function verCompAdmin(idx) {
 // ──────────────────────────────────────────────────────────────────────────
 // 26. MI LEGAJO
 // ──────────────────────────────────────────────────────────────────────────
-function renderMiLegajo() {
+
+// Obtiene el nombre del Jefe de Ventas a partir del manager_id (con caché simple)
+var _jefeCache = null;
+async function obtenerNombreJefe(managerId) {
+  if (!managerId) return 'Sin jefe asignado';
+  if (_jefeCache && _jefeCache.managerId === managerId) return _jefeCache.nombre;
+  try {
+    var { data, error } = await sbClient
+      .from('staff_profiles')
+      .select('nombre')
+      .eq('id', managerId)
+      .eq('role_id', 5)
+      .single();
+    if (error || !data) return 'Sin jefe asignado';
+    _jefeCache = { managerId: managerId, nombre: data.nombre };
+    return data.nombre;
+  } catch(e) {
+    console.warn('Error al obtener jefe:', e);
+    return 'Sin jefe asignado';
+  }
+}
+
+async function renderMiLegajo() {
   var el=document.getElementById('legajoSection'); if (!el) return;
   if (!_currentProfile) { el.innerHTML='<div style="text-align:center;padding:60px;">Sin sesión</div>'; return; }
   var yo=_currentProfile;
+  // Obtener nombre del jefe de ventas (si existe manager_id)
+  var nombreJefe = yo.manager_id ? await obtenerNombreJefe(yo.manager_id) : 'Sin jefe asignado';
   var total=allClients.length, activos=allClients.filter(function(c){ return c.estado==='activo'; }).length;
   var enMora=allClients.filter(function(c){ return c.estado==='atraso'||c.estado==='atraso_gestion'; }).length;
   var completados=allClients.filter(function(c){ return c.estado==='completo'; }).length;
@@ -2185,7 +2209,8 @@ function renderMiLegajo() {
     '<div style="background:linear-gradient(135deg,rgba(167,139,250,.12),rgba(99,102,241,.08));border:1px solid rgba(167,139,250,.25);border-radius:18px;padding:24px;margin-bottom:20px;display:flex;align-items:center;gap:20px;">'+
     '<div style="width:60px;height:60px;border-radius:50%;background:linear-gradient(135deg,#a78bfa,#6366f1);display:flex;align-items:center;justify-content:center;font-size:1.6rem;font-weight:800;">'+(yo.nombre?yo.nombre.charAt(0).toUpperCase():'?')+'</div>'+
     '<div><div style="font-size:1.15rem;font-weight:800;">'+(yo.nombre||'')+' '+(yo.apellido||'')+'</div>'+
-    '<div style="font-size:.8rem;color:rgba(167,139,250,.8);">'+(yo.badge||yo.email||'—')+'</div></div>'+
+    '<div style="font-size:.8rem;color:rgba(167,139,250,.8);">'+(yo.badge||yo.email||'—')+'</div>'+
+    '<div style="font-size:.8rem;margin-top:4px;"><span style="color:var(--gold);">⭐ Jefe de Ventas:</span> <strong>'+LZ.esc(nombreJefe)+'</strong></div></div>'+
     '<div style="text-align:right;margin-left:auto;"><div style="font-size:.62rem;color:var(--muted);">Asesor · ID</div><div style="font-family:monospace;font-size:.82rem;">'+String(yo.id||'—')+'</div></div></div>'+
     '<div style="margin-bottom:16px;"><div style="font-size:.65rem;font-weight:700;text-transform:uppercase;color:rgba(167,139,250,.7);margin-bottom:12px;">📊 Cartera</div>'+
     '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:12px;">'+mc('👥','Total',total,'#e2e8f0')+mc('✅','Activos',activos,'#4ade80')+mc('🔴','En mora',enMora,'#f87171')+mc('🏁','Completados',completados,'#a78bfa')+mc('⛔','Bajas',enBaja,'#6b7280')+'</div></div>'+
