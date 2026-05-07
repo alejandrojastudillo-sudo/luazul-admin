@@ -499,6 +499,7 @@ function _sbLoad() { return loadClients(); }
     <div class="tabs" style="flex-wrap:wrap;">
       <div class="tab active" onclick="showTab('overview')" id="tab-overview">📊 Resumen</div>
       <div class="tab" onclick="showTab('vendors')" id="tab-vendors">👔 Vendedores</div>
+      <div class="tab" onclick="showTab('salesleaders')" id="tab-salesleaders">⭐ Jefes de Ventas</div>
       <div class="tab" onclick="showTab('venddash')" id="tab-venddash">📈 Dashboard Vendedor</div>
       <div class="tab" onclick="showTab('pagos')" id="tab-pagos">💳 Pagos</div>
       <div class="tab" onclick="showTab('mora')" id="tab-mora">🚨 Mora</div>
@@ -540,6 +541,17 @@ function _sbLoad() { return loadClients(); }
         </div>
       </div>
       <div class="vgrid" id="vGrid"></div>
+    </div>
+
+    <!-- ⭐ JEFES DE VENTAS -->
+    <div class="tabpg" id="tabpg-salesleaders">
+      <div class="sec-head">
+        <h2>⭐ Jefes de Ventas y sus Equipos</h2>
+        <div style="display:flex;gap:10px;">
+          <button class="addbtn" onclick="openAddSalesLeader()">➕ Nuevo Jefe de Ventas</button>
+        </div>
+      </div>
+      <div class="vgrid" id="salesLeadersGrid"></div>
     </div>
 
     <!-- CLIENTS -->
@@ -1223,7 +1235,7 @@ function renderOverview() {
 // ══════════════════════════════════════════════════════
 function renderVendors() {
   var vs = (_memCache[VK] || []).filter(function(s) {
-    return s.role_id === ROLE_SELLER || s.role_id === ROLE_SALES_LEADER;
+    return s.role_id === ROLE_SELLER;
   });
   var cs = ((_memCache[DB_KEY] || []) || []).map(enrich);
   var ns = (_memCache[NK] || []) || [];
@@ -1317,6 +1329,41 @@ function renderVendors() {
       + '<button class="vcbtn" onclick="toggleVendor(\'' + v.user_id + '\')">' + (v.activo ? '⏸️' : '▶️') + '</button>'
       + '</div></div>';
   }).join('') || '<div class="empty"><div class="ei">👔</div><p>Sin vendedores ni jefes</p></div>';
+}
+
+function renderSalesLeaders() {
+  var vs = (_memCache[VK] || []).filter(function(s) {
+    return s.role_id === ROLE_SALES_LEADER;
+  });
+  var cs = ((_memCache[DB_KEY] || []) || []).map(enrich);
+  var ns = (_memCache[NK] || []) || [];
+  document.getElementById('salesLeadersGrid').innerHTML = vs.map(function(v) {
+    var jefeCm = calcComisionJefe(v, cs);
+    var ini = v.nombre.split(' ').map(function(w) { return w[0]; }).join('').slice(0, 2).toUpperCase();
+    return '<div class="vcard" onclick="openVendorDetail(\'' + v.user_id + '\')">'
+      + '<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">'
+      + '<div class="vavatar" style="background:linear-gradient(135deg,#059669,#10b981);">' + ini + '</div>'
+      + '<div style="flex:1;min-width:0;">'
+      + '<div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;">'
+      + '<span style="font-weight:700;font-size:.92rem;">' + esc(v.nombre) + ' <span style="font-size:.6rem;padding:2px 7px;border-radius:10px;background:#10b98120;color:#10b981;">⭐ Jefe</span></span>'
+      + '<span class="bpill ' + (v.activo ? 'on' : 'off') + '">' + (v.activo ? 'Activo' : 'Inactivo') + '</span>'
+      + '</div>'
+      + '<div style="font-size:.7rem;color:var(--muted);">' + esc(v.email) + '</div>'
+      + '</div></div>'
+      + '<div style="background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2);border-radius:12px;padding:12px;margin:0 0 12px;">'
+      + '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center;">'
+      + '<div><div style="font-size:.6rem;color:var(--muted);">Vendedores a cargo</div><div style="font-size:1.5rem;font-weight:800;">' + (jefeCm.equipoSize || 0) + '</div></div>'
+      + '<div><div style="font-size:.6rem;color:var(--muted);">Clientes totales</div><div style="font-size:1.5rem;font-weight:800;">' + (jefeCm.totalClientesEquipo || 0) + '</div></div>'
+      + '<div><div style="font-size:.6rem;color:var(--muted);">Recaudado equipo</div><div style="font-size:.9rem;font-weight:800;">USD ' + (jefeCm.neta / 0.15 || 0).toFixed(0) + '</div></div>'
+      + '</div>'
+      + '<div style="margin-top:8px;font-size:.8rem;"><span style="color:var(--gold);">💰 Su comisión (15%):</span> <strong style="color:var(--green);">USD ' + jefeCm.neta.toFixed(2) + '</strong></div>'
+      + '</div>'
+      + '<div class="vactions" onclick="event.stopPropagation()">'
+      + '<button class="vcbtn p" onclick="openVendorDetail(\'' + v.user_id + '\')")>👥 Ver equipo</button>'
+      + '<button class="vcbtn" onclick="editVendor(\'' + v.user_id + '\')")>✏️ Editar</button>'
+      + '<button class="vcbtn" onclick="toggleVendor(\'' + v.user_id + '\')")>' + (v.activo ? '⏸️' : '▶️') + '</button>'
+      + '</div></div>';
+  }).join('') || '<div class="empty"><div class="ei">⭐</div><p>No hay jefes de ventas creados.</p></div>';
 }
 
 function openVendorDetail(vid) {
@@ -2643,6 +2690,7 @@ function showTab(id) {
   if (id === 'mensual') { renderMensual(); }
   if (id === 'tickets') { cargarTicketsGerente(); }
   if (id === 'clients') { renderClients(); }
+  if (id === 'salesleaders') { renderSalesLeaders(); }
 }
 
 // ── RECAUDACIÓN MENSUAL ─────────────────────────────────────
