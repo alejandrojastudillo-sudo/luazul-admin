@@ -542,10 +542,11 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
 <!-- ==================== crm-core (inline) ==================== -->
 <script>
 // ── Constantes de roles ──────────────────────────────────────────────
-var ROLE_CEO     = 1;
-var ROLE_MANAGER = 2;
-var ROLE_SELLER  = 3;
-var ROLE_CLIENT  = 4;
+var ROLE_CEO          = 1;
+var ROLE_MANAGER      = 2;
+var ROLE_SELLER       = 3;
+var ROLE_CLIENT       = 4;
+var ROLE_SALES_LEADER = 5;  // Jefe de Ventas
 
 window.LZ = (function() {
   'use strict';
@@ -1215,7 +1216,8 @@ var ROLE_MANAGER = 2;   // Gerente (según tabla staff_profiles.role_id)
 var ROLE_SELLER  = 3;   // Vendedor / Asesor
 // ROLE_CEO = LZ.ROLE_CEO (definido en window.LZ)
 var _cacheGerentes = null;
-var _cacheVendedores = null;
+var _cacheVendedores   = null;
+var _cacheSalesLeaders = null;  // Jefes de Ventas (role_id=5)
 var _cacheClientes = null;
 var _cachePagos = null;
 var _cacheRegiones = null;
@@ -1260,8 +1262,9 @@ async function loadClients() {
     var profile = { user_id: _ceoUid, id: _ceoUid, role_id: LZ.ROLE_CEO };
     var loaded = await LZ.LZ_LOAD.loadData(profile, LZ.ROLE_CEO, sbClient);
     _cacheClientes    = loaded.clientes.map(LZ.enrich);
-    _cacheVendedores  = loaded.staff.filter(function(s) { return s.role_id === LZ.ROLE_SELLER; });
-    _cacheGerentes    = loaded.staff.filter(function(s) { return s.role_id === LZ.ROLE_MANAGER; });
+    _cacheVendedores   = loaded.staff.filter(function(s) { return s.role_id === LZ.ROLE_SELLER; });
+    _cacheSalesLeaders = loaded.staff.filter(function(s) { return s.role_id === ROLE_SALES_LEADER; });
+    _cacheGerentes     = loaded.staff.filter(function(s) { return s.role_id === LZ.ROLE_MANAGER; });
     _cacheRegiones    = loaded.regiones;
     _cachePagos       = loaded.notificaciones.filter(function(n) { return n.tipo === 'payment'; });
     window._cacheContratos = loaded.notificaciones.filter(function(n) { return n.tipo === 'contrato'; });
@@ -1759,11 +1762,13 @@ function getRegionesConActividad() {
 }
 
 function renderRegiones() {
-  var allRs = _cacheRegiones || [];
-  var gs = _cacheGerentes || [];
-  var vs = _cacheVendedores || [];
-  var cs = _cacheClientes || [];
-  var rs = (_regFiltMode === 'activo') ? getRegionesConActividad() : allRs;
+  var allRs = _cacheRegiones    || [];
+  var gs    = _cacheGerentes    || [];
+  var vs    = _cacheVendedores  || [];   // role_id=3
+  var jefes = _cacheSalesLeaders || [];  // role_id=5
+  var cs    = _cacheClientes    || [];
+  var rs    = (_regFiltMode === 'activo') ? getRegionesConActividad() : allRs;
+
   var infoEl = document.getElementById('regFiltInfo');
   if (infoEl) {
     var ac = getRegionesConActividad().length;
@@ -1775,26 +1780,46 @@ function renderRegiones() {
     document.getElementById('rGrid').innerHTML = '<div style="text-align:center;padding:50px;color:var(--muted);"><div style="font-size:2.5rem;margin-bottom:12px;">🌎</div><p>Sin regiones con actividad todavía.<br><small>Asigná un gerente o cargá un cliente para que aparezca aquí.</small></p></div>';
     return;
   }
+
   var html = '';
   for (var i = 0; i < rs.length; i++) {
-    var r = rs[i];
+    var r      = rs[i];
     var ridStr = String(r.id);
+
+    // Gerente de la región
     var g = null;
     for (var j = 0; j < gs.length; j++) {
       var gtmp = gs[j];
-      // CORRECCIÓN: comparar region_id (número) y region_ids (array de números)
       if (String(gtmp.region_id) === ridStr || (gtmp.region_ids && gtmp.region_ids.indexOf(parseInt(ridStr, 10)) !== -1)) {
-        g = gtmp;
-        break;
+        g = gtmp; break;
       }
     }
     g = g || {};
-    var rv = vs.filter(function(v) { return String(v.region_id) === ridStr; });
-    var rc = cs.filter(function(c) { return String(c.region_id) === ridStr; });
-    var rec = rc.reduce(function(s,c) { return s + (parseInt(c.cuotas_pagadas) || 0) * (parseFloat(c.monto_cuota) || 0); }, 0);
-    var at = rc.filter(function(c) { return c.estado === 'atraso'; }).length;
+
+    // Jefes de ventas de esta región (por region_id o manager_id del gerente)
+    var misJefes = jefes.filter(function(j) {
+      return String(j.region_id) === ridStr
+        || (g.user_id && String(j.manager_id) === String(g.user_id))
+        || (g.id     && String(j.manager_id) === String(g.id));
+    });
+
+    // Vendedores directos del gerente (sin jefe intermedio) y los de cada jefe
+    var idsJefes = misJefes.map(function(j) { return String(j.user_id || j.id); });
+    var vendedoresDirectos = vs.filter(function(v) {
+      return String(v.region_id) === ridStr
+        && !idsJefes.includes(String(v.manager_id));
+    });
+
+    // Clientes y recaudado por región
+    var rc   = cs.filter(function(c) { return String(c.region_id) === ridStr; });
+    var rec  = rc.reduce(function(s, c) { return s + (parseInt(c.cuotas_pagadas) || 0) * (parseFloat(c.monto_cuota) || 0); }, 0);
+    var at   = rc.filter(function(c) { return c.estado === 'atraso'; }).length;
     var compl = rc.filter(function(c) { return c.estado === 'completo'; }).length;
+
+    // ── CARD HTML ────────────────────────────────────────────────────
     html += '<div class="rcard" data-rid="' + r.id + '" style="border-color:' + r.color + '33;">'
+
+      // Cabecera región
       + '<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">'
       + '<span style="font-size:2rem;">' + r.bandera + '</span>'
       + '<div style="flex:1;">'
@@ -1803,26 +1828,69 @@ function renderRegiones() {
       + '<span style="font-size:.62rem;font-weight:700;padding:2px 8px;border-radius:12px;background:' + r.color + '22;color:' + r.color + ';border:1px solid ' + r.color + '44;">' + r.pais + '</span>'
       + '</div>'
       + '<div style="font-size:.72rem;color:var(--muted);">Gerente: <strong style="color:var(--text);">'
-      + (g.user_id ? '<a href="javascript:void(0)" onclick="verDetalleStaff(\'' + g.user_id + '\')" style="color:#3b82f6; text-decoration:underline; cursor:pointer;">' + esc(g.nombre || 'Sin asignar') + '</a>' : esc(g.nombre || 'Sin asignar'))
+      + (g.user_id ? '<a href="javascript:void(0)" onclick="verDetalleStaff(\'' + g.user_id + '\')" style="color:#3b82f6;text-decoration:underline;cursor:pointer;">' + esc(g.nombre || 'Sin asignar') + '</a>' : esc(g.nombre || 'Sin asignar'))
       + '</strong></div>'
       + '<div style="font-size:.7rem;color:var(--muted);">' + (g.ciudad || '') + '</div>'
-      + '</div></div>'
-      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;">'
+      + '</div></div>';
+
+    // ── Jefes de Ventas ──────────────────────────────────────────────
+    if (misJefes.length) {
+      html += '<div style="margin-bottom:12px;">'
+        + '<div style="font-size:.68rem;font-weight:700;letter-spacing:.05em;color:var(--gold);margin-bottom:6px;text-transform:uppercase;">⭐ Jefes de Ventas</div>';
+      for (var jj = 0; jj < misJefes.length; jj++) {
+        var jefe      = misJefes[jj];
+        var jefeIdStr = String(jefe.user_id || jefe.id);
+        var susV      = vs.filter(function(v) { return String(v.manager_id) === jefeIdStr; });
+        var susC      = cs.filter(function(c) {
+          return susV.some(function(v) { return String(v.user_id || v.id) === String(c.seller_id); });
+        });
+        var susRec   = susC.reduce(function(s, c) { return s + (parseInt(c.cuotas_pagadas) || 0) * (parseFloat(c.monto_cuota) || 0); }, 0);
+        var comJefe  = susRec * 0.15;
+
+        html += '<div style="background:rgba(245,158,11,.06);border-left:3px solid var(--gold);border-radius:8px;padding:8px 12px;margin-bottom:5px;">'
+          + '<div style="display:flex;justify-content:space-between;align-items:center;">'
+          + '<div>'
+          + '<span style="font-weight:700;font-size:.82rem;">👑 ' + esc(jefe.nombre || '—') + '</span>'
+          + '<span style="font-size:.65rem;padding:2px 7px;border-radius:10px;background:rgba(245,158,11,.15);color:var(--gold);margin-left:6px;font-weight:700;">Jefe de Ventas</span>'
+          + '</div>'
+          + '<span style="font-size:.72rem;color:var(--gold);">Comis. 15%: ' + fmtUSD(comJefe) + '</span>'
+          + '</div>'
+          + '<div style="font-size:.7rem;color:var(--muted);margin-top:4px;margin-left:4px;">📋 ' + susV.length + ' vendedor' + (susV.length !== 1 ? 'es' : '') + ' · 👥 ' + susC.length + ' clientes</div>'
+          + '</div>';
+      }
+      html += '</div>';
+    }
+
+    // ── Vendedores directos ──────────────────────────────────────────
+    if (vendedoresDirectos.length) {
+      html += '<div style="margin-bottom:10px;">'
+        + '<div style="font-size:.68rem;font-weight:700;letter-spacing:.05em;color:var(--accent2);margin-bottom:5px;text-transform:uppercase;">👔 Asesores directos</div>';
+      for (var k = 0; k < vendedoresDirectos.length; k++) {
+        html += '<div style="font-size:.78rem;padding:2px 4px;">• ' + esc(vendedoresDirectos[k].nombre || '—') + '</div>';
+      }
+      html += '</div>';
+    }
+
+    // ── KPIs region ──────────────────────────────────────────────────
+    html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;">'
       + '<div style="background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:8px;padding:9px;text-align:center;">'
-      + '<div style="font-family:Syne,sans-serif;font-size:1.3rem;font-weight:800;">' + rv.length + '</div>'
-      + '<div style="font-size:.62rem;color:var(--muted);">Asesores</div></div>'
+      + '<div style="font-family:Syne,sans-serif;font-size:1.3rem;font-weight:800;">' + (vs.filter(function(v) { return String(v.region_id) === ridStr; }).length + misJefes.length) + '</div>'
+      + '<div style="font-size:.62rem;color:var(--muted);">Staff</div></div>'
       + '<div style="background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:8px;padding:9px;text-align:center;">'
       + '<div style="font-family:Syne,sans-serif;font-size:1.3rem;font-weight:800;">' + rc.length + '</div>'
       + '<div style="font-size:.62rem;color:var(--muted);">Clientes</div></div>'
       + '</div>'
       + '<div style="margin-bottom:10px;">'
       + '<div style="font-family:Syne,sans-serif;font-size:1.1rem;font-weight:800;color:' + r.color + ';">' + fmtUSD(rec) + '</div>'
-      + '<div style="font-size:.68rem;color:var(--muted);">Recaudado total</div></div>'
+      + '<div style="font-size:.68rem;color:var(--muted);">Recaudado total · Comis. gerente (5%): ' + fmtUSD(rec * 0.05) + '</div>'
+      + '</div>'
       + '<div style="display:flex;gap:8px;font-size:.7rem;">'
       + '<span style="color:var(--red);">⚠️ ' + at + ' atraso</span>'
       + '<span style="color:var(--blue);">🏁 ' + compl + ' completos</span>'
-      + '</div></div>';
+      + '</div>'
+      + '</div>';
   }
+
   document.getElementById('rGrid').innerHTML = html;
   var cards = document.querySelectorAll('#rGrid .rcard');
   for (var i = 0; i < cards.length; i++) {
@@ -1832,7 +1900,6 @@ function renderRegiones() {
     })(cards[i]);
   }
 }
-
 function openRegionDetail(rid) {
   var r = rby(rid);
   var gs = _cacheGerentes || [];
