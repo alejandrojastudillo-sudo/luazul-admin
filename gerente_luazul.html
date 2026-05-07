@@ -1175,68 +1175,73 @@ function renderVendors() {
     var rec = vc.reduce(function(s, c) { return s + (parseInt(c.cuotas_pagadas) || 0) * (parseFloat(c.monto_cuota) || 0); }, 0);
     var at = vc.filter(function(c) { return c.estado === 'atraso'; }).length;
     var al = ns.filter(function(n) { return n.vid === v.user_id && !n.leida; }).length;
-    var cm = calcComision(v, cs);
+    var esJefe = (v.role_id === ROLE_SALES_LEADER);
+    var cm = esJefe ? calcComisionJefe(v, cs) : calcComision(v, cs);
     var ini = v.nombre.split(' ').map(function(w) { return w[0]; }).join('').slice(0, 2).toUpperCase();
+    var badgeJefe = esJefe ? '<span style="font-size:.6rem;padding:2px 7px;border-radius:10px;background:rgba(245,158,11,.2);color:#f59e0b;font-weight:700;margin-left:4px;">⭐ Jefe</span>' : '';
+    var tasaDisplay = esJefe ? '15%' : cm.tasaActual + '%';
+    var comisionDisplay = esJefe ? 'USD ' + cm.neta : 'USD ' + cm.comisionMes;
     return '<div class="vcard" onclick="openVendorDetail(\'' + v.user_id + '\')">'
       + '<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">'
       + '<div class="vavatar">' + ini + '</div>'
       + '<div style="flex:1;min-width:0;">'
       + '<div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;">'
-      + '<span style="font-weight:700;font-size:.92rem;">' + esc(v.nombre) + (v.role_id === ROLE_SALES_LEADER ? ' <span style="font-size:.6rem;padding:2px 7px;border-radius:10px;background:rgba(245,158,11,.2);color:#f59e0b;font-weight:700;margin-left:4px;">⭐ Jefe</span>' : '') + '</span>'
+      + '<span style="font-weight:700;font-size:.92rem;">' + esc(v.nombre) + badgeJefe + '</span>'
       + '<span class="bpill ' + (v.activo ? 'on' : 'off') + '">' + (v.activo ? 'Activo' : 'Inactivo') + '</span>'
       + (al > 0 ? '<span style="background:var(--red);color:white;font-size:.62rem;padding:1px 7px;border-radius:20px;font-weight:700;">' + al + ' alertas</span>' : '')
       + '</div>'
       + '<div style="font-size:.7rem;color:var(--muted);margin-top:2px;">' + esc(v.email) + '</div>'
       + '</div></div>'
       + '<div style="margin:0 0 12px;">'
-      + '<div style="border-radius:10px;overflow:hidden;border:1px solid ' + (cm.tasaActual === 80 ? 'rgba(34,197,94,.35)' : 'rgba(245,158,11,.35)') + ';background:' + (cm.tasaActual === 80 ? 'rgba(34,197,94,.05)' : 'rgba(245,158,11,.05)') + '">'
-      + '<div style="display:flex;align-items:center;justify-content:space-between;padding:9px 13px;background:' + (cm.tasaActual === 80 ? 'rgba(34,197,94,.12)' : 'rgba(245,158,11,.12)') + '">'
-      + '<span style="font-size:.7rem;font-weight:800;color:' + (cm.tasaActual === 80 ? 'var(--green)' : 'var(--gold)') + ';">📅 ' + new Date().toLocaleDateString('es-AR', { month: 'long', year: 'numeric' }).replace(/^\w/, function(c) { return c.toUpperCase(); }) + ' </span>'
-      + '<span style="font-size:.76rem;font-weight:800;padding:3px 11px;border-radius:20px;background:' + (cm.tasaActual === 80 ? 'rgba(34,197,94,.2)' : 'rgba(245,158,11,.2)') + ';color:' + (cm.tasaActual === 80 ? 'var(--green)' : 'var(--gold)') + ';border:1px solid ' + (cm.tasaActual === 80 ? 'rgba(34,197,94,.4)' : 'rgba(245,158,11,.35)') + ';">' + cm.tasaActual + '% comisión</span>'
+      + '<div style="border-radius:10px;overflow:hidden;border:1px solid ' + (esJefe ? 'rgba(245,158,11,.35)' : (cm.tasaActual === 80 ? 'rgba(34,197,94,.35)' : 'rgba(245,158,11,.35)')) + ';background:' + (esJefe ? 'rgba(245,158,11,.05)' : (cm.tasaActual === 80 ? 'rgba(34,197,94,.05)' : 'rgba(245,158,11,.05)')) + '">'
+      + '<div style="display:flex;align-items:center;justify-content:space-between;padding:9px 13px;background:' + (esJefe ? 'rgba(245,158,11,.12)' : (cm.tasaActual === 80 ? 'rgba(34,197,94,.12)' : 'rgba(245,158,11,.12)')) + '">'
+      + '<span style="font-size:.7rem;font-weight:800;color:' + (esJefe ? 'var(--gold)' : (cm.tasaActual === 80 ? 'var(--green)' : 'var(--gold)')) + ';">📅 ' + new Date().toLocaleDateString('es-AR', { month: 'long', year: 'numeric' }).replace(/^\w/, function(c) { return c.toUpperCase(); }) + ' </span>'
+      + '<span style="font-size:.76rem;font-weight:800;padding:3px 11px;border-radius:20px;background:' + (esJefe ? 'rgba(245,158,11,.2)' : (cm.tasaActual === 80 ? 'rgba(34,197,94,.2)' : 'rgba(245,158,11,.2)')) + ';color:' + (esJefe ? 'var(--gold)' : (cm.tasaActual === 80 ? 'var(--green)' : 'var(--gold)')) + ';border:1px solid ' + (esJefe ? 'rgba(245,158,11,.35)' : (cm.tasaActual === 80 ? 'rgba(34,197,94,.4)' : 'rgba(245,158,11,.35)')) + ';">' + tasaDisplay + ' comisión</span>'
       + '</div>'
       + '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;border-top:1px solid rgba(255,255,255,.07);">'
       + '<div style="padding:13px 8px;text-align:center;border-right:1px solid rgba(255,255,255,.07);">'
-      + '<div style="font-size:.58rem;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);margin-bottom:4px;">Ventas mes</div>'
-      + '<div style="font-family:Syne,sans-serif;font-size:2rem;font-weight:900;line-height:1;color:var(--text);">' + cm.ventasMes + '</div>'
-      + (cm.faltanBonus > 0 ? '<div style="font-size:.62rem;color:var(--gold);margin-top:3px;">' + cm.faltanBonus + ' para 80%</div>' : '<div style="font-size:.62rem;color:var(--green);margin-top:3px;">🏆 objetivo</div>')
+      + '<div style="font-size:.58rem;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);margin-bottom:4px;">' + (esJefe ? 'Vendedores' : 'Ventas mes') + '</div>'
+      + '<div style="font-family:Syne,sans-serif;font-size:2rem;font-weight:900;line-height:1;color:var(--text);">' + (esJefe ? (cm.equipoSize || 0) : cm.ventasMes) + '</div>'
+      + (esJefe ? '' : (cm.faltanBonus > 0 ? '<div style="font-size:.62rem;color:var(--gold);margin-top:3px;">' + cm.faltanBonus + ' para 80%</div>' : '<div style="font-size:.62rem;color:var(--green);margin-top:3px;">🏆 objetivo</div>'))
       + '</div>'
       + '<div style="padding:13px 8px;text-align:center;border-right:1px solid rgba(255,255,255,.07);">'
-      + '<div style="font-size:.58rem;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);margin-bottom:4px;">1ª cuota cobrada</div>'
-      + '<div style="font-family:Syne,sans-serif;font-size:1.15rem;font-weight:900;line-height:1;color:var(--text);">USD ' + cm.ingresoMes + '</div>'
-      + '<div style="font-size:.62rem;color:var(--muted);margin-top:4px;">ingresó a Luazul</div>'
+      + '<div style="font-size:.58rem;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);margin-bottom:4px;">' + (esJefe ? 'Clientes equipo' : '1ª cuota cobrada') + '</div>'
+      + '<div style="font-family:Syne,sans-serif;font-size:1.15rem;font-weight:900;line-height:1;color:var(--text);">' + (esJefe ? (cm.totalClientesEquipo || 0) : 'USD ' + cm.ingresoMes) + '</div>'
+      + '<div style="font-size:.62rem;color:var(--muted);margin-top:4px;">' + (esJefe ? 'en total' : 'ingresó a Luazul') + '</div>'
       + '</div>'
       + '<div style="padding:13px 8px;text-align:center;">'
-      + '<div style="font-size:.58rem;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--gold);margin-bottom:4px;">Le corresponde</div>'
-      + '<div style="font-family:Syne,sans-serif;font-size:1.25rem;font-weight:900;line-height:1;color:var(--green);">USD ' + cm.comisionMes + '</div>'
-      + '<div style="font-size:.62rem;color:var(--muted);margin-top:4px;">comisión</div>'
+      + '<div style="font-size:.58rem;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--gold);margin-bottom:4px;">' + (esJefe ? 'Comisión 15%' : 'Le corresponde') + '</div>'
+      + '<div style="font-family:Syne,sans-serif;font-size:1.25rem;font-weight:900;line-height:1;color:var(--green);">' + comisionDisplay + '</div>'
+      + '<div style="font-size:.62rem;color:var(--muted);margin-top:4px;">' + (esJefe ? 'de su equipo' : 'comisión') + '</div>'
       + '</div></div>'
-      + (Object.keys(cm.pkgBreakdown).length > 0
-        ? '<div style="border-top:1px solid rgba(255,255,255,.07);">'
-          + '<table style="width:100%;border-collapse:collapse;">'
-          + '<thead><tr style="background:rgba(0,0,0,.15);">'
-          + '<th style="padding:5px 10px;text-align:left;font-size:.6rem;font-weight:700;text-transform:uppercase;color:var(--muted);">Paquete</th>'
-          + '<th style="padding:5px 10px;text-align:center;font-size:.6rem;font-weight:700;text-transform:uppercase;color:var(--muted);">Cant.</th>'
-          + '<th style="padding:5px 10px;text-align:right;font-size:.6rem;font-weight:700;text-transform:uppercase;color:var(--muted);">1ª cuota</th>'
-          + '<th style="padding:5px 10px;text-align:right;font-size:.6rem;font-weight:700;text-transform:uppercase;color:var(--gold);">Comisión</th>'
-          + '</tr></thead><tbody>'
-          + Object.keys(cm.pkgBreakdown).map(function(pkg) {
-              var p = cm.pkgBreakdown[pkg];
-              return '<tr style="border-top:1px solid rgba(255,255,255,.05);">'
-                + '<td style="padding:5px 10px;font-size:.78rem;color:var(--text);">' + pkg + '</td>'
-                + '<td style="padding:5px 10px;text-align:center;font-weight:800;font-size:.88rem;">' + p.count + '<td>'
-                + '<td style="padding:5px 10px;text-align:right;font-size:.78rem;">USD ' + Math.round(p.ingreso) + '</td>'
-                + '<td style="padding:5px 10px;text-align:right;font-weight:800;font-size:.82rem;color:var(--green);">USD ' + Math.round(p.comision) + '</td>'
-              + '</tr>';
-            }).join('')
-          + '<tr style="border-top:2px solid rgba(255,255,255,.12);background:rgba(0,0,0,.2);">'
-            + '<td style="padding:6px 10px;font-size:.78rem;font-weight:700;color:var(--text);">TOTAL</td>'
-            + '<td style="padding:6px 10px;text-align:center;font-weight:900;font-size:1rem;">' + cm.ventasMes + '</td>'
-            + '<td style="padding:6px 10px;text-align:right;font-weight:700;font-size:.82rem;">USD ' + cm.ingresoMes + '</td>'
-            + '<td style="padding:6px 10px;text-align:right;font-weight:900;font-size:.9rem;color:var(--green);">USD ' + cm.comisionMes + '</td>'
-          + '</tr>'
-          + '</tbody></table>'
-        + '</div>'
-        : '<div style="padding:10px;text-align:center;font-size:.75rem;color:var(--muted);border-top:1px solid rgba(255,255,255,.06);">Sin ventas este mes</div>')
+      + (esJefe ? '<div style="padding:10px;text-align:center;font-size:.75rem;color:var(--muted);border-top:1px solid rgba(255,255,255,.06);">Equipo de ' + (cm.equipoSize || 0) + ' vendedor(es)</div>'
+        : (Object.keys(cm.pkgBreakdown).length > 0
+          ? '<div style="border-top:1px solid rgba(255,255,255,.07);">'
+            + '<table style="width:100%;border-collapse:collapse;">'
+            + '<thead><tr style="background:rgba(0,0,0,.15);">'
+            + '<th style="padding:5px 10px;text-align:left;font-size:.6rem;font-weight:700;text-transform:uppercase;color:var(--muted);">Paquete</th>'
+            + '<th style="padding:5px 10px;text-align:center;font-size:.6rem;font-weight:700;text-transform:uppercase;color:var(--muted);">Cant.</th>'
+            + '<th style="padding:5px 10px;text-align:right;font-size:.6rem;font-weight:700;text-transform:uppercase;color:var(--muted);">1ª cuota</th>'
+            + '<th style="padding:5px 10px;text-align:right;font-size:.6rem;font-weight:700;text-transform:uppercase;color:var(--gold);">Comisión</th>'
+            + '</tr></thead><tbody>'
+            + Object.keys(cm.pkgBreakdown).map(function(pkg) {
+                var p = cm.pkgBreakdown[pkg];
+                return '<tr style="border-top:1px solid rgba(255,255,255,.05);">'
+                  + '<td style="padding:5px 10px;font-size:.78rem;color:var(--text);">' + pkg + '</td>'
+                  + '<td style="padding:5px 10px;text-align:center;font-weight:800;font-size:.88rem;">' + p.count + '<td>'
+                  + '<td style="padding:5px 10px;text-align:right;font-size:.78rem;">USD ' + Math.round(p.ingreso) + '</td>'
+                  + '<td style="padding:5px 10px;text-align:right;font-weight:800;font-size:.82rem;color:var(--green);">USD ' + Math.round(p.comision) + '</td>'
+                + '</tr>';
+              }).join('')
+            + '<tr style="border-top:2px solid rgba(255,255,255,.12);background:rgba(0,0,0,.2);">'
+              + '<td style="padding:6px 10px;font-size:.78rem;font-weight:700;color:var(--text);">TOTAL</td>'
+              + '<td style="padding:6px 10px;text-align:center;font-weight:900;font-size:1rem;">' + cm.ventasMes + '</td>'
+              + '<td style="padding:6px 10px;text-align:right;font-weight:700;font-size:.82rem;">USD ' + cm.ingresoMes + '</td>'
+              + '<td style="padding:6px 10px;text-align:right;font-weight:900;font-size:.9rem;color:var(--green);">USD ' + cm.comisionMes + '</td>'
+            + '</tr>'
+            + '</tbody></table>'
+          + '</div>'
+          : '<div style="padding:10px;text-align:center;font-size:.75rem;color:var(--muted);border-top:1px solid rgba(255,255,255,.06);">Sin ventas este mes</div>'))
       + '</div>'
       + '<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">'
       + '<div style="flex:1;min-width:80px;padding:8px 10px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:8px;text-align:center;">'
@@ -1247,30 +1252,65 @@ function renderVendors() {
       + '<div style="font-family:Syne,sans-serif;font-size:1.1rem;font-weight:800;margin-top:2px;color:' + (at > 0 ? 'var(--red)' : 'var(--muted)') + ';">' + at + '</div></div>'
       + '<div style="flex:1;min-width:80px;padding:8px 10px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:8px;text-align:center;">'
       + '<div style="font-size:.58rem;font-weight:700;text-transform:uppercase;color:var(--gold);letter-spacing:.5px;">Comis. acum.</div>'
-      + '<div style="font-family:Syne,sans-serif;font-size:.95rem;font-weight:800;margin-top:2px;color:var(--green);">USD ' + cm.neta + '</div></div>'
+      + '<div style="font-family:Syne,sans-serif;font-size:.95rem;font-weight:800;margin-top:2px;color:var(--green);">USD ' + (esJefe ? (cm.neta || '0') : cm.neta) + '</div></div>'
       + '</div></div>'
       + '<div class="vactions" onclick="event.stopPropagation()">'
-      + '<button class="vcbtn p" onclick="openVendorDetail(\'' + v.user_id + '\')">👥 Clientes</button>'
+      + '<button class="vcbtn p" onclick="openVendorDetail(\'' + v.user_id + '\')">👥 ' + (esJefe ? 'Equipo' : 'Clientes') + '</button>'
       + '<button class="vcbtn" onclick="editVendor(\'' + v.user_id + '\')">✏️ Editar</button>'
       + '<button class="vcbtn" onclick="toggleVendor(\'' + v.user_id + '\')">' + (v.activo ? '⏸️' : '▶️') + '</button>'
       + '</div></div>';
-  }).join('') || '<div class="empty"><div class="ei">👔</div><p>Sin vendedores</p></div>';
+  }).join('') || '<div class="empty"><div class="ei">👔</div><p>Sin vendedores ni jefes</p></div>';
 }
 
 function openVendorDetail(vid) {
   var v = vby(vid);
-  var cs = ((_memCache[DB_KEY] || []) || []).map(enrich).filter(function(c) { return String(c.vid) === String(vid); }).sort(function(a, b) { return a._p - b._p; });
-  var rec = cs.reduce(function(s, c) { return s + (parseInt(c.cuotas_pagadas) || 0) * (parseFloat(c.monto_cuota) || 0); }, 0);
-  var rows = cs.map(function(c) {
-    return '<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);cursor:pointer;" onclick="openClientDetail(' + c.id + ')">'
-      + '<div class="sem ' + c._s + '"></div>'
-      + '<div style="flex:1;min-width:0;"><div style="font-weight:600;font-size:.85rem;">' + esc(c.nombre) + '</div>'
-      + '<div style="font-size:.7rem;color:var(--muted);">' + c.destino + ' · ' + c.paquete + '</div></div>'
-      + '<div style="width:75px;text-align:right;"><div style="font-size:.75rem;font-weight:700;color:' + sc(c._s) + ';">' + c._pct + '%</div>'
-      + '<div class="pbar"><div class="pfill" style="width:' + c._pct + '%;background:' + sc(c._s) + ';"></div></div></div>'
-      + '<span class="bdg ' + c.estado + '">' + c.estado + '</span>'
-      + '</div>';
-  }).join('') || '<p style="color:var(--muted);text-align:center;padding:20px;">Sin clientes asignados</p>';
+  var esJefe = (v.role_id === ROLE_SALES_LEADER);
+  var cs = ((_memCache[DB_KEY] || []) || []).map(enrich);
+  var misClientes = cs.filter(function(c) { return String(c.vid) === String(vid); }).sort(function(a, b) { return a._p - b._p; });
+  var rec = misClientes.reduce(function(s, c) { return s + (parseInt(c.cuotas_pagadas) || 0) * (parseFloat(c.monto_cuota) || 0); }, 0);
+
+  // Si es jefe, obtener su equipo y los clientes de ellos
+  var miEquipo = [];
+  var clientesEquipo = [];
+  if (esJefe) {
+    miEquipo = (_memCache[VK] || []).filter(function(vend) {
+      return vend.role_id === ROLE_SELLER && String(vend.manager_id) === String(v.id);
+    });
+    var equipoIds = miEquipo.map(function(vend) { return vend.id; });
+    clientesEquipo = cs.filter(function(c) {
+      return equipoIds.indexOf(c.seller_id) !== -1;
+    });
+    rec = clientesEquipo.reduce(function(s, c) {
+      return s + (parseInt(c.cuotas_pagadas) || 0) * (parseFloat(c.monto_cuota) || 0);
+    }, 0);
+  }
+
+  var rows = '';
+  if (esJefe) {
+    rows = miEquipo.map(function(vend) {
+      var vc2 = cs.filter(function(c) { return String(c.vid) === String(vend.user_id); });
+      var vrec = vc2.reduce(function(s, c) { return s + (parseInt(c.cuotas_pagadas) || 0) * (parseFloat(c.monto_cuota) || 0); }, 0);
+      var ini = vend.nombre.split(' ').map(function(w) { return w[0]; }).join('').slice(0, 2).toUpperCase();
+      return '<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);cursor:pointer;" onclick="openVendorDetail(\'' + vend.user_id + '\')">'
+        + '<div style="width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#d97706,#f59e0b);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:.7rem;">' + ini + '</div>'
+        + '<div style="flex:1;min-width:0;"><div style="font-weight:600;font-size:.85rem;">' + esc(vend.nombre) + '</div>'
+        + '<div style="font-size:.7rem;color:var(--muted);">' + vend.email + ' · ' + vc2.length + ' clientes</div></div>'
+        + '<div style="width:75px;text-align:right;"><div style="font-size:.75rem;font-weight:700;color:var(--gold);">USD ' + vrec.toLocaleString() + '</div></div>'
+        + '</div>';
+    }).join('') || '<p style="color:var(--muted);text-align:center;padding:20px;">Sin vendedores asignados</p>';
+  } else {
+    rows = misClientes.map(function(c) {
+      return '<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);cursor:pointer;" onclick="openClientDetail(' + c.id + ')">'
+        + '<div class="sem ' + c._s + '"></div>'
+        + '<div style="flex:1;min-width:0;"><div style="font-weight:600;font-size:.85rem;">' + esc(c.nombre) + '</div>'
+        + '<div style="font-size:.7rem;color:var(--muted);">' + c.destino + ' · ' + c.paquete + '</div></div>'
+        + '<div style="width:75px;text-align:right;"><div style="font-size:.75rem;font-weight:700;color:' + sc(c._s) + ';">' + c._pct + '%</div>'
+        + '<div class="pbar"><div class="pfill" style="width:' + c._pct + '%;background:' + sc(c._s) + ';"></div></div></div>'
+        + '<span class="bdg ' + c.estado + '">' + c.estado + '</span>'
+        + '</div>';
+    }).join('') || '<p style="color:var(--muted);text-align:center;padding:20px;">Sin clientes asignados</p>';
+  }
+
   var comps = v.comprobantes || [];
   var compsHTML = comps.length
     ? comps.map(function(c, i) {
@@ -1282,15 +1322,16 @@ function openVendorDetail(vid) {
           + '</div>';
       }).join('')
     : '<div style="text-align:center;padding:12px;color:var(--muted);font-size:.8rem;">Sin comprobantes</div>';
-  document.getElementById('mbox').innerHTML = '<div class="mhead"><div><h2>👔 ' + esc(v.nombre) + '</h2>'
-    + '<p style="font-size:.78rem;color:var(--muted);">' + esc(v.email) + '</p></div>'
+
+  document.getElementById('mbox').innerHTML = '<div class="mhead"><div><h2>' + (esJefe ? '⭐ ' : '👔 ') + esc(v.nombre) + '</h2>'
+    + '<p style="font-size:.78rem;color:var(--muted);">' + esc(v.email) + ' · ' + (esJefe ? 'Jefe de Ventas' : 'Vendedor') + '</p></div>'
     + '<button class="mclose" onclick="closeModal()">✕</button></div>'
     + '<div class="mbody">'
     + '<div class="mgrid" style="margin-bottom:14px;">'
-    + '<div class="mi"><div class="ml">Clientes</div><div class="mv">' + cs.length + '</div></div>'
+    + '<div class="mi"><div class="ml">' + (esJefe ? 'Vendedores a cargo' : 'Clientes') + '</div><div class="mv">' + (esJefe ? miEquipo.length : misClientes.length) + '</div></div>'
     + '<div class="mi"><div class="ml">Recaudado</div><div class="mv" style="color:var(--gold);">USD ' + rec.toLocaleString() + '</div></div>'
-    + '<div class="mi"><div class="ml">Activos</div><div class="mv" style="color:var(--green);">' + cs.filter(function(c) { return c.estado === 'activo'; }).length + '</div></div>'
-    + '<div class="mi"><div class="ml">Atrasos</div><div class="mv" style="color:var(--red);">' + cs.filter(function(c) { return c.estado === 'atraso'; }).length + '</div></div>'
+    + '<div class="mi"><div class="ml">Activos</div><div class="mv" style="color:var(--green);">' + (esJefe ? clientesEquipo.filter(function(c){ return c.estado === 'activo'; }).length : misClientes.filter(function(c){ return c.estado === 'activo'; }).length) + '</div></div>'
+    + '<div class="mi"><div class="ml">Atrasos</div><div class="mv" style="color:var(--red);">' + (esJefe ? clientesEquipo.filter(function(c){ return c.estado === 'atraso'; }).length : misClientes.filter(function(c){ return c.estado === 'atraso'; }).length) + '</div></div>'
     + (v.telefono1 ? '<div class="mi"><div class="ml">Tel. principal</div><div class="mv">' + v.telefono1 + '</div></div>' : '')
     + (v.telefono2 ? '<div class="mi"><div class="ml">Tel. referencia</div><div class="mv">' + v.telefono2 + '</div></div>' : '')
     + (v.domicilio ? '<div class="mi" style="grid-column:span 2;"><div class="ml">Domicilio</div><div class="mv">' + v.domicilio + '</div></div>' : '')
@@ -1300,7 +1341,7 @@ function openVendorDetail(vid) {
     + '</div>'
     + '<div style="font-size:.67rem;color:var(--gold);font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">📎 Comprobantes de Comisión</div>'
     + '<div style="max-height:130px;overflow-y:auto;margin-bottom:14px;">' + compsHTML + '</div>'
-    + '<div style="font-size:.67rem;color:var(--gold);font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:9px;">Cartera de clientes</div>'
+    + '<div style="font-size:.67rem;color:var(--gold);font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:9px;">' + (esJefe ? 'Equipo de ventas' : 'Cartera de clientes') + '</div>'
     + '<div style="max-height:220px;overflow-y:auto;">' + rows + '</div>'
     + '<div class="mact">'
     + '<button class="mbtn gold" onclick="closeModal();showTab(\'clients\');document.getElementById(\'vFilt\').value=\'' + v.user_id + '\';renderClients()">Ver todos</button>'
@@ -1420,6 +1461,7 @@ async function saveVendor() {
 
 function editVendor(vid) {
   var v = vby(vid);
+  var esJefe = (v.role_id === ROLE_SALES_LEADER);
   var comps = v.comprobantes || [];
   var compsHTML = comps.length
     ? comps.map(function(c, i) {
@@ -1432,7 +1474,7 @@ function editVendor(vid) {
           + '</div>';
       }).join('')
     : '<div style="text-align:center;padding:16px;color:var(--muted);font-size:.8rem;">Sin comprobantes cargados</div>';
-  document.getElementById('mbox').innerHTML = '<div class="mhead"><div><h2>✏️ Editar Vendedor</h2></div><button class="mclose" onclick="closeModal()">✕</button></div>'
+  document.getElementById('mbox').innerHTML = '<div class="mhead"><div><h2>✏️ Editar ' + (esJefe ? 'Jefe de Ventas' : 'Vendedor') + '</h2></div><button class="mclose" onclick="closeModal()">✕</button></div>'
     + '<div class="mbody"><div class="mgrid">'
     + '<div class="mi"><div class="ml">Nombre</div><input class="min" id="evN" value="' + esc(v.nombre) + '"/></div>'
     + '<div class="mi"><div class="ml">Email</div><input class="min" id="evE" value="' + esc(v.email) + '"/></div>'
@@ -1443,12 +1485,14 @@ function editVendor(vid) {
     + '<input class="min" id="evCBU" value="' + esc(v.cbu || '') + '" style="font-family:monospace;"/></div>'
     + '</div>'
     + '<div style="margin:14px 0 10px;padding:14px 16px;background:rgba(245,158,11,.07);border:1px solid rgba(245,158,11,.2);border-radius:12px;">'
-    + '<div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--gold);margin-bottom:10px;">💰 Estructura de Comisión</div>'
-    + '<div style="font-size:.82rem;color:var(--muted);margin-bottom:12px;line-height:1.6;">'
-    + 'Comisión sobre la <strong style="color:var(--text);">primera cuota</strong> de cada venta del mes:<br>'
-    + '<span style="color:var(--green);">● 3 o más ventas → <strong>80%</strong> de la primera cuota</span><br>'
-    + '<span style="color:var(--gold);">● Menos de 3 ventas → <strong>50%</strong> de la primera cuota</span>'
-    + '</div>'
+    + '<div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--gold);margin-bottom:10px;">💰 ' + (esJefe ? 'Comisión del 15% sobre la recaudación de su equipo' : 'Estructura de Comisión') + '</div>'
+    + (esJefe
+      ? '<div style="font-size:.82rem;color:var(--muted);">La comisión del Jefe de Ventas es el <strong style="color:var(--green);">15%</strong> del total recaudado por sus vendedores.</div>'
+      : '<div style="font-size:.82rem;color:var(--muted);margin-bottom:12px;line-height:1.6;">'
+        + 'Comisión sobre la <strong style="color:var(--text);">primera cuota</strong> de cada venta del mes:<br>'
+        + '<span style="color:var(--green);">● 3 o más ventas → <strong>80%</strong> de la primera cuota</span><br>'
+        + '<span style="color:var(--gold);">● Menos de 3 ventas → <strong>50%</strong> de la primera cuota</span>'
+        + '</div>')
     + '<div style="padding:10px 12px;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);border-radius:10px;">'
     + '<div style="font-size:.67rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#fca5a5;margin-bottom:5px;">⚠️ Penalización — baja en primeras 3 cuotas</div>'
     + '<div style="font-size:.8rem;color:rgba(180,200,240,.6);">Se pierde la comisión del cliente que se da de baja antes de la cuota 4.</div>'
