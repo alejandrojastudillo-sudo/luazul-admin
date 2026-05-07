@@ -3687,13 +3687,8 @@ window.enviarRespuestaGerente      = enviarRespuestaGerente;
     var apellidoStr  = nombresArr.slice(1).join(' ') || '';
 
     try {
-      const response = await fetch('https://yunvqgaljopirzvjrntc.supabase.co/functions/v1/crear_usuario_staff_v2', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer ' + SUPABASE_KEY
-        },
-        body: JSON.stringify({
+      const { data, error } = await sbClient.functions.invoke('crear_usuario_staff_v2', {
+        body: {
           p_email:      email,
           p_password:   pass,
           p_role_id:    ROLE_SALES_LEADER,
@@ -3706,10 +3701,10 @@ window.enviarRespuestaGerente      = enviarRespuestaGerente;
           p_domicilio:  domicilio || null,
           p_cbu:        cbu || null,
           p_manager_id: window._gerenteProfile.id
-        })
+        }
       });
-      const data = await response.json();
-      if (data.error) throw new Error(data.error);
+      if (error) throw new Error(error.message);
+      if (data && data.error) throw new Error(data.error);
       showToast('✅ Jefe de Ventas ' + nombre + ' creado exitosamente');
       closeModal();
       await loadClients();   // recargar datos del panel
