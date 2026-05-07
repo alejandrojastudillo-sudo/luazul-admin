@@ -1132,18 +1132,26 @@ function renderOverview() {
     return '<div class="stat"><span style="font-size:1.3rem;">' + s.i + '</span><div class="sval"' + (s.c ? ' style="color:' + s.c + '"' : '') + '>' + s.v + '</div><div class="slbl">' + s.l + '</div></div>';
   }).join('');
   var maxRec = 1;
-  var vp = vs.map(function(v) {
+  // Separar vendedores (role_id=3) y jefes (role_id=5)
+  var vendedores = vs.filter(function(v) { return v.role_id === ROLE_SELLER; });
+  var jefes = vs.filter(function(v) { return v.role_id === ROLE_SALES_LEADER; });
+
+  // 1. Tarjetas de vendedores
+  var vp = vendedores.map(function(v) {
     var vc = cs.filter(function(c) { return String(c.vid) === String(v.id); });
     var r = vc.reduce(function(s, c) { return s + (parseInt(c.cuotas_pagadas) || 0) * (parseFloat(c.monto_cuota) || 0); }, 0);
     if (r > maxRec) maxRec = r;
-    return { v: v, n: vc.length, r: r, at: vc.filter(function(c) { return c.estado === 'atraso'; }).length };
+    return { v: v, n: vc.length, r: r, at: vc.filter(function(c) { return c.estado === 'atraso'; }).length, cm: calcComision(v, cs) };
   }).sort(function(a, b) { return b.r - a.r; });
-  document.getElementById('vPerf').innerHTML = vp.map(function(item) {
+
+  var vendedoresHtml = '';
+  for (var i = 0; i < vp.length; i++) {
+    var item = vp[i];
     var ini = item.v.nombre.split(' ').map(function(w) { return w[0]; }).join('').slice(0, 2).toUpperCase();
     var pct = Math.round(item.r / maxRec * 100);
-    var cm = calcComision(item.v, cs);
+    var cm = item.cm;
     var tasaColor = cm.tasaActual === 80 ? 'var(--green)' : 'var(--gold)';
-    return '<div style="margin-bottom:16px;">'
+    vendedoresHtml += '<div style="margin-bottom:16px;">'
       + '<div style="display:flex;align-items:center;gap:9px;margin-bottom:5px;">'
       + '<div style="width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#d97706,#f59e0b);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:.72rem;flex-shrink:0;">' + ini + '</div>'
       + '<span style="flex:1;font-weight:600;font-size:.85rem;">' + esc(item.v.nombre) + '</span>'
@@ -1158,7 +1166,35 @@ function renderOverview() {
       + '<span style="background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.2);border-radius:6px;padding:3px 9px;color:var(--green);font-weight:700;">Neta USD ' + cm.neta + '</span>'
       + (cm.faltanBonus > 0 ? '<span style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.2);border-radius:6px;padding:3px 9px;color:var(--gold);">🎯 faltan ' + cm.faltanBonus + ' para 80%</span>' : '')
       + '</div></div>';
-  }).join('');
+  }
+
+  // 2. Tarjetas de Jefes de Ventas (equipo, comisión 15%)
+  var jefesHtml = '';
+  if (jefes.length) {
+    jefesHtml = '<div style="margin-top:16px;border-top:1px solid var(--border);padding-top:14px;">'
+      + '<div style="font-family:Syne,sans-serif;font-size:.8rem;font-weight:800;margin-bottom:10px;">⭐ Jefes de Ventas</div>';
+    for (var j = 0; j < jefes.length; j++) {
+      var jefe = jefes[j];
+      var cmJefe = calcComisionJefe(jefe, cs);
+      var iniJ = jefe.nombre.split(' ').map(function(w) { return w[0]; }).join('').slice(0, 2).toUpperCase();
+      jefesHtml += '<div style="margin-bottom:16px;background:rgba(245,158,11,.05);border:1px solid rgba(245,158,11,.2);border-radius:10px;padding:12px;">'
+        + '<div style="display:flex;align-items:center;gap:9px;margin-bottom:8px;">'
+        + '<div style="width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#d97706,#f59e0b);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:.72rem;flex-shrink:0;">' + iniJ + '</div>'
+        + '<span style="flex:1;font-weight:700;font-size:.9rem;">' + esc(jefe.nombre) + ' <span style="font-size:.7rem;color:var(--gold);">⭐ Jefe</span></span>'
+        + '<span style="font-size:.78rem;font-weight:800;color:var(--green);">Comisión 15%</span>'
+        + '</div>'
+        + '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:6px;">'
+        + '<div><span style="font-size:.65rem;color:var(--muted);">Vendedores equipo</span><div style="font-weight:800;">' + (cmJefe.equipoSize || 0) + '</div></div>'
+        + '<div><span style="font-size:.65rem;color:var(--muted);">Clientes totales</span><div style="font-weight:800;">' + (cmJefe.totalClientesEquipo || 0) + '</div></div>'
+        + '<div><span style="font-size:.65rem;color:var(--muted);">Recaudado equipo</span><div style="font-weight:800;">USD ' + (cmJefe.neta / 0.15 || 0).toFixed(0) + '</div></div>'
+        + '</div>'
+        + '<div style="margin-top:6px;"><span style="font-size:.7rem;color:var(--gold);">💰 Su comisión: </span><strong style="color:var(--green);">USD ' + cmJefe.neta.toFixed(2) + '</strong></div>'
+        + '</div>';
+    }
+    jefesHtml += '</div>';
+  }
+
+  document.getElementById('vPerf').innerHTML = (vendedoresHtml || '<p style="color:var(--muted);">Sin vendedores</p>') + jefesHtml;
   var pays = ns.filter(function(n) { return n.tipo === 'payment'; }).sort(function(a, b) { return b.ts - a.ts; }).slice(0, 5);
   document.getElementById('lastPays').innerHTML = pays.length ? pays.map(function(n) {
     return '<div style="display:flex;align-items:center;gap:9px;padding:8px 0;border-bottom:1px solid var(--border);">'
