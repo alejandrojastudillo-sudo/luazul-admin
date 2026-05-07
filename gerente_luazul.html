@@ -430,7 +430,7 @@ async function loadClients() {
     var clientes = result.clientes, staff = result.staff,
         notificaciones = result.notificaciones, regiones = result.regiones;
     _memCache[DB_KEY] = clientes.map(LZ.enrich);
-    _memCache[VK]     = staff.filter(function(s) { return s.role_id === LZ.ROLE_SELLER; });
+    _memCache[VK]     = staff.filter(function(s) { return s.role_id === LZ.ROLE_SELLER || s.role_id === ROLE_SALES_LEADER; });
     _memCache[NK]     = notificaciones;
     window._cacheRegiones    = regiones;
     window._gerenteRegionIds = regiones.map(function(r) { return r.id; });
@@ -759,6 +759,27 @@ function calcComision(v, allClients) {
     enSeguimiento: enSeguimiento.length,
     totalClientes: vc.length,
     meses: meses
+  };
+}
+
+// Comisión para Jefe de Ventas (15% sobre recaudación de sus vendedores)
+function calcComisionJefe(jefe, allClients) {
+  var misVendedores = (_memCache[VK] || []).filter(function(v) {
+    return v.role_id === ROLE_SELLER && String(v.manager_id) === String(jefe.id);
+  });
+  var vendedoresIds = misVendedores.map(function(v) { return v.id; });
+  var clientesEquipo = allClients.filter(function(c) {
+    return vendedoresIds.indexOf(c.seller_id) !== -1;
+  });
+  var totalRecaudado = clientesEquipo.reduce(function(s, c) {
+    return s + (parseInt(c.cuotas_pagadas) || 0) * (parseFloat(c.monto_cuota) || 0);
+  }, 0);
+  var comisionNeta = totalRecaudado * 0.15;
+  return {
+    equipoSize: misVendedores.length,
+    totalClientesEquipo: clientesEquipo.length,
+    neta: Math.round(comisionNeta * 100) / 100,
+    tasaActual: 15
   };
 }
 
