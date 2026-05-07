@@ -499,7 +499,7 @@ function _sbLoad() { return loadClients(); }
     <div class="tabs" style="flex-wrap:wrap;">
       <div class="tab active" onclick="showTab('overview')" id="tab-overview">📊 Resumen</div>
       <div class="tab" onclick="showTab('vendors')" id="tab-vendors">👔 Vendedores</div>
-      <div class="tab" onclick="showTab('salesleaders')" id="tab-salesleaders">⭐ Jefes de Ventas</div>
+      <div class="tab" onclick="showTab('salesleaders')" id="tab-salesleaders">⭐ Equipos de Ventas</div>
       <div class="tab" onclick="showTab('venddash')" id="tab-venddash">📈 Dashboard Vendedor</div>
       <div class="tab" onclick="showTab('pagos')" id="tab-pagos">💳 Pagos</div>
       <div class="tab" onclick="showTab('mora')" id="tab-mora">🚨 Mora</div>
@@ -534,11 +534,8 @@ function _sbLoad() { return loadClients(); }
     <!-- VENDORS -->
     <div class="tabpg" id="tabpg-vendors">
       <div class="sec-head">
-        <h2>👔 Gestión de Equipos</h2>
-        <div style="display:flex;gap:10px;">
-          <button class="addbtn" onclick="openAddVendor()">＋ Nuevo Vendedor</button>
-          <button class="addbtn" onclick="openAddSalesLeader()" style="background:linear-gradient(135deg,#059669,#10b981);">⭐ Nuevo Jefe de Ventas</button>
-        </div>
+        <h2>👔 Vendedores</h2>
+        <div style="display:flex;gap:10px;"></div>
       </div>
       <div class="vgrid" id="vGrid"></div>
     </div>
@@ -546,7 +543,7 @@ function _sbLoad() { return loadClients(); }
     <!-- ⭐ JEFES DE VENTAS -->
     <div class="tabpg" id="tabpg-salesleaders">
       <div class="sec-head">
-        <h2>⭐ Jefes de Ventas y sus Equipos</h2>
+        <h2>⭐ Equipos de Ventas</h2>
         <div style="display:flex;gap:10px;">
           <button class="addbtn" onclick="openAddSalesLeader()">➕ Nuevo Jefe de Ventas</button>
         </div>
@@ -1131,8 +1128,10 @@ function renderOverview() {
   var unread = ns.filter(function(n) { return !n.leida; }).length;
   var pending = ns.filter(function(n) { return n.tipo === 'payment' && !n.aprobada; }).length;
   var rec = cs.reduce(function(s, c) { return s + (parseInt(c.cuotas_pagadas) || 0) * (parseFloat(c.monto_cuota) || 0); }, 0);
+  var totalJefes = vs.filter(function(v) { return v.role_id === ROLE_SALES_LEADER; }).length;
   document.getElementById('oStats').innerHTML = [
-    { i: '👔', v: vs.filter(function(v) { return v.activo; }).length, l: 'Vendedores activos', c: '' },
+    { i: '⭐', v: totalJefes, l: 'Equipos de ventas', c: '' },
+    { i: '👔', v: vs.filter(function(v) { return v.activo && v.role_id === ROLE_SELLER; }).length, l: 'Vendedores activos', c: '' },
     { i: '👥', v: cs.length, l: 'Total clientes', c: '' },
     { i: '✅', v: cs.filter(function(c) { return c.estado === 'activo'; }).length, l: 'Activos', c: 'var(--green)' },
     { i: '⚠️', v: cs.filter(function(c) { return c.estado === 'atraso'; }).length, l: 'En atraso', c: 'var(--red)' },
