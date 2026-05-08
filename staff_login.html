@@ -533,18 +533,20 @@
   ──────────────────────────────────────────────────── */
   function getRedirectByRoleId(roleId) {
     var id = parseInt(String(roleId), 10) || 3;
-    if (id === 1) { return 'ceo_luazul.html';     }
-    if (id === 2) { return 'gerente_luazul.html';  }
-    if (id === 3) { return 'admin_luazul.html';    }
+    if (id === 1) { return 'ceo_luazul.html';         }
+    if (id === 2) { return 'gerente_luazul.html';      }
+    if (id === 3) { return 'admin_luazul.html';        }
+    if (id === 5) { return 'jefe_ventas_luazul.html'; }
     return 'admin_luazul.html'; /* default / unknown */
   }
 
   /* Role name string — for lz_role key (panels read this) */
   function getRoleName(roleId) {
     var id = parseInt(String(roleId), 10) || 3;
-    if (id === 1) { return 'owner';   }
-    if (id === 2) { return 'manager'; }
-    if (id === 3) { return 'admin';   }
+    if (id === 1) { return 'owner';       }
+    if (id === 2) { return 'manager';     }
+    if (id === 3) { return 'admin';       }
+    if (id === 5) { return 'jefe_ventas'; }
     return 'seller';
   }
 
