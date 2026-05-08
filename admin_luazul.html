@@ -2497,8 +2497,8 @@ function calcSimDinamico() {
     
     var cuotaBase = Math.floor(precioTotal / cuotas * 100) / 100;
     var ultimaCuota = Math.round((precioTotal - cuotaBase * (cuotas - 1)) * 100) / 100;
-    var porDia = (precioTotal / personas / noches).toFixed(2);
-    
+    var porDiaCuota = (cuotaBase / 30).toFixed(2);   // cuota diaria por persona
+
     document.getElementById('simTotal').textContent = 'USD ' + precioTotal.toLocaleString('es-AR');
     document.getElementById('simCuota').textContent = 'USD ' + cuotaBase.toLocaleString('es-AR');
     document.getElementById('simPers').textContent = personas + (personas === 1 ? ' persona' : ' personas');
@@ -2507,7 +2507,7 @@ function calcSimDinamico() {
         bd.innerHTML = '<span style="color:var(--muted);">USD ' + precioTotal.toLocaleString('es-AR') + ' en ' + cuotas + ' cuotas de </span>' +
             '<strong style="color:#60a5fa;">USD ' + cuotaBase.toLocaleString('es-AR') + '</strong>' +
             (ultimaCuota !== cuotaBase ? ' <span style="font-size:.78rem;">(última: USD ' + ultimaCuota.toLocaleString('es-AR') + ')</span>' : '') +
-            '<br><span style="font-size:.72rem;">💰 USD ' + porDia + ' por persona/día</span>';
+            '<br><span style="font-size:.72rem;">💰 USD ' + porDiaCuota + ' por día (costo de la cuota por persona)</span>';
     }
 }
 
@@ -2528,6 +2528,7 @@ function calcCuotaDinamico() {
 
     var cuotaBase = Math.floor(precioTotal / cuotas * 100) / 100;
     var ultimaCuota = Math.round((precioTotal - cuotaBase * (cuotas - 1)) * 100) / 100;
+    var porDiaCuota = (cuotaBase / 30).toFixed(2);   // cuota diaria por persona
 
     document.getElementById('nTotalDisplay').textContent = 'USD ' + precioTotal.toLocaleString('es-AR');
     document.getElementById('nCuotaDisplay').textContent = 'USD ' + cuotaBase.toLocaleString('es-AR');
@@ -2541,7 +2542,8 @@ function calcCuotaDinamico() {
     var bd = document.getElementById('nBreakdown');
     if (bd) {
         bd.innerHTML = '<span style="color:var(--muted);">USD ' + precioTotal.toLocaleString('es-AR') + ' en ' + cuotas + ' cuotas de </span><strong style="color:#60a5fa;">USD ' + cuotaBase.toLocaleString('es-AR') + '</strong>' +
-            (ultimaCuota !== cuotaBase ? ' <span style="font-size:.78rem;color:var(--muted);">(última: USD ' + ultimaCuota + ')</span>' : '');
+            (ultimaCuota !== cuotaBase ? ' <span style="font-size:.78rem;color:var(--muted);">(última: USD ' + ultimaCuota + ')</span>' : '') +
+            '<br><span style="font-size:.72rem;">💰 USD ' + porDiaCuota + ' por día (costo de la cuota por persona)</span>';
     }
 }
 
