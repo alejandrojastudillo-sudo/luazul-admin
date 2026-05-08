@@ -2374,48 +2374,71 @@ var PKG_PRICES = {
 };
 
 function openSimulador() {
-  document.getElementById('modalBox').innerHTML=
-    '<div class="modal-head"><div><h2>📊 Simulador de Cuotas</h2><p>Calculá el plan ideal para el cliente</p></div>'+
-    '<button class="modal-close" onclick="closeModal()">✕</button></div>'+
-    '<div class="modal-body">'+
-    '<div class="modal-grid" style="grid-template-columns:1fr 1fr;">'+
-    '<div class="m-item"><div class="m-label">Paquete</div>'+
-    '<select class="edit-input" id="simPkg" onchange="calcSim()">'+
-    '<option value="Escapada en Pareja">Escapada en Pareja · USD 870</option>'+
-    '<option value="Paquete 4 Amigos">Paquete 4 Amigos · USD 1.450</option>'+
-    '<option value="Paquete 6 Amigos">Paquete 6 Amigos · USD 1.740</option>'+
-    '</select></div>'+
-    '<div class="m-item"><div class="m-label">Número de cuotas</div>'+
-    '<select class="edit-input" id="simCuotas" onchange="calcSim()">'+
-    '<option value="6">6 cuotas</option><option value="10" selected>10 cuotas</option>'+
-    '<option value="12">12 cuotas</option><option value="18">18 cuotas</option>'+
-    '</select></div>'+
-    '</div>'+
-    '<div class="sim-grid" id="simResult" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;">'+
-    '<div class="sim-card"><div class="sim-lbl">Total plan</div><div class="sim-val" id="simTotal" style="color:var(--accent2);">USD 870</div></div>'+
-    '<div class="sim-card"><div class="sim-lbl">Cuota mensual</div><div class="sim-val" id="simCuota" style="color:var(--green);">USD 87</div></div>'+
-    '<div class="sim-card"><div class="sim-lbl">Personas</div><div class="sim-val" id="simPers" style="color:var(--yellow);">2</div></div>'+
-    '</div>'+
-    '<div id="simBreakdown" style="margin-top:16px;padding:14px 18px;background:rgba(59,130,246,.07);border:1px solid rgba(59,130,246,.2);border-radius:12px;font-size:.9rem;text-align:center;color:var(--muted);"></div>'+
-    '<div class="modal-actions"><button class="m-btn primary" onclick="closeModal()">Cerrar</button></div>'+
-    '</div>';
-  document.getElementById('modal').classList.add('open');
-  setTimeout(calcSim, 50);
+    if (!sbClient) { showToast('❌ Sin conexión'); return; }
+    document.getElementById('modalBox').innerHTML = '<div class="modal-body"><p style="text-align:center;padding:30px;">⏳ Cargando catálogo...</p></div>';
+    document.getElementById('modal').classList.add('open');
+    
+    sbClient.from('catalogo_precios').select('*').eq('activo', true).order('orden')
+        .then(function(res) {
+            if (res.error) throw res.error;
+            var catalogo = res.data || [];
+            if (!catalogo.length) throw new Error('No hay destinos activos');
+            
+            var selectsHtml = '<div class="modal-grid" style="grid-template-columns:1fr 1fr;">' +
+                '<div class="m-item"><div class="m-label">Destino y paquete</div>' +
+                '<select id="simPkg" class="edit-input" onchange="calcSimDinamico()">';
+            for (var i = 0; i < catalogo.length; i++) {
+                var item = catalogo[i];
+                selectsHtml += '<option value="' + item.id + '" data-personas="' + item.personas + '" data-precio="' + item.precio_usd + '" data-noches="' + item.noches + '">' +
+                    (item.nombre_destino || '') + ' · ' + (item.paquete || '') + ' · ' + item.personas + ' pers. · USD ' + item.precio_usd + '</option>';
+            }
+            selectsHtml += '</select></div>' +
+                '<div class="m-item"><div class="m-label">Número de cuotas</div>' +
+                '<select id="simCuotas" class="edit-input" onchange="calcSimDinamico()">' +
+                '<option value="6">6 cuotas</option><option value="10" selected>10 cuotas</option>' +
+                '<option value="12">12 cuotas</option><option value="18">18 cuotas</option>' +
+                '</select></div></div>' +
+                '<div class="sim-grid" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin:16px 0;">' +
+                '<div class="sim-card"><div class="sim-lbl">Total plan</div><div class="sim-val" id="simTotal" style="color:var(--accent2);">—</div></div>' +
+                '<div class="sim-card"><div class="sim-lbl">Cuota mensual</div><div class="sim-val" id="simCuota" style="color:var(--green);">—</div></div>' +
+                '<div class="sim-card"><div class="sim-lbl">Personas</div><div class="sim-val" id="simPers" style="color:var(--yellow);">—</div></div>' +
+                '</div>' +
+                '<div id="simBreakdown" style="margin:8px 0 16px;padding:12px;background:rgba(59,130,246,.07);border-radius:12px;font-size:.85rem;text-align:center;"></div>' +
+                '<div class="modal-actions"><button class="m-btn primary" onclick="closeModal()">Cerrar</button></div>';
+            
+            document.getElementById('modalBox').innerHTML = '<div class="modal-head"><div><h2>📊 Simulador de Cuotas</h2><p>Calculá el plan ideal para el cliente</p></div><button class="modal-close" onclick="closeModal()">✕</button></div><div class="modal-body">' + selectsHtml + '</div>';
+            calcSimDinamico();
+        })
+        .catch(function(e) {
+            console.error(e);
+            document.getElementById('modalBox').innerHTML = '<div class="modal-head"><div><h2>📊 Simulador</h2></div><button class="modal-close" onclick="closeModal()">✕</button></div><div class="modal-body"><p style="color:var(--red);">❌ Error al cargar catálogo: ' + (e.message || e) + '</p></div>';
+        });
 }
 
-function calcSim() {
-  var pkgKey = (document.getElementById('simPkg')||{}).value || 'Escapada en Pareja';
-  var cuotas = parseInt((document.getElementById('simCuotas')||{}).value,10) || 10;
-  var pkg    = PKG_PRICES[pkgKey] || { price:870, pers:2 };
-  // FIX 7: Math.floor para cuota, última cuota ajustada para no superar el total
-  var cuotaBase  = Math.floor(pkg.price / cuotas * 100) / 100;
-  var ultimaCuota = Math.round((pkg.price - cuotaBase * (cuotas - 1)) * 100) / 100;
-  var tEl=document.getElementById('simTotal'), cEl=document.getElementById('simCuota'), pEl=document.getElementById('simPers');
-  if (tEl) tEl.textContent = 'USD '+pkg.price.toLocaleString('es-AR');
-  if (cEl) cEl.textContent = 'USD '+cuotaBase.toLocaleString('es-AR');
-  if (pEl) pEl.textContent = pkg.pers+(pkg.pers===1?' persona':' personas');
-  var bd=document.getElementById('simBreakdown');
-  if (bd) bd.innerHTML='<span style="color:var(--muted);">USD '+pkg.price.toLocaleString('es-AR')+' en '+cuotas+' cuotas de </span><strong style="color:#60a5fa;font-size:1.1rem;">USD '+cuotaBase.toLocaleString('es-AR')+'</strong>'+(ultimaCuota!==cuotaBase?' <span style="color:var(--muted);font-size:.82rem;">(última cuota: USD '+ultimaCuota.toLocaleString('es-AR')+')</span>':'');
+function calcSimDinamico() {
+    var selectPkg = document.getElementById('simPkg');
+    if (!selectPkg || !selectPkg.options.length) return;
+    var selectedOption = selectPkg.options[selectPkg.selectedIndex];
+    var precioTotal = parseFloat(selectedOption.getAttribute('data-precio'));
+    var personas = parseInt(selectedOption.getAttribute('data-personas'), 10);
+    var noches = parseInt(selectedOption.getAttribute('data-noches'), 10);
+    var cuotas = parseInt(document.getElementById('simCuotas').value, 10);
+    if (isNaN(precioTotal) || isNaN(cuotas)) return;
+    
+    var cuotaBase = Math.floor(precioTotal / cuotas * 100) / 100;
+    var ultimaCuota = Math.round((precioTotal - cuotaBase * (cuotas - 1)) * 100) / 100;
+    var porDia = (precioTotal / personas / noches).toFixed(2);
+    
+    document.getElementById('simTotal').textContent = 'USD ' + precioTotal.toLocaleString('es-AR');
+    document.getElementById('simCuota').textContent = 'USD ' + cuotaBase.toLocaleString('es-AR');
+    document.getElementById('simPers').textContent = personas + (personas === 1 ? ' persona' : ' personas');
+    var bd = document.getElementById('simBreakdown');
+    if (bd) {
+        bd.innerHTML = '<span style="color:var(--muted);">USD ' + precioTotal.toLocaleString('es-AR') + ' en ' + cuotas + ' cuotas de </span>' +
+            '<strong style="color:#60a5fa;">USD ' + cuotaBase.toLocaleString('es-AR') + '</strong>' +
+            (ultimaCuota !== cuotaBase ? ' <span style="font-size:.78rem;">(última: USD ' + ultimaCuota.toLocaleString('es-AR') + ')</span>' : '') +
+            '<br><span style="font-size:.72rem;">💰 USD ' + porDia + ' por persona/día</span>';
+    }
 }
 
 // ──────────────────────────────────────────────────────────────────────────
