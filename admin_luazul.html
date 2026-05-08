@@ -2497,7 +2497,7 @@ function calcSimDinamico() {
     
     var cuotaBase = Math.floor(precioTotal / cuotas * 100) / 100;
     var ultimaCuota = Math.round((precioTotal - cuotaBase * (cuotas - 1)) * 100) / 100;
-    var porDiaCuota = (cuotaBase / 30).toFixed(2);   // cuota diaria por persona
+    var porDiaCuota = (cuotaBase / personas / 30).toFixed(2);   // cuota diaria por persona
 
     document.getElementById('simTotal').textContent = 'USD ' + precioTotal.toLocaleString('es-AR');
     document.getElementById('simCuota').textContent = 'USD ' + cuotaBase.toLocaleString('es-AR');
@@ -2528,7 +2528,7 @@ function calcCuotaDinamico() {
 
     var cuotaBase = Math.floor(precioTotal / cuotas * 100) / 100;
     var ultimaCuota = Math.round((precioTotal - cuotaBase * (cuotas - 1)) * 100) / 100;
-    var porDiaCuota = (cuotaBase / 30).toFixed(2);   // cuota diaria por persona
+    var porDiaCuota = (cuotaBase / personas / 30).toFixed(2);   // cuota diaria por persona
 
     document.getElementById('nTotalDisplay').textContent = 'USD ' + precioTotal.toLocaleString('es-AR');
     document.getElementById('nCuotaDisplay').textContent = 'USD ' + cuotaBase.toLocaleString('es-AR');
