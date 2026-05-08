@@ -664,6 +664,33 @@ body::after {
   .modal-grid,.mgrid { grid-template-columns:1fr; }
   .topbar-right .tb-pill,.topbar-right .add-btn { display:none; }
 }
+
+/* Fix para selects y options en modo oscuro */
+select.edit-input,
+select.edit-input option {
+  background-color: #0c1628 !important;
+  color: #e8eeff !important;
+  border-color: rgba(255,255,255,0.13) !important;
+}
+
+select.edit-input option:hover,
+select.edit-input option:checked {
+  background-color: #3b82f6 !important;
+  color: white !important;
+}
+
+.modal-body select,
+.modal-body select option {
+  background-color: #0c1628 !important;
+  color: #e8eeff !important;
+  border-color: rgba(255,255,255,0.13) !important;
+}
+
+.modal-body select option:hover,
+.modal-body select option:checked {
+  background-color: #3b82f6 !important;
+  color: white !important;
+}
 </style>
 </head>
 <body>
@@ -2367,47 +2394,65 @@ async function guardarFirma() {
 // ──────────────────────────────────────────────────────────────────────────
 // 29. SIMULADOR DE CUOTAS
 // ──────────────────────────────────────────────────────────────────────────
-var PKG_PRICES = {
-  'Escapada en Pareja': { price:870,  pers:2 },
-  'Paquete 4 Amigos':   { price:1450, pers:4 },
-  'Paquete 6 Amigos':   { price:1740, pers:6 }
-};
+/* PKG_PRICES eliminado — los precios se leen ahora de catalogo_precios */
 
 function openSimulador() {
     if (!sbClient) { showToast('❌ Sin conexión'); return; }
-    document.getElementById('modalBox').innerHTML = '<div class="modal-body"><p style="text-align:center;padding:30px;">⏳ Cargando catálogo...</p></div>';
+    document.getElementById('modalBox').innerHTML = '<div class="modal-body"><p style="text-align:center;padding:30px;">⏳ Cargando destinos...</p></div>';
     document.getElementById('modal').classList.add('open');
-    
+
     sbClient.from('catalogo_precios').select('*').eq('activo', true).order('orden')
         .then(function(res) {
             if (res.error) throw res.error;
             var catalogo = res.data || [];
             if (!catalogo.length) throw new Error('No hay destinos activos');
-            
-            var selectsHtml = '<div class="modal-grid" style="grid-template-columns:1fr 1fr;">' +
-                '<div class="m-item"><div class="m-label">Destino y paquete</div>' +
-                '<select id="simPkg" class="edit-input" onchange="calcSimDinamico()">';
-            for (var i = 0; i < catalogo.length; i++) {
-                var item = catalogo[i];
-                selectsHtml += '<option value="' + item.id + '" data-personas="' + item.personas + '" data-precio="' + item.precio_usd + '" data-noches="' + item.noches + '">' +
-                    (item.nombre_destino || '') + ' · ' + (item.paquete || '') + ' · ' + item.personas + ' pers. · USD ' + item.precio_usd + '</option>';
-            }
-            selectsHtml += '</select></div>' +
-                '<div class="m-item"><div class="m-label">Número de cuotas</div>' +
-                '<select id="simCuotas" class="edit-input" onchange="calcSimDinamico()">' +
-                '<option value="6">6 cuotas</option><option value="10" selected>10 cuotas</option>' +
-                '<option value="12">12 cuotas</option><option value="18">18 cuotas</option>' +
-                '</select></div></div>' +
+
+            // Obtener destinos únicos (slug + nombre_destino)
+            var destinos = {};
+            catalogo.forEach(function(item) {
+                if (!destinos[item.slug]) {
+                    destinos[item.slug] = { nombre: item.nombre_destino, slug: item.slug };
+                }
+            });
+            var destinosArray = Object.values(destinos);
+
+            var selectsHtml =
+                '<div class="modal-grid" style="grid-template-columns:1fr 1fr;">' +
+                    '<div class="m-item">' +
+                        '<div class="m-label">Destino</div>' +
+                        '<select id="simDestino" class="edit-input" onchange="cargarPaquetesPorDestino()">' +
+                            '<option value="">Seleccionar destino...</option>' +
+                            destinosArray.map(function(d){ return '<option value="'+d.slug+'">'+d.nombre+'</option>'; }).join('') +
+                        '</select>' +
+                    '</div>' +
+                    '<div class="m-item">' +
+                        '<div class="m-label">Paquete</div>' +
+                        '<select id="simPkg" class="edit-input" onchange="calcSimDinamico()" disabled>' +
+                            '<option value="">Primero selecciona un destino</option>' +
+                        '</select>' +
+                    '</div>' +
+                    '<div class="m-item">' +
+                        '<div class="m-label">Número de cuotas</div>' +
+                        '<select id="simCuotas" class="edit-input" onchange="calcSimDinamico()">' +
+                            '<option value="6">6 cuotas</option>' +
+                            '<option value="10" selected>10 cuotas</option>' +
+                            '<option value="12">12 cuotas</option>' +
+                            '<option value="18">18 cuotas</option>' +
+                        '</select>' +
+                    '</div>' +
+                '</div>' +
                 '<div class="sim-grid" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin:16px 0;">' +
-                '<div class="sim-card"><div class="sim-lbl">Total plan</div><div class="sim-val" id="simTotal" style="color:var(--accent2);">—</div></div>' +
-                '<div class="sim-card"><div class="sim-lbl">Cuota mensual</div><div class="sim-val" id="simCuota" style="color:var(--green);">—</div></div>' +
-                '<div class="sim-card"><div class="sim-lbl">Personas</div><div class="sim-val" id="simPers" style="color:var(--yellow);">—</div></div>' +
+                    '<div class="sim-card"><div class="sim-lbl">Total plan</div><div class="sim-val" id="simTotal" style="color:var(--accent2);">—</div></div>' +
+                    '<div class="sim-card"><div class="sim-lbl">Cuota mensual</div><div class="sim-val" id="simCuota" style="color:var(--green);">—</div></div>' +
+                    '<div class="sim-card"><div class="sim-lbl">Personas</div><div class="sim-val" id="simPers" style="color:var(--yellow);">—</div></div>' +
                 '</div>' +
                 '<div id="simBreakdown" style="margin:8px 0 16px;padding:12px;background:rgba(59,130,246,.07);border-radius:12px;font-size:.85rem;text-align:center;"></div>' +
                 '<div class="modal-actions"><button class="m-btn primary" onclick="closeModal()">Cerrar</button></div>';
-            
+
             document.getElementById('modalBox').innerHTML = '<div class="modal-head"><div><h2>📊 Simulador de Cuotas</h2><p>Calculá el plan ideal para el cliente</p></div><button class="modal-close" onclick="closeModal()">✕</button></div><div class="modal-body">' + selectsHtml + '</div>';
-            calcSimDinamico();
+
+            // Guardar catálogo en variable global temporal para uso en cargarPaquetesPorDestino
+            window._catalogoSim = catalogo;
         })
         .catch(function(e) {
             console.error(e);
@@ -2415,10 +2460,35 @@ function openSimulador() {
         });
 }
 
+function cargarPaquetesPorDestino() {
+    var destinoSlug = document.getElementById('simDestino').value;
+    var pkgSelect = document.getElementById('simPkg');
+    if (!destinoSlug || !window._catalogoSim) {
+        pkgSelect.innerHTML = '<option value="">Primero selecciona un destino</option>';
+        pkgSelect.disabled = true;
+        return;
+    }
+    var paquetes = window._catalogoSim.filter(function(item) { return item.slug === destinoSlug; });
+    if (paquetes.length === 0) {
+        pkgSelect.innerHTML = '<option value="">No hay paquetes para este destino</option>';
+        pkgSelect.disabled = true;
+        return;
+    }
+    var options = '';
+    for (var i = 0; i < paquetes.length; i++) {
+        var p = paquetes[i];
+        options += '<option value="' + p.id + '" data-personas="' + p.personas + '" data-precio="' + p.precio_usd + '" data-noches="' + p.noches + '">' + p.paquete + ' · ' + p.personas + ' pers. · USD ' + p.precio_usd + '</option>';
+    }
+    pkgSelect.innerHTML = options;
+    pkgSelect.disabled = false;
+    calcSimDinamico();
+}
+
 function calcSimDinamico() {
     var selectPkg = document.getElementById('simPkg');
-    if (!selectPkg || !selectPkg.options.length) return;
+    if (!selectPkg || !selectPkg.options.length || selectPkg.disabled) return;
     var selectedOption = selectPkg.options[selectPkg.selectedIndex];
+    if (!selectedOption || !selectedOption.getAttribute) return;
     var precioTotal = parseFloat(selectedOption.getAttribute('data-precio'));
     var personas = parseInt(selectedOption.getAttribute('data-personas'), 10);
     var noches = parseInt(selectedOption.getAttribute('data-noches'), 10);
@@ -2444,90 +2514,145 @@ function calcSimDinamico() {
 // ──────────────────────────────────────────────────────────────────────────
 // 30. NUEVO CLIENTE (MODAL Y LÓGICA)
 // ──────────────────────────────────────────────────────────────────────────
-function calcCuota() {
-  var pkgSel   = document.getElementById('nPkg');
-  var cuotasSel= document.getElementById('nCuotas');
-  var cuotas   = parseInt(cuotasSel ? cuotasSel.value : 10, 10) || 10;
-  var pkgKey   = pkgSel ? pkgSel.value : 'Escapada en Pareja';
-  var pkg      = PKG_PRICES[pkgKey] || { price: 870, pers: 2 };
+function calcCuotaDinamico() {
+    var selectPkg = document.getElementById('nPkg');
+    var cuotasSelect = document.getElementById('nCuotas');
+    if (!selectPkg || !selectPkg.options.length || selectPkg.disabled) return;
+    var selectedOption = selectPkg.options[selectPkg.selectedIndex];
+    if (!selectedOption || !selectedOption.getAttribute) return;
+    var precioTotal = parseFloat(selectedOption.getAttribute('data-precio'));
+    var personas = parseInt(selectedOption.getAttribute('data-personas'), 10);
+    var noches = parseInt(selectedOption.getAttribute('data-noches'), 10);
+    var cuotas = parseInt(cuotasSelect.value, 10);
+    if (isNaN(precioTotal) || isNaN(cuotas)) return;
 
-  // Cuota base con 2 decimales exactos; última cuota absorbe diferencia de centavos
-  var cuota       = Math.floor(pkg.price / cuotas * 100) / 100;
-  var ultimaCuota = Math.round((pkg.price - cuota * (cuotas - 1)) * 100) / 100;
+    var cuotaBase = Math.floor(precioTotal / cuotas * 100) / 100;
+    var ultimaCuota = Math.round((precioTotal - cuotaBase * (cuotas - 1)) * 100) / 100;
 
-  var td = document.getElementById('nTotalDisplay');  if (td) td.textContent = 'USD ' + pkg.price.toLocaleString('es-AR');
-  var cd = document.getElementById('nCuotaDisplay');  if (cd) cd.textContent = 'USD ' + cuota.toLocaleString('es-AR');
-  var pd = document.getElementById('nPersDisplay');   if (pd) pd.textContent = pkg.pers + (pkg.pers === 1 ? ' persona' : ' personas');
-  var tf = document.getElementById('nTotal');         if (tf) tf.value = pkg.price;
-  var pf = document.getElementById('nPersonas');      if (pf) pf.value = pkg.pers;
-  // Guardar última cuota para que addClient la use en el cálculo real
-  var uf = document.getElementById('nUltimaCuota');   if (uf) uf.value = ultimaCuota;
-  var bd = document.getElementById('nBreakdown');
-  if (bd) bd.innerHTML = '<span style="color:var(--muted);">USD ' + pkg.price.toLocaleString('es-AR') + ' en ' + cuotas + ' cuotas de </span><strong style="color:#60a5fa;">USD ' + cuota.toLocaleString('es-AR') + '</strong>' + (ultimaCuota !== cuota ? ' <span style="font-size:.78rem;color:var(--muted);">(última: USD ' + ultimaCuota + ')</span>' : '');
+    document.getElementById('nTotalDisplay').textContent = 'USD ' + precioTotal.toLocaleString('es-AR');
+    document.getElementById('nCuotaDisplay').textContent = 'USD ' + cuotaBase.toLocaleString('es-AR');
+    document.getElementById('nPersDisplay').textContent = personas + (personas === 1 ? ' persona' : ' personas');
 
-  // Asegurar que los campos ocultos existan
-  var mbody = document.querySelector('.modal-body');
-  if (mbody) {
-    var ids = ['nTotal', 'nMontoCuota', 'nCuotasTotal', 'nUltimaCuota', 'nPersonas'];
-    for (var i = 0; i < ids.length; i++) {
-      var el = document.getElementById(ids[i]);
-      if (!el) {
-        el = document.createElement('input');
-        el.type = 'hidden';
-        el.id = ids[i];
-        mbody.appendChild(el);
-      }
+    document.getElementById('nTotal').value = precioTotal;
+    document.getElementById('nMontoCuota').value = cuotaBase;
+    document.getElementById('nPersonas').value = personas;
+    document.getElementById('nUltimaCuota').value = ultimaCuota;
+
+    var bd = document.getElementById('nBreakdown');
+    if (bd) {
+        bd.innerHTML = '<span style="color:var(--muted);">USD ' + precioTotal.toLocaleString('es-AR') + ' en ' + cuotas + ' cuotas de </span><strong style="color:#60a5fa;">USD ' + cuotaBase.toLocaleString('es-AR') + '</strong>' +
+            (ultimaCuota !== cuotaBase ? ' <span style="font-size:.78rem;color:var(--muted);">(última: USD ' + ultimaCuota + ')</span>' : '');
     }
-  }
-  document.getElementById('nTotal').value        = pkg.price;
-  document.getElementById('nMontoCuota').value   = cuota;
-  document.getElementById('nCuotasTotal').value  = cuotas;
-  document.getElementById('nUltimaCuota').value  = ultimaCuota;
-  document.getElementById('nPersonas').value     = pkg.pers;
 }
 
 function openAddModal() {
-  document.getElementById('modalBox').innerHTML=
-    '<div class="modal-head"><div><h2>➕ Nuevo Cliente</h2><p>Completá los datos del nuevo plan</p></div>'+
-    '<button class="modal-close" onclick="closeModal()">✕</button></div>'+
-    '<div class="modal-body">'+
-    '<div class="modal-grid">'+
-    '<div class="m-item"><div class="m-label">Nombre completo</div><input class="edit-input" id="nNombre" placeholder="Ej: Juan Pérez" /></div>'+
-    '<div class="m-item"><div class="m-label">Email</div><input class="edit-input" id="nEmail" placeholder="juan@email.com" /></div>'+
-    '<div class="m-item"><div class="m-label">Contraseña (panel cliente)</div><input class="edit-input" id="nPass" placeholder="Contraseña" type="password" /></div>'+
-    '<div class="m-item"><div class="m-label">Documento</div><input class="edit-input" id="nDoc" placeholder="DNI 32.456.789" /></div>'+
-    '<div class="m-item"><div class="m-label">Teléfono principal</div><input class="edit-input" id="nTel1" placeholder="+54 9 11 1234-5678" /></div>'+
-    '<div class="m-item"><div class="m-label">Teléfono de referencia</div><input class="edit-input" id="nTel2" placeholder="+54 9 351 9876-5432" /></div>'+
-    '<div class="m-item" style="grid-column:span 2;"><div class="m-label">Domicilio</div><input class="edit-input" id="nDomicilio" placeholder="Av. Corrientes 1234, Buenos Aires" /></div>'+
-    '<div class="m-item"><div class="m-label">Destino</div><select class="edit-input" id="nDest">'+
-    '<option value="Cabo Frío, Brasil">🏖️ Cabo Frío</option><option value="Arraial do Cabo, Brasil">🌊 Arraial do Cabo</option>'+
-    '<option value="Búzios, Brasil">⛵ Búzios</option><option value="Río de Janeiro – Copacabana, Brasil">🏙️ Río de Janeiro</option></select></div>'+
-    '<div class="m-item"><div class="m-label">Paquete</div><select class="edit-input" id="nPkg" onchange="calcCuota()">'+
-    '<option value="Escapada en Pareja">Escapada en Pareja · USD 870</option>'+
-    '<option value="Paquete 4 Amigos">Paquete 4 Amigos · USD 1.450</option>'+
-    '<option value="Paquete 6 Amigos">Paquete 6 Amigos · USD 1.740</option></select></div>'+
-    '<div class="m-item"><div class="m-label">Cuotas totales</div><select class="edit-input" id="nCuotas" onchange="calcCuota()">'+
-    '<option value="6">6 cuotas</option><option value="10" selected>10 cuotas</option>'+
-    '<option value="12">12 cuotas</option><option value="18">18 cuotas</option></select>'+
-    '<div id="nBreakdown" style="margin-top:6px;font-size:.82rem;"></div></div>'+
-    '<div class="m-item" style="grid-column:span 2;">'+
-    '<div style="display:flex;gap:12px;padding:12px;background:rgba(59,130,246,.08);border-radius:12px;">'+
-    '<div><div class="m-label">Total plan</div><div id="nTotalDisplay" style="font-size:1.3rem;font-weight:800;">USD 870</div></div>'+
-    '<div><div class="m-label">Cuota</div><div id="nCuotaDisplay" style="font-size:1.3rem;font-weight:800;color:#60a5fa;">USD 87</div></div>'+
-    '<div><div class="m-label">Personas</div><div id="nPersDisplay" style="font-size:1.3rem;font-weight:800;">2</div></div></div></div>'+
-    '<input type="hidden" id="nTotal" value="870"><input type="hidden" id="nPersonas" value="2"><input type="hidden" id="nUltimaCuota" value="87">'+
-    '<!-- Fecha de viaje eliminada: la elige el cliente al 80% -->'+
-    '<input type="hidden" id="nFecha" value="">'+
-    '<div class="m-item"><div class="m-label">Noches</div><input class="edit-input" id="nNoches" placeholder="7" value="7" /></div>'+
-    '<div class="m-item" style="grid-column:span 2;"><div class="m-label">🎁 Código de referido</div>'+
-    '<input class="edit-input" id="nRefCodigo" placeholder="Ej: LUA-VALENTINA" oninput="buscarReferidor(this.value)" />'+
-    '<div id="nRefInfo" style="margin-top:6px;font-size:.78rem;color:#fbbf24;"></div></div>'+
-    '</div>'+
-    '<div class="modal-actions">'+
-    '<button class="m-btn primary" onclick="addClient()">✅ Agregar cliente</button>'+
-    '<button class="m-btn ghost" onclick="closeModal()">Cancelar</button></div></div>';
-  document.getElementById('modal').classList.add('open');
-  setTimeout(calcCuota,50);
+    if (!sbClient) { showToast('❌ Sin conexión'); return; }
+    document.getElementById('modalBox').innerHTML = '<div class="modal-body"><p style="text-align:center;padding:30px;">⏳ Cargando catálogo...</p></div>';
+    document.getElementById('modal').classList.add('open');
+
+    sbClient.from('catalogo_precios').select('*').eq('activo', true).order('orden')
+        .then(function(res) {
+            if (res.error) throw res.error;
+            var catalogo = res.data || [];
+            if (!catalogo.length) throw new Error('No hay destinos activos');
+
+            // Destinos únicos
+            var destinos = {};
+            catalogo.forEach(function(item) {
+                if (!destinos[item.slug]) {
+                    destinos[item.slug] = { nombre: item.nombre_destino, slug: item.slug };
+                }
+            });
+            var destinosArray = Object.values(destinos);
+            window._catalogoAdd = catalogo; // guardar para usar en cargarPaquetesPorDestinoAdd
+
+            var modalHtml =
+                '<div class="modal-head">' +
+                    '<div><h2>➕ Nuevo Cliente</h2><p>Completá los datos del nuevo plan</p></div>' +
+                    '<button class="modal-close" onclick="closeModal()">✕</button>' +
+                '</div>' +
+                '<div class="modal-body">' +
+                    '<div class="modal-grid">' +
+                        '<div class="m-item"><div class="m-label">Nombre completo</div><input class="edit-input" id="nNombre" placeholder="Ej: Juan Pérez" /></div>' +
+                        '<div class="m-item"><div class="m-label">Email</div><input class="edit-input" id="nEmail" placeholder="juan@email.com" /></div>' +
+                        '<div class="m-item"><div class="m-label">Contraseña (panel cliente)</div><input class="edit-input" id="nPass" placeholder="Contraseña" type="password" /></div>' +
+                        '<div class="m-item"><div class="m-label">Documento</div><input class="edit-input" id="nDoc" placeholder="DNI 32.456.789" /></div>' +
+                        '<div class="m-item"><div class="m-label">Teléfono principal</div><input class="edit-input" id="nTel1" placeholder="+54 9 11 1234-5678" /></div>' +
+                        '<div class="m-item"><div class="m-label">Teléfono de referencia</div><input class="edit-input" id="nTel2" placeholder="+54 9 351 9876-5432" /></div>' +
+                        '<div class="m-item" style="grid-column:span 2;"><div class="m-label">Domicilio</div><input class="edit-input" id="nDomicilio" placeholder="Av. Corrientes 1234, Buenos Aires" /></div>' +
+                        '<div class="m-item"><div class="m-label">Destino</div>' +
+                            '<select id="nDestinoSelect" class="edit-input" onchange="cargarPaquetesPorDestinoAdd()">' +
+                                '<option value="">Seleccionar destino...</option>' +
+                                destinosArray.map(function(d){ return '<option value="'+d.slug+'">'+d.nombre+'</option>'; }).join('') +
+                            '</select>' +
+                        '</div>' +
+                        '<div class="m-item"><div class="m-label">Paquete</div>' +
+                            '<select id="nPkg" class="edit-input" onchange="calcCuotaDinamico()" disabled>' +
+                                '<option value="">Primero selecciona un destino</option>' +
+                            '</select>' +
+                        '</div>' +
+                        '<div class="m-item"><div class="m-label">Cuotas totales</div>' +
+                            '<select id="nCuotas" class="edit-input" onchange="calcCuotaDinamico()">' +
+                                '<option value="6">6 cuotas</option>' +
+                                '<option value="10" selected>10 cuotas</option>' +
+                                '<option value="12">12 cuotas</option>' +
+                                '<option value="18">18 cuotas</option>' +
+                            '</select>' +
+                            '<div id="nBreakdown" style="margin-top:6px;font-size:.82rem;"></div>' +
+                        '</div>' +
+                        '<div class="m-item" style="grid-column:span 2;">' +
+                            '<div style="display:flex;gap:12px;padding:12px;background:rgba(59,130,246,.08);border-radius:12px;">' +
+                                '<div><div class="m-label">Total plan</div><div id="nTotalDisplay" style="font-size:1.3rem;font-weight:800;">—</div></div>' +
+                                '<div><div class="m-label">Cuota</div><div id="nCuotaDisplay" style="font-size:1.3rem;font-weight:800;color:#60a5fa;">—</div></div>' +
+                                '<div><div class="m-label">Personas</div><div id="nPersDisplay" style="font-size:1.3rem;font-weight:800;">—</div></div>' +
+                            '</div>' +
+                        '</div>' +
+                        '<input type="hidden" id="nTotal" value="">' +
+                        '<input type="hidden" id="nMontoCuota" value="">' +
+                        '<input type="hidden" id="nPersonas" value="">' +
+                        '<input type="hidden" id="nUltimaCuota" value="">' +
+                        '<div class="m-item"><div class="m-label">Noches</div><input class="edit-input" id="nNoches" placeholder="7" value="7" /></div>' +
+                        '<div class="m-item" style="grid-column:span 2;">' +
+                            '<div class="m-label">🎁 Código de referido</div>' +
+                            '<input class="edit-input" id="nRefCodigo" placeholder="Ej: LUA-VALENTINA" oninput="buscarReferidor(this.value)" />' +
+                            '<div id="nRefInfo" style="margin-top:6px;font-size:.78rem;color:#fbbf24;"></div>' +
+                        '</div>' +
+                    '</div>' +
+                    '<div class="modal-actions">' +
+                        '<button class="m-btn primary" onclick="addClient()">✅ Agregar cliente</button>' +
+                        '<button class="m-btn ghost" onclick="closeModal()">Cancelar</button>' +
+                    '</div>' +
+                '</div>';
+            document.getElementById('modalBox').innerHTML = modalHtml;
+        })
+        .catch(function(e) {
+            console.error(e);
+            document.getElementById('modalBox').innerHTML = '<div class="modal-head"><div><h2>➕ Nuevo Cliente</h2></div><button class="modal-close" onclick="closeModal()">✕</button></div><div class="modal-body"><p style="color:var(--red);">❌ Error al cargar catálogo: ' + (e.message || e) + '</p></div>';
+        });
+}
+
+function cargarPaquetesPorDestinoAdd() {
+    var destinoSlug = document.getElementById('nDestinoSelect').value;
+    var pkgSelect = document.getElementById('nPkg');
+    if (!destinoSlug || !window._catalogoAdd) {
+        pkgSelect.innerHTML = '<option value="">Primero selecciona un destino</option>';
+        pkgSelect.disabled = true;
+        return;
+    }
+    var paquetes = window._catalogoAdd.filter(function(item) { return item.slug === destinoSlug; });
+    if (paquetes.length === 0) {
+        pkgSelect.innerHTML = '<option value="">No hay paquetes disponibles</option>';
+        pkgSelect.disabled = true;
+        return;
+    }
+    var options = '';
+    for (var i = 0; i < paquetes.length; i++) {
+        var p = paquetes[i];
+        options += '<option value="' + p.id + '" data-precio="' + p.precio_usd + '" data-personas="' + p.personas + '" data-noches="' + p.noches + '">' + p.paquete + ' · ' + p.personas + ' pers. · USD ' + p.precio_usd + '</option>';
+    }
+    pkgSelect.innerHTML = options;
+    pkgSelect.disabled = false;
+    calcCuotaDinamico();
 }
 
 function buscarReferidor(codigo) {
@@ -2558,11 +2683,13 @@ async function addClient() {
   if (!_currentProfile) { showToast('⚠️ Sesión no cargada'); return; }
   if (!sbClient) { showToast('❌ Sin conexión'); return; }
   if (!total || total <= 0) {
-    // fallback: calcular desde el paquete seleccionado
-    var pkgKeyFb = (document.getElementById('nPkg') || {}).value || 'Escapada en Pareja';
-    var pkgPricesFb = { 'Escapada en Pareja': 870, 'Paquete 4 Amigos': 1450, 'Paquete 6 Amigos': 1740 };
-    total = pkgPricesFb[pkgKeyFb] || 870;
-    if (!total) { showToast('⚠️ Error al calcular el total del plan'); return; }
+    // fallback: leer precio desde el data-precio del option seleccionado
+    var pkgSelFb = document.getElementById('nPkg');
+    if (pkgSelFb && pkgSelFb.options.length && !pkgSelFb.disabled) {
+      var optFb = pkgSelFb.options[pkgSelFb.selectedIndex];
+      total = parseFloat(optFb.getAttribute('data-precio')) || 0;
+    }
+    if (!total) { showToast('⚠️ Seleccioná un destino y paquete primero'); return; }
   }
 
   // ── Verificación local de caché ────────────────────────────
@@ -2628,8 +2755,8 @@ async function addClient() {
     var camposExtra = {
       documento: (document.getElementById('nDoc') || {}).value.trim() || null,
       telefono: telefono1,
-      destino: (document.getElementById('nDest') || {}).value || null,
-      paquete: (document.getElementById('nPkg') || {}).value || null,
+      destino: (document.getElementById('nDestinoSelect') || {}).value ? document.getElementById('nDestinoSelect').options[document.getElementById('nDestinoSelect').selectedIndex].text : null,
+      paquete: (document.getElementById('nPkg') || {}).value ? document.getElementById('nPkg').options[document.getElementById('nPkg').selectedIndex].text : null,
       domicilio: domicilio,
       notas: (document.getElementById('nNotas') || {}).value && document.getElementById('nNotas').value.trim() || null,
       personas: parseInt((document.getElementById('nPersDisplay') || {}).innerText, 10) || null,
