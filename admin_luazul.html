@@ -2550,13 +2550,6 @@ async function addClient() {
   var originalText = btn ? btn.textContent : '✅ Agregar cliente';
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Verificando...'; }
 
-  // ── Verificación remota: email ya en Supabase (otro panel/vendedor) ──
-  var checkRes = await sbClient.from('clientes').select('id').eq('email', email).limit(1);
-  if (checkRes.data && checkRes.data.length > 0) {
-    showToast('❌ Ya existe un usuario registrado con ese email');
-    if (btn) { btn.disabled = false; btn.textContent = originalText; }
-    return;
-  }
   if (btn) btn.textContent = '⏳ Creando...';
 
   // Cuota base; última cuota ajustada para que suma exacta == total (sin diferencias de centavos)
@@ -2567,35 +2560,46 @@ async function addClient() {
   var telefono2 = (document.getElementById('nTel2') || {}).value.trim() || null;
   var domicilio = (document.getElementById('nDomicilio') || {}).value.trim() || null;
 
-  fetch('https://yunvqgaljopirzvjrntc.supabase.co/functions/v1/crear_usuario_staff_v2', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': 'Bearer ' + SUPABASE_KEY
-    },
-    body: JSON.stringify({
-      p_email: email,
-      p_documento: (document.getElementById('nDoc') || {}).value.trim() || null,
-      p_password: pass,
-      p_role_id: 4,
-      p_nombre: nombre,
-      p_apellido: '',
-      p_region_ids: [],   // enviar array vacío
-      p_telefono1: telefono1,
-      p_telefono2: telefono2,
-      p_ciudad: null,
-      p_domicilio: domicilio,
-      p_cbu: null,
-      p_manager_id: null,
-      p_seller_id: sellerId,
-      p_total_usd: total,
-      p_monto_cuota: montoCuota,
-      p_cuotas_total: cuotas
-    })
-  })
-  .then(function(response) { return response.json(); })
-  .then(function(data) {
-    if (data.error) throw new Error(data.error);
+  // Obtener token de sesión
+  const { data: { session } } = await sbClient.auth.getSession();
+  const token = session?.access_token;
+  if (!token) {
+    showToast('❌ No se pudo obtener la sesión. Iniciá sesión nuevamente.');
+    if (btn) { btn.disabled = false; btn.textContent = originalText; }
+    return;
+  }
+
+  try {
+    const response = await fetch('https://yunvqgaljopirzvjrntc.supabase.co/functions/v1/crear_usuario_staff_v2', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        p_email: email,
+        p_documento: (document.getElementById('nDoc') || {}).value.trim() || null,
+        p_password: pass,
+        p_role_id: 4,
+        p_nombre: nombre,
+        p_apellido: '',
+        p_region_ids: [],
+        p_telefono1: telefono1,
+        p_telefono2: telefono2,
+        p_ciudad: null,
+        p_domicilio: domicilio,
+        p_cbu: null,
+        p_manager_id: null,
+        p_seller_id: sellerId,
+        p_total_usd: total,
+        p_monto_cuota: montoCuota,
+        p_cuotas_total: cuotas
+      })
+    });
+
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || `Error ${response.status}: ${response.statusText}`);
+
     var nuevoClienteId = data.id;
 
     var camposExtra = {
@@ -2609,17 +2613,12 @@ async function addClient() {
       noches: parseInt((document.getElementById('nNoches') || {}).value, 10) || null
     };
 
-    return sbClient.from('clientes').update(camposExtra).eq('id', nuevoClienteId)
-      .then(function(updRes) {
-        if (updRes.error) throw updRes.error;
-        return nuevoClienteId;
-      });
-  })
-  .then(function(clienteId) {
-    return sbClient.from('clientes').select('*').eq('id', clienteId).single();
-  })
-  .then(function(clienteRes) {
+    var updRes = await sbClient.from('clientes').update(camposExtra).eq('id', nuevoClienteId);
+    if (updRes.error) throw updRes.error;
+
+    var clienteRes = await sbClient.from('clientes').select('*').eq('id', nuevoClienteId).single();
     if (clienteRes.error) throw clienteRes.error;
+
     var nuevoCliente = LZ.enrich(clienteRes.data);
     allClients.push(nuevoCliente);
     notificarAccion('nuevo_cliente', 'Nuevo cliente creado: ' + nuevoCliente.nombre, nuevoCliente.id, null);
@@ -2649,8 +2648,7 @@ async function addClient() {
     renderAll();
     showToast('✅ Cliente ' + nombre + ' creado exitosamente');
     refreshAdminNotifBadge();
-  })
-  .catch(function(err) {
+  } catch (err) {
     console.error('[addClient] Error:', err);
     var msg = err.message || 'Error desconocido';
     if (msg.indexOf('duplicate key') !== -1 || msg.indexOf('already exists') !== -1) {
@@ -2660,10 +2658,9 @@ async function addClient() {
     } else {
       showToast('❌ Error al crear cliente: ' + msg);
     }
-  })
-  .finally(function() {
+  } finally {
     if (btn) { btn.disabled = false; btn.textContent = originalText; }
-  });
+  }
 }
 
 // ──────────────────────────────────────────────────────────────────────────
