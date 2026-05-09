@@ -711,6 +711,54 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
     border-color: var(--gold);
     color: var(--gold);
 }
+/* Divisa grid */
+.divisas-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+.divisa-item {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 16px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+.divisa-info {
+    display: flex;
+    gap: 24px;
+    flex-wrap: wrap;
+    align-items: baseline;
+}
+.divisa-info .moneda {
+    font-weight: 800;
+    min-width: 80px;
+}
+.divisa-info .cotizacion {
+    color: var(--gold);
+    font-weight: 700;
+}
+.divisa-info .margen {
+    color: var(--cyan);
+}
+.divisa-actions button {
+    background: rgba(255,255,255,0.06);
+    border: 1px solid var(--border2);
+    border-radius: 8px;
+    padding: 6px 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+    color: var(--text);
+}
+.divisa-actions button.edit:hover {
+    background: var(--purple-bg);
+    border-color: var(--purple-bd);
+    color: var(--purple);
+}
 </style>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script>
@@ -1037,6 +1085,7 @@ window.LZ = (function() {
       <div class="tab" onclick="showTab('tickets')" id="tab-tickets" style="color:#fbbf24;">🎫 Tickets</div>
       <div class="tab" onclick="showTab('comunicaciones'); renderComunicaciones();" id="tab-comunicaciones" style="color:#06b6d4;">📩 Comunicaciones</div>
       <div class="tab" onclick="showTab('catalogo')" id="tab-catalogo" style="color:#fbbf24;">🏷️ Catálogo</div>
+      <div class="tab" onclick="showTab('divisas')" id="tab-divisas" style="color:#34d399;">💱 Divisas</div>
     </div>
         <!-- ══ OVERVIEW ══ -->
     <div class="tabpg active" id="tabpg-overview">
@@ -1387,6 +1436,17 @@ window.LZ = (function() {
       </div>
       <div id="catalogoGrid" class="catalogo-grid" style="margin-top: 20px;">
         <div class="empty-state">Cargando catálogo...</div>
+      </div>
+    </div>
+
+    <!-- ══ DIVISAS (CEO) ══ -->
+    <div class="tabpg" id="tabpg-divisas">
+      <div class="sec-head">
+        <h2>💱 Configuración de Divisas y Margen</h2>
+        <button class="addbtn" onclick="actualizarDivisasAhora()" style="background:var(--accent2);">🔄 Actualizar cotizaciones</button>
+      </div>
+      <div id="divisasGrid" class="divisas-grid" style="margin-top:20px;">
+        <div class="empty-state">Cargando configuración de divisas...</div>
       </div>
     </div>
 
@@ -4129,6 +4189,7 @@ function verDetalleStaff(staffId) {
     if (tabId === 'pagocomisiones') renderPagoComisiones();
     if (tabId === 'clientes') renderClientes();
     if (tabId === 'catalogo') renderCatalogo();
+    if (tabId === 'divisas') renderDivisas();
   }
 
   function closeModal() { document.getElementById('modal').classList.remove('open'); }
@@ -4296,6 +4357,126 @@ function verDetalleStaff(staffId) {
       renderCatalogo();
     } catch (err) {
       showToast('❌ Error: ' + err.message);
+    }
+  }
+
+  // ── DIVISAS ────────────────────────────────────────────────
+  async function renderDivisas() {
+    const container = document.getElementById('divisasGrid');
+    if (!container) return;
+    container.innerHTML = '<div class="empty-state">Cargando divisas...</div>';
+    try {
+      const { data: rates, error } = await sbClient
+        .from('exchange_rates')
+        .select('*')
+        .order('moneda_destino');
+      if (error) throw error;
+      const { data: configs } = await sbClient
+        .from('configuracion_divisas')
+        .select('*');
+      const configMap = {};
+      if (configs) configs.forEach(c => configMap[c.moneda_destino] = c.margen_porcentaje);
+
+      if (!rates.length) {
+        container.innerHTML = '<div class="empty-state">No hay datos de divisas. Ejecutá "Actualizar cotizaciones".</div>';
+        return;
+      }
+      let html = '';
+      for (const r of rates) {
+        const margenActual = configMap[r.moneda_destino] !== undefined ? configMap[r.moneda_destino] : r.margen_porcentaje;
+        html += `
+          <div class="divisa-item">
+            <div class="divisa-info">
+              <div class="moneda"><strong>${r.moneda_destino}</strong></div>
+              <div class="cotizacion">Compra: ${r.cotizacion_compra} | Venta: ${r.cotizacion_venta}</div>
+              <div class="margen">Margen: ${margenActual}%</div>
+              <div class="actualizacion">Últ. act: ${new Date(r.ultima_actualizacion).toLocaleString('es-AR')}</div>
+            </div>
+            <div class="divisa-actions">
+              <button class="edit" onclick="openEditMargen('${r.moneda_destino}', ${margenActual})">✏️ Editar margen</button>
+            </div>
+          </div>
+        `;
+      }
+      container.innerHTML = html;
+    } catch (err) {
+      console.error(err);
+      container.innerHTML = '<div class="empty-state" style="color:var(--red);">❌ Error: ' + LZ.esc(err.message) + '</div>';
+    }
+  }
+
+  async function actualizarDivisasAhora() {
+    const btn = event.target;
+    if (btn) btn.disabled = true;
+    showToast('⏳ Solicitando actualización de cotizaciones...');
+    try {
+      const { error } = await sbClient.functions.invoke('actualizar-cotizaciones');
+      if (error) throw error;
+      showToast('✅ Cotizaciones actualizadas correctamente');
+      await renderDivisas();
+    } catch (err) {
+      showToast('❌ Error al actualizar: ' + err.message);
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  }
+
+  function openEditMargen(moneda, margenActual) {
+    const modalHtml = `
+      <div class="modal-head"><div><h2>✏️ Configurar margen para ${moneda}</h2><p>El margen se suma a la cotización de mercado.</p></div><button class="modal-close" onclick="closeModal()">✕</button></div>
+      <div class="modal-body">
+        <div class="manager-input-group"><label>Margen (%)</label><input id="margenInput" type="number" step="0.5" value="${margenActual}" /></div>
+        <div class="manager-input-group"><label>Ejemplo de cálculo</label><div style="background:rgba(255,255,255,.04);padding:8px;border-radius:8px;">Cotización actual: ${window.cotizacionActual || '—'} <br>Con margen: <span id="ejemploMonto">—</span></div></div>
+      </div>
+      <div class="modal-actions"><button class="mbtn gold" onclick="guardarMargen('${moneda}')">💾 Guardar</button><button class="mbtn ghost" onclick="closeModal()">Cancelar</button></div>
+    `;
+    document.getElementById('mbox').innerHTML = modalHtml;
+    document.getElementById('modal').classList.add('open');
+    // cargar cotización actual para mostrar ejemplo
+    sbClient.from('exchange_rates').select('cotizacion_compra').eq('moneda_destino', moneda).single()
+      .then(res => {
+        if (res.data) window.cotizacionActual = res.data.cotizacion_compra;
+        const input = document.getElementById('margenInput');
+        if (input) input.addEventListener('input', () => actualizarEjemploMargen(moneda));
+        actualizarEjemploMargen(moneda);
+      });
+  }
+
+  function actualizarEjemploMargen(moneda) {
+    const margen = parseFloat(document.getElementById('margenInput')?.value || 0);
+    const cotizacion = window.cotizacionActual;
+    if (cotizacion && !isNaN(margen)) {
+      const final = cotizacion * (1 + margen / 100);
+      document.getElementById('ejemploMonto').innerHTML = final.toFixed(4) + ' (' + moneda + ')';
+    } else {
+      document.getElementById('ejemploMonto').innerHTML = '—';
+    }
+  }
+
+  async function guardarMargen(moneda) {
+    const nuevoMargen = parseFloat(document.getElementById('margenInput').value);
+    if (isNaN(nuevoMargen)) { showToast('⚠️ Ingresá un número válido'); return; }
+    const btn = document.querySelector('#modal .mbtn.gold');
+    if (btn) btn.disabled = true;
+    try {
+      // Actualizar configuración
+      const { error: cfgErr } = await sbClient
+        .from('configuracion_divisas')
+        .upsert({ moneda_destino: moneda, margen_porcentaje: nuevoMargen, updated_at: new Date() }, { onConflict: 'moneda_destino' });
+      if (cfgErr) throw cfgErr;
+      // Recalcular cotización_venta en exchange_rates
+      const { data: rate } = await sbClient.from('exchange_rates').select('cotizacion_compra').eq('moneda_destino', moneda).single();
+      if (rate) {
+        const nuevaVenta = rate.cotizacion_compra * (1 + nuevoMargen / 100);
+        await sbClient.from('exchange_rates').update({ cotizacion_venta: nuevaVenta, margen_porcentaje: nuevoMargen }).eq('moneda_destino', moneda);
+      }
+      showToast('✅ Margen actualizado');
+      closeModal();
+      renderDivisas();
+    } catch (err) {
+      showToast('❌ Error: ' + err.message);
+    } finally {
+      if (btn) btn.disabled = false;
     }
   }
 
@@ -5432,6 +5613,17 @@ for (var k = 0; k < allRs.length; k++) {
   window.verFichaCliente = verFichaCliente;
   window.calcCuotaCeo = calcCuotaCeo;
   window.buscarReferidorCeo = buscarReferidorCeo;
+  window.renderDivisas = renderDivisas;
+  window.actualizarDivisasAhora = actualizarDivisasAhora;
+  window.openEditMargen = openEditMargen;
+  window.actualizarEjemploMargen = actualizarEjemploMargen;
+  window.guardarMargen = guardarMargen;
+  window.renderCatalogo = renderCatalogo;
+  window.openAddCatalogo = openAddCatalogo;
+  window.saveAddCatalogo = saveAddCatalogo;
+  window.openEditCatalogo = openEditCatalogo;
+  window.saveEditCatalogo = saveEditCatalogo;
+  window.deleteCatalogo = deleteCatalogo;
   // ... más según necesidad
 </script>
 </body>
