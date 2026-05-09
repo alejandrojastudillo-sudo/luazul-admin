@@ -528,6 +528,189 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
 .mbtn.purple:hover {
   background: rgba(167, 139, 250, 0.25);
 }
+/* Catálogo – grid responsive */
+.catalogo-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+.catalogo-item {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 16px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+.catalogo-info {
+    flex: 3;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    align-items: baseline;
+}
+.catalogo-info div {
+    font-size: 0.85rem;
+}
+.catalogo-info .destino {
+    font-weight: 800;
+    min-width: 140px;
+}
+.catalogo-info .paquete {
+    color: var(--accent2);
+    min-width: 160px;
+}
+.catalogo-info .precio {
+    font-weight: 800;
+    color: var(--gold);
+    min-width: 80px;
+}
+.catalogo-info .personas {
+    min-width: 70px;
+}
+.catalogo-info .noches {
+    min-width: 60px;
+}
+.catalogo-actions {
+    display: flex;
+    gap: 8px;
+}
+.catalogo-actions button {
+    background: rgba(255,255,255,0.06);
+    border: 1px solid var(--border2);
+    border-radius: 8px;
+    padding: 6px 12px;
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    color: var(--text);
+}
+.catalogo-actions button.edit:hover {
+    background: var(--purple-bg);
+    border-color: var(--purple-bd);
+    color: var(--purple);
+}
+.catalogo-actions button.delete:hover {
+    background: var(--red-bg);
+    border-color: var(--red-bd);
+    color: var(--red);
+}
+.modal-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+}
+.ml {
+    display: block;
+    font-size: .68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    color: var(--muted);
+    margin-bottom: 6px;
+}
+.edit-input {
+    width: 100%;
+    padding: 10px 14px;
+    background: rgba(0,0,0,.35);
+    border: 1px solid var(--border2);
+    border-radius: 10px;
+    color: var(--text);
+    font-family: 'Mulish', sans-serif;
+    font-size: .85rem;
+    transition: border-color .2s;
+    box-sizing: border-box;
+}
+.edit-input:focus {
+    outline: none;
+    border-color: var(--gold);
+}
+.modal-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 18px 24px;
+    border-bottom: 1px solid var(--gold-bd);
+    background: rgba(0,0,0,0.3);
+    border-radius: 24px 24px 0 0;
+}
+.modal-head h2 {
+    font-family: 'Syne', sans-serif;
+    font-size: 1.2rem;
+    font-weight: 800;
+    color: var(--gold);
+    margin: 0;
+}
+.modal-head p {
+    font-size: 0.7rem;
+    color: var(--muted);
+    margin-top: 4px;
+}
+.modal-close {
+    background: rgba(255,255,255,0.08);
+    border: none;
+    color: var(--text);
+    font-size: 1.2rem;
+    cursor: pointer;
+    width: 30px;
+    height: 30px;
+    border-radius: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+.modal-close:hover {
+    background: rgba(255,255,255,0.2);
+    color: var(--gold);
+}
+.modal-body {
+    padding: 24px;
+}
+.modal-actions {
+    padding: 16px 24px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    border-top: 1px solid var(--border);
+    background: rgba(0,0,0,0.2);
+    border-radius: 0 0 24px 24px;
+}
+.m-btn {
+    padding: 8px 20px;
+    border-radius: 10px;
+    font-family: 'Mulish', sans-serif;
+    font-weight: 700;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: none;
+}
+.m-btn.primary {
+    background: linear-gradient(135deg, #b45309, #f59e0b);
+    color: #1a0a00;
+}
+.m-btn.primary:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 14px rgba(245, 158, 11, 0.3);
+}
+.m-btn.primary:disabled {
+    opacity: .45;
+    cursor: not-allowed;
+    transform: none;
+}
+.m-btn.ghost {
+    background: transparent;
+    border: 1px solid var(--border2);
+    color: var(--muted);
+}
+.m-btn.ghost:hover {
+    border-color: var(--gold);
+    color: var(--gold);
+}
 </style>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script>
@@ -853,6 +1036,7 @@ window.LZ = (function() {
       <div class="tab" onclick="showTab('vouchers')" id="tab-vouchers">🎟️ Gestión Vouchers</div>
       <div class="tab" onclick="showTab('tickets')" id="tab-tickets" style="color:#fbbf24;">🎫 Tickets</div>
       <div class="tab" onclick="showTab('comunicaciones'); renderComunicaciones();" id="tab-comunicaciones" style="color:#06b6d4;">📩 Comunicaciones</div>
+      <div class="tab" onclick="showTab('catalogo')" id="tab-catalogo" style="color:#fbbf24;">🏷️ Catálogo</div>
     </div>
         <!-- ══ OVERVIEW ══ -->
     <div class="tabpg active" id="tabpg-overview">
@@ -1193,6 +1377,17 @@ window.LZ = (function() {
         <button onclick="renderComunicaciones()" style="padding:8px 16px;border-radius:9px;background:rgba(6,182,212,.1);border:1px solid rgba(6,182,212,.25);color:#06b6d4;font-family:inherit;font-size:.78rem;font-weight:700;cursor:pointer;">🔄 Actualizar</button>
       </div>
       <div id="comunicacionesContainer" style="min-height:300px;"></div>
+    </div>
+
+    <!-- ══ CATÁLOGO DE PRECIOS (CRUD CEO) ══ -->
+    <div class="tabpg" id="tabpg-catalogo">
+      <div class="sec-head">
+        <h2>🏷️ Catálogo de Precios y Paquetes</h2>
+        <button class="addbtn" onclick="openAddCatalogo()">➕ Nuevo paquete</button>
+      </div>
+      <div id="catalogoGrid" class="catalogo-grid" style="margin-top: 20px;">
+        <div class="empty-state">Cargando catálogo...</div>
+      </div>
     </div>
 
   </main>
@@ -3933,11 +4128,176 @@ function verDetalleStaff(staffId) {
     if (tabId === 'premios_referidos') renderPremiosReferidos();
     if (tabId === 'pagocomisiones') renderPagoComisiones();
     if (tabId === 'clientes') renderClientes();
+    if (tabId === 'catalogo') renderCatalogo();
   }
 
   function closeModal() { document.getElementById('modal').classList.remove('open'); }
   function closeModalOut(e) { if (e.target === document.getElementById('modal')) closeModal(); }
   function showToast(msg, dur) { var t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show'); setTimeout(function() { t.classList.remove('show'); }, dur || 3500); }
+
+  // ══════════════════════════════════════════════════════
+  //  CATÁLOGO DE PRECIOS — CRUD CEO
+  // ══════════════════════════════════════════════════════
+
+  async function renderCatalogo() {
+    var container = document.getElementById('catalogoGrid');
+    if (!container) return;
+    container.innerHTML = '<div class="empty-state">Cargando catálogo...</div>';
+    try {
+      var res = await sbClient.from('catalogo_precios').select('*').order('orden');
+      if (res.error) throw res.error;
+      var data = res.data || [];
+      if (!data.length) {
+        container.innerHTML = '<div class="empty-state">📦 No hay paquetes cargados. Usá "Nuevo paquete" para agregar.</div>';
+        return;
+      }
+      var html = '';
+      data.forEach(function(item) {
+        html += '<div class="catalogo-item">' +
+          '<div class="catalogo-info">' +
+            '<div class="destino">' + LZ.esc(item.nombre_destino) + '</div>' +
+            '<div class="paquete">' + LZ.esc(item.paquete) + '</div>' +
+            '<div class="precio">USD ' + item.precio_usd + '</div>' +
+            '<div class="personas">' + item.personas + ' pers.</div>' +
+            '<div class="noches">' + item.noches + ' noches</div>' +
+            '<div class="activo">' + (item.activo ? '✅ Activo' : '❌ Inactivo') + '</div>' +
+          '</div>' +
+          '<div class="catalogo-actions">' +
+            '<button class="edit" onclick="openEditCatalogo(' + item.id + ')">✏️ Editar</button>' +
+            '<button class="delete" onclick="deleteCatalogo(' + item.id + ')">🗑 ' + (item.activo ? 'Desactivar' : 'Eliminar') + '</button>' +
+          '</div>' +
+        '</div>';
+      });
+      container.innerHTML = html;
+    } catch (err) {
+      console.error(err);
+      container.innerHTML = '<div class="empty-state" style="color:var(--red);">❌ Error al cargar: ' + LZ.esc(err.message) + '</div>';
+    }
+  }
+
+  function openAddCatalogo() {
+    var modalHtml = '<div class="modal-head"><div><h2>➕ Nuevo Paquete</h2><p>Agregar destino o paquete al catálogo</p></div><button class="modal-close" onclick="closeModal()">✕</button></div>' +
+      '<div class="modal-body"><div class="modal-grid">' +
+        '<div><label class="ml">Nombre del destino *</label><input id="catDestino" class="edit-input" placeholder="Ej: Cabo Frío, Brasil"></div>' +
+        '<div><label class="ml">Slug *</label><input id="catSlug" class="edit-input" placeholder="cabofrio (sin espacios)"></div>' +
+        '<div><label class="ml">Paquete *</label><input id="catPaquete" class="edit-input" placeholder="Ej: Escapada en Pareja"></div>' +
+        '<div><label class="ml">Personas *</label><input id="catPersonas" type="number" class="edit-input" placeholder="2,4,6"></div>' +
+        '<div><label class="ml">Noches</label><input id="catNoches" type="number" class="edit-input" value="7"></div>' +
+        '<div><label class="ml">Precio USD *</label><input id="catPrecio" type="number" step="1" class="edit-input"></div>' +
+        '<div><label class="ml">Orden</label><input id="catOrden" type="number" class="edit-input" placeholder="10,20,30..."></div>' +
+        '<div><label class="ml">Activo</label><select id="catActivo" class="edit-input"><option value="true">Sí</option><option value="false">No</option></select></div>' +
+      '</div></div>' +
+      '<div class="modal-actions"><button class="m-btn primary" onclick="saveAddCatalogo()">💾 Guardar</button><button class="m-btn ghost" onclick="closeModal()">Cancelar</button></div>';
+    document.getElementById('mbox').innerHTML = modalHtml;
+    document.getElementById('modal').classList.add('open');
+  }
+
+  async function saveAddCatalogo() {
+    var nombreDestino = document.getElementById('catDestino').value.trim();
+    var slug = document.getElementById('catSlug').value.trim().toLowerCase();
+    var paquete = document.getElementById('catPaquete').value.trim();
+    var personas = parseInt(document.getElementById('catPersonas').value, 10);
+    var noches = parseInt(document.getElementById('catNoches').value, 10) || 7;
+    var precio = parseFloat(document.getElementById('catPrecio').value);
+    var orden = parseInt(document.getElementById('catOrden').value, 10) || 0;
+    var activo = document.getElementById('catActivo').value === 'true';
+
+    if (!nombreDestino || !slug || !paquete || !personas || !precio) {
+      showToast('⚠️ Complete todos los campos obligatorios (*)');
+      return;
+    }
+    if (isNaN(personas) || isNaN(precio)) {
+      showToast('⚠️ Personas y precio deben ser números válidos');
+      return;
+    }
+
+    var btn = document.querySelector('#modal .m-btn.primary');
+    if (btn) btn.disabled = true;
+
+    try {
+      var res = await sbClient.from('catalogo_precios').insert([{
+        nombre_destino: nombreDestino,
+        slug: slug,
+        paquete: paquete,
+        personas: personas,
+        noches: noches,
+        precio_usd: precio,
+        orden: orden,
+        activo: activo
+      }]);
+      if (res.error) throw res.error;
+      showToast('✅ Paquete agregado correctamente');
+      closeModal();
+      renderCatalogo();
+    } catch (err) {
+      showToast('❌ Error: ' + err.message);
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  }
+
+  async function openEditCatalogo(id) {
+    var res = await sbClient.from('catalogo_precios').select('*').eq('id', id).single();
+    if (res.error) { showToast('Error al cargar datos'); return; }
+    var d = res.data;
+    var modalHtml = '<div class="modal-head"><div><h2>✏️ Editar Paquete</h2><p>ID ' + d.id + '</p></div><button class="modal-close" onclick="closeModal()">✕</button></div>' +
+      '<div class="modal-body"><div class="modal-grid">' +
+        '<div><label class="ml">Nombre destino</label><input id="editDestino" class="edit-input" value="' + LZ.esc(d.nombre_destino) + '"></div>' +
+        '<div><label class="ml">Slug</label><input id="editSlug" class="edit-input" value="' + LZ.esc(d.slug) + '"></div>' +
+        '<div><label class="ml">Paquete</label><input id="editPaquete" class="edit-input" value="' + LZ.esc(d.paquete) + '"></div>' +
+        '<div><label class="ml">Personas</label><input id="editPersonas" type="number" class="edit-input" value="' + d.personas + '"></div>' +
+        '<div><label class="ml">Noches</label><input id="editNoches" type="number" class="edit-input" value="' + d.noches + '"></div>' +
+        '<div><label class="ml">Precio USD</label><input id="editPrecio" type="number" step="1" class="edit-input" value="' + d.precio_usd + '"></div>' +
+        '<div><label class="ml">Orden</label><input id="editOrden" type="number" class="edit-input" value="' + (d.orden || 0) + '"></div>' +
+        '<div><label class="ml">Activo</label><select id="editActivo" class="edit-input"><option value="true"' + (d.activo ? ' selected' : '') + '>Sí</option><option value="false"' + (!d.activo ? ' selected' : '') + '>No</option></select></div>' +
+      '</div></div>' +
+      '<div class="modal-actions"><button class="m-btn primary" onclick="saveEditCatalogo(' + d.id + ')">💾 Guardar</button><button class="m-btn ghost" onclick="closeModal()">Cancelar</button></div>';
+    document.getElementById('mbox').innerHTML = modalHtml;
+    document.getElementById('modal').classList.add('open');
+  }
+
+  async function saveEditCatalogo(id) {
+    var updates = {
+      nombre_destino: document.getElementById('editDestino').value.trim(),
+      slug: document.getElementById('editSlug').value.trim().toLowerCase(),
+      paquete: document.getElementById('editPaquete').value.trim(),
+      personas: parseInt(document.getElementById('editPersonas').value, 10),
+      noches: parseInt(document.getElementById('editNoches').value, 10) || 7,
+      precio_usd: parseFloat(document.getElementById('editPrecio').value),
+      orden: parseInt(document.getElementById('editOrden').value, 10) || 0,
+      activo: document.getElementById('editActivo').value === 'true'
+    };
+    if (!updates.nombre_destino || !updates.slug || !updates.paquete || !updates.personas || !updates.precio_usd) {
+      showToast('⚠️ Complete todos los campos obligatorios');
+      return;
+    }
+    var btn = document.querySelector('#modal .m-btn.primary');
+    if (btn) btn.disabled = true;
+    try {
+      var res = await sbClient.from('catalogo_precios').update(updates).eq('id', id);
+      if (res.error) throw res.error;
+      showToast('✅ Actualizado correctamente');
+      closeModal();
+      renderCatalogo();
+    } catch (err) {
+      showToast('❌ Error: ' + err.message);
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  }
+
+  async function deleteCatalogo(id) {
+    var ok = confirm('¿Desactivar este paquete? (no se eliminará físicamente, solo se ocultará del simulador)');
+    if (!ok) return;
+    try {
+      var res = await sbClient.from('catalogo_precios').update({ activo: false }).eq('id', id);
+      if (res.error) throw res.error;
+      showToast('✅ Paquete desactivado');
+      renderCatalogo();
+    } catch (err) {
+      showToast('❌ Error: ' + err.message);
+    }
+  }
 
   function calcComision(v, allClients) {
     var vc = allClients.filter(function(c) { return String(c.seller_id) === String(v.user_id); });
