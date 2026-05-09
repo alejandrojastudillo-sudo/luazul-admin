@@ -509,6 +509,7 @@ function _sbLoad() { return loadClients(); }
       <div class="tab" onclick="showTab('miscomisiones')" id="tab-miscomisiones" style="color:#4ade80;">💰 Mis Comisiones</div>
       <div class="tab" onclick="showTab('tickets')" id="tab-tickets" style="color:#fbbf24;">🎫 Tickets</div>
       <div class="tab" onclick="showTab('comunicaciones'); renderComunicacionesGerente();" id="tab-comunicaciones" style="color:#67e8f9;">📩 Comunicaciones</div>
+      <div class="tab" onclick="showTab('legajo')" id="tab-legajo" style="color:#a78bfa;">🪪 Mi Legajo</div>
     </div>
     <!-- OVERVIEW -->
     <div class="tabpg active" id="tabpg-overview">
@@ -642,6 +643,12 @@ function _sbLoad() { return loadClients(); }
         <button onclick="renderComunicacionesGerente()" style="padding:8px 16px;border-radius:9px;background:rgba(103,232,249,.1);border:1px solid rgba(103,232,249,.25);color:#67e8f9;font-family:inherit;font-size:.78rem;font-weight:700;cursor:pointer;">🔄 Actualizar</button>
       </div>
       <div id="comunicacionesContainerGerente" style="min-height:300px;"></div>
+    </div>
+    <!-- MI LEGAJO -->
+    <div class="tabpg" id="tabpg-legajo">
+      <div id="legajoContent" class="glass" style="padding:28px; max-width:780px; margin:0 auto;">
+        <!-- se llena con JavaScript -->
+      </div>
     </div>
   </main>
 </div>
@@ -1080,7 +1087,7 @@ function renderAll() { renderOverview(); renderVendors(); renderClients(); rende
 function renderOverview() {
   var cs = getClientesDelRamal().map(enrich);
   // Solo vendedores (role_id=3) asignados a este jefe
-  var _jefeId = window._gerenteProfile ? (window._gerenteProfile.user_id || window._gerenteProfile.id) : null;
+  var _jefeId = window._gerenteProfile ? window._gerenteProfile.id : null;
   var vs = (_memCache[VK] || []).filter(function(s) {
     return s.role_id === ROLE_SELLER && String(s.manager_id) === String(_jefeId);
   });
@@ -1156,7 +1163,7 @@ function renderOverview() {
 // ══════════════════════════════════════════════════════
 // ── SCOPE HELPER: clientes del ramal del jefe ─────────────────────
 function getClientesDelRamal() {
-  var _jefeId = window._gerenteProfile ? (window._gerenteProfile.user_id || window._gerenteProfile.id) : null;
+  var _jefeId = window._gerenteProfile ? window._gerenteProfile.id : null;  // ← CAMBIO: usar id numérico
   var misVendedores = (_memCache[VK] || []).filter(function(s) {
     return s.role_id === ROLE_SELLER && String(s.manager_id) === String(_jefeId);
   });
@@ -1167,8 +1174,9 @@ function getClientesDelRamal() {
 }
 
 function renderVendors() {
+  var _jefeId = window._gerenteProfile ? window._gerenteProfile.id : null;
   var vs = (_memCache[VK] || []).filter(function(s) {
-    return s.role_id === ROLE_SELLER || s.role_id === ROLE_SALES_LEADER;
+    return (s.role_id === ROLE_SELLER || s.role_id === ROLE_SALES_LEADER) && String(s.manager_id) === String(_jefeId);
   });
   var cs = ((_memCache[DB_KEY] || []) || []).map(enrich);
   var ns = (_memCache[NK] || []) || [];
@@ -2554,6 +2562,7 @@ function showTab(id) {
   if (id === 'mensual') { renderMensual(); }
   if (id === 'tickets') { cargarTicketsGerente(); }
   if (id === 'clients') { renderClients(); }
+  if (id === 'legajo') { renderMiLegajoJefe(); }
 }
 
 // ── RECAUDACIÓN MENSUAL ─────────────────────────────────────
@@ -3623,6 +3632,96 @@ window.enviarRespuestaGerente      = enviarRespuestaGerente;
 
 
 window.mostrarRespuestaGerente     = mostrarRespuestaGerente;
+
+// ===================== MI LEGAJO (JEFE DE VENTAS) =====================
+async function renderMiLegajoJefe() {
+  var yo = window._gerenteProfile;
+  if (!yo) { document.getElementById('legajoContent').innerHTML = '<div class="empty">Sin sesión</div>'; return; }
+  var totalVendedores = (_memCache[VK] || []).filter(function(v) { return v.role_id === ROLE_SELLER && String(v.manager_id) === String(yo.id); }).length;
+  var totalClientes = getClientesDelRamal().length;
+  var activos = getClientesDelRamal().filter(function(c) { return c.estado === 'activo'; }).length;
+  var enMora = getClientesDelRamal().filter(function(c) { return c.estado === 'atraso' || c.estado === 'atraso_gestion'; }).length;
+  var completados = getClientesDelRamal().filter(function(c) { return c.estado === 'completo'; }).length;
+  var totalRec = getClientesDelRamal().reduce(function(s, c) { return s + ((parseInt(c.cuotas_pagadas) || 0) * (parseFloat(c.monto_cuota) || 0)); }, 0);
+  var comPct = 15; // 15% para jefe de ventas (fijo)
+  var comEst = totalRec * (comPct / 100);
+  var miJefe = null;
+  if (yo.manager_id) {
+    var { data } = await sbClient.from('staff_profiles').select('nombre').eq('id', yo.manager_id).single();
+    miJefe = data ? data.nombre : 'Sin gerente asignado';
+  } else {
+    miJefe = 'Sin gerente asignado';
+  }
+  var nombreCompleto = (yo.nombre || '') + (yo.apellido ? ' ' + yo.apellido : '');
+  var email = yo.badge || yo.email || '—';
+  var telefono = yo.telefono1 || '—';
+  var cbu = yo.cbu || '—';
+  var comps = [];
+  if (yo.comprobantes_json) { try { comps = JSON.parse(yo.comprobantes_json); } catch(e) {} }
+  var compsHtml = comps.length
+    ? comps.map(function(c, i) {
+        return '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);">' +
+          '<span style="font-size:.8rem;flex:1;">📎 ' + esc(c.nombre) + '</span>' +
+          '<span style="font-size:.7rem;color:var(--muted);">' + c.fecha + '</span>' +
+          (c.monto ? '<span style="font-size:.78rem;font-weight:700;color:var(--green);">USD ' + c.monto + '</span>' : '') +
+          '<button onclick="verCompJefe(' + i + ')" style="padding:3px 9px;background:rgba(59,130,246,.15);border:1px solid rgba(59,130,246,.3);color:#7eb8ff;border-radius:6px;font-size:.7rem;cursor:pointer;">Ver</button>' +
+          '</div>';
+      }).join('')
+    : '<div style="text-align:center;padding:16px;color:var(--muted);font-size:.8rem;">Sin comprobantes cargados</div>';
+  var html = `
+    <div style="background:linear-gradient(135deg,rgba(167,139,250,.08),rgba(99,102,241,.05));border:1px solid rgba(167,139,250,.2);border-radius:18px;padding:24px;margin-bottom:20px;display:flex;align-items:center;gap:20px;flex-wrap:wrap;">
+      <div style="width:60px;height:60px;border-radius:50%;background:linear-gradient(135deg,#a78bfa,#6366f1);display:flex;align-items:center;justify-content:center;font-size:1.6rem;font-weight:800;">${(nombreCompleto.charAt(0) || '?').toUpperCase()}</div>
+      <div><div style="font-size:1.15rem;font-weight:800;">${esc(nombreCompleto)}</div>
+      <div style="font-size:.8rem;color:rgba(167,139,250,.8);">${esc(email)}</div>
+      <div style="font-size:.8rem;margin-top:4px;"><span style="color:var(--gold);">⭐ Gerente a cargo:</span> <strong>${esc(miJefe)}</strong></div></div>
+      <div style="text-align:right;margin-left:auto;"><div style="font-size:.62rem;color:var(--muted);">ID</div><div style="font-family:monospace;font-size:.82rem;">${yo.id || '—'}</div></div>
+    </div>
+    <div style="margin-bottom:16px;"><div style="font-size:.65rem;font-weight:700;text-transform:uppercase;color:rgba(167,139,250,.7);margin-bottom:12px;">📊 Mi equipo</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:12px;">
+      <div class="stat" style="padding:14px;"><div class="stat-icon">👥</div><div class="sval">${totalVendedores}</div><div class="slbl">Vendedores</div></div>
+      <div class="stat" style="padding:14px;"><div class="stat-icon">👥</div><div class="sval">${totalClientes}</div><div class="slbl">Clientes totales</div></div>
+      <div class="stat" style="padding:14px;"><div class="stat-icon">✅</div><div class="sval" style="color:var(--green);">${activos}</div><div class="slbl">Clientes activos</div></div>
+      <div class="stat" style="padding:14px;"><div class="stat-icon">⚠️</div><div class="sval" style="color:var(--red);">${enMora}</div><div class="slbl">En mora</div></div>
+      <div class="stat" style="padding:14px;"><div class="stat-icon">🏁</div><div class="sval" style="color:var(--blue);">${completados}</div><div class="slbl">Completados</div></div>
+      <div class="stat" style="padding:14px;"><div class="stat-icon">💵</div><div class="sval" style="color:var(--gold);">USD ${Math.round(totalRec).toLocaleString('es-AR')}</div><div class="slbl">Recaudado total</div></div>
+    </div></div>
+    <div style="background:rgba(74,222,128,.04);border:1px solid rgba(74,222,128,.15);border-radius:16px;padding:20px;">
+      <div style="background:rgba(74,222,128,.08);border:1px solid rgba(74,222,128,.2);border-radius:12px;padding:14px;margin-bottom:14px;">
+        <div style="font-size:.65rem;color:rgba(74,222,128,.7);">💰 Comisión total estimada (15%)</div>
+        <div style="font-family:Syne,sans-serif;font-size:1.5rem;font-weight:800;color:#4ade80;">USD ${Math.round(comEst).toLocaleString('es-AR')}</div>
+      </div>
+      <div style="background:rgba(74,222,128,.08);border:1px solid rgba(74,222,128,.2);border-radius:12px;padding:14px;margin-bottom:14px;">
+        <div style="font-size:.65rem;color:rgba(74,222,128,.7);">🏦 CBU / Alias bancario</div>
+        <div style="font-family:monospace;font-size:.9rem;font-weight:700;color:#4ade80;">${esc(cbu)}</div>
+      </div>
+    </div>
+    <div style="margin-top:20px;">
+      <div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--gold);margin-bottom:12px;">📎 Comprobantes de comisiones</div>
+      <div style="max-height:200px;overflow-y:auto;">${compsHtml}</div>
+    </div>
+  `;
+  document.getElementById('legajoContent').innerHTML = html;
+}
+window.verCompJefe = function(idx) {
+  var yo = window._gerenteProfile;
+  var comps = [];
+  if (yo.comprobantes_json) { try { comps = JSON.parse(yo.comprobantes_json); } catch(e) {} }
+  var comp = comps[idx];
+  if (!comp || !comp.data) return;
+  var w = window.open('', '_blank');
+  w.document.open(); w.document.close();
+  if (comp.tipo && comp.tipo.indexOf('image') === 0) {
+    var img = w.document.createElement('img');
+    img.src = comp.data;
+    img.style.cssText = 'max-width:100%;margin:auto;display:block;';
+    w.document.body.appendChild(img);
+  } else {
+    var fr = w.document.createElement('iframe');
+    fr.src = comp.data;
+    fr.style.cssText = 'width:100%;height:100vh;border:0;';
+    w.document.body.appendChild(fr);
+  }
+};
 </script>
 </body>
 </html>
