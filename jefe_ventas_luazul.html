@@ -814,7 +814,7 @@ function gLogin() {
   sbClient.auth.signInWithPassword({ email: emailToUse, password: pass })
     .then(function(res) {
       if (res.error || !res.data || !res.data.user) throw new Error(res.error ? res.error.message : 'Sin respuesta del servidor');
-      return sbClient.from('staff_profiles_view').select('id,user_id,role_id,role_name,nombre,region_id,region_name').eq('user_id', res.data.user.id).single();
+      return sbClient.from('staff_profiles').select('*').eq('user_id', res.data.user.id).single();
     })
     .then(function(p) {
       if (p.error || !p.data) throw new Error('Perfil de gerente no encontrado. Contactá al administrador.');
@@ -837,7 +837,7 @@ async function refrescarPerfilYComisiones() {
   showToast('⏳ Actualizando datos...');
   try {
     var res = await sbClient
-      .from('staff_profiles_view')
+      .from('staff_profiles')
       .select('*')
       .eq('user_id', window._gerenteProfile.user_id)
       .single();
@@ -1011,10 +1011,10 @@ function initApp() {
       .then(function(res) {
         var session = res.data && res.data.session ? res.data.session : null;
         if (!session || !session.user) return Promise.resolve();
-        return sbClient.from('staff_profiles_view')
-          .select('id,user_id,role_id,role_name,nombre,region_id,region_name').eq('user_id', session.user.id).single()
+        return sbClient.from('staff_profiles')
+          .select('*').eq('user_id', session.user.id).single()
           .then(function(p) {
-            if (p.data && String(p.data.role_id) === '2') {
+            if (p.data && String(p.data.role_id) === '5') {
               window._gerenteProfile = p.data;
             } else {
               window._gerenteProfile = null;
