@@ -1940,7 +1940,7 @@ function renderOverview() {
 
   // Top asesores
   var vdata = vs.map(function(v) {
-    var vc = cs.filter(function(c) { return String(c.seller_id) === String(v.user_id); });
+    var vc = cs.filter(function(c) { return String(c.seller_id) === String(v.id); });
     var rec = vc.reduce(function(s,c) { return s + (parseInt(c.cuotas_pagadas) || 0) * (parseFloat(c.monto_cuota) || 0); }, 0);
     var r = rby(v.region_id);
     return { v: v, n: vc.length, rec: rec, r: r };
@@ -2176,7 +2176,7 @@ function openRegionDetail(rid) {
   var vendRows = '';
   for (var i = 0; i < vs.length; i++) {
     var v = vs[i];
-    var vc = cs.filter(function(c) { return String(c.seller_id) === String(v.user_id); });
+    var vc = cs.filter(function(c) { return String(c.seller_id) === String(v.id); });
     var vrec = vc.reduce(function(s,c) { return s + (parseInt(c.cuotas_pagadas) || 0) * (parseFloat(c.monto_cuota) || 0); }, 0);
     var ini = v.nombre.split(' ').map(function(w) { return w[0]; }).join('').slice(0,2).toUpperCase();
     vendRows += '<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);">'
@@ -2701,7 +2701,7 @@ function saveEditGerente(gid) {
       return;
     }
     var v = vby(vid);
-    var cs = (_cacheClientes || []).map(enrich).filter(function(c) { return String(c.seller_id) === String(vid); });
+    var cs = (_cacheClientes || []).map(enrich).filter(function(c) { return String(c.seller_id) === String(v.id); });
     var r = rby(v.region_id);
     var cm = calcComision(v, cs);
     var ini = v.nombre.split(' ').map(function(w) { return w[0]; }).join('').slice(0, 2).toUpperCase();
@@ -3195,7 +3195,7 @@ function saveEditGerente(gid) {
   var v = vby(vid);
   var r = rby(v.region_id);
   
-  var cs = (_cacheClientes || []).filter(function(c) { return String(c.seller_id) === String(vid); });
+  var cs = (_cacheClientes || []).filter(function(c) { return String(c.seller_id) === String(v.id); });
   var totalRec = cs.reduce(function(s, c) { return s + (parseInt(c.cuotas_pagadas) || 0) * (parseFloat(c.monto_cuota) || 0); }, 0);
   var activos = cs.filter(function(c) { return c.estado === 'activo'; }).length;
   var atraso = cs.filter(function(c) { return c.estado === 'atraso'; }).length;
@@ -3405,7 +3405,7 @@ function verDetalleStaff(staffId) {
 
   function _filaAsesor(v) {
     var r = rby(v.region_id);
-    var vc = (_cacheClientes || []).filter(function(c) { return String(c.seller_id) === String(v.user_id); });
+    var vc = (_cacheClientes || []).filter(function(c) { return String(c.seller_id) === String(v.id); });
     var rec = vc.reduce(function(s, c) { return s + (parseInt(c.cuotas_pagadas) || 0) * (parseFloat(c.monto_cuota) || 0); }, 0);
     return {
       'ID': v.id || '',
@@ -3644,27 +3644,8 @@ function verDetalleStaff(staffId) {
       return;
     }
     function calcularNeta(v) {
-      var vc = cs.filter(function(c) { return String(c.seller_id) === String(v.user_id); });
-      var byMonth = {};
-      vc.forEach(function(c) {
-        if (c.estado === 'baja' && (parseInt(c.cuotas_pagadas) || 0) === 0) return;
-        var d = c.fechaAlta ? new Date(c.fechaAlta + 'T00:00:00') : new Date();
-        var key = d.getFullYear() + '-' + d.getMonth();
-        if (!byMonth[key]) byMonth[key] = [];
-        byMonth[key].push(c);
-      });
-      var totalBruta = 0, totalPen = 0;
-      Object.keys(byMonth).forEach(function(key) {
-        var grupo = byMonth[key];
-        var activos = grupo.filter(function(c) { return c.estado !== 'baja'; });
-        var bajasP3 = grupo.filter(function(c) { return c.estado === 'baja' && (parseInt(c.cuotas_pagadas) || 0) <= 3; });
-        var tasa = grupo.length >= 3 ? 0.80 : 0.50;
-        var bruta = activos.reduce(function(s, c) { return s + (parseFloat(c.monto_cuota) || 0) * tasa; }, 0);
-        var pen = bajasP3.reduce(function(s, c) { return s + (parseFloat(c.monto_cuota) || 0) * tasa; }, 0);
-        totalBruta += bruta;
-        totalPen += pen;
-      });
-      return Math.round((totalBruta - totalPen) * 100) / 100;
+      var cm = calcComision(v, cs);
+      return cm.neta;
     }
     var rows = '';
     for (var i = 0; i < vs.length; i++) {
@@ -4501,7 +4482,7 @@ function verDetalleStaff(staffId) {
   }
 
   function calcComision(v, allClients) {
-    var vc = allClients.filter(function(c) { return String(c.seller_id) === String(v.user_id); });
+    var vc = allClients.filter(function(c) { return String(c.seller_id) === String(v.id); });
     var now = new Date();
     var curKey = now.getFullYear() + '-' + now.getMonth();
     var byMonth = {};
