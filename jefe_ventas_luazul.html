@@ -686,7 +686,7 @@ function getClientMonth(c) {
 }
 
 function calcComision(v, allClients) {
-  var vc = allClients.filter(function(c) { return String(c.vid) === String(v.user_id); });
+  var vc = allClients.filter(function(c) { return String(c.vid) === String(v.id); });
   var now = new Date();
   var curKey = now.getFullYear() + '-' + now.getMonth();
   var byMonth = {};
@@ -1183,10 +1183,10 @@ function renderVendors() {
   var cs = ((_memCache[DB_KEY] || []) || []).map(enrich);
   var ns = (_memCache[NK] || []) || [];
   document.getElementById('vGrid').innerHTML = vs.map(function(v) {
-    var vc = cs.filter(function(c) { return String(c.vid) === String(v.user_id); });
+    var vc = cs.filter(function(c) { return String(c.vid) === String(v.id); });
     var rec = vc.reduce(function(s, c) { return s + (parseInt(c.cuotas_pagadas) || 0) * (parseFloat(c.monto_cuota) || 0); }, 0);
     var at = vc.filter(function(c) { return c.estado === 'atraso'; }).length;
-    var al = ns.filter(function(n) { return n.vid === v.user_id && !n.leida; }).length;
+    var al = ns.filter(function(n) { return String(n.vid) === String(v.id) && !n.leida; }).length;
     var cm = calcComision(v, csRamal);
     var ini = v.nombre.split(' ').map(function(w) { return w[0]; }).join('').slice(0, 2).toUpperCase();
     return '<div class="vcard" onclick="openVendorDetail(\'' + v.user_id + '\')">'
@@ -1610,7 +1610,7 @@ function openReasignarCobro(clientId) {
   var vs = _memCache[VK] || [];
   var currentSeller = vby(c.vid);
   var options = vs.map(function(v) {
-    return '<option value="' + v.user_id + '"' + (String(v.user_id) === String(c.vid) ? ' selected' : '') + '>' + esc(v.nombre) + '</option>';
+    return '<option value="' + v.id + '"' + (String(v.id) === String(c.vid) ? ' selected' : '') + '>' + esc(v.nombre) + '</option>';
   }).join('');
   document.getElementById('mbox').innerHTML =
     '<div class="mhead"><div><h2>🔄 Re-asignar Cobro</h2><p>Cliente: ' + esc(c.nombre) + '</p></div>'
@@ -1725,7 +1725,7 @@ function openClientDetail(id) {
   var vOptions = '<option value="">Sin asesor</option>';
   for (var i = 0; i < vs.length; i++) {
     var vv = vs[i];
-    vOptions += '<option value="' + vv.user_id + '"' + (String(vv.user_id) === String(c.vid) ? ' selected' : '') + '>' + esc(vv.nombre) + '</option>';
+    vOptions += '<option value="' + vv.id + '"' + (String(vv.id) === String(c.vid) ? ' selected' : '') + '>' + esc(vv.nombre) + '</option>';
   }
 
   // Opciones para estado
@@ -2522,7 +2522,7 @@ function renderEquipoDash() {
   var completos = cs.filter(function(c) { return c.estado === 'completo'; }).length;
   var bajas = cs.filter(function(c) { return c.estado === 'baja'; }).length;
   var vData = vs.map(function(v) {
-    var vc = cs.filter(function(c) { return String(c.vid) === String(v.user_id); });
+    var vc = cs.filter(function(c) { return String(c.vid) === String(v.id); });
     var rec = vc.reduce(function(s, c) { return s + (parseInt(c.cuotas_pagadas) || 0) * (parseFloat(c.monto_cuota) || 0); }, 0);
     var cm = calcComision(v, cs);
     var atV = vc.filter(function(c) { return c.estado === 'atraso' || c.estado === 'atraso_gestion'; }).length;
