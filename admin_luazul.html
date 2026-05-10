@@ -3528,7 +3528,7 @@ body{background:#f0f4fa;font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif
           });
         }
         const uuid = generarUUID();
-        const fileName = `presupuestos/presupuesto_${uuid}.pdf`;
+        const fileName = `presupuesto_${uuid}.pdf`;
         const { error: uploadErr } = await sbClient.storage.from('presupuestos').upload(fileName, pdfBlob, { contentType: 'application/pdf' });
         if (uploadErr) throw uploadErr;
         const { data: urlData } = sbClient.storage.from('presupuestos').getPublicUrl(fileName);
