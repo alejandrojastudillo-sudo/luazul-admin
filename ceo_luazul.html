@@ -2427,6 +2427,12 @@ function openGerDetail(gid) {
       }).join('')
     : '<div style="text-align:center;padding:16px;color:var(--muted);font-size:.8rem;">Sin comprobantes cargados</div>';
 
+  // ── Cálculo de comisiones del gerente ──
+  var cmG = calcComisionGerente(g, _cacheClientes || [], _cacheVendedores || []);
+  var totalPagadoG = comps.reduce(function(s, x) { return s + (parseFloat(x.monto) || 0); }, 0);
+  var pendienteG = Math.max(0, cmG.neta - totalPagadoG);
+  var pctPagadoG = Math.min(100, (totalPagadoG / (cmG.neta || 1)) * 100);
+
   var modalHtml = '<div class="mhead"><div><h2>👔 ' + g.nombre + '</h2>'
     + '<p>' + r.bandera + ' ' + r.nombre + ' · ' + (g.ciudad || '') + '</p></div>'
     + '<button class="mclose" onclick="closeModal()">✕</button></div>'
@@ -2441,6 +2447,23 @@ function openGerDetail(gid) {
     + '<div style="font-size:.65rem;color:#fbbf24;font-weight:700;margin-bottom:4px;">💰 CBU / ALIAS BANCARIO</div>'
     + '<div style="font-family:monospace;font-size:.88rem;color:var(--text);">' + (g.cbu || '<span style="color:var(--muted);">No cargado</span>') + '</div></div>'
     + '</div>'
+    // ── Resumen de comisiones ──
+    + '<div style="background:rgba(34,197,94,.06);border:1px solid rgba(34,197,94,.15);border-radius:12px;padding:14px;margin-bottom:16px;">'
+    + '<div style="font-size:.72rem;font-weight:700;color:var(--green);margin-bottom:10px;">💰 Resumen de Comisiones</div>'
+    + '<div class="kpi-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:10px;">'
+    + '<div class="kpi"><span>📊</span><div class="kpi-v" style="color:var(--gold);">' + cmG.tasaBase + '%</div><div class="kpi-l">Base</div></div>'
+    + '<div class="kpi"><span>⭐</span><div class="kpi-v" style="color:#a78bfa;">' + cmG.tasaBonus + '%</div><div class="kpi-l">Bonus</div></div>'
+    + '<div class="kpi"><span>👥</span><div class="kpi-v">' + cmG.totalClientes + '</div><div class="kpi-l">Clientes</div></div>'
+    + '<div class="kpi"><span>🧑‍💼</span><div class="kpi-v">' + cmG.totalVendedores + '</div><div class="kpi-l">Vendedores</div></div>'
+    + '</div>'
+    + '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">'
+    + '<div style="text-align:center;"><div style="font-size:.6rem;color:var(--muted);">Comisión neta</div><div style="font-family:Syne,sans-serif;font-size:1.1rem;font-weight:800;color:var(--green);">USD ' + cmG.neta.toFixed(2) + '</div></div>'
+    + '<div style="text-align:center;"><div style="font-size:.6rem;color:var(--muted);">Pagado</div><div style="font-family:Syne,sans-serif;font-size:1.1rem;font-weight:800;color:var(--gold);">USD ' + totalPagadoG.toFixed(2) + '</div></div>'
+    + '<div style="text-align:center;"><div style="font-size:.6rem;color:var(--muted);">Pendiente</div><div style="font-family:Syne,sans-serif;font-size:1.1rem;font-weight:800;color:var(--red);">USD ' + pendienteG.toFixed(2) + '</div></div>'
+    + '</div>'
+    + '<div style="margin-top:10px;"><div class="progress-track"><div class="progress-fill" style="width:' + pctPagadoG + '%;background:var(--green);"></div></div></div>'
+    + '</div>'
+    // ── Fin resumen comisiones ──
     + '<div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--gold);margin-bottom:8px;">📎 Comprobantes de Comisión</div>'
     + '<div id="gerCompsWrap" style="max-height:180px;overflow-y:auto;margin-bottom:12px;">' + compsHTML + '</div>'
     + '<div style="background:rgba(255,255,255,.03);border:1px dashed rgba(255,255,255,.15);border-radius:10px;padding:14px;">'
@@ -3200,6 +3223,10 @@ function saveEditGerente(gid) {
   var activos = cs.filter(function(c) { return c.estado === 'activo'; }).length;
   var atraso = cs.filter(function(c) { return c.estado === 'atraso'; }).length;
   var completos = cs.filter(function(c) { return c.estado === 'completo'; }).length;
+  var cmV = calcComision(v, cs);
+  var totalPagadoV = (v.comprobantes || []).reduce(function(s, x) { return s + (parseFloat(x.monto) || 0); }, 0);
+  var pendienteV = Math.max(0, cmV.neta - totalPagadoV);
+  var pctPagadoV = Math.min(100, (totalPagadoV / (cmV.neta || 1)) * 100);
   
   var modalHtml = '<div class="mhead"><div><h2>🧑‍💼 Perfil de Asesor</h2>'
     + '<p>' + v.nombre + ' · ' + v.email + '</p></div>'
@@ -3219,10 +3246,19 @@ function saveEditGerente(gid) {
     + '<div class="kpi"><span>⚠️</span><div class="kpi-v" style="color:var(--red);">' + atraso + '</div><div class="kpi-l">En atraso</div></div>'
     + '<div class="kpi"><span>🏁</span><div class="kpi-v" style="color:var(--blue);">' + completos + '</div><div class="kpi-l">Completos</div></div>'
     + '</div>'
-    + '<div style="background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.2);border-radius:10px;padding:12px;">'
-    + '<div style="font-size:.75rem;color:var(--muted);">💰 Comisión total neta</div>'
-    + '<div style="font-family:Syne,sans-serif;font-size:1.6rem;font-weight:800;color:var(--green);">' + fmtUSD(totalRec * 0.2) + '</div>'
-    + '<div style="font-size:.65rem;color:var(--muted);">Estimado 20% sobre recaudación total de clientes</div>'
+    + '<div style="background:rgba(34,197,94,.06);border:1px solid rgba(34,197,94,.15);border-radius:12px;padding:14px;margin-bottom:12px;">'
+    + '<div style="font-size:.72rem;font-weight:700;color:var(--green);margin-bottom:10px;">💰 Resumen de Comisiones</div>'
+    + '<div class="kpi-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:10px;">'
+    + '<div class="kpi"><span>📊</span><div class="kpi-v" style="color:var(--gold);">' + cmV.tasaActual + '%</div><div class="kpi-l">Tasa</div></div>'
+    + '<div class="kpi"><span>🗓️</span><div class="kpi-v">' + cmV.ventasMes + '</div><div class="kpi-l">Ventas mes</div></div>'
+    + '<div class="kpi"><span>💵</span><div class="kpi-v" style="color:var(--gold);">' + fmtUSD(cmV.ingresoMes) + '</div><div class="kpi-l">Ingreso mes</div></div>'
+    + '</div>'
+    + '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">'
+    + '<div style="text-align:center;"><div style="font-size:.6rem;color:var(--muted);">Comisión neta</div><div style="font-family:Syne,sans-serif;font-size:1.1rem;font-weight:800;color:var(--green);">' + fmtUSD(cmV.neta) + '</div></div>'
+    + '<div style="text-align:center;"><div style="font-size:.6rem;color:var(--muted);">Pagado</div><div style="font-family:Syne,sans-serif;font-size:1.1rem;font-weight:800;color:var(--gold);">' + fmtUSD(totalPagadoV) + '</div></div>'
+    + '<div style="text-align:center;"><div style="font-size:.6rem;color:var(--muted);">Pendiente</div><div style="font-family:Syne,sans-serif;font-size:1.1rem;font-weight:800;color:var(--red);">' + fmtUSD(pendienteV) + '</div></div>'
+    + '</div>'
+    + '<div style="margin-top:10px;"><div class="progress-track"><div class="progress-fill" style="width:' + pctPagadoV + '%;background:var(--green);"></div></div></div>'
     + '</div>'
     + '</div>'
     + '<div class="mact"><button class="mbtn ghost" onclick="closeModal()">Cerrar</button></div>';
@@ -3636,67 +3672,135 @@ function verDetalleStaff(staffId) {
   }
   function renderPagoComisiones() {
     var vs = _cacheVendedores || [];
+    var gs = _cacheGerentes || [];
+    var js = _cacheSalesLeaders || [];
     var cs = _cacheClientes || [];
     var container = document.getElementById('pagoComisionesList');
     if (!container) return;
-    if (!vs.length) {
-      container.innerHTML = '<div style="padding:40px;text-align:center;">No hay asesores cargados.</div>';
+    if (!vs.length && !gs.length && !js.length) {
+      container.innerHTML = '<div style="padding:40px;text-align:center;">No hay staff cargado.</div>';
       return;
     }
-    function calcularNeta(v) {
-      var cm = calcComision(v, cs);
-      return cm.neta;
-    }
     var rows = '';
-    for (var i = 0; i < vs.length; i++) {
-      var v = vs[i];
-      var neta = calcularNeta(v);
-      var pagado = 0;
-      if (v.comprobantes && v.comprobantes.length) {
-        pagado = v.comprobantes.reduce(function(s, c) { return s + (parseFloat(c.monto) || 0); }, 0);
+    // ── GERENTES ──
+    if (gs.length) {
+      rows += '<div style="margin-bottom:8px;font-size:.78rem;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:1px;">👔 Gerentes</div>';
+      for (var i = 0; i < gs.length; i++) {
+        var g = gs[i];
+        var cm = calcComisionGerente(g, cs, vs);
+        var neta = cm.neta;
+        var pagado = 0;
+        if (g.comprobantes && g.comprobantes.length) {
+          pagado = g.comprobantes.reduce(function(s, c) { return s + (parseFloat(c.monto) || 0); }, 0);
+        }
+        var pendiente = Math.max(0, neta - pagado);
+        var pct = Math.min(100, (pagado / (neta || 1)) * 100);
+        var r = rby(g.region_id);
+        rows += '<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:12px;">' +
+          '<div style="display:flex;justify-content:space-between;"><div><strong>👔 ' + esc(g.nombre) + '</strong><br><span style="font-size:.7rem;">' + esc(g.email || '') + ' · ' + r.bandera + ' ' + r.nombre + '</span></div>' +
+          '<div style="text-align:right;"><span style="color:var(--gold);">Comisión neta: USD ' + neta.toFixed(2) + '</span><br>' +
+          '<span style="font-size:.68rem;color:var(--muted);">Base ' + cm.tasaBase + '%: USD ' + cm.base.toFixed(2) + ' · Bonus ' + cm.tasaBonus + '%: USD ' + cm.bonus.toFixed(2) + '</span><br>' +
+          '<span style="color:var(--green);">Pagado: USD ' + pagado.toFixed(2) + '</span></div></div>' +
+          '<div style="margin:12px 0;"><div class="progress-track"><div class="progress-fill" style="width:' + pct + '%;background:var(--green);"></div></div></div>' +
+          '<div><button onclick="mostrarModalPagoStaff(\'' + g.user_id + '\',' + pendiente.toFixed(2) + ',\'gerente\')" class="mbtn gold" style="margin-top:4px;">💰 Pagar comisión</button>&nbsp;' +
+          '<button onclick="verComprobantesStaff(\'' + g.user_id + '\',\'gerente\')" class="mbtn ghost">📎 Historial</button></div></div>';
       }
-      var pendiente = Math.max(0, neta - pagado);
-      rows += '<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:12px;">' +
-        '<div style="display:flex;justify-content:space-between;"><div><strong>' + esc(v.nombre) + '</strong><br><span style="font-size:.7rem;">' + esc(v.email || '') + '</span></div>' +
-        '<div><span style="color:var(--gold);">Comisión neta: USD ' + neta.toFixed(2) + '</span><br><span style="color:var(--green);">Pagado: USD ' + pagado.toFixed(2) + '</span></div></div>' +
-        '<div style="margin:12px 0;"><div class="progress-track"><div class="progress-fill" style="width:' + Math.min(100, (pagado / (neta || 1)) * 100) + '%;background:var(--green);"></div></div></div>' +
-        '<div><button onclick="mostrarModalPagoComision(\'' + v.user_id + '\',' + pendiente.toFixed(2) + ')" class="mbtn gold" style="margin-top:4px;">💰 Pagar comisión</button>&nbsp;' +
-        '<button onclick="verComprobantesVendedor(\'' + v.user_id + '\')" class="mbtn ghost">📎 Historial</button></div></div>';
+    }
+    // ── JEFES DE VENTAS ──
+    if (js.length) {
+      rows += '<div style="margin:16px 0 8px;font-size:.78rem;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:1px;">🎯 Jefes de Ventas</div>';
+      for (var j = 0; j < js.length; j++) {
+        var jefe = js[j];
+        var cmJ = calcComisionJefe(jefe, cs, vs);
+        var netaJ = cmJ.neta;
+        var pagadoJ = 0;
+        if (jefe.comprobantes && jefe.comprobantes.length) {
+          pagadoJ = jefe.comprobantes.reduce(function(s, c) { return s + (parseFloat(c.monto) || 0); }, 0);
+        }
+        var pendienteJ = Math.max(0, netaJ - pagadoJ);
+        var pctJ = Math.min(100, (pagadoJ / (netaJ || 1)) * 100);
+        var rJ = rby(jefe.region_id);
+        rows += '<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:12px;">' +
+          '<div style="display:flex;justify-content:space-between;"><div><strong>🎯 ' + esc(jefe.nombre) + '</strong><br><span style="font-size:.7rem;">' + esc(jefe.email || '') + ' · ' + rJ.bandera + ' ' + rJ.nombre + ' · Equipo: ' + cmJ.equipoSize + ' vendedores</span></div>' +
+          '<div style="text-align:right;"><span style="color:var(--gold);">Comisión neta: USD ' + netaJ.toFixed(2) + '</span><br>' +
+          '<span style="font-size:.68rem;color:var(--muted);">Tasa 15% · ' + cmJ.totalClientesEquipo + ' clientes · Recaudado: USD ' + cmJ.totalRecaudado.toFixed(2) + '</span><br>' +
+          '<span style="color:var(--green);">Pagado: USD ' + pagadoJ.toFixed(2) + '</span></div></div>' +
+          '<div style="margin:12px 0;"><div class="progress-track"><div class="progress-fill" style="width:' + pctJ + '%;background:var(--green);"></div></div></div>' +
+          '<div><button onclick="mostrarModalPagoStaff(\'' + jefe.user_id + '\',' + pendienteJ.toFixed(2) + ',\'jefe\')" class="mbtn gold" style="margin-top:4px;">💰 Pagar comisión</button>&nbsp;' +
+          '<button onclick="verComprobantesStaff(\'' + jefe.user_id + '\',\'jefe\')" class="mbtn ghost">📎 Historial</button></div></div>';
+      }
+    }
+    // ── VENDEDORES / ASESORES ──
+    if (vs.length) {
+      rows += '<div style="margin:16px 0 8px;font-size:.78rem;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:1px;">🧑‍💼 Asesores / Vendedores</div>';
+      for (var k = 0; k < vs.length; k++) {
+        var v = vs[k];
+        var cmV = calcComision(v, cs);
+        var netaV = cmV.neta;
+        var pagadoV = 0;
+        if (v.comprobantes && v.comprobantes.length) {
+          pagadoV = v.comprobantes.reduce(function(s, c) { return s + (parseFloat(c.monto) || 0); }, 0);
+        }
+        var pendienteV = Math.max(0, netaV - pagadoV);
+        var pctV = Math.min(100, (pagadoV / (netaV || 1)) * 100);
+        var rV = rby(v.region_id);
+        rows += '<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:12px;">' +
+          '<div style="display:flex;justify-content:space-between;"><div><strong>🧑‍💼 ' + esc(v.nombre) + '</strong><br><span style="font-size:.7rem;">' + esc(v.email || '') + ' · ' + rV.bandera + ' ' + rV.nombre + '</span></div>' +
+          '<div style="text-align:right;"><span style="color:var(--gold);">Comisión neta: USD ' + netaV.toFixed(2) + '</span><br>' +
+          '<span style="font-size:.68rem;color:var(--muted);">Tasa ' + cmV.tasaActual + '% · Ventas mes: ' + cmV.ventasMes + '</span><br>' +
+          '<span style="color:var(--green);">Pagado: USD ' + pagadoV.toFixed(2) + '</span></div></div>' +
+          '<div style="margin:12px 0;"><div class="progress-track"><div class="progress-fill" style="width:' + pctV + '%;background:var(--green);"></div></div></div>' +
+          '<div><button onclick="mostrarModalPagoStaff(\'' + v.user_id + '\',' + pendienteV.toFixed(2) + ',\'vendedor\')" class="mbtn gold" style="margin-top:4px;">💰 Pagar comisión</button>&nbsp;' +
+          '<button onclick="verComprobantesStaff(\'' + v.user_id + '\',\'vendedor\')" class="mbtn ghost">📎 Historial</button></div></div>';
+      }
     }
     container.innerHTML = rows;
   }
 
   function mostrarModalPagoComision(vendorUid, montoMax) {
-    var v = null;
-    for (var i = 0; i < _cacheVendedores.length; i++) {
-      if (String(_cacheVendedores[i].user_id) === String(vendorUid)) { v = _cacheVendedores[i]; break; }
-    }
-    if (!v) return;
-    var html = '<div class="mhead"><div><h2>💰 Pagar Comisión a ' + esc(v.nombre) + '</h2></div><button class="mclose" onclick="closeModal()">✕</button></div>' +
+    mostrarModalPagoStaff(vendorUid, montoMax, 'vendedor');
+  }
+
+  // ── Modal unificado para pagar comisiones a cualquier rol ──
+  function mostrarModalPagoStaff(staffUid, montoMax, rolTipo) {
+    var staff = findStaffByUid(staffUid);
+    if (!staff) return;
+    var rolLabel = rolTipo === 'gerente' ? '👔 Gerente' : rolTipo === 'jefe' ? '🎯 Jefe de Ventas' : '🧑‍💼 Asesor';
+    var html = '<div class="mhead"><div><h2>💰 Pagar Comisión a ' + esc(staff.nombre) + '</h2><p style="font-size:.78rem;color:var(--muted);">' + rolLabel + '</p></div><button class="mclose" onclick="closeModal()">✕</button></div>' +
       '<div class="mbody">' +
       '<div class="manager-input-group"><label>Monto a pagar (USD)</label><input id="montoComision" type="number" step="1" max="' + montoMax + '" value="' + montoMax + '" /></div>' +
       '<div class="manager-input-group"><label>Descripción</label><input id="descComision" placeholder="Ej: Comisión Marzo 2026" /></div>' +
       '<div class="manager-input-group"><label>Comprobante (archivo)</label><input id="fileComision" type="file" accept="image/*,application/pdf" /></div>' +
-      '</div><div class="mact"><button class="mbtn gold" onclick="procesarPagoComision(\'' + vendorUid + '\')">✅ Registrar Pago</button><button class="mbtn ghost" onclick="closeModal()">Cancelar</button></div>';
+      '</div><div class="mact"><button class="mbtn gold" onclick="procesarPagoComision(\'' + staffUid + '\')">✅ Registrar Pago</button><button class="mbtn ghost" onclick="closeModal()">Cancelar</button></div>';
     document.getElementById('mbox').innerHTML = html;
     document.getElementById('modal').classList.add('open');
   }
 
-  function procesarPagoComision(vendorUid) {
+  // ── Buscar staff por user_id en cualquiera de los 3 caches ──
+  function findStaffByUid(uid) {
+    var caches = [_cacheGerentes, _cacheSalesLeaders, _cacheVendedores];
+    for (var ci = 0; ci < caches.length; ci++) {
+      var cache = caches[ci];
+      if (!cache) continue;
+      for (var i = 0; i < cache.length; i++) {
+        if (String(cache[i].user_id) === String(uid)) return cache[i];
+      }
+    }
+    return null;
+  }
+
+  function procesarPagoComision(staffUid) {
     var monto = parseFloat(document.getElementById('montoComision').value);
     var desc = document.getElementById('descComision').value.trim();
     var fileInput = document.getElementById('fileComision');
     if (!desc) { showToast('⚠️ Ingresá una descripción'); return; }
     if (!monto || monto <= 0) { showToast('⚠️ Ingresá un monto válido'); return; }
-    var v = null;
-    for (var i = 0; i < _cacheVendedores.length; i++) {
-      if (String(_cacheVendedores[i].user_id) === String(vendorUid)) { v = _cacheVendedores[i]; break; }
-    }
-    if (!v) return;
+    var staff = findStaffByUid(staffUid);
+    if (!staff) { showToast('⚠️ Staff no encontrado'); return; }
     function guardar(dataURL, tipo) {
-      var comprobantes = v.comprobantes || [];
+      var comprobantes = staff.comprobantes || [];
       comprobantes.push({ nombre: desc, monto: monto, fecha: new Date().toLocaleDateString('es-AR'), data: dataURL, tipo: tipo });
-      sbClient.from('staff_profiles').update({ comprobantes_json: JSON.stringify(comprobantes) }).eq('user_id', vendorUid)
+      sbClient.from('staff_profiles').update({ comprobantes_json: JSON.stringify(comprobantes) }).eq('user_id', staffUid)
         .then(function(res) {
           if (res.error) throw res.error;
           showToast('✅ Comisión registrada');
@@ -3715,17 +3819,20 @@ function verDetalleStaff(staffId) {
   }
 
   function verComprobantesVendedor(vendorUid) {
-    var v = null;
-    for (var i = 0; i < _cacheVendedores.length; i++) {
-      if (String(_cacheVendedores[i].user_id) === String(vendorUid)) { v = _cacheVendedores[i]; break; }
-    }
-    if (!v || !v.comprobantes || !v.comprobantes.length) { showToast('No hay comprobantes'); return; }
-    var html = '<div class="mhead"><div><h2>📎 Historial - ' + esc(v.nombre) + '</h2></div><button class="mclose" onclick="closeModal()">✕</button></div><div class="mbody">';
-    v.comprobantes.slice().reverse().forEach(function(c, idx) {
-      var realIdx = v.comprobantes.length - 1 - idx;
+    verComprobantesStaff(vendorUid, 'vendedor');
+  }
+
+  // ── Historial unificado para cualquier rol ──
+  function verComprobantesStaff(staffUid, rolTipo) {
+    var staff = findStaffByUid(staffUid);
+    if (!staff || !staff.comprobantes || !staff.comprobantes.length) { showToast('No hay comprobantes'); return; }
+    var rolLabel = rolTipo === 'gerente' ? '👔 Gerente' : rolTipo === 'jefe' ? '🎯 Jefe de Ventas' : '🧑‍💼 Asesor';
+    var html = '<div class="mhead"><div><h2>📎 Historial - ' + esc(staff.nombre) + '</h2><p style="font-size:.78rem;color:var(--muted);">' + rolLabel + '</p></div><button class="mclose" onclick="closeModal()">✕</button></div><div class="mbody">';
+    staff.comprobantes.slice().reverse().forEach(function(c, idx) {
+      var realIdx = staff.comprobantes.length - 1 - idx;
       html += '<div style="border-bottom:1px solid var(--border);padding:8px 0;display:flex;justify-content:space-between;">' +
         '<div><strong>' + esc(c.nombre) + '</strong><br><span style="font-size:.7rem;">' + c.fecha + '</span></div>' +
-        '<div><span style="color:var(--green);">USD ' + (parseFloat(c.monto) || 0) + '</span> <button onclick="verComprobanteVend(\'' + vendorUid + '\',' + realIdx + ')" class="mbtn ghost" style="padding:3px 8px;">Ver</button></div></div>';
+        '<div><span style="color:var(--green);">USD ' + (parseFloat(c.monto) || 0) + '</span> <button onclick="verComprobanteStaff(\'' + staffUid + '\',' + realIdx + ')" class="mbtn ghost" style="padding:3px 8px;">Ver</button></div></div>';
     });
     html += '</div><div class="mact"><button class="mbtn ghost" onclick="closeModal()">Cerrar</button></div>';
     document.getElementById('mbox').innerHTML = html;
@@ -3733,12 +3840,14 @@ function verDetalleStaff(staffId) {
   }
 
   function verComprobanteVend(vendorUid, idx) {
-    var v = null;
-    for (var i = 0; i < _cacheVendedores.length; i++) {
-      if (String(_cacheVendedores[i].user_id) === String(vendorUid)) { v = _cacheVendedores[i]; break; }
-    }
-    if (v && v.comprobantes && v.comprobantes[idx]) {
-      var comp = v.comprobantes[idx];
+    verComprobanteStaff(vendorUid, idx);
+  }
+
+  // ── Ver comprobante unificado para cualquier rol ──
+  function verComprobanteStaff(staffUid, idx) {
+    var staff = findStaffByUid(staffUid);
+    if (staff && staff.comprobantes && staff.comprobantes[idx]) {
+      var comp = staff.comprobantes[idx];
       var w = window.open('', '_blank');
       w.document.open(); w.document.close();
       if (comp.tipo && comp.tipo.indexOf('image') === 0) {
@@ -4561,6 +4670,66 @@ function verDetalleStaff(staffId) {
     });
     return { bruta:Math.round(totalBruta*100)/100, penalizacion:Math.round(totalPen*100)/100, neta:Math.round(Math.max(0,totalBruta-totalPen)*100)/100, tasaActual:curTasa, ventasMes:curVentas, faltanBonus:faltan, ingresoMes:Math.round(ingresoMes*100)/100, comisionMes:comisionMes, pkgBreakdown:pkgBreakdown, meses:meses };
   }
+
+  // ── Comisión de Gerente (20% base + bonus com_pct sobre clientes con 2+ cuotas) ──
+  function calcComisionGerente(g, allClients, allVendedores) {
+    var gRegionId = String(g.region_id || '');
+    var gRegionIds = g.region_ids || [];
+    // Clientes de las regiones del gerente
+    var misClientes = allClients.filter(function(c) {
+      if (gRegionIds.length > 0) return gRegionIds.indexOf(parseInt(c.region_id, 10)) !== -1;
+      return String(c.region_id) === gRegionId;
+    });
+    var activos = misClientes.filter(function(c) { return c.estado !== 'baja'; });
+    var pctBase = 0.20;
+    var pctBonus = parseFloat(g.com_pct || 0) / 100;
+    var totalBase = activos.reduce(function(s, c) { return s + (parseFloat(c.monto_cuota) || 0) * pctBase; }, 0);
+    var totalBonus = 0;
+    if (pctBonus > 0) {
+      totalBonus = activos.filter(function(c) { return (parseInt(c.cuotas_pagadas) || 0) >= 2; })
+        .reduce(function(s, c) { return s + (parseFloat(c.monto_cuota) || 0) * pctBonus; }, 0);
+    }
+    var totalNeta = totalBase + totalBonus;
+    var vendedoresRegion = (allVendedores || []).filter(function(v) {
+      if (gRegionIds.length > 0) return gRegionIds.indexOf(parseInt(v.region_id, 10)) !== -1;
+      return String(v.region_id) === gRegionId;
+    });
+    var totalRecaudado = activos.reduce(function(s, c) { return s + (parseInt(c.cuotas_pagadas) || 0) * (parseFloat(c.monto_cuota) || 0); }, 0);
+    return {
+      base: Math.round(totalBase * 100) / 100,
+      bonus: Math.round(totalBonus * 100) / 100,
+      neta: Math.round(totalNeta * 100) / 100,
+      tasaBase: 20,
+      tasaBonus: parseFloat(g.com_pct || 0),
+      totalClientes: misClientes.length,
+      activos: activos.length,
+      totalVendedores: vendedoresRegion.length,
+      totalRecaudado: Math.round(totalRecaudado * 100) / 100
+    };
+  }
+
+  // ── Comisión de Jefe de Ventas (15% sobre recaudación de sus vendedores) ──
+  function calcComisionJefe(jefe, allClients, allVendedores) {
+    var misVendedores = (allVendedores || []).filter(function(v) {
+      return String(v.manager_id) === String(jefe.id);
+    });
+    var vendedoresIds = misVendedores.map(function(v) { return v.id; });
+    var clientesEquipo = allClients.filter(function(c) {
+      return vendedoresIds.indexOf(c.seller_id) !== -1;
+    });
+    var totalRecaudado = clientesEquipo.reduce(function(s, c) {
+      return s + (parseInt(c.cuotas_pagadas) || 0) * (parseFloat(c.monto_cuota) || 0);
+    }, 0);
+    var comisionNeta = totalRecaudado * 0.15;
+    return {
+      neta: Math.round(comisionNeta * 100) / 100,
+      tasaActual: 15,
+      equipoSize: misVendedores.length,
+      totalClientesEquipo: clientesEquipo.length,
+      totalRecaudado: Math.round(totalRecaudado * 100) / 100
+    };
+  }
+
   function getClientMonth(c) {
     if (c.fechaAlta) {
       var d = new Date(c.fechaAlta + 'T00:00:00');
@@ -5381,9 +5550,15 @@ for (var k = 0; k < allRs.length; k++) {
   window.saveNewClienteCeo = saveNewClienteCeo;
   window.renderPagoComisiones = renderPagoComisiones;
   window.mostrarModalPagoComision = mostrarModalPagoComision;
+  window.mostrarModalPagoStaff = mostrarModalPagoStaff;
+  window.findStaffByUid = findStaffByUid;
   window.procesarPagoComision = procesarPagoComision;
   window.verComprobantesVendedor = verComprobantesVendedor;
+  window.verComprobantesStaff = verComprobantesStaff;
   window.verComprobanteVend = verComprobanteVend;
+  window.verComprobanteStaff = verComprobanteStaff;
+  window.calcComisionGerente = calcComisionGerente;
+  window.calcComisionJefe = calcComisionJefe;
   window.approvePayment = approvePayment;
   window.aprobarTodos = aprobarTodos;
   window.escanearMora = escanearMora;
