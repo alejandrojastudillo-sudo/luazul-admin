@@ -512,6 +512,7 @@ function _sbLoad() { return loadClients(); }
       <div class="tab" onclick="showTab('passwords')" id="tab-passwords" style="color:#a78bfa;">🔑 Contraseñas</div>
       <div class="tab" onclick="showTab('tickets')" id="tab-tickets" style="color:#fbbf24;">🎫 Tickets</div>
       <div class="tab" onclick="showTab('comunicaciones'); renderComunicacionesGerente();" id="tab-comunicaciones" style="color:#67e8f9;">📩 Comunicaciones</div>
+      <div class="tab" onclick="showTab('prospectos_region')" id="tab-prospectos_region" style="color:#38bdf8;">📋 Prospectos de la región</div>
     </div>
     <!-- OVERVIEW -->
     <div class="tabpg active" id="tabpg-overview">
@@ -664,6 +665,26 @@ function _sbLoad() { return loadClients(); }
         <button onclick="renderComunicacionesGerente()" style="padding:8px 16px;border-radius:9px;background:rgba(103,232,249,.1);border:1px solid rgba(103,232,249,.25);color:#67e8f9;font-family:inherit;font-size:.78rem;font-weight:700;cursor:pointer;">🔄 Actualizar</button>
       </div>
       <div id="comunicacionesContainerGerente" style="min-height:300px;"></div>
+    </div>
+    <!-- PROSPECTOS DE LA REGIÓN -->
+    <div class="tabpg" id="tabpg-prospectos_region">
+      <div class="sec-head">
+        <h2>📋 Prospectos de la región</h2>
+        <div style="display:flex; gap:12px; flex-wrap:wrap;">
+          <select id="filtroVendedorPR" class="msel" onchange="cargarProspectosRegionGerente()" style="width:auto;">
+            <option value="">Todos los vendedores</option>
+          </select>
+          <select id="filtroEstadoPR" class="msel" onchange="cargarProspectosRegionGerente()" style="width:auto;">
+            <option value="todos">Todos los estados</option>
+            <option value="nuevo">🆕 Nuevo</option>
+            <option value="contactado">✅ Contactado</option>
+            <option value="cerrado">🎉 Cerrado</option>
+            <option value="perdido">❌ Perdido</option>
+          </select>
+          <div class="sbox" style="flex:1;"><span>🔍</span><input type="text" id="buscarPR" placeholder="Buscar por nombre, email..." oninput="cargarProspectosRegionGerente()"></div>
+        </div>
+      </div>
+      <div id="prospectosRegionList" class="twrap" style="padding:16px;">Cargando...</div>
     </div>
   </main>
 </div>
@@ -2694,6 +2715,7 @@ function showTab(id) {
   if (id === 'tickets') { cargarTicketsGerente(); }
   if (id === 'clients') { renderClients(); }
   if (id === 'salesleaders') { renderSalesLeaders(); }
+  if (id === 'prospectos_region') { poblarVendedoresRegion(); cargarProspectosRegionGerente(); }
 }
 
 // ── RECAUDACIÓN MENSUAL ─────────────────────────────────────
@@ -3892,6 +3914,158 @@ window.enviarRespuestaGerente      = enviarRespuestaGerente;
       if (btn) { btn.disabled = false; btn.textContent = originalText; }
     }
   }
+
+
+// ── PROSPECTOS DE LA REGIÓN (Gerente) ──────────────────────────────────
+async function poblarVendedoresRegion() {
+  var gerenteUserId = window._gerenteProfile ? window._gerenteProfile.user_id : null;
+  if (!gerenteUserId) return;
+  // Obtener regiones del gerente
+  var { data: gerReg } = await sbClient.from('gerente_regiones').select('region_id').eq('gerente_id', gerenteUserId);
+  var regionIds = (gerReg || []).map(function(r) { return r.region_id; });
+  if (!regionIds.length) {
+    var select = document.getElementById('filtroVendedorPR');
+    if (select) select.innerHTML = '<option value="">Sin vendedores</option>';
+    return;
+  }
+  // Obtener vendedores en esas regiones
+  var { data: vendedores } = await sbClient
+    .from('staff_profiles')
+    .select('id, nombre, apellido, region_id')
+    .in('region_id', regionIds)
+    .eq('role_id', ROLE_SELLER);
+  var select = document.getElementById('filtroVendedorPR');
+  if (!select) return;
+  select.innerHTML = '<option value="">Todos los vendedores</option>' +
+    (vendedores || []).map(function(v) { return '<option value="' + v.id + '">' + LZ.esc(v.nombre || '') + ' ' + LZ.esc(v.apellido || '') + '</option>'; }).join('');
+}
+
+async function cargarProspectosRegionGerente() {
+  var container = document.getElementById('prospectosRegionList');
+  if (!container) return;
+  container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted);">Cargando prospectos...</div>';
+  var gerenteUserId = window._gerenteProfile ? window._gerenteProfile.user_id : null;
+  if (!gerenteUserId) { container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted);">Sin sesión activa</div>'; return; }
+
+  var estado = (document.getElementById('filtroEstadoPR') || {}).value || 'todos';
+  var vendedorId = (document.getElementById('filtroVendedorPR') || {}).value || '';
+  var busqueda = ((document.getElementById('buscarPR') || {}).value || '').toLowerCase();
+
+  // Obtener regiones del gerente
+  var { data: gerReg } = await sbClient.from('gerente_regiones').select('region_id').eq('gerente_id', gerenteUserId);
+  var regionIds = (gerReg || []).map(function(r) { return r.region_id; });
+  if (!regionIds.length) {
+    container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted);">No tienes regiones asignadas</div>';
+    return;
+  }
+
+  // Obtener vendedores en esas regiones
+  var { data: vendedores, error: vErr } = await sbClient
+    .from('staff_profiles')
+    .select('id, nombre, apellido, email, region_id')
+    .in('region_id', regionIds)
+    .eq('role_id', ROLE_SELLER);
+  if (vErr || !vendedores || !vendedores.length) {
+    container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted);">No hay vendedores en tus regiones</div>';
+    return;
+  }
+  var vendedorIds = vendedores.map(function(v) { return v.id; });
+  var vendedorMap = {};
+  vendedores.forEach(function(v) { vendedorMap[v.id] = (v.nombre || '') + ' ' + (v.apellido || ''); });
+
+  // Filtrar por vendedor específico si se seleccionó
+  if (vendedorId) {
+    vendedorIds = vendedorIds.filter(function(id) { return String(id) === String(vendedorId); });
+  }
+
+  // Consultar prospectos
+  var query = sbClient.from('prospectos').select('*').in('asesor_id', vendedorIds).order('created_at', { ascending: false });
+  if (estado !== 'todos') query = query.eq('estado', estado);
+
+  var { data, error } = await query;
+  if (error) { container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--red);">Error: ' + LZ.esc(error.message) + '</div>'; return; }
+
+  var filtered = data || [];
+  if (busqueda) {
+    filtered = filtered.filter(function(p) {
+      return (p.nombre + ' ' + (p.apellido || '')).toLowerCase().indexOf(busqueda) >= 0 ||
+        (p.email || '').toLowerCase().indexOf(busqueda) >= 0 ||
+        (p.telefono || '').indexOf(busqueda) >= 0 ||
+        (vendedorMap[p.asesor_id] || '').toLowerCase().indexOf(busqueda) >= 0;
+    });
+  }
+
+  if (!filtered.length) {
+    container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted);">📭 No hay prospectos para mostrar</div>';
+    return;
+  }
+
+  // Estadísticas rápidas
+  var stats = { nuevo: 0, contactado: 0, cerrado: 0, perdido: 0, total: filtered.length };
+  filtered.forEach(function(p) { if (stats[p.estado] !== undefined) stats[p.estado]++; });
+
+  var estadoColors = { nuevo: '#22c55e', contactado: '#f59e0b', cerrado: '#6ee7b7', perdido: '#f87171' };
+  var html = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:16px;">'
+    + '<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px;text-align:center;"><div style="font-size:.65rem;font-weight:700;color:var(--muted);text-transform:uppercase;">Total</div><div style="font-size:1.3rem;font-weight:900;">' + stats.total + '</div></div>'
+    + '<div style="background:var(--surface);border:1px solid rgba(34,197,94,.25);border-radius:12px;padding:12px;text-align:center;"><div style="font-size:.65rem;font-weight:700;color:#22c55e;">Nuevos</div><div style="font-size:1.3rem;font-weight:900;color:#22c55e;">' + stats.nuevo + '</div></div>'
+    + '<div style="background:var(--surface);border:1px solid rgba(245,158,11,.25);border-radius:12px;padding:12px;text-align:center;"><div style="font-size:.65rem;font-weight:700;color:#f59e0b;">Contactados</div><div style="font-size:1.3rem;font-weight:900;color:#f59e0b;">' + stats.contactado + '</div></div>'
+    + '<div style="background:var(--surface);border:1px solid rgba(110,231,183,.25);border-radius:12px;padding:12px;text-align:center;"><div style="font-size:.65rem;font-weight:700;color:#6ee7b7;">Cerrados</div><div style="font-size:1.3rem;font-weight:900;color:#6ee7b7;">' + stats.cerrado + '</div></div>'
+    + '<div style="background:var(--surface);border:1px solid rgba(248,113,113,.25);border-radius:12px;padding:12px;text-align:center;"><div style="font-size:.65rem;font-weight:700;color:#f87171;">Perdidos</div><div style="font-size:1.3rem;font-weight:900;color:#f87171;">' + stats.perdido + '</div></div>'
+    + '</div>';
+
+  html += '<div style="display:flex;flex-direction:column;gap:12px;">';
+  for (var i = 0; i < filtered.length; i++) {
+    var p = filtered[i];
+    var asesorNombre = vendedorMap[p.asesor_id] || 'Desconocido';
+    var estadoColor = estadoColors[p.estado] || '#9ca3af';
+    var fechaRecordatorio = p.proximo_recordatorio ? new Date(p.proximo_recordatorio).toLocaleDateString('es-AR') : '';
+    var ultimoContacto = p.ultimo_contacto ? new Date(p.ultimo_contacto).toLocaleDateString('es-AR') : '';
+    html += '<div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:16px;">'
+      + '<div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;">'
+      + '<div>'
+      + '<div style="font-weight:800;">' + LZ.esc(p.nombre) + ' ' + LZ.esc(p.apellido || '') + '</div>'
+      + '<div style="font-size:.78rem;">📧 ' + LZ.esc(p.email || '—') + ' · 📱 ' + LZ.esc(p.telefono || '—') + '</div>'
+      + '<div style="font-size:.72rem;">👤 Asesor: ' + LZ.esc(asesorNombre) + '</div>'
+      + '<div style="font-size:.72rem;">🏝️ ' + LZ.esc(p.destino_slug || '—') + ' | 👥 ' + (p.personas || '—') + ' pers. | 📆 ' + (p.cuotas || '—') + ' cuotas</div>'
+      + '<div style="font-size:.72rem;">📌 Estado: <span style="color:' + estadoColor + ';">' + LZ.esc(p.estado || '—') + '</span>'
+      + (ultimoContacto ? ' <span style="margin-left:12px;">🕒 Último contacto: ' + ultimoContacto + '</span>' : '')
+      + '</div>'
+      + (fechaRecordatorio ? '<div style="font-size:.72rem;">📅 Recordatorio: ' + fechaRecordatorio + ' - ' + LZ.esc(p.recordatorio_nota || '') + '</div>' : '')
+      + '</div>'
+      + '<div style="display:flex;gap:8px;flex-wrap:wrap;">'
+      + '<button class="tb-btn" onclick="verDetalleProspectoGerente(' + p.id + ')">👁️ Ver</button>'
+      + '</div>'
+      + '</div></div>';
+  }
+  html += '</div>';
+  container.innerHTML = html;
+}
+
+function verDetalleProspectoGerente(id) {
+  sbClient.from('prospectos').select('*').eq('id', id).single().then(function(r) {
+    if (r.error || !r.data) { showToast('Error al cargar prospecto'); return; }
+    var p = r.data;
+    var estadoColors = { nuevo: '#22c55e', contactado: '#f59e0b', cerrado: '#6ee7b7', perdido: '#f87171' };
+    var estadoColor = estadoColors[p.estado] || '#9ca3af';
+    document.getElementById('mbox').innerHTML = '<div class="mhd"><div><h2>📋 Detalle del Prospecto</h2></div><button class="mcl" onclick="closeModal()">✕</button></div>'
+      + '<div class="mbody">'
+      + '<div class="mgrid">'
+      + '<div class="mi"><div class="ml">Nombre</div><div class="mv">' + LZ.esc(p.nombre) + ' ' + LZ.esc(p.apellido || '') + '</div></div>'
+      + '<div class="mi"><div class="ml">Email</div><div class="mv">' + LZ.esc(p.email || '—') + '</div></div>'
+      + '<div class="mi"><div class="ml">Teléfono</div><div class="mv">' + LZ.esc(p.telefono || '—') + '</div></div>'
+      + '<div class="mi"><div class="ml">Estado</div><div class="mv" style="color:' + estadoColor + ';">' + LZ.esc(p.estado) + '</div></div>'
+      + '<div class="mi"><div class="ml">Destino</div><div class="mv">' + LZ.esc(p.destino_slug || '—') + '</div></div>'
+      + '<div class="mi"><div class="ml">Personas</div><div class="mv">' + (p.personas || '—') + '</div></div>'
+      + '<div class="mi"><div class="ml">Cuotas</div><div class="mv">' + (p.cuotas || '—') + '</div></div>'
+      + '<div class="mi"><div class="ml">Moneda</div><div class="mv">' + LZ.esc(p.moneda || '—') + '</div></div>'
+      + (p.ultimo_contacto ? '<div class="mi"><div class="ml">Último contacto</div><div class="mv">' + new Date(p.ultimo_contacto).toLocaleDateString('es-AR') + '</div></div>' : '')
+      + (p.proximo_recordatorio ? '<div class="mi"><div class="ml">Próximo recordatorio</div><div class="mv">' + new Date(p.proximo_recordatorio).toLocaleDateString('es-AR') + ' - ' + LZ.esc(p.recordatorio_nota || '') + '</div></div>' : '')
+      + '</div>'
+      + (p.notas ? '<div style="margin-top:16px;padding:12px 16px;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:12px;"><div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--accent2);margin-bottom:6px;">Notas</div><div style="font-size:.88rem;">' + LZ.esc(p.notas) + '</div></div>' : '')
+      + '</div>';
+    document.getElementById('modal').classList.add('open');
+  });
+}
 
 window.mostrarRespuestaGerente     = mostrarRespuestaGerente;
 </script>
