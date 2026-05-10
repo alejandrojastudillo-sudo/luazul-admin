@@ -910,12 +910,23 @@ body::after {
 
     <!-- ── SECCIÓN PRESUPUESTOS ────────────────────────────────────────────── -->
     <div id="presupuestosSection" class="section-container">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:12px;">
             <h2 style="font-size:1.1rem;font-weight:900;">📋 Gestión de Presupuestos</h2>
-            <div style="display:flex;gap:8px;">
-              <button class="tb-btn" onclick="volverAClientes()">← Volver a mis clientes</button>
-              <button class="add-btn" onclick="abrirFormPresupuesto()">➕ Nuevo presupuesto</button>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                <select id="filtroEstadoPresupuesto" class="ftab" onchange="cargarPresupuestos()" style="background:var(--surface);border:1px solid var(--border2);border-radius:8px;padding:6px 12px;">
+                    <option value="todos">Todos los estados</option>
+                    <option value="nuevo">🆕 Nuevo</option>
+                    <option value="contactado">✅ Contactado</option>
+                    <option value="cerrado">🎉 Cerrado (venta)</option>
+                    <option value="perdido">❌ Perdido</option>
+                </select>
+                <div class="search-box" style="flex:1;min-width:160px;">
+                    <span>🔍</span>
+                    <input type="text" id="buscarPresupuesto" placeholder="Buscar por nombre, email..." oninput="cargarPresupuestos()">
+                </div>
             </div>
+            <button class="add-btn" onclick="abrirFormPresupuesto()" style="background:linear-gradient(135deg,#1a5bb5,#0B3D91);">➕ Nuevo presupuesto</button>
+            <button class="tb-btn" onclick="volverAClientes()">← Volver a mis clientes</button>
         </div>
         <div id="presupuestosLista" style="display:flex;flex-direction:column;gap:12px;"></div>
     </div>
@@ -1178,6 +1189,8 @@ async function loadClients() {
     renderAll();
     showToast('✅ ' + allClients.length + ' clientes cargados');
     refreshAdminNotifBadge();
+    // Alertas de recordatorios próximos al cargar el panel
+    if (typeof mostrarAlertasRecordatorios === 'function') mostrarAlertasRecordatorios();
   } catch (err) {
     console.error('loadClients error:', err);
     showToast('⚠️ Error al cargar clientes: ' + (err.message || err));
@@ -3220,19 +3233,36 @@ async function cargarPresupuestos() {
     const container = document.getElementById('presupuestosLista');
     if (!container) return;
     container.innerHTML = '<div class="empty-state">Cargando presupuestos...</div>';
+
+    // Mostrar alertas de recordatorios próximos al entrar a la sección
+    if (typeof mostrarAlertasRecordatorios === 'function') mostrarAlertasRecordatorios();
+
     try {
-        const { data, error } = await sbClient
-            .from('prospectos')
-            .select('*')
-            .eq('asesor_id', _currentProfile.id)
-            .order('created_at', { ascending: false });
+        const estadoFiltro = document.getElementById('filtroEstadoPresupuesto')?.value || 'todos';
+        const busqueda = (document.getElementById('buscarPresupuesto')?.value || '').toLowerCase();
+
+        let query = sbClient.from('prospectos').select('*').eq('asesor_id', _currentProfile.id).order('created_at', { ascending: false });
+        if (estadoFiltro !== 'todos') query = query.eq('estado', estadoFiltro);
+
+        const { data, error } = await query;
         if (error) throw error;
-        if (!data.length) {
-            container.innerHTML = '<div class="empty-state">📭 No hay presupuestos aún. Usá "Nuevo presupuesto".</div>';
+
+        let filtered = data || [];
+        if (busqueda) {
+            filtered = data.filter(p =>
+                (p.nombre + ' ' + (p.apellido || '')).toLowerCase().includes(busqueda) ||
+                (p.email || '').toLowerCase().includes(busqueda) ||
+                (p.telefono || '').includes(busqueda)
+            );
+        }
+
+        if (!filtered.length) {
+            container.innerHTML = '<div class="empty-state">📭 No hay presupuestos con ese filtro.</div>';
             return;
         }
+
         let html = '';
-        for (const p of data) {
+        for (const p of filtered) {
             const { data: presup } = await sbClient
                 .from('presupuestos')
                 .select('pdf_url, created_at')
@@ -3241,6 +3271,8 @@ async function cargarPresupuestos() {
                 .limit(1);
             const pdfUrl = presup && presup.length ? presup[0].pdf_url : null;
             const fechaPresu = presup && presup.length ? new Date(presup[0].created_at).toLocaleDateString('es-AR') : '—';
+            const estadoColor = p.estado === 'nuevo' ? '#22c55e' : (p.estado === 'contactado' ? '#f59e0b' : (p.estado === 'cerrado' ? '#6ee7b7' : '#f87171'));
+
             html += `
                 <div class="presupuesto-card" style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:18px;transition:all .15s;">
                     <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px;">
@@ -3248,7 +3280,10 @@ async function cargarPresupuestos() {
                             <div style="font-weight:800;font-size:1rem;">${LZ.esc(p.nombre)} ${LZ.esc(p.apellido || '')}</div>
                             <div style="font-size:.78rem;color:var(--text-muted);">📧 ${LZ.esc(p.email || '—')} · 📱 ${LZ.esc(p.telefono || '—')}</div>
                             <div style="font-size:.72rem;margin-top:6px;">🏝️ Destino: ${LZ.esc(p.destino_slug || '—')} | 👥 ${p.personas} pers. | 📆 ${p.cuotas} cuotas | 💱 ${p.moneda}</div>
-                            <div style="font-size:.72rem;color:var(--accent2);">Estado: ${p.estado}</div>
+                            <div style="font-size:.72rem;margin-top:4px;">
+                                <span style="color:${estadoColor};">📌 Estado: ${p.estado}</span>
+                                ${p.ultimo_contacto ? `<span style="margin-left:12px;">🕒 Último contacto: ${new Date(p.ultimo_contacto).toLocaleDateString('es-AR')}</span>` : ''}
+                            </div>
                             ${p.proximo_recordatorio ? `<div style="font-size:.72rem;">📅 Recordatorio: ${new Date(p.proximo_recordatorio).toLocaleDateString('es-AR')} - ${LZ.esc(p.recordatorio_nota || '')}</div>` : ''}
                             ${pdfUrl ? `<div style="font-size:.7rem;color:var(--gold);margin-top:4px;">📄 Último presupuesto: ${fechaPresu}</div>` : ''}
                         </div>
@@ -3257,6 +3292,7 @@ async function cargarPresupuestos() {
                             <button class="tb-btn" onclick="generarPresupuestoPDF(${p.id})">✨ Generar PDF</button>
                             <button class="tb-btn" onclick="enviarWhatsAppPresupuesto(${p.id})">💬 Enviar WhatsApp</button>
                             <button class="tb-btn" onclick="agregarRecordatorio(${p.id}, '${LZ.esc(p.nombre)}')">📅 Recordatorio</button>
+                            ${p.estado === 'nuevo' ? `<button class="tb-btn" onclick="marcarContactado(${p.id})">✅ Marcar contactado</button>` : ''}
                             <button class="tb-btn" onclick="abrirFormPresupuesto(${p.id})">✏️ Editar</button>
                             <button class="tb-btn danger" onclick="eliminarPresupuesto(${p.id})">🗑️ Eliminar</button>
                         </div>
@@ -3559,6 +3595,56 @@ async function guardarRecordatorio(prospectoId) {
     showToast('✅ Recordatorio guardado');
     closeModal();
     cargarPresupuestos();
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// 8. Marcar prospecto como contactado
+//    NOTA: Si la columna ultimo_contacto no existe, ejecutar en Supabase SQL:
+//    ALTER TABLE prospectos ADD COLUMN ultimo_contacto TIMESTAMP;
+// ──────────────────────────────────────────────────────────────────────────
+async function marcarContactado(id) {
+    try {
+        // Intentar actualizar estado + ultimo_contacto
+        const { error } = await sbClient.from('prospectos').update({
+            estado: 'contactado',
+            ultimo_contacto: new Date().toISOString()
+        }).eq('id', id);
+        if (error) {
+            // Si falla por columna inexistente, intentar solo con estado
+            if (error.message && error.message.includes('ultimo_contacto')) {
+                await sbClient.from('prospectos').update({ estado: 'contactado' }).eq('id', id);
+                showToast('✅ Marcado como contactado (sin registro de fecha de contacto — ejecutá: ALTER TABLE prospectos ADD COLUMN ultimo_contacto TIMESTAMP)');
+            } else {
+                throw error;
+            }
+        } else {
+            showToast('✅ Marcado como contactado');
+        }
+        cargarPresupuestos();
+    } catch (err) {
+        showToast('❌ Error al actualizar estado: ' + err.message);
+    }
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// 9. Alertas de recordatorios próximos (dentro de 2 días)
+// ──────────────────────────────────────────────────────────────────────────
+async function mostrarAlertasRecordatorios() {
+    const hoy = new Date();
+    const dentroDe2Dias = new Date();
+    dentroDe2Dias.setDate(hoy.getDate() + 2);
+
+    const { data, error } = await sbClient
+        .from('prospectos')
+        .select('id, nombre, telefono, proximo_recordatorio, recordatorio_nota')
+        .eq('asesor_id', _currentProfile.id)
+        .gte('proximo_recordatorio', hoy.toISOString().slice(0,10))
+        .lte('proximo_recordatorio', dentroDe2Dias.toISOString().slice(0,10));
+
+    if (error || !data.length) return;
+
+    const lista = data.map(p => p.nombre + ' (' + p.proximo_recordatorio + ')').join(', ');
+    showToast('📅 Tienes ' + data.length + ' recordatorio(s) próximo(s): ' + lista, 8000);
 }
 
 window.cargarPresupuestos = cargarPresupuestos;
