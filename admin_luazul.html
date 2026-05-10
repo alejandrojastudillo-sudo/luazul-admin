@@ -3436,7 +3436,7 @@ async function generarPresupuestoPDF(prospectoId) {
 
         const vendedorNombre = _currentProfile.nombre || 'Asesor Luazul';
         const vendedorWhatsapp = _currentProfile.telefono1 || '5492974726449';
-        const logoUrl = window.location.origin + '/images/logo-nav.png';
+        const logoUrl = 'https://luazul-smarttravel.vercel.app/images/logo-nav.png';
 
         // Plantilla con enfoque de beneficio para los vuelos (positivo, flexible, acompañamiento)
         const templateHtml = `<!DOCTYPE html>
@@ -3528,7 +3528,7 @@ body{background:#f0f4fa;font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif
           });
         }
         const uuid = generarUUID();
-        const fileName = `presupuestos/asesor_${_currentProfile.user_id}/presupuesto_${uuid}.pdf`;
+        const fileName = `presupuestos/presupuesto_${uuid}.pdf`;
         const { error: uploadErr } = await sbClient.storage.from('presupuestos').upload(fileName, pdfBlob, { contentType: 'application/pdf' });
         if (uploadErr) throw uploadErr;
         const { data: urlData } = sbClient.storage.from('presupuestos').getPublicUrl(fileName);
