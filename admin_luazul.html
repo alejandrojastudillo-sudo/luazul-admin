@@ -2142,16 +2142,19 @@ function renderCuentasList() {
 // 25. MIS COMISIONES
 // ──────────────────────────────────────────────────────────────────────────
 function renderMisComisionesAdmin() {
-  var el=document.getElementById('misComisionesSection'); if (!el) return;
-  if (!sbClient||!_currentProfile) { el.innerHTML='<div style="text-align:center;padding:50px;color:var(--muted);">Sin datos</div>'; return; }
-  var yo=_currentProfile;
+  var el = document.getElementById('misComisionesSection'); if (!el) return;
+  var yo = _currentProfile;
+  if (!yo) { el.innerHTML = '<div style="padding:40px;text-align:center;color:var(--muted);">Sin datos</div>'; return; }
+
+  // Calcular comisión dinámica a partir de allClients
+  var cm = calcComisionVendedor(allClients);
+
   var comps = [];
   if (yo.comprobantes_json) {
     try { comps = JSON.parse(yo.comprobantes_json); } catch(e) {}
   }
-  var compsHTML = '';
-  if (comps.length) {
-    compsHTML = '<div style="display:flex;flex-direction:column;gap:8px;">' +
+  var compsHTML = comps.length
+    ? '<div style="display:flex;flex-direction:column;gap:8px;">' +
       comps.slice().reverse().map(function(c, idx) {
         return '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);">' +
           '<span style="font-size:.8rem;flex:1;">📎 ' + LZ.esc(c.nombre) + '</span>' +
@@ -2159,14 +2162,41 @@ function renderMisComisionesAdmin() {
           (c.monto ? '<span style="font-size:.78rem;font-weight:700;color:var(--green);">USD ' + c.monto + '</span>' : '') +
           (c.data ? '<button onclick="verCompAdmin(' + (comps.length - 1 - idx) + ')" style="padding:3px 9px;background:rgba(59,130,246,.15);border:1px solid rgba(59,130,246,.3);color:#7eb8ff;border-radius:6px;font-size:.7rem;cursor:pointer;">Ver</button>' : '') +
         '</div>';
-      }).join('') + '</div>';
-  } else {
-    compsHTML = '<div style="text-align:center;padding:36px;background:rgba(255,255,255,.02);border:1px dashed rgba(255,255,255,.1);border-radius:14px;color:var(--muted);">Sin pagos de comisiones registrados aún.</div>';
-  }
-  var cbuBlock=yo.cbu
-    ?'<div style="background:rgba(74,222,128,.07);border:1px solid rgba(74,222,128,.2);border-radius:14px;padding:16px 20px;margin-bottom:20px;display:flex;align-items:center;gap:16px;"><span style="font-size:1.6rem;">🏦</span><div><div style="font-size:.62rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:rgba(74,222,128,.7);">Tu CBU / Alias</div><div style="font-family:monospace;font-size:.95rem;font-weight:700;color:#4ade80;">'+yo.cbu+'</div></div></div>'
-    :'<div style="background:rgba(255,255,255,.03);border:1px dashed rgba(255,255,255,.1);border-radius:14px;padding:16px;margin-bottom:20px;text-align:center;">⚠️ Sin cuenta de cobro. Andá a <strong>🏦 Cuentas</strong>.</div>';
-  el.innerHTML='<div style="padding:24px;max-width:700px;"><div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;"><div style="font-size:.68rem;font-weight:700;text-transform:uppercase;color:rgba(74,222,128,.7);">💰 Estado de tus comisiones</div><span style="font-size:.6rem;padding:2px 8px;border-radius:20px;background:rgba(107,114,128,.15);color:#9ca3af;">🔒 Solo lectura</span></div>'+cbuBlock+'<div style="font-size:.68rem;font-weight:700;text-transform:uppercase;margin-bottom:12px;">📋 Historial de pagos</div>'+compsHTML+'</div>';
+      }).join('') + '</div>'
+    : '<div style="text-align:center;padding:36px;background:rgba(255,255,255,.02);border:1px dashed rgba(255,255,255,.1);border-radius:14px;color:var(--muted);">Sin pagos de comisiones registrados aún.</div>';
+
+  var cbuBlock = yo.cbu
+    ? '<div style="background:rgba(74,222,128,.07);border:1px solid rgba(74,222,128,.2);border-radius:14px;padding:16px 20px;margin-bottom:20px;display:flex;align-items:center;gap:16px;"><span style="font-size:1.6rem;">🏦</span><div><div style="font-size:.62rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:rgba(74,222,128,.7);">Tu CBU / Alias</div><div style="font-family:monospace;font-size:.95rem;font-weight:700;color:#4ade80;">' + yo.cbu + '</div></div></div>'
+    : '<div style="background:rgba(255,255,255,.03);border:1px dashed rgba(255,255,255,.1);border-radius:14px;padding:16px;margin-bottom:20px;text-align:center;">⚠️ Sin cuenta de cobro. Andá a <strong>🏦 Cuentas</strong>.</div>';
+
+  function fmtM(v) { return 'USD ' + (v || 0).toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 0 }); }
+
+  el.innerHTML = '<div style="padding:24px;max-width:700px;">' +
+    '<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">' +
+      '<div style="font-size:.68rem;font-weight:700;text-transform:uppercase;color:rgba(74,222,128,.7);">💰 Estado de tus comisiones</div>' +
+      '<span style="font-size:.6rem;padding:2px 8px;border-radius:20px;background:rgba(107,114,128,.15);color:#9ca3af;">🔒 Solo lectura</span>' +
+    '</div>' +
+    cbuBlock +
+    '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin-bottom:20px;">' +
+      '<div style="background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:12px;padding:14px;text-align:center;">' +
+        '<div style="font-size:.7rem;color:var(--muted);">Ventas este mes</div>' +
+        '<div style="font-size:1.5rem;font-weight:900;color:var(--gold);">' + cm.ventasMes + '</div>' +
+        '<div style="font-size:.65rem;color:' + (cm.tasaActual === 80 ? 'var(--green)' : 'var(--gold)') + ';">Tasa ' + cm.tasaActual + '%</div>' +
+      '</div>' +
+      '<div style="background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:12px;padding:14px;text-align:center;">' +
+        '<div style="font-size:.7rem;color:var(--muted);">Recaudado mes</div>' +
+        '<div style="font-size:1.5rem;font-weight:900;color:var(--text);">USD ' + cm.ingresoMes + '</div>' +
+        '<div style="font-size:.65rem;">1ª cuota</div>' +
+      '</div>' +
+      '<div style="background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:12px;padding:14px;text-align:center;">' +
+        '<div style="font-size:.7rem;color:var(--muted);">Comisión neta</div>' +
+        '<div style="font-size:1.5rem;font-weight:900;color:var(--green);">' + fmtM(cm.neta) + '</div>' +
+        '<div style="font-size:.65rem;">Total acumulado</div>' +
+      '</div>' +
+    '</div>' +
+    '<div style="font-size:.68rem;font-weight:700;text-transform:uppercase;margin-bottom:12px;">📋 Historial de pagos</div>' +
+    compsHTML +
+    '</div>';
 }
 
 function verCompAdmin(idx) {
@@ -2227,7 +2257,7 @@ async function renderMiLegajo() {
     '<div style="text-align:right;margin-left:auto;"><div style="font-size:.62rem;color:var(--muted);">Asesor · ID</div><div style="font-family:monospace;font-size:.82rem;">'+String(yo.id||'—')+'</div></div></div>'+
     '<div style="margin-bottom:16px;"><div style="font-size:.65rem;font-weight:700;text-transform:uppercase;color:rgba(167,139,250,.7);margin-bottom:12px;">📊 Cartera</div>'+
     '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:12px;">'+mc('👥','Total',total,'#e2e8f0')+mc('✅','Activos',activos,'#4ade80')+mc('🔴','En mora',enMora,'#f87171')+mc('🏁','Completados',completados,'#a78bfa')+mc('⛔','Bajas',enBaja,'#6b7280')+'</div></div>'+
-    '<div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:20px;margin-bottom:20px;">'+ir('UUID',String(yo.user_id||'—'))+ir('ID numérico',String(yo.id||'—'))+ir('Región asignada',yo.region_id?'ID '+yo.region_id:'—')+ir('Comisión configurada',comPct>0?comPct+'%':'<span style="color:#f87171;">No configurada</span>')+'</div>'+
+    '<div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:20px;margin-bottom:20px;">'+ir('UUID',String(yo.user_id||'—'))+ir('ID numérico',String(yo.id||'—'))+ir('Teléfono principal',yo.telefono1||'—')+ir('Teléfono secundario',yo.telefono2||'—')+(yo.cbu?ir('CBU / Alias','<span style="font-family:monospace;">'+yo.cbu+'</span>'):'')+ir('Región asignada',yo.region_id?'ID '+yo.region_id:'—')+ir('Comisión configurada',comPct>0?comPct+'%':'<span style="color:#f87171;">No configurada</span>')+'</div>'+
     '<div style="background:rgba(74,222,128,.04);border:1px solid rgba(74,222,128,.15);border-radius:16px;padding:20px;">'+
     (yo.cbu?'<div style="background:rgba(74,222,128,.08);border:1px solid rgba(74,222,128,.2);border-radius:12px;padding:14px;margin-bottom:14px;"><div style="font-size:.65rem;color:rgba(74,222,128,.7);">CBU / Alias</div><div style="font-family:monospace;font-size:.95rem;font-weight:700;color:#4ade80;">'+yo.cbu+'</div></div>':'<div style="background:rgba(248,113,113,.06);border:1px dashed rgba(248,113,113,.25);border-radius:12px;padding:14px;margin-bottom:14px;"><div style="color:#f87171;">⚠️ Sin cuenta de cobro</div></div>')+
     ir('Comisión estimada pendiente',comPct>0?'<span style="color:#4ade80;">USD '+comEst.toLocaleString('es-AR')+'</span>':'—')+'</div>'+
@@ -2520,19 +2550,31 @@ function openAddModal() {
   setTimeout(calcCuota,50);
 }
 
-function buscarReferidor(codigo) {
-  var info=document.getElementById('nRefInfo'); if (!info) return;
-  if (!codigo||codigo.length<4) { info.textContent=''; return; }
+async function buscarReferidor(codigo) {
+  var info = document.getElementById('nRefInfo');
+  if (!info || !codigo || codigo.length < 4) { if (info) info.innerHTML = ''; return; }
   var term = codigo.trim().toUpperCase();
-  // FIX 8: Buscar por codigo_referido guardado en BD, por email exacto, o por código generado LUA-NOMBRE
-  var match = allClients.find(function(c) {
-    if (c.codigo_referido && c.codigo_referido.toUpperCase()===term) return true;
-    if (c.email && c.email.toUpperCase()===codigo.trim().toUpperCase()) return true;
-    var codGen = 'LUA-'+(c.nombre||'').split(' ')[0].toUpperCase();
-    return codGen===term;
+  // Primero buscar en BD (más actual)
+  const { data, error } = await sbClient
+    .from('clientes')
+    .select('nombre, email, codigo_referido')
+    .or(`codigo_referido.ilike.${term},email.ilike.${term}`)
+    .limit(1);
+  if (!error && data && data.length > 0) {
+    var match = data[0];
+    info.innerHTML = '✅ Referidor encontrado: <strong>' + LZ.esc(match.nombre) + '</strong> (' + LZ.esc(match.email) + ')';
+    return;
+  }
+  // Fallback a caché local
+  var matchLocal = allClients.find(function(c) {
+    return (c.codigo_referido && c.codigo_referido.toUpperCase() === term) ||
+           (c.email && c.email.toUpperCase() === term);
   });
-  if (match) info.innerHTML='✅ Referidor encontrado: <strong>'+LZ.esc(match.nombre)+'</strong> ('+LZ.esc(match.email)+')';
-  else info.innerHTML='⚠️ No se encontró cliente con ese código o email';
+  if (matchLocal) {
+    info.innerHTML = '✅ Referidor encontrado: <strong>' + LZ.esc(matchLocal.nombre) + '</strong> (' + LZ.esc(matchLocal.email) + ')';
+  } else {
+    info.innerHTML = '⚠️ No se encontró cliente con ese código o email';
+  }
 }
 
 async function addClient() {
@@ -2629,11 +2671,14 @@ async function addClient() {
     var updRes = await sbClient.from('clientes').update(camposExtra).eq('id', nuevoClienteId);
     if (updRes.error) throw updRes.error;
 
+    // Recargar la lista completa de clientes para mantener consistencia
+    await loadClients();
+
     var clienteRes = await sbClient.from('clientes').select('*').eq('id', nuevoClienteId).single();
     if (clienteRes.error) throw clienteRes.error;
 
     var nuevoCliente = LZ.enrich(clienteRes.data);
-    allClients.push(nuevoCliente);
+    // No hacemos allClients.push porque loadClients() ya recargó la lista completa
     notificarAccion('nuevo_cliente', 'Nuevo cliente creado: ' + nuevoCliente.nombre, nuevoCliente.id, null);
 
     if (codigoReferido && nuevoCliente.id) {
@@ -3412,7 +3457,14 @@ body{background:#f0f4fa;font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif
         const opt = { margin: 0.5, filename: `presupuesto_${prospectoId}.pdf`, image: { type: 'jpeg', quality: 0.98 }, html2canvas: { scale: 2 }, jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' } };
         const pdfBlob = await html2pdf().set(opt).from(templateHtml).outputPdf('blob');
 
-        const fileName = `presupuestos/asesor_${_currentProfile.user_id}/presupuesto_${prospectoId}_${Date.now()}.pdf`;
+        function generarUUID() {
+          return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+            var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+            return v.toString(16);
+          });
+        }
+        const uuid = generarUUID();
+        const fileName = `presupuestos/asesor_${_currentProfile.user_id}/presupuesto_${uuid}.pdf`;
         const { error: uploadErr } = await sbClient.storage.from('presupuestos').upload(fileName, pdfBlob, { contentType: 'application/pdf' });
         if (uploadErr) throw uploadErr;
         const { data: urlData } = sbClient.storage.from('presupuestos').getPublicUrl(fileName);
@@ -3445,7 +3497,10 @@ async function enviarWhatsAppPresupuesto(prospectoId) {
         .single();
     if (!presup || !presup.pdf_url) { showToast('Primero generá el PDF del presupuesto'); return; }
     const telefono = p.telefono?.replace(/\D/g, '');
-    if (!telefono) { showToast('El cliente no tiene número de teléfono'); return; }
+    if (!telefono || telefono.length < 8) {
+      showToast('⚠️ Número de teléfono inválido');
+      return;
+    }
     const mensaje = `¡Hola ${p.nombre}! 🌊 *Tu presupuesto para Luazul Smart Travel está listo.* 📄 Descargalo aquí: ${presup.pdf_url} - Válido por 48 horas. ¡Comenzá hoy tu plan en cuotas!`;
     window.open(`https://wa.me/${telefono}?text=${encodeURIComponent(mensaje)}`, '_blank');
     await sbClient.from('presupuestos').update({ enviado_whatsapp: true }).eq('pdf_url', presup.pdf_url);
