@@ -354,19 +354,29 @@ function _lzEnrich(c) {
 const LZ_LOAD = {
   loadData: async function(profile, userRole, sbClient) {
 
-    // ── RONDA 1: regiones + staff + gerente_regiones en paralelo ──
+    // ── RONDA 1: regiones + gerente_regiones en paralelo ──
     var ronda1 = await Promise.all([
       sbClient.from('regiones').select('id,nombre,bandera,pais,color,activo').eq('activo', true).order('pais,nombre'),
-      sbClient.from('staff_profiles').select('*').or('manager_id.eq.' + profile.id + ',user_id.eq.' + profile.user_id),
       sbClient.from('gerente_regiones').select('region_id').eq('gerente_id', profile.user_id)
     ]);
-    var regRes = ronda1[0], staffRes = ronda1[1], grRes = ronda1[2];
-    if (regRes.error)   throw regRes.error;
-    if (staffRes.error) throw staffRes.error;
+    var regRes = ronda1[0], grRes = ronda1[1];
+    if (regRes.error) throw regRes.error;
 
     var regiones = regRes.data || [];
-    var staff    = (staffRes.data || []).map(_lzMapStaff);
     var rIds     = (grRes.data || []).map(function(r) { return r.region_id; });
+
+    // ── Staff: para gerente, obtener por región (roles 3 y 5) ──
+    var staffRes;
+    if (rIds.length) {
+      staffRes = await sbClient.from('staff_profiles')
+        .select('*')
+        .in('region_id', rIds)
+        .in('role_id', [ROLE_SELLER, ROLE_SALES_LEADER]);
+    } else {
+      staffRes = await sbClient.from('staff_profiles').select('*').eq('id', -1);
+    }
+    if (staffRes.error) throw staffRes.error;
+    var staff = (staffRes.data || []).map(_lzMapStaff);
 
     var cliQuery = sbClient.from('clientes').select('*');
     if (rIds.length) {
@@ -431,7 +441,8 @@ async function loadClients() {
     var clientes = result.clientes, staff = result.staff,
         notificaciones = result.notificaciones, regiones = result.regiones;
     _memCache[DB_KEY] = clientes.map(LZ.enrich);
-    _memCache[VK]     = staff.filter(function(s) { return s.role_id === LZ.ROLE_SELLER || s.role_id === ROLE_SALES_LEADER; });
+    _memCache[VK]     = staff.filter(function(s) { return s.role_id === LZ.ROLE_SELLER; });
+    window._cacheSalesLeaders = staff.filter(function(s) { return s.role_id === LZ.ROLE_SALES_LEADER; });
     _memCache[NK]     = notificaciones;
     window._cacheRegiones    = regiones;
     window._gerenteRegionIds = regiones.map(function(r) { return r.id; });
@@ -1143,17 +1154,15 @@ function renderAll() { renderOverview(); renderVendors(); renderClients(); rende
 // ══════════════════════════════════════════════════════
 function renderOverview() {
   var cs = ((_memCache[DB_KEY] || []) || []).map(enrich);
-  var vs = (_memCache[VK] || []).filter(function(s) {
-    return s.role_id === ROLE_SELLER || s.role_id === ROLE_SALES_LEADER;
-  });
+  var allStaff = (_memCache[VK] || []).concat(window._cacheSalesLeaders || []);
   var ns = (_memCache[NK] || []) || [];
   var unread = ns.filter(function(n) { return !n.leida; }).length;
   var pending = ns.filter(function(n) { return n.tipo === 'payment' && !n.aprobada; }).length;
   var rec = cs.reduce(function(s, c) { return s + (parseInt(c.cuotas_pagadas) || 0) * (parseFloat(c.monto_cuota) || 0); }, 0);
-  var totalJefes = vs.filter(function(v) { return v.role_id === ROLE_SALES_LEADER; }).length;
+  var totalJefes = (window._cacheSalesLeaders || []).length;
   document.getElementById('oStats').innerHTML = [
     { i: '⭐', v: totalJefes, l: 'Equipos de ventas', c: '' },
-    { i: '👔', v: vs.filter(function(v) { return v.activo && v.role_id === ROLE_SELLER; }).length, l: 'Vendedores activos', c: '' },
+    { i: '👔', v: allStaff.filter(function(v) { return v.activo && v.role_id === ROLE_SELLER; }).length, l: 'Vendedores activos', c: '' },
     { i: '👥', v: cs.length, l: 'Total clientes', c: '' },
     { i: '✅', v: cs.filter(function(c) { return c.estado === 'activo'; }).length, l: 'Activos', c: 'var(--green)' },
     { i: '⚠️', v: cs.filter(function(c) { return c.estado === 'atraso'; }).length, l: 'En atraso', c: 'var(--red)' },
@@ -1166,8 +1175,8 @@ function renderOverview() {
   }).join('');
   var maxRec = 1;
   // Separar vendedores (role_id=3) y jefes (role_id=5)
-  var vendedores = vs.filter(function(v) { return v.role_id === ROLE_SELLER; });
-  var jefes = vs.filter(function(v) { return v.role_id === ROLE_SALES_LEADER; });
+  var vendedores = allStaff.filter(function(v) { return v.role_id === ROLE_SELLER; });
+  var jefes = allStaff.filter(function(v) { return v.role_id === ROLE_SALES_LEADER; });
 
   // 1. Tarjetas de vendedores
   var vp = vendedores.map(function(v) {
@@ -1353,9 +1362,7 @@ function renderVendors() {
 }
 
 function renderSalesLeaders() {
-  var vs = (_memCache[VK] || []).filter(function(s) {
-    return s.role_id === ROLE_SALES_LEADER;
-  });
+  var vs = window._cacheSalesLeaders || [];
   var cs = ((_memCache[DB_KEY] || []) || []).map(enrich);
   var ns = (_memCache[NK] || []) || [];
   document.getElementById('salesLeadersGrid').innerHTML = vs.map(function(v) {
