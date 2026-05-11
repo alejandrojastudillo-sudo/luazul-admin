@@ -439,17 +439,21 @@ async function loadClients() {
   try {
     var result = await LZ.LZ_LOAD.loadData(window._gerenteProfile, LZ.ROLE_MANAGER, sbClient);
     var clientes = result.clientes, staff = result.staff,
-        notificaciones = result.notificaciones, regiones = result.regiones;
+        notificaciones = result.notificaciones, regiones = result.regiones,
+        pagos = result.pagos || [];
     _memCache[DB_KEY] = clientes.map(LZ.enrich);
     _memCache[VK]     = staff.filter(function(s) { return s.role_id === LZ.ROLE_SELLER; });
     window._cacheSalesLeaders = staff.filter(function(s) { return s.role_id === LZ.ROLE_SALES_LEADER; });
-    _memCache[NK]     = notificaciones;
+    // ── FIX: Merge pagos into notificaciones cache para que renderPagos() los encuentre ──
+    _memCache[NK]     = notificaciones.concat(pagos);
+    window._cachePagosRaw = pagos;
     window._cacheRegiones    = regiones;
     window._gerenteRegionIds = regiones.map(function(r) { return r.id; });
     console.log('📦 Datos cargados:', {
       clientes: _memCache[DB_KEY].length,
       staff:    _memCache[VK].length,
-      notificaciones: notificaciones.length
+      notificaciones: notificaciones.length,
+      pagos: pagos.length
     });
     renderAll();
     if (typeof renderPagos === 'function') renderPagos();
@@ -2470,6 +2474,23 @@ function renderPagos() {
   var vf = document.getElementById('pagoVFilt') ? document.getElementById('pagoVFilt').value : '';
   var ef = document.getElementById('pagoEstFilt') ? document.getElementById('pagoEstFilt').value : '';
   var pays = ns.filter(function(n) { return n.tipo === 'payment'; });
+
+  // ── Filtro de mes actual para pagos pendientes ──
+  var now = new Date();
+  var mesActual = now.getMonth();
+  var anioActual = now.getFullYear();
+
+  // Pre-filtrar: cuota 1 pendiente siempre visible, cuotas 2+ pendientes solo mes actual
+  pays = pays.filter(function(n) {
+    if (n.aprobada) return true; // Aprobados: siempre en historial
+    // Pendientes: cuota 1 siempre, cuotas 2+ solo mes actual
+    var cuotaNum = parseInt(n.cuota) || 1;
+    if (cuotaNum === 1) return true;
+    var tsDate = n.ts ? new Date(n.ts) : null;
+    if (!tsDate) return false;
+    return tsDate.getMonth() === mesActual && tsDate.getFullYear() === anioActual;
+  });
+
   if (vf) pays = pays.filter(function(n) { return n.vid && String(n.vid) === String(vf); });
   if (ef === 'pendiente') pays = pays.filter(function(n) { return !n.aprobada; });
   if (ef === 'aprobado') pays = pays.filter(function(n) { return !!n.aprobada; });
@@ -2477,8 +2498,16 @@ function renderPagos() {
   var el = document.getElementById('pagosBody');
   if (!el) return;
   if (!pays.length) { el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted);">Sin pagos para mostrar</div>'; return; }
-  var totalPend = ns.filter(function(n) { return n.tipo === 'payment' && !n.aprobada; }).length;
-  var totalAprob = ns.filter(function(n) { return n.tipo === 'payment' && n.aprobada; }).length;
+  // ── KPIs: pendientes solo mes actual ──
+  var allPayments = ns.filter(function(n) { return n.tipo === 'payment'; });
+  var totalPend = allPayments.filter(function(n) {
+    if (n.aprobada) return false;
+    var cuotaNum = parseInt(n.cuota) || 1;
+    if (cuotaNum === 1) return true;
+    var tsDate = n.ts ? new Date(n.ts) : null;
+    return tsDate && tsDate.getMonth() === mesActual && tsDate.getFullYear() === anioActual;
+  }).length;
+  var totalAprob = allPayments.filter(function(n) { return n.aprobada; }).length;
   var totalUSD = pays.filter(function(n) { return n.aprobada; }).reduce(function(s, n) { return s + (parseFloat(n.monto) || 0); }, 0);
   el.innerHTML = '<div class="kpi-grid" style="margin-bottom:18px;">'
     + '<div class="kpi"><span>⏳</span><div class="kpi-v" style="color:var(--gold);">' + totalPend + '</div><div class="kpi-l">Pendientes aprobación</div></div>'

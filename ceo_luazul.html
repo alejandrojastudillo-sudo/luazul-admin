@@ -271,7 +271,7 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
             <option value="pendiente">Pendientes</option>
             <option value="aprobado">Aprobados</option>
           </select>
-          <button class="addbtn" onclick="aprobarTodos()">✅ Aprobar todos</button>
+          <button class="addbtn" onclick="showTab('pagos_aprobacion')" style="background:linear-gradient(135deg,#2563eb,#1d4ed8);">👁 Ir a Aprobación CEO</button>
         </div>
       </div>
       <div id="pagosBody"></div>
@@ -1343,18 +1343,40 @@ function renderVendDash(){
 
 // ── PAGOS ─────────────────────────────────────────────
 function renderPagos(){
-  var pays = (_cachePagos||[]).filter(function(n){ return true; });
+  // ── Filtro de mes actual para pagos pendientes ──
+  var now = new Date();
+  var mesActual = now.getMonth();
+  var anioActual = now.getFullYear();
+  var pays = (_cachePagos||[]).filter(function(n){
+    // Aprobados: siempre mostrar (historial)
+    if(n.estado==='aprobado') return true;
+    // Pendientes: cuota 1 siempre, cuotas 2+ solo mes actual
+    if(n.estado==='pendiente'){
+      if(parseInt(n.numero_cuota)===1) return true;
+      var f = n.created_at ? new Date(n.created_at) : null;
+      if(!f) return false;
+      return f.getMonth()===mesActual && f.getFullYear()===anioActual;
+    }
+    return false;
+  });
   var ef=(document.getElementById('pagoEstFilt')||{}).value||'';
   if(ef==='pendiente') pays=pays.filter(function(n){ return n.estado==='pendiente'; });
   if(ef==='aprobado')  pays=pays.filter(function(n){ return n.estado==='aprobado'; });
 
-  var el=document.getElementById('pagosBody'); if(!el)return;
-  var pend=(_cachePagos||[]).filter(function(n){ return n.estado==='pendiente'; }).length;
+  // ── KPIs del mes actual ──
+  var pendMes=(_cachePagos||[]).filter(function(n){
+    if(n.estado!=='pendiente') return false;
+    if(parseInt(n.numero_cuota)===1) return true;
+    var f=n.created_at?new Date(n.created_at):null;
+    return f && f.getMonth()===mesActual && f.getFullYear()===anioActual;
+  }).length;
   var aprob=(_cachePagos||[]).filter(function(n){ return n.estado==='aprobado'; }).length;
   var totalUSD=(_cachePagos||[]).filter(function(n){ return n.estado==='aprobado'; }).reduce(function(s,n){ return s+(parseFloat(n.monto_usd)||0); },0);
+
+  var el=document.getElementById('pagosBody'); if(!el)return;
   el.innerHTML=
     '<div class="kpi-grid" style="margin-bottom:16px;">'
-    +'<div class="kpi"><span>⏳</span><div class="kpi-v" style="color:var(--gold);">'+pend+'</div><div class="kpi-l">Pendientes</div></div>'
+    +'<div class="kpi"><span>⏳</span><div class="kpi-v" style="color:var(--gold);">'+pendMes+'</div><div class="kpi-l">Pendientes (mes)</div></div>'
     +'<div class="kpi"><span>✅</span><div class="kpi-v" style="color:var(--green);">'+aprob+'</div><div class="kpi-l">Aprobados</div></div>'
     +'<div class="kpi"><span>💵</span><div class="kpi-v" style="color:var(--gold);font-size:1.2rem;">'+totalUSD.toLocaleString('es-AR')+'</div><div class="kpi-l">USD confirmados</div></div>'
     +'</div>'
@@ -1366,16 +1388,24 @@ function renderPagos(){
     +pays.map(function(n){
       var aprobado = n.estado==='aprobado';
       var ts = n.created_at ? new Date(n.created_at).getTime() : Date.now();
+      // ── Resolver nombres desde cache en vez de columna raw ──
+      var cl = (_cacheClientes||[]).find(function(x){ return String(x.id)===String(n.cliente_id); });
+      var nombreCli = cl ? cl.nombre : (n.cliente_nombre||'—');
+      var nombreAsesor = n.vendedor_nombre||'—';
+      if(cl && cl.vid){
+        var vnd = (_cacheVendedores||[]).find(function(x){ return String(x.user_id)===String(cl.vid) || String(x.id)===String(cl.vid); });
+        if(vnd) nombreAsesor = vnd.nombre;
+      }
       return '<div class="trow-ceo" style="grid-template-columns:30px 2fr 1.2fr 80px 80px 100px 80px 90px;">'
         +'<span style="font-size:1rem;">'+(aprobado?'✅':'⏳')+'</span>'
-        +'<div><div style="font-size:.84rem;font-weight:600;">'+(n.cliente_nombre||'—')+'</div></div>'
-        +'<div style="font-size:.76rem;color:var(--muted);">'+(n.vendedor_nombre||'—')+'</div>'
+        +'<div><div style="font-size:.84rem;font-weight:600;">'+nombreCli+'</div></div>'
+        +'<div style="font-size:.76rem;color:var(--muted);">'+nombreAsesor+'</div>'
         +'<div style="text-align:center;">#'+n.numero_cuota+'</div>'
         +'<div style="font-weight:700;color:'+(aprobado?'var(--green)':'var(--gold)')+';">USD '+n.monto_usd+'</div>'
         +'<div style="font-size:.7rem;color:var(--muted);">'+fmtTs(ts)+'</div>'
         +'<div><span style="font-size:.68rem;font-weight:700;padding:2px 7px;border-radius:6px;'+(aprobado?'background:var(--green-bg);color:var(--green);':'background:var(--gold-bg);color:var(--gold);')+'">'+(aprobado?'OK':'Pend.')+'</span></div>'
         +'<div>'
-        +(!aprobado?'<button onclick="aprobarPagoSb(\''+n.id+'\')" style="padding:3px 7px;background:var(--green-bg);border:1px solid var(--green-bd);color:var(--green);border-radius:5px;font-size:.66rem;font-weight:700;cursor:pointer;">✅</button>':'')
+        +(!aprobado ? '<button onclick="showTab(\'pagos_aprobacion\')" style="padding:3px 7px;background:var(--blue-bg);border:1px solid var(--blue-bd);color:#93c5fd;border-radius:5px;font-size:.66rem;font-weight:700;cursor:pointer;" title="Ir a Aprobación CEO">👁 Ver</button>' : '')
         +'</div></div>';
     }).join('')+'</div>'
     :'<div style="text-align:center;padding:40px;color:var(--muted);">Sin pagos para mostrar</div>');
@@ -2916,13 +2946,23 @@ function renderPagosAprobacion() {
       // Obs
       + (p.obs ? '<div style="background:rgba(11,61,145,.2);border:1px solid rgba(100,160,255,.1);border-radius:10px;padding:10px 12px;margin-bottom:16px;font-size:.78rem;color:rgba(200,220,255,.75);">💬 ' + p.obs + '</div>' : '')
 
-      // Comprobante image
-      + (p.url ? '<div style="margin-bottom:16px;"><a href="' + p.url + '" target="_blank" style="display:inline-flex;align-items:center;gap:8px;background:rgba(11,61,145,.3);border:1px solid rgba(100,160,255,.2);border-radius:10px;padding:9px 14px;font-size:.75rem;font-weight:700;color:#7eb8ff;text-decoration:none;">📎 Ver Comprobante Adjunto</a></div>'
-        : '<div style="margin-bottom:16px;font-size:.72rem;color:rgba(150,190,255,.4);font-style:italic;">Sin imagen de comprobante adjunta</div>')
+      // Comprobante — preview inline + link ampliar
+      + (p.url
+        ? '<div style="margin-bottom:16px;">'
+          + '<div style="font-size:.62rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:rgba(150,190,255,.5);margin-bottom:8px;">📎 Comprobante de Pago</div>'
+          + '<div style="background:rgba(0,0,0,.3);border:1px solid rgba(100,160,255,.15);border-radius:12px;padding:10px;text-align:center;max-height:280px;overflow:hidden;">'
+          + '<img src="' + p.url + '" style="max-width:100%;max-height:260px;border-radius:8px;object-fit:contain;" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'block\';"/>'
+          + '<div style="display:none;padding:20px;color:var(--muted);font-size:.75rem;">No se pudo cargar la imagen del comprobante</div>'
+          + '</div>'
+          + '<a href="' + p.url + '" target="_blank" style="display:inline-flex;align-items:center;gap:6px;margin-top:8px;font-size:.7rem;font-weight:700;color:#7eb8ff;text-decoration:none;">🔍 Abrir en nueva pestaña</a>'
+          + '</div>'
+        : '<div style="margin-bottom:16px;background:rgba(248,113,113,.06);border:1px solid rgba(248,113,113,.15);border-radius:10px;padding:12px 14px;font-size:.75rem;color:#fca5a5;">⚠️ Sin comprobante adjunto — no se puede verificar el pago</div>')
 
-      // Action buttons
+      // Action buttons — bloquear aprobar si no hay comprobante
       + '<div style="display:flex;gap:10px;">'
-      + '<button onclick="aprobarPago(\'' + c.id + '\',\'' + p.cuota + '\',\'' + item.dbKey + '\')" style="flex:1;padding:11px;background:linear-gradient(135deg,#059669,#047857);border:1px solid rgba(52,211,153,.3);border-radius:50px;font-family:inherit;font-size:.82rem;font-weight:700;color:white;cursor:pointer;transition:all .2s;">✅ Aprobar y Acreditar</button>'
+      + (p.url
+        ? '<button onclick="aprobarPago(\'' + c.id + '\',\'' + p.cuota + '\',\'' + item.dbKey + '\')" style="flex:1;padding:11px;background:linear-gradient(135deg,#059669,#047857);border:1px solid rgba(52,211,153,.3);border-radius:50px;font-family:inherit;font-size:.82rem;font-weight:700;color:white;cursor:pointer;transition:all .2s;">✅ Aprobar y Acreditar</button>'
+        : '<button disabled style="flex:1;padding:11px;background:rgba(100,100,100,.2);border:1px solid rgba(100,100,100,.2);border-radius:50px;font-family:inherit;font-size:.82rem;font-weight:700;color:rgba(200,200,200,.4);cursor:not-allowed;">🔒 Sin comprobante — no se puede aprobar</button>')
       + '<button onclick="rechazarPago(\'' + c.id + '\',\'' + p.cuota + '\',\'' + item.dbKey + '\')" style="padding:11px 20px;background:rgba(248,113,113,.1);border:1px solid rgba(248,113,113,.3);border-radius:50px;font-family:inherit;font-size:.82rem;font-weight:700;color:#f87171;cursor:pointer;transition:all .2s;">❌ Rechazar</button>'
       + '</div>'
       + '</div>';
