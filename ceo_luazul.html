@@ -2897,7 +2897,7 @@ function borrarCompCentral(tipo, pid, idx){
   renderPagoComisiones();
 }
 
-function renderPagosAprobacion() {
+async function renderPagosAprobacion() {
   var pending = getPendingPayments();
   var container = document.getElementById('pagosAprobacionList');
 
@@ -2910,11 +2910,39 @@ function renderPagosAprobacion() {
     return;
   }
 
+  // ── Cargar contratos de los clientes con pagos pendientes ──
+  var clienteIds = [];
+  pending.forEach(function(item){
+    var cid = String(item.client.id);
+    if(clienteIds.indexOf(cid)===-1) clienteIds.push(cid);
+  });
+  var contratosMap = {};
+  try {
+    var ctRes = await sbClient.from('contratos')
+      .select('id,cliente_id,estado,contrato_url,firma_url,created_at,contenido_json')
+      .in('cliente_id', clienteIds)
+      .order('created_at',{ascending:false});
+    if(!ctRes.error && ctRes.data){
+      ctRes.data.forEach(function(ct){
+        var cid = String(ct.cliente_id);
+        if(!contratosMap[cid]) contratosMap[cid] = ct;
+      });
+    }
+  } catch(e){ console.warn('[renderPagosAprobacion] Error cargando contratos:', e); }
+
   var html = '<div style="display:flex;flex-direction:column;gap:14px;">';
   pending.forEach(function(item) {
     var c = item.client;
     var p = item.pago;
+    var esCuota1 = parseInt(p.cuota) === 1;
     var fechaReg = p.registrado ? new Date(p.registrado).toLocaleDateString('es-AR') : '—';
+
+    // ── Buscar contrato del cliente ──
+    var ct = contratosMap[String(c.id)] || null;
+    var tieneContrato = ct && ct.contrato_url;
+    var tieneFirma = ct && ct.firma_url;
+    var estadoContrato = ct ? ct.estado : null;
+
     html += '<div style="background:rgba(5,18,55,.65);border:1px solid rgba(251,146,60,.25);border-radius:18px;padding:22px;position:relative;">'
       + '<div style="position:absolute;top:14px;right:14px;background:rgba(251,146,60,.12);border:1px solid rgba(251,146,60,.3);border-radius:10px;padding:3px 12px;font-size:.65rem;font-weight:700;color:#fb923c;">⏳ Pendiente</div>'
 
@@ -2946,10 +2974,10 @@ function renderPagosAprobacion() {
       // Obs
       + (p.obs ? '<div style="background:rgba(11,61,145,.2);border:1px solid rgba(100,160,255,.1);border-radius:10px;padding:10px 12px;margin-bottom:16px;font-size:.78rem;color:rgba(200,220,255,.75);">💬 ' + p.obs + '</div>' : '')
 
-      // Comprobante — preview inline + link ampliar
+      // ── SECCIÓN: Comprobante de Pago ──
+      + '<div style="font-size:.62rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:rgba(150,190,255,.5);margin-bottom:8px;">📎 Comprobante de Pago</div>'
       + (p.url
         ? '<div style="margin-bottom:16px;">'
-          + '<div style="font-size:.62rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:rgba(150,190,255,.5);margin-bottom:8px;">📎 Comprobante de Pago</div>'
           + '<div style="background:rgba(0,0,0,.3);border:1px solid rgba(100,160,255,.15);border-radius:12px;padding:10px;text-align:center;max-height:280px;overflow:hidden;">'
           + '<img src="' + p.url + '" style="max-width:100%;max-height:260px;border-radius:8px;object-fit:contain;" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'block\';"/>'
           + '<div style="display:none;padding:20px;color:var(--muted);font-size:.75rem;">No se pudo cargar la imagen del comprobante</div>'
@@ -2958,7 +2986,36 @@ function renderPagosAprobacion() {
           + '</div>'
         : '<div style="margin-bottom:16px;background:rgba(248,113,113,.06);border:1px solid rgba(248,113,113,.15);border-radius:10px;padding:12px 14px;font-size:.75rem;color:#fca5a5;">⚠️ Sin comprobante adjunto — no se puede verificar el pago</div>')
 
-      // Action buttons — bloquear aprobar si no hay comprobante
+      // ── SECCIÓN: Contrato (visible para cuota 1 o si existe contrato) ──
+      + (esCuota1 || tieneContrato
+        ? '<div style="font-size:.62rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:rgba(167,139,250,.7);margin-bottom:8px;margin-top:4px;">📋 Contrato' + (esCuota1 ? ' (requerido para cuota 1)' : '') + '</div>'
+        + (tieneContrato
+          ? '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">'
+            // Firma del cliente
+            + (tieneFirma
+              ? '<div style="background:rgba(0,0,0,.3);border:1px solid rgba(167,139,250,.2);border-radius:12px;padding:10px;text-align:center;">'
+                + '<div style="font-size:.6rem;color:rgba(167,139,250,.6);margin-bottom:6px;">FIRMA DEL CLIENTE</div>'
+                + '<img src="' + ct.firma_url + '" style="max-width:100%;max-height:80px;border-radius:6px;object-fit:contain;" onerror="this.outerHTML=\'<span style=font-size:.7rem;color:var(--muted);>No se pudo cargar</span>\'"/>'
+                + '</div>'
+              : '<div style="background:rgba(248,113,113,.06);border:1px solid rgba(248,113,113,.15);border-radius:12px;padding:16px;text-align:center;"><div style="font-size:.72rem;color:#fca5a5;">⚠️ Sin firma</div></div>')
+            // PDF del contrato
+            + '<div style="background:rgba(167,139,250,.06);border:1px solid rgba(167,139,250,.2);border-radius:12px;padding:14px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;">'
+              + '<div style="font-size:.6rem;font-weight:700;color:rgba(167,139,250,.6);letter-spacing:.08em;">ESTADO: ' + (estadoContrato||'—').toUpperCase() + '</div>'
+              + '<a href="' + ct.contrato_url + '" target="_blank" style="display:inline-flex;align-items:center;gap:8px;padding:10px 18px;background:linear-gradient(135deg,#7c3aed,#a78bfa);border-radius:10px;font-size:.78rem;font-weight:700;color:white;text-decoration:none;">📄 Ver Contrato PDF</a>'
+              + (ct.firma_url ? '<a href="' + ct.firma_url + '" target="_blank" style="font-size:.68rem;color:rgba(167,139,250,.7);text-decoration:none;">Ver firma completa</a>' : '')
+              + '</div>'
+            + '</div>'
+          : '<div style="background:rgba(248,113,113,.06);border:1px solid rgba(248,113,113,.15);border-radius:10px;padding:12px 14px;margin-bottom:16px;font-size:.75rem;color:#fca5a5;">⚠️ El cliente aún no firmó el contrato — necesario para activar el plan</div>')
+        : '')
+
+      // ── Resumen de verificación antes de aprobar ──
+      + '<div style="background:rgba(11,61,145,.15);border:1px solid rgba(100,160,255,.1);border-radius:10px;padding:10px 14px;margin-bottom:16px;display:flex;gap:16px;flex-wrap:wrap;font-size:.7rem;">'
+      + '<span style="color:' + (p.url ? '#34d399' : '#f87171') + ';">' + (p.url ? '✅' : '❌') + ' Comprobante</span>'
+      + (esCuota1 ? '<span style="color:' + (tieneContrato ? '#34d399' : '#f87171') + ';">' + (tieneContrato ? '✅' : '❌') + ' Contrato</span>'
+        + '<span style="color:' + (tieneFirma ? '#34d399' : '#f87171') + ';">' + (tieneFirma ? '✅' : '❌') + ' Firma</span>' : '')
+      + '</div>'
+
+      // Action buttons
       + '<div style="display:flex;gap:10px;">'
       + (p.url
         ? '<button onclick="aprobarPago(\'' + c.id + '\',\'' + p.cuota + '\',\'' + item.dbKey + '\')" style="flex:1;padding:11px;background:linear-gradient(135deg,#059669,#047857);border:1px solid rgba(52,211,153,.3);border-radius:50px;font-family:inherit;font-size:.82rem;font-weight:700;color:white;cursor:pointer;transition:all .2s;">✅ Aprobar y Acreditar</button>'
@@ -3069,8 +3126,8 @@ function renderContratosPendientes(){
   el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted);">\u23F3 Cargando contratos...</div>';
 
   sbClient.from('contratos')
-    .select('id, cliente_id, vendedor_id, estado, numero_contrato, fecha_firma, created_at, contenido_json')
-    .in('estado', ['borrador', 'revisado'])
+    .select('id, cliente_id, vendedor_id, estado, numero_contrato, fecha_firma, created_at, contenido_json, contrato_url, firma_url')
+    .in('estado', ['borrador', 'revisado', 'pendiente'])
     .order('created_at', { ascending: false })
     .limit(100)
     .then(function(res){
@@ -3095,8 +3152,9 @@ function renderContratosPendientes(){
         var cuotas        = contenido.cuotas_total   || '\u2014';
         var vendedor      = contenido.vendedor_nombre || ct.vendedor_id || '\u2014';
         var fechaCreado   = new Date(ct.created_at).toLocaleDateString('es-AR');
-        var estadoColor   = ct.estado === 'revisado' ? '#fbbf24' : '#93c5fd';
-        var estadoBg      = ct.estado === 'revisado' ? 'rgba(251,191,36,.1)' : 'rgba(59,130,246,.1)';
+        var estadoColor   = ct.estado === 'pendiente' ? '#fb923c' : ct.estado === 'revisado' ? '#fbbf24' : '#93c5fd';
+        var estadoBg      = ct.estado === 'pendiente' ? 'rgba(251,146,60,.1)' : ct.estado === 'revisado' ? 'rgba(251,191,36,.1)' : 'rgba(59,130,246,.1)';
+        var estadoLabel   = ct.estado === 'pendiente' ? 'PENDIENTE FIRMA CEO' : ct.estado.toUpperCase();
 
         html += '<div style="background:rgba(5,18,55,.65);border:1px solid rgba(167,139,250,.2);border-radius:18px;padding:22px;">'
           + '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;flex-wrap:wrap;gap:8px;">'
@@ -3106,12 +3164,28 @@ function renderContratosPendientes(){
           +     '<div style="font-size:.75rem;color:rgba(200,220,255,.65);margin-top:2px;">' + destino + ' · ' + totalUsd + ' · ' + cuotas + ' cuotas</div>'
           +   '</div>'
           +   '<span style="font-size:.68rem;font-weight:700;padding:3px 12px;border-radius:12px;background:' + estadoBg + ';color:' + estadoColor + ';border:1px solid ' + estadoColor + '33;">'
-          +     ct.estado.toUpperCase()
+          +     estadoLabel
           +   '</span>'
           + '</div>'
           + '<div style="font-size:.72rem;color:rgba(150,190,255,.5);margin-bottom:16px;">'
           +   'Asesor: ' + vendedor + ' \u00b7 Creado: ' + fechaCreado
           + '</div>'
+
+          // Vista previa: firma + PDF
+          + '<div style="display:grid;grid-template-columns:auto 1fr;gap:14px;margin-bottom:16px;align-items:center;">'
+          + (ct.firma_url
+            ? '<div style="background:rgba(0,0,0,.3);border:1px solid rgba(167,139,250,.2);border-radius:10px;padding:8px;text-align:center;">'
+              + '<div style="font-size:.55rem;color:rgba(167,139,250,.6);margin-bottom:4px;">FIRMA</div>'
+              + '<img src="' + ct.firma_url + '" style="max-width:120px;max-height:60px;border-radius:6px;object-fit:contain;"/>'
+              + '</div>'
+            : '<div style="font-size:.72rem;color:#fca5a5;">Sin firma</div>')
+          + (ct.contrato_url
+            ? '<div>'
+              + '<a href="' + ct.contrato_url + '" target="_blank" style="display:inline-flex;align-items:center;gap:8px;padding:9px 16px;background:linear-gradient(135deg,#7c3aed,#a78bfa);border-radius:10px;font-size:.78rem;font-weight:700;color:white;text-decoration:none;">📄 Ver Contrato PDF</a>'
+              + '</div>'
+            : '<div style="font-size:.72rem;color:#fca5a5;">Sin PDF</div>')
+          + '</div>'
+
           + '<div style="display:flex;gap:10px;flex-wrap:wrap;">'
           +   '<button onclick="firmarContratoCEO(\'' + String(ct.id) + '\',\'' + String(ct.cliente_id) + '\')" '
           +   'style="padding:10px 22px;background:linear-gradient(135deg,#7c3aed,#a78bfa);border:none;border-radius:50px;font-family:inherit;font-size:.82rem;font-weight:700;color:white;cursor:pointer;">'
