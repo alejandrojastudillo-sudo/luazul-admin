@@ -1408,7 +1408,18 @@ function aprobarTodos(){
 }
 
 function getPendingPayments(){
-  return (_cachePagos||[]).filter(function(p){ return p.estado==='pendiente'; }).map(function(p){
+  var now = new Date();
+  var mesActual = now.getMonth();
+  var anioActual = now.getFullYear();
+  return (_cachePagos||[]).filter(function(p){
+    if (p.estado !== 'pendiente') return false;
+    // Siempre mostrar cuota 1 pendiente
+    if (parseInt(p.numero_cuota) === 1) return true;
+    // Mostrar solo pagos del mes actual
+    var fecha = p.created_at ? new Date(p.created_at) : null;
+    if (!fecha) return false;
+    return fecha.getMonth() === mesActual && fecha.getFullYear() === anioActual;
+  }).map(function(p){
     var c = (_cacheClientes||[]).find(function(x){ return String(x.id)===String(p.cliente_id); })||{nombre:p.cliente_nombre||'—',destino:'—',paquete:'—',cuotas_pagadas:0,cuotas_total:10};
     return{client:c,pago:{id:p.id,cuota:p.numero_cuota,monto:p.monto_usd,url:p.comprobante_url,fecha:p.fecha_pago,obs:''},dbKey:'supabase'};
   });
