@@ -445,9 +445,10 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
 // ══════════════════════════════════════════════════════
 //  LUAZUL CEO — CAPA DE DATOS: SUPABASE (migración v3)
 // ══════════════════════════════════════════════════════
-var ROLE_SELLER  = 2;
-var ROLE_MANAGER = 3;
 var ROLE_CEO     = 1;
+var ROLE_MANAGER = 2;  // Gerente
+var ROLE_SELLER  = 3;  // Asesor/Vendedor
+var ROLE_SALES_LEADER = 5; // Jefe de Ventas
 var RK = 'luazul_ceo_regiones';
 var _cacheGerentes=null, _cacheVendedores=null, _cacheClientes=null, _cachePagos=null, _cacheRegiones=null;
 // UUID del CEO autenticado — se setea en cLogin / DOMContentLoaded
@@ -480,7 +481,7 @@ function cargarDatosSupabase(){
       });
       dbs(RK,_cacheRegiones);
       return sbClient.from('staff_profiles')
-        .select('id,user_id,nombre,apellido,activo,badge,color,role_id,ciudad,telefono1,telefono2,domicilio,cbu,region_id,com_pct,comprobantes_json')
+        .select('*')
         .eq('role_id',ROLE_MANAGER);
     })
     .then(function(gRes){
@@ -495,7 +496,7 @@ function cargarDatosSupabase(){
         g.region_ids=grData.filter(function(x){return x.gerente_id===g.id;}).map(function(x){return x.region_id;});
       });
       return sbClient.from('staff_profiles')
-        .select('id,user_id,nombre,apellido,activo,badge,color,role_id,ciudad,telefono1,telefono2,domicilio,cbu,region_id,fecha_alta,comprobantes_json')
+        .select('*')
         .eq('role_id',ROLE_SELLER);
     })
     .then(function(vRes){
@@ -552,6 +553,17 @@ var CEO_ALLOWED_EMAILS = [
   'luazul.turismobr@gmail.com',
   'luazulsmarttravel@gmail.com'
 ];
+var CEO_USERS_KEY = 'luazul_ceo_users';
+
+function getCeoUsers(){
+  var stored = dbg(CEO_USERS_KEY);
+  if(stored && stored.length) return stored;
+  // Generar lista desde CEO_ALLOWED_EMAILS si no hay datos en localStorage
+  return CEO_ALLOWED_EMAILS.map(function(email, i){
+    var name = email.split('@')[0].replace(/\./g, ' ').replace(/\b\w/g, function(c){ return c.toUpperCase(); });
+    return { id: 'ceo_' + i, nombre: name, usuario: email, password: '' };
+  });
+}
 
 function cLogin(){
   var u = document.getElementById('cUser').value.trim().toLowerCase();
@@ -1635,7 +1647,7 @@ function renderClientes(){
 function renderPwCeoUsers(){
   var users=getCeoUsers();
   var el=document.getElementById('pwCeoUsers'); if(!el)return;
-  // Superadmin (u2) es incognito - no aparece en el panel
+  if(!users||!users.length){el.innerHTML='<div style="text-align:center;padding:20px;color:var(--muted);font-size:.82rem;">No hay usuarios CEO para gestionar contraseñas.</div>';return;}
   var visibles=users.filter(function(u){ return u.id !== 'u2'; });
   el.innerHTML=visibles.map(function(u){
     var ini=u.nombre[0].toUpperCase();
