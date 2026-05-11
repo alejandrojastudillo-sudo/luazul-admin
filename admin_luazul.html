@@ -903,7 +903,10 @@ body::after {
     <div id="comunicacionesSection" class="section-container">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
         <h2 style="font-size:1rem;font-weight:900;">📩 Comunicaciones internas</h2>
-        <button class="tb-btn" onclick="volverAClientes()">← Volver a mis clientes</button>
+        <div style="display:flex;gap:8px;">
+          <button class="tb-btn" onclick="abrirCrearCanal()" style="background:rgba(74,222,128,.1);border-color:rgba(74,222,128,.25);color:#4ade80;">➕ Nuevo Canal</button>
+          <button class="tb-btn" onclick="volverAClientes()">← Volver a mis clientes</button>
+        </div>
       </div>
       <div id="comunicacionesContainer"></div>
     </div>
@@ -3195,6 +3198,72 @@ async function enviarMensaje(canalId, respuestaA) {
 
 async function enviarRespuesta(msgId, canalId) {
   await enviarMensaje(String(canalId), msgId);
+}
+
+// ── Crear nuevo canal ──
+function abrirCrearCanal() {
+  var ov = document.getElementById('crearCanalOverlay');
+  if (ov) { ov.style.display = 'flex'; return; }
+  ov = document.createElement('div');
+  ov.id = 'crearCanalOverlay';
+  ov.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.6);z-index:9999;display:flex;align-items:center;justify-content:center;';
+  ov.onclick = function(e) { if (e.target === ov) cerrarCrearCanal(); };
+  ov.innerHTML = '<div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:24px;width:420px;max-width:90vw;">' +
+    '<h3 style="font-family:Syne,sans-serif;font-size:.95rem;font-weight:800;margin-bottom:16px;">&#x2795; Nuevo Canal</h3>' +
+    '<label style="display:block;margin-bottom:12px;">' +
+      '<span style="font-size:.78rem;font-weight:600;color:var(--muted);">Nombre del canal</span>' +
+      '<input id="ncNombre" type="text" placeholder="Ej: general-moras" style="width:100%;margin-top:4px;padding:8px 12px;background:rgba(255,255,255,.04);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-family:inherit;font-size:.85rem;" />' +
+    '</label>' +
+    '<label style="display:block;margin-bottom:12px;">' +
+      '<span style="font-size:.78rem;font-weight:600;color:var(--muted);">Descripción</span>' +
+      '<input id="ncDesc" type="text" placeholder="Descripción breve..." style="width:100%;margin-top:4px;padding:8px 12px;background:rgba(255,255,255,.04);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-family:inherit;font-size:.85rem;" />' +
+    '</label>' +
+    '<div style="margin-bottom:16px;">' +
+      '<span style="font-size:.78rem;font-weight:600;color:var(--muted);display:block;margin-bottom:8px;">¿Quién puede ver este canal?</span>' +
+      '<label style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:.85rem;cursor:pointer;"><input type="checkbox" id="ncRolCeo" /> CEO</label>' +
+      '<label style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:.85rem;cursor:pointer;"><input type="checkbox" id="ncRolGerente" /> Gerente</label>' +
+      '<label style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:.85rem;cursor:pointer;"><input type="checkbox" id="ncRolJefe" /> Jefe de Ventas</label>' +
+      '<label style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:.85rem;cursor:pointer;"><input type="checkbox" id="ncRolAsesor" checked /> Asesor</label>' +
+    '</div>' +
+    '<div style="display:flex;gap:10px;justify-content:flex-end;">' +
+      '<button onclick="cerrarCrearCanal()" style="padding:8px 16px;background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:8px;color:var(--text);cursor:pointer;font-family:inherit;font-size:.82rem;">Cancelar</button>' +
+      '<button onclick="crearNuevoCanal()" style="padding:8px 20px;background:linear-gradient(135deg,#0891b2,#06b6d4);border:none;border-radius:8px;color:white;font-weight:700;cursor:pointer;font-family:inherit;font-size:.82rem;">Crear Canal</button>' +
+    '</div>' +
+  '</div>';
+  document.body.appendChild(ov);
+}
+
+function cerrarCrearCanal() {
+  var ov = document.getElementById('crearCanalOverlay');
+  if (ov) ov.remove();
+}
+
+async function crearNuevoCanal() {
+  var nombre = document.getElementById('ncNombre');
+  var desc = document.getElementById('ncDesc');
+  var roles = [];
+  if (document.getElementById('ncRolCeo').checked) roles.push('ceo');
+  if (document.getElementById('ncRolGerente').checked) roles.push('gerente');
+  if (document.getElementById('ncRolJefe').checked) roles.push('jefe_ventas');
+  if (document.getElementById('ncRolAsesor').checked) roles.push('asesor');
+  if (!nombre || !nombre.value.trim()) { showToast('⚠️ Ingresá un nombre para el canal'); return; }
+  if (!roles.length) { showToast('⚠️ Seleccioná al menos un rol'); return; }
+  try {
+    var { error } = await sbClient.from('canales_equipo').insert({
+      nombre: nombre.value.trim(),
+      descripcion: desc ? desc.value.trim() : '',
+      tipo: 'publico',
+      miembros: { roles: roles },
+      creado_por: _currentProfile.user_id
+    });
+    if (error) throw error;
+    showToast('✅ Canal "' + nombre.value.trim() + '" creado');
+    cerrarCrearCanal();
+    renderComunicaciones();
+  } catch(err) {
+    console.error('[crearNuevoCanal]', err);
+    showToast('❌ Error: ' + (err.message || err));
+  }
 }
 
 // Event listener global para botones "Copiar número de ticket" (.copiar-ticket)
