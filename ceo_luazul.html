@@ -509,7 +509,7 @@ function cargarDatosSupabase(){
       if(cRes.error) throw cRes.error;
       _cacheClientes=(cRes.data||[]).map(mapCliente);
       return sbClient.from('pagos')
-        .select('id,reserva_id,numero_cuota,monto_usd,estado,fecha_pago,comprobante_url,cliente_id,aprobado_por,vendedor_nombre,cliente_nombre,created_at')
+        .select('*')
         .order('created_at',{ascending:false}).limit(500);
     })
     .then(function(pRes){
