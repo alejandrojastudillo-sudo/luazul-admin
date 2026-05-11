@@ -3528,6 +3528,10 @@ function escanearMora(){
     LZ_AUTH.togglePassword(inputId, btn);
   };
 
+  /* ── Exportar al scope global ─────────────────────────── */
+  global.LZ_AUTH = LZ_AUTH;
+
+})(window);
 
 // ══════════════════════════════════════════════════════
 //  MÓDULO DE COMUNICACIONES INTERNAS — CEO
@@ -3805,11 +3809,6 @@ async function crearNuevoCanal() {
     showToast('Error: ' + (err.message || err));
   }
 }
-
-  /* ── Exportar al scope global ─────────────────────────── */
-  global.LZ_AUTH = LZ_AUTH;
-
-})(window);
 
 </script>
 <!-- lzToggle() ya está definido como alias en auth.js — no se duplica aquí -->
