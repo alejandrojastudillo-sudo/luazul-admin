@@ -2908,12 +2908,17 @@ function guardarTicketAsesor() {
     p_asignado_a:   null,
     p_prioridad:    prioridad,
     p_categoria:    categoria
-  }).then(function() {
+  }).then(function(result) {
+    if (result && result.error) throw result.error;
     closeModal();
     cargarTicketsAsesor();
     showToast('✅ Ticket enviado. Gerencia fue notificada.');
-  }).catch(function(e) {
-    showToast('❌ Error: ' + (e.message || 'No se pudo crear el ticket'));
+  }).catch(function(err) {
+    console.error('Error RPC crear_ticket completo:', err);
+    if (err.details) console.error('Detalles:', err.details);
+    if (err.hint) console.error('Hint:', err.hint);
+    if (err.code) console.error('Código:', err.code);
+    showToast('❌ Error: ' + (err.message || 'No se pudo crear el ticket'));
   }).finally(function() { if (btn) btn.disabled = false; });
 }
 
@@ -3528,7 +3533,7 @@ body{background:#f0f4fa;font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif
           });
         }
         const uuid = generarUUID();
-        const fileName = `presupuesto_${uuid}.pdf`;
+        const fileName = `presupuestos/presupuesto_${uuid}.pdf`;
         const { error: uploadErr } = await sbClient.storage.from('presupuestos').upload(fileName, pdfBlob, { contentType: 'application/pdf' });
         if (uploadErr) throw uploadErr;
         const { data: urlData } = sbClient.storage.from('presupuestos').getPublicUrl(fileName);
