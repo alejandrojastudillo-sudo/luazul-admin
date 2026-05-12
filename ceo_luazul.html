@@ -3193,9 +3193,8 @@ function confirmarRechazo(){
 
   if(!_rechazoPago){ cerrarModalRechazo(); return; }
 
-  var _pagoId = _rechazoPago.id;
-  var _clientId = String(_rechazoClientId);
-  var _cuotaNum = parseInt(_rechazoCuotaKey);
+  var _clientId = String(_rechazoPago.cliente_id || _rechazoClientId);
+  var _cuotaNum = parseInt(_rechazoPago.numero_cuota || _rechazoCuotaKey);
   var esCuota1 = _cuotaNum === 1;
   // Formato: CEO_rechazado|Motivo aquí
   var aprobadoPor = 'CEO_rechazado|' + motivo;
@@ -3204,12 +3203,26 @@ function confirmarRechazo(){
   var btnConfirm = document.querySelector('#rechazoModal button[onclick="confirmarRechazo()"]');
   if(btnConfirm){ btnConfirm.disabled = true; btnConfirm.textContent = '⏳ Procesando...'; }
 
-  // PASO 1 — Rechazar el pago con motivo
-  sbClient.from('pagos').update({ estado: 'rechazado', aprobado_por: aprobadoPor }).eq('id', _pagoId)
+  // PASO 1 — Rechazar el pago usando cliente_id + numero_cuota como clave (más robusto que id)
+  sbClient.from('pagos')
+    .update({ estado: 'rechazado', aprobado_por: aprobadoPor })
+    .eq('cliente_id', _clientId)
+    .eq('numero_cuota', _cuotaNum)
+    .select()
     .then(function(res){
+      console.log('[rechazarPago] Supabase response:', JSON.stringify(res));
       if(res.error) throw res.error;
-      _rechazoPago.estado = 'rechazado';
-      _rechazoPago.aprobado_por = aprobadoPor;
+      if(!res.data || res.data.length === 0){
+        throw new Error('No se encontró el pago para rechazar (cliente: ' + _clientId + ', cuota: ' + _cuotaNum + ')');
+      }
+      // Actualizar cache local
+      var cacheIdx = (_cachePagos||[]).findIndex(function(x){
+        return String(x.cliente_id) === _clientId && String(x.numero_cuota) === String(_cuotaNum);
+      });
+      if(cacheIdx >= 0){
+        _cachePagos[cacheIdx].estado = 'rechazado';
+        _cachePagos[cacheIdx].aprobado_por = aprobadoPor;
+      }
       // PASO 2 — Si es cuota 1, también rechazar el contrato asociado
       if(esCuota1){
         return sbClient.from('contratos')
@@ -3218,13 +3231,17 @@ function confirmarRechazo(){
           .in('estado', ['pendiente', 'borrador', 'revisado']);
       }
     })
-    .then(function(){
+    .then(function(ctRes){
+      if(ctRes && ctRes.error){
+        console.warn('[rechazarPago] Error al rechazar contrato:', ctRes.error.message);
+      }
       cerrarModalRechazo();
       renderPagosAprobacion();
       showToast('❌ Comprobante rechazado · Motivo: ' + motivo);
     })
     .catch(function(e){
-      showToast('❌ Error: ' + (e.message || ''));
+      console.error('[rechazarPago] Error completo:', e);
+      showToast('❌ Error al rechazar: ' + (e.message || ''));
       if(btnConfirm){ btnConfirm.disabled = false; btnConfirm.textContent = '❌ Confirmar Rechazo'; }
     });
 }
