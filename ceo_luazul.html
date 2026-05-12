@@ -3824,14 +3824,25 @@ function escCeo(s) {
 
 var _canalActivoCeo = null;
 var _staffCacheCeo = [];
+var _ROLE_NAMES = {1:'CEO', 2:'Gerente', 3:'Asesor', 4:'Jefe de Ventas', 5:'Admin'};
 
 async function cargarStaffCeo() {
   if (_staffCacheCeo.length) return _staffCacheCeo;
   try {
-    var res = await sbClient.from('staff_profiles').select('user_id, nombre, role');
+    // Usar columnas que existen: id, user_id, nombre, apellido, role_id, badge
+    var res = await sbClient.from('staff_profiles').select('id, user_id, nombre, apellido, role_id, badge, activo');
     console.log('[cargarStaffCeo] resultado:', res.data ? res.data.length + ' registros' : 'sin datos', res.error || '');
     if (res.error) throw res.error;
-    _staffCacheCeo = res.data || [];
+    _staffCacheCeo = (res.data || []).map(function(r) {
+      return {
+        user_id: r.user_id || r.id,
+        nombre: (r.nombre || '') + (r.apellido ? ' ' + r.apellido : ''),
+        role: _ROLE_NAMES[r.role_id] || ('Rol ' + (r.role_id || '?')),
+        badge: r.badge || '',
+        activo: r.activo !== false
+      };
+    });
+    console.log('[cargarStaffCeo] cache listo:', _staffCacheCeo.length, 'usuarios');
     return _staffCacheCeo;
   } catch(e) { console.warn('[cargarStaffCeo]', e); return []; }
 }

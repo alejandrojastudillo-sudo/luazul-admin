@@ -3051,14 +3051,24 @@ async function subirAdjuntoATicketAsesor(ticketId) {
 // ──────────────────────────────────────────────────────────────────────────
 
 var _staffCacheAdmin = [];
+var _ROLE_NAMES = {1:'CEO', 2:'Gerente', 3:'Asesor', 4:'Jefe de Ventas', 5:'Admin'};
 
 async function cargarStaffAdmin() {
   if (_staffCacheAdmin.length) return _staffCacheAdmin;
   try {
-    var res = await sbClient.from('staff_profiles').select('user_id, nombre, role');
+    var res = await sbClient.from('staff_profiles').select('id, user_id, nombre, apellido, role_id, badge, activo');
     console.log('[cargarStaffAdmin] resultado:', res.data ? res.data.length + ' registros' : 'sin datos', res.error || '');
     if (res.error) throw res.error;
-    _staffCacheAdmin = res.data || [];
+    _staffCacheAdmin = (res.data || []).map(function(r) {
+      return {
+        user_id: r.user_id || r.id,
+        nombre: (r.nombre || '') + (r.apellido ? ' ' + r.apellido : ''),
+        role: _ROLE_NAMES[r.role_id] || ('Rol ' + (r.role_id || '?')),
+        badge: r.badge || '',
+        activo: r.activo !== false
+      };
+    });
+    console.log('[cargarStaffAdmin] cache listo:', _staffCacheAdmin.length, 'usuarios');
     return _staffCacheAdmin;
   } catch(e) { console.warn('[cargarStaffAdmin]', e); return []; }
 }

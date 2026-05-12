@@ -3626,14 +3626,24 @@ window.subirAdjuntoATicketGerente = subirAdjuntoATicketGerente;
 
 var _canalActivoGerente = null;
 var _staffCacheGerente = [];
+var _ROLE_NAMES = {1:'CEO', 2:'Gerente', 3:'Asesor', 4:'Jefe de Ventas', 5:'Admin'};
 
 async function cargarStaffGerente() {
   if (_staffCacheGerente.length) return _staffCacheGerente;
   try {
-    var res = await sbClient.from('staff_profiles').select('user_id, nombre, role');
+    var res = await sbClient.from('staff_profiles').select('id, user_id, nombre, apellido, role_id, badge, activo');
     console.log('[cargarStaffGerente] resultado:', res.data ? res.data.length + ' registros' : 'sin datos', res.error || '');
     if (res.error) throw res.error;
-    _staffCacheGerente = res.data || [];
+    _staffCacheGerente = (res.data || []).map(function(r) {
+      return {
+        user_id: r.user_id || r.id,
+        nombre: (r.nombre || '') + (r.apellido ? ' ' + r.apellido : ''),
+        role: _ROLE_NAMES[r.role_id] || ('Rol ' + (r.role_id || '?')),
+        badge: r.badge || '',
+        activo: r.activo !== false
+      };
+    });
+    console.log('[cargarStaffGerente] cache listo:', _staffCacheGerente.length, 'usuarios');
     return _staffCacheGerente;
   } catch(e) { console.warn('[cargarStaffGerente]', e); return []; }
 }
