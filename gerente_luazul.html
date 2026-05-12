@@ -72,6 +72,10 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;back
 .lz-pass-wrap input{padding-right:50px;}
 .lz-eye-btn{position:absolute;right:13px;top:50%;transform:translateY(-50%);background:none;border:none;color:rgba(229,228,226,.3);cursor:pointer;padding:8px;display:flex;align-items:center;transition:color .2s;min-width:44px;min-height:44px;justify-content:center;}
 .lz-eye-btn:hover{color:rgba(229,228,226,.8);}
+.lz-phone-wrap{display:flex;gap:0;}
+.lz-phone-wrap select{width:auto;min-width:110px;padding:7px 6px 7px 8px;font-size:.78rem;border:1px solid rgba(100,160,255,.15);border-right:none;border-radius:8px 0 0 8px;background:rgba(100,160,255,.06);color:rgba(200,220,255,.85);font-family:Mulish,sans-serif;appearance:auto;cursor:pointer;flex-shrink:0;}
+.lz-phone-wrap select:focus{outline:none;border-color:rgba(0,210,255,.4);}
+.lz-phone-wrap input{border-radius:0 8px 8px 0!important;flex:1;}
 .lbtn{width:100%;padding:14px;margin-top:4px;margin-bottom:10px;background:linear-gradient(90deg,#4a4a4a 0%,#E5E4E2 40%,#fff 70%,#a0a0a0 100%);background-size:200% auto;color:#0a0a0a;border:none;border-radius:12px;font-family:'Syne',sans-serif;font-size:.92rem;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;cursor:pointer;box-shadow:0 4px 24px rgba(229,228,226,.2);transition:background-position .4s,transform .15s,box-shadow .3s;}
 .lbtn:hover{background-position:right center;box-shadow:0 6px 36px rgba(229,228,226,.4);transform:translateY(-1px);}
 .lbtn:active{transform:translateY(0);}
@@ -1499,8 +1503,8 @@ function openAddVendor() {
     + '<div class="mi"><div class="ml">Email</div><input class="min" id="vE" placeholder="laura@luazul.com"/></div>'
     + '<input type="hidden" id="vReg" value="">'
     + '<div class="mi"><div class="ml">Contraseña (panel admin)</div><input class="min" id="vP" placeholder="Contraseña segura"/></div>'
-    + '<div class="mi"><div class="ml">Teléfono principal</div><input class="min" id="vT" placeholder="+54 9 11 1234-5678"/></div>'
-    + '<div class="mi"><div class="ml">Teléfono de referencia</div><input class="min" id="vT2" placeholder="+54 9 351 9876-5432"/></div>'
+    + '<div class="mi"><div class="ml">Teléfono principal</div><div class="lz-phone-wrap">'+lzBuildPhoneSelect('prefix_vT','+54')+'<input class="min" id="vT" placeholder="9 11 1234-5678" value="+54 "/></div></div>'
+    + '<div class="mi"><div class="ml">Teléfono de referencia</div><div class="lz-phone-wrap">'+lzBuildPhoneSelect('prefix_vT2','+54')+'<input class="min" id="vT2" placeholder="9 11 9876-5432" value="+54 "/></div></div>'
     + '<div class="mi" style="grid-column:span 2;"><div class="ml">Domicilio</div><input class="min" id="vDom" placeholder="Ej: Av. Corrientes 1234, Buenos Aires"/></div>'
     + '<div class="mi" style="grid-column:span 2;">'
     + '<div class="ml">💰 CBU / Alias bancario <span style="font-weight:400;color:var(--muted);font-size:.75rem;">(para cobro de comisiones)</span></div>'
@@ -1618,8 +1622,8 @@ function editVendor(vid) {
     + '<div class="mbody"><div class="mgrid">'
     + '<div class="mi"><div class="ml">Nombre</div><input class="min" id="evN" value="' + esc(v.nombre) + '"/></div>'
     + '<div class="mi"><div class="ml">Email</div><input class="min" id="evE" value="' + esc(v.email) + '"/></div>'
-    + '<div class="mi"><div class="ml">Teléfono principal</div><input class="min" id="evT1" value="' + (v.telefono1 || '') + '"/></div>'
-    + '<div class="mi"><div class="ml">Teléfono de referencia</div><input class="min" id="evT2" value="' + (v.telefono2 || '') + '"/></div>'
+    + '<div class="mi"><div class="ml">Teléfono principal</div><div class="lz-phone-wrap">'+lzBuildPhoneSelect('prefix_evT1',lzDetectPrefix(v.telefono1||''))+'<input class="min" id="evT1" value="' + (v.telefono1 || '') + '" placeholder="9 11 1234-5678"/></div></div>'
+    + '<div class="mi"><div class="ml">Teléfono de referencia</div><div class="lz-phone-wrap">'+lzBuildPhoneSelect('prefix_evT2',lzDetectPrefix(v.telefono2||''))+'<input class="min" id="evT2" value="' + (v.telefono2 || '') + '" placeholder="9 11 9876-5432"/></div></div>'
     + '<div class="mi" style="grid-column:span 2;"><div class="ml">Domicilio</div><input class="min" id="evDom" value="' + esc(v.domicilio || '') + '"/></div>'
     + '<div class="mi" style="grid-column:span 2;"><div class="ml">💰 CBU / Alias bancario</div>'
     + '<input class="min" id="evCBU" value="' + esc(v.cbu || '') + '" style="font-family:monospace;"/></div>'
@@ -1923,7 +1927,7 @@ function openClientDetail(id) {
           <div><label style="font-size:.68rem;color:var(--muted);display:block;margin-bottom:4px;">Nombre completo</label><input class="edit-input" id="efNombre" value="${esc(c.nombre || '')}"></div>
           <div><label style="font-size:.68rem;color:var(--muted);display:block;margin-bottom:4px;">Email</label><input class="edit-input" id="efEmail" type="email" value="${esc(c.email || '')}"></div>
           <div><label style="font-size:.68rem;color:var(--muted);display:block;margin-bottom:4px;">Documento</label><input class="edit-input" id="efDoc" value="${esc(c.documento || '')}"></div>
-          <div><label style="font-size:.68rem;color:var(--muted);display:block;margin-bottom:4px;">Teléfono</label><input class="edit-input" id="efTel" value="${esc(c.telefono || '')}"></div>
+          <div><label style="font-size:.68rem;color:var(--muted);display:block;margin-bottom:4px;">Teléfono</label><div class="lz-phone-wrap">${lzBuildPhoneSelect('prefix_efTel',lzDetectPrefix(c.telefono||''))}<input class="edit-input" id="efTel" value="${esc(c.telefono || '')}" placeholder="9 11 1234-5678"></div></div>
           <div><label style="font-size:.68rem;color:var(--muted);display:block;margin-bottom:4px;">Destino</label>
             <select class="edit-input" id="efDest">
               <option value="Cabo Frío, Brasil" ${c.destino === 'Cabo Frío, Brasil' ? 'selected' : ''}>🏖️ Cabo Frío</option>
@@ -3904,13 +3908,13 @@ window.enviarRespuestaGerente      = enviarRespuestaGerente;
               <h3><span>👤</span> Datos personales</h3>
               <div class="manager-input-group"><label>Nombre completo *</label><input id="slNombre" class="edit-input" placeholder="Ej: Laura Gómez" autocomplete="off"></div>
               <div class="manager-input-group"><label>Email *</label><input id="slEmail" type="email" class="edit-input" placeholder="jefe@luazul.com" autocomplete="off"></div>
-              <div class="manager-input-group"><label>Contraseña *</label><input id="slPass" type="password" class="edit-input" placeholder="Contraseña" autocomplete="off"></div>
+              <div class="manager-input-group"><label>Contraseña *</label><div class="lz-pass-wrap" style="display:inline-flex;position:relative;"><input id="slPass" type="password" class="edit-input" placeholder="Contraseña" autocomplete="off" style="padding-right:50px!important;"><button type="button" class="lz-eye-btn" onclick="lzToggle('slPass',this)" tabindex="-1"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg></button></div></div>
             </div>
             <div class="manager-modal-section">
               <h3><span>📞</span> Contacto</h3>
               <div class="manager-phone-group" style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
-                <div class="manager-input-group"><label>Teléfono principal</label><input id="slTel1" class="edit-input" placeholder="+54 9 11 1234-5678"></div>
-                <div class="manager-input-group"><label>Teléfono de referencia</label><input id="slTel2" class="edit-input" placeholder="+54 9 351 9876-5432"></div>
+                <div class="manager-input-group"><label>Teléfono principal</label><div class="lz-phone-wrap"><select id="prefix_slTel1" onchange="lzSyncPhonePrefix('prefix_slTel1','slTel1')"><option value="+54" selected>🇦🇷 +54</option><option value="+55">🇧🇷 +55</option><option value="+56">🇨🇱 +56</option><option value="+57">🇨🇴 +57</option><option value="+52">🇲🇽 +52</option><option value="+598">🇺🇾 +598</option><option value="+58">🇻🇪 +58</option><option value="+34">🇪🇸 +34</option><option value="+1">🇺🇸 +1</option><option value="+595">🇵🇾 +595</option><option value="+591">🇧🇴 +591</option><option value="+51">🇵🇪 +51</option><option value="+593">🇪🇨 +593</option><option value="+507">🇵🇦 +507</option><option value="+506">🇨🇷 +506</option></select><input id="slTel1" class="edit-input" placeholder="9 11 1234-5678" value="+54 "></div></div>
+                <div class="manager-input-group"><label>Teléfono de referencia</label><div class="lz-phone-wrap"><select id="prefix_slTel2" onchange="lzSyncPhonePrefix('prefix_slTel2','slTel2')"><option value="+54" selected>🇦🇷 +54</option><option value="+55">🇧🇷 +55</option><option value="+56">🇨🇱 +56</option><option value="+57">🇨🇴 +57</option><option value="+52">🇲🇽 +52</option><option value="+598">🇺🇾 +598</option><option value="+58">🇻🇪 +58</option><option value="+34">🇪🇸 +34</option><option value="+1">🇺🇸 +1</option><option value="+595">🇵🇾 +595</option><option value="+591">🇧🇴 +591</option><option value="+51">🇵🇪 +51</option><option value="+593">🇪🇨 +593</option><option value="+507">🇵🇦 +507</option><option value="+506">🇨🇷 +506</option></select><input id="slTel2" class="edit-input" placeholder="9 11 9876-5432" value="+54 "></div></div>
               </div>
               <div class="manager-input-group"><label>Domicilio</label><input id="slDom" class="edit-input" placeholder="Av. Corrientes 1234, Buenos Aires"></div>
             </div>
@@ -4171,6 +4175,23 @@ function verDetalleProspectoGerente(id) {
 }
 
 window.mostrarRespuestaGerente     = mostrarRespuestaGerente;
+
+var LZ_PHONE_PREFIXES = [
+  {code:'+54',flag:'🇦🇷',label:'Argentina'},{code:'+55',flag:'🇧🇷',label:'Brasil'},
+  {code:'+56',flag:'🇨🇱',label:'Chile'},{code:'+57',flag:'🇨🇴',label:'Colombia'},
+  {code:'+52',flag:'🇲🇽',label:'México'},{code:'+598',flag:'🇺🇾',label:'Uruguay'},
+  {code:'+58',flag:'🇻🇪',label:'Venezuela'},{code:'+34',flag:'🇪🇸',label:'España'},
+  {code:'+1',flag:'🇺🇸',label:'USA'},{code:'+595',flag:'🇵🇾',label:'Paraguay'},
+  {code:'+591',flag:'🇧🇴',label:'Bolivia'},{code:'+51',flag:'🇵🇪',label:'Perú'},
+  {code:'+593',flag:'🇪🇨',label:'Ecuador'},{code:'+507',flag:'🇵🇦',label:'Panamá'},
+  {code:'+506',flag:'🇨🇷',label:'Costa Rica'}
+];
+function lzBuildPhoneSelect(selectId,currentVal){
+  var opts=LZ_PHONE_PREFIXES.map(function(p){return '<option value="'+p.code+'"'+(currentVal===p.code?' selected':'')+'>'+p.flag+' '+p.code+'</option>';}).join('');
+  return '<select id="'+selectId+'" onchange="lzSyncPhonePrefix(\''+selectId+'\',\''+selectId.replace('prefix_','')+'\')">'+opts+'</select>';
+}
+function lzSyncPhonePrefix(prefixId,inputId){var sel=document.getElementById(prefixId);var inp=document.getElementById(inputId);if(!sel||!inp)return;var prefix=sel.value;var raw=inp.value.replace(/^\+\d+\s*/,'');inp.value=prefix+' '+raw;}
+function lzDetectPrefix(val){if(!val)return '+54';val=val.trim();for(var i=0;i<LZ_PHONE_PREFIXES.length;i++){if(val.indexOf(LZ_PHONE_PREFIXES[i].code)===0)return LZ_PHONE_PREFIXES[i].code;}return '+54';}
 </script>
 </body>
 </html>

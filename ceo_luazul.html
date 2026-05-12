@@ -131,6 +131,14 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
 /* SEM */
 .sem{width:9px;height:9px;border-radius:50%;box-shadow:0 0 5px currentColor;}
 .sem.r{background:#ef4444;color:#ef4444;}.sem.n{background:#f97316;color:#f97316;}.sem.a{background:#eab308;color:#eab308;}.sem.v{background:#22c55e;color:#22c55e;}.sem.b{background:#6b7280;color:#6b7280;box-shadow:none;}
+.lz-pass-wrap{position:relative;}
+.lz-pass-wrap input{padding-right:50px!important;}
+.lz-eye-btn{position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:rgba(0,210,255,.3);cursor:pointer;padding:6px;display:flex;align-items:center;transition:color .2s;min-width:36px;min-height:36px;justify-content:center;}
+.lz-eye-btn:hover{color:rgba(0,210,255,.8);}
+.lz-phone-wrap{display:flex;gap:0;}
+.lz-phone-wrap select{width:auto;min-width:110px;padding:7px 6px 7px 8px;font-size:.78rem;border:1px solid rgba(100,160,255,.15);border-right:none;border-radius:8px 0 0 8px;background:rgba(100,160,255,.06);color:rgba(200,220,255,.85);font-family:Mulish,sans-serif;appearance:auto;cursor:pointer;flex-shrink:0;}
+.lz-phone-wrap select:focus{outline:none;border-color:rgba(0,210,255,.4);}
+.lz-phone-wrap input{border-radius:0 8px 8px 0!important;flex:1;}
 </style>
 
   <!-- ── SUPABASE SDK ──────────────────────────────────── -->
@@ -1591,7 +1599,7 @@ function openAddClienteCeo(){
     '<div class="mbody"><div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'+
     '<div class="mitem"><div class="ml">Nombre completo</div><input class="medit" id="ccNombre" placeholder="Ej: Ana García" /></div>'+
     '<div class="mitem"><div class="ml">Email</div><input class="medit" id="ccEmail" placeholder="ana@email.com" /></div>'+
-    '<div class="mitem"><div class="ml">Teléfono</div><input class="medit" id="ccTel" placeholder="+54 9 11 1234-5678" /></div>'+
+    '<div class="mitem"><div class="ml">Teléfono</div><div class="lz-phone-wrap">'+lzBuildPhoneSelect('prefix_ccTel','')+'<input class="medit" id="ccTel" placeholder="9 11 1234-5678" value="+54 " /></div></div>'+
     '<div class="mitem"><div class="ml">DNI / Documento</div><input class="medit" id="ccDoc" placeholder="12345678" /></div>'+
     '<div class="mitem"><div class="ml">Destino</div><select class="medit" id="ccDest"><option value="">— Seleccionar —</option><option>Cabo Frío</option><option>Búzios</option><option>Arraial do Cabo</option><option>Copacabana</option><option>Río de Janeiro</option></select></div>'+
     '<div class="mitem"><div class="ml">Paquete</div><input class="medit" id="ccPkg" placeholder="Ej: 2 pax · 10 cuotas" /></div>'+
@@ -1700,10 +1708,8 @@ function renderPwCeoUsers(){
       +'<div><div style="font-weight:700;font-size:.88rem;color:var(--purple);">'+u.nombre+'</div>'
       +'<div style="font-size:.68rem;color:var(--muted);">'+u.usuario+'</div>'
       +'</div></div>'
-      +'<div class="mitem"><div class="ml">Nueva contrasena</div>'
-      +'<input class="medit" id="ceou-pass-'+realIdx+'" type="password" placeholder="Nueva contrasena" /></div>'
-      +'<div class="mitem"><div class="ml">Confirmar contrasena</div>'
-      +'<input class="medit" id="ceou-pass2-'+realIdx+'" type="password" placeholder="Repetila" /></div>'
+      +'<div class="mitem"><div class="ml">Nueva contrasena</div><div class="lz-pass-wrap"><input class="medit" id="ceou-pass-'+realIdx+'" type="password" placeholder="Nueva contrasena" /><button type="button" class="lz-eye-btn" onclick="lzToggle(\'ceou-pass-'+realIdx+'\',this)" tabindex="-1"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg></button></div></div>'
+      +'<div class="mitem"><div class="ml">Confirmar contrasena</div><div class="lz-pass-wrap"><input class="medit" id="ceou-pass2-'+realIdx+'" type="password" placeholder="Repetila" /><button type="button" class="lz-eye-btn" onclick="lzToggle(\'ceou-pass2-'+realIdx+'\',this)" tabindex="-1"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg></button></div></div>'
       +'<button onclick="saveCeoUser(\"'+u.id+'\",'+realIdx+')" style="width:100%;padding:9px;margin-top:8px;background:linear-gradient(135deg,#7c3aed,#a78bfa);border:none;color:white;border-radius:8px;font-family:Mulish,sans-serif;font-size:.8rem;font-weight:700;cursor:pointer;">Guardar nueva contrasena</button>'
       +'</div>';
   }).join('');
@@ -1786,10 +1792,10 @@ function openAddVendorCeo(){
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'+
     '<div class="mitem"><div class="ml">Nombre completo</div><input class="medit" id="caVN" placeholder="Ej: Laura Mendoza" /></div>'+
     '<div class="mitem"><div class="ml">Email</div><input class="medit" id="caVE" placeholder="laura@luazul.com" /></div>'+
-    '<div class="mitem"><div class="ml">Contraseña</div><input class="medit" id="caVP" placeholder="Contraseña de acceso" /></div>'+
+    '<div class="mitem"><div class="ml">Contraseña</div><div class="lz-pass-wrap"><input class="medit" id="caVP" type="password" placeholder="Contraseña de acceso" /><button type="button" class="lz-eye-btn" onclick="lzToggle(\'caVP\',this)" tabindex="-1"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg></button></div></div>'+
     '<div class="mitem"><div class="ml">Ciudad / Región</div><select class="medit" id="caVR">'+regOpts+'</select></div>'+
-    '<div class="mitem"><div class="ml">Teléfono principal</div><input class="medit" id="caVT1" placeholder="+54 9 11 1234-5678" /></div>'+
-    '<div class="mitem"><div class="ml">Teléfono de referencia</div><input class="medit" id="caVT2" placeholder="+54 9 351 9876-5432" /></div>'+
+    '<div class="mitem"><div class="ml">Teléfono principal</div><div class="lz-phone-wrap">'+lzBuildPhoneSelect('prefix_caVT1','')+'<input class="medit" id="caVT1" placeholder="9 11 1234-5678" value="+54 " /></div></div>'+
+    '<div class="mitem"><div class="ml">Teléfono de referencia</div><div class="lz-phone-wrap">'+lzBuildPhoneSelect('prefix_caVT2','')+'<input class="medit" id="caVT2" placeholder="9 351 9876-5432" value="+54 " /></div></div>'+
     '<div class="mitem" style="grid-column:span 2;"><div class="ml">Domicilio</div><input class="medit" id="caVDom" placeholder="Av. Corrientes 1234, Buenos Aires" /></div>'+
     '<div class="mitem" style="grid-column:span 2;">'+
       '<div class="ml">💰 CBU / Alias bancario</div>'+
@@ -1972,9 +1978,9 @@ function openEditVendCeo(vid){
     '<div class="mitem"><div class="ml">Nombre</div><input class="medit" id="ceVN" value="'+v.nombre+'" /></div>'+
     '<div class="mitem"><div class="ml">Email</div><input class="medit" id="ceVE" value="'+(v.email||'')+'" /></div>'+
     '<div class="mitem"><div class="ml">Región</div><select class="medit" id="ceVR">'+regOpts+'</select></div>'+
-    '<div class="mitem"><div class="ml">Contraseña</div><input class="medit" id="ceVP" value="'+(v.password||'')+'" /></div>'+
-    '<div class="mitem"><div class="ml">Teléfono principal</div><input class="medit" id="ceVT1" value="'+(v.telefono1||'')+'" /></div>'+
-    '<div class="mitem"><div class="ml">Teléfono de referencia</div><input class="medit" id="ceVT2" value="'+(v.telefono2||'')+'" /></div>'+
+    '<div class="mitem"><div class="ml">Contraseña</div><div class="lz-pass-wrap"><input class="medit" id="ceVP" type="password" value="'+(v.password||'')+'" /><button type="button" class="lz-eye-btn" onclick="lzToggle(\'ceVP\',this)" tabindex="-1"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg></button></div></div>'+
+    '<div class="mitem"><div class="ml">Teléfono principal</div><div class="lz-phone-wrap">'+lzBuildPhoneSelect('prefix_ceVT1',lzDetectPrefix(v.telefono1))+'<input class="medit" id="ceVT1" value="'+(v.telefono1||'')+'" placeholder="9 11 1234-5678" /></div></div>'+
+    '<div class="mitem"><div class="ml">Teléfono de referencia</div><div class="lz-phone-wrap">'+lzBuildPhoneSelect('prefix_ceVT2',lzDetectPrefix(v.telefono2))+'<input class="medit" id="ceVT2" value="'+(v.telefono2||'')+'" placeholder="9 351 9876-5432" /></div></div>'+
     '<div class="mitem" style="grid-column:span 2;"><div class="ml">Domicilio</div><input class="medit" id="ceVDom" value="'+(v.domicilio||'')+'" /></div>'+
     '<div class="mitem" style="grid-column:span 2;"><div class="ml">💰 CBU / Alias bancario</div><input class="medit" id="ceVCBU" value="'+(v.cbu||'')+'" style="font-family:monospace;" /></div>'+
     '</div></div>'+
@@ -2019,10 +2025,10 @@ function openAddGerente(){
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'+
     '<div class="mitem"><div class="ml">Nombre completo</div><input class="medit" id="gNombre" placeholder="Ej: María Gómez" /></div>'+
     '<div class="mitem"><div class="ml">Email</div><input class="medit" id="gEmail" placeholder="gerente@email.com" /></div>'+
-    '<div class="mitem"><div class="ml">Contraseña</div><input class="medit" id="gPass" placeholder="Contraseña de acceso" /></div>'+
+    '<div class="mitem"><div class="ml">Contraseña</div><div class="lz-pass-wrap"><input class="medit" id="gPass" type="password" placeholder="Contraseña de acceso" /><button type="button" class="lz-eye-btn" onclick="lzToggle(\'gPass\',this)" tabindex="-1"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg></button></div></div>'+
     '<div class="mitem"><div class="ml">Ciudad</div><input class="medit" id="gCiudad" placeholder="Ej: Córdoba" /></div>'+
-    '<div class="mitem"><div class="ml">Teléfono principal</div><input class="medit" id="gTel1" placeholder="+54 9 11 1234-5678" /></div>'+
-    '<div class="mitem"><div class="ml">Teléfono de referencia</div><input class="medit" id="gTel2" placeholder="+54 9 351 9876-5432" /></div>'+
+    '<div class="mitem"><div class="ml">Teléfono principal</div><div class="lz-phone-wrap">'+lzBuildPhoneSelect('prefix_gTel1','')+'<input class="medit" id="gTel1" placeholder="9 11 1234-5678" value="+54 " /></div></div>'+
+    '<div class="mitem"><div class="ml">Teléfono de referencia</div><div class="lz-phone-wrap">'+lzBuildPhoneSelect('prefix_gTel2','')+'<input class="medit" id="gTel2" placeholder="9 351 9876-5432" value="+54 " /></div></div>'+
     '<div class="mitem" style="grid-column:span 2;"><div class="ml">Domicilio</div><input class="medit" id="gDomicilio" placeholder="Av. Colón 1234, Córdoba" /></div>'+
     '<div class="mitem" style="grid-column:span 2;">'+
       '<div class="ml">💰 CBU / Alias bancario</div>'+
@@ -2213,8 +2219,8 @@ function openEditGerente(gid){
     '<div class="mitem"><div class="ml">Nombre completo</div><input class="medit" id="egNombre" value="'+g.nombre+'" /></div>'+
     '<div class="mitem"><div class="ml">Email</div><input class="medit" id="egEmail" value="'+(g.email||'')+'" /></div>'+
     '<div class="mitem"><div class="ml">Ciudad</div><input class="medit" id="egCiudad" value="'+(g.ciudad||'')+'" /></div>'+
-    '<div class="mitem"><div class="ml">Teléfono principal</div><input class="medit" id="egTel1" value="'+(g.telefono1||'')+'" /></div>'+
-    '<div class="mitem"><div class="ml">Teléfono de referencia</div><input class="medit" id="egTel2" value="'+(g.telefono2||'')+'" /></div>'+
+    '<div class="mitem"><div class="ml">Teléfono principal</div><div class="lz-phone-wrap">'+lzBuildPhoneSelect('prefix_egTel1',lzDetectPrefix(g.telefono1))+'<input class="medit" id="egTel1" value="'+(g.telefono1||'')+'" placeholder="9 11 1234-5678" /></div></div>'+
+    '<div class="mitem"><div class="ml">Teléfono de referencia</div><div class="lz-phone-wrap">'+lzBuildPhoneSelect('prefix_egTel2',lzDetectPrefix(g.telefono2))+'<input class="medit" id="egTel2" value="'+(g.telefono2||'')+'" placeholder="9 351 9876-5432" /></div></div>'+
     '<div class="mitem" style="grid-column:span 2;"><div class="ml">Domicilio</div><input class="medit" id="egDomicilio" value="'+(g.domicilio||'')+'" /></div>'+
     '<div class="mitem" style="grid-column:span 2;"><div class="ml">💰 CBU / Alias bancario</div><input class="medit" id="egCBU" value="'+(g.cbu||'')+'" style="font-family:monospace;" /></div>'+
     '<div class="mitem" style="grid-column:span 2;">'+
@@ -4079,6 +4085,40 @@ async function crearNuevoCanal() {
     console.error('[crearNuevoCanal]', err);
     showToast('Error: ' + (err.message || err));
   }
+}
+
+/* ── Country phone prefix selector helper ── */
+var LZ_PHONE_PREFIXES = [
+  {code:'+54',flag:'🇦🇷',label:'Argentina'},{code:'+55',flag:'🇧🇷',label:'Brasil'},
+  {code:'+56',flag:'🇨🇱',label:'Chile'},{code:'+57',flag:'🇨🇴',label:'Colombia'},
+  {code:'+52',flag:'🇲🇽',label:'México'},{code:'+598',flag:'🇺🇾',label:'Uruguay'},
+  {code:'+58',flag:'🇻🇪',label:'Venezuela'},{code:'+34',flag:'🇪🇸',label:'España'},
+  {code:'+1',flag:'🇺🇸',label:'USA'},{code:'+595',flag:'🇵🇾',label:'Paraguay'},
+  {code:'+591',flag:'🇧🇴',label:'Bolivia'},{code:'+51',flag:'🇵🇪',label:'Perú'},
+  {code:'+593',flag:'🇪🇨',label:'Ecuador'},{code:'+507',flag:'🇵🇦',label:'Panamá'},
+  {code:'+506',flag:'🇨🇷',label:'Costa Rica'}
+];
+function lzBuildPhoneSelect(selectId, currentVal){
+  var opts = LZ_PHONE_PREFIXES.map(function(p){
+    return '<option value="'+p.code+'"'+(currentVal===p.code?' selected':'')+'>'+p.flag+' '+p.code+'</option>';
+  }).join('');
+  return '<select id="'+selectId+'" onchange="lzSyncPhonePrefix(\''+selectId+'\',\''+selectId.replace('prefix_','')+'\')">'+opts+'</select>';
+}
+function lzSyncPhonePrefix(prefixId, inputId){
+  var sel = document.getElementById(prefixId);
+  var inp = document.getElementById(inputId);
+  if(!sel||!inp) return;
+  var prefix = sel.value;
+  var raw = inp.value.replace(/^\+\d+\s*/,'');
+  inp.value = prefix + ' ' + raw;
+}
+function lzDetectPrefix(val){
+  if(!val) return '+54';
+  val = val.trim();
+  for(var i=0;i<LZ_PHONE_PREFIXES.length;i++){
+    if(val.indexOf(LZ_PHONE_PREFIXES[i].code)===0) return LZ_PHONE_PREFIXES[i].code;
+  }
+  return '+54';
 }
 
 </script>
