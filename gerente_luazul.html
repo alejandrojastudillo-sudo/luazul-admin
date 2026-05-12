@@ -3539,14 +3539,16 @@ function agregarComentarioGerente(id) {
 function actualizarTicketGerente(id) {
   var nuevoEstado = document.getElementById('detEstadoGerente').value;
   var nuevaPrioridad = document.getElementById('detPrioridadGerente').value;
-  var fechaCierre = nuevoEstado === 'cerrado' ? new Date().toISOString() : null;
-  sbClient.from('notificaciones').update({ estado:nuevoEstado, prioridad:nuevaPrioridad, updated_at:new Date(), fecha_cierre:fechaCierre }).eq('id', id)
-    .then(function() {
+  var updateData = { estado: nuevoEstado, prioridad: nuevaPrioridad, updated_at: new Date().toISOString() };
+  sbClient.from('notificaciones').update(updateData).eq('id', id).select().single()
+    .then(function(res) {
+      if (res.error) throw res.error;
+      console.log('[actualizarTicketGerente] Ticket '+id+' actualizado a estado: '+nuevoEstado);
       showToast('✅ Ticket actualizado');
       verTicketGerente(id);
       cargarTicketsGerente();
     })
-    .catch(function(e) { showToast('❌ Error: '+e.message); });
+    .catch(function(e) { console.error('[actualizarTicketGerente] Error:', e); showToast('❌ Error: '+e.message); });
 }
 
 async function subirAdjuntoATicketGerente(ticketId) {
