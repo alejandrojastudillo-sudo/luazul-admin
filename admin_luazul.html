@@ -3056,6 +3056,7 @@ async function cargarStaffAdmin() {
   if (_staffCacheAdmin.length) return _staffCacheAdmin;
   try {
     var res = await sbClient.from('staff_profiles').select('user_id, nombre, role');
+    console.log('[cargarStaffAdmin] resultado:', res.data ? res.data.length + ' registros' : 'sin datos', res.error || '');
     if (res.error) throw res.error;
     _staffCacheAdmin = res.data || [];
     return _staffCacheAdmin;
@@ -3253,27 +3254,31 @@ async function enviarRespuesta(msgId, canalId) {
 }
 
 // ── Mensaje directo (DM) ──
-function abrirNuevoDM() {
+async function abrirNuevoDM() {
   var ov = document.getElementById('dmOverlayAdmin');
   if (ov) { ov.style.display = 'flex'; return; }
+  // Forzar recarga del cache de staff para asegurar lista actualizada
+  _staffCacheAdmin = [];
+  var staff = await cargarStaffAdmin();
+  var uid = _currentProfile ? _currentProfile.user_id : '';
   ov = document.createElement('div');
   ov.id = 'dmOverlayAdmin';
   ov.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.6);z-index:9999;display:flex;align-items:center;justify-content:center;';
   ov.onclick = function(e) { if (e.target === ov) ov.remove(); };
-  var uid = _currentProfile ? _currentProfile.user_id : '';
   var staffOpts = '';
-  for (var i = 0; i < _staffCacheAdmin.length; i++) {
-    var s = _staffCacheAdmin[i];
+  for (var i = 0; i < staff.length; i++) {
+    var s = staff[i];
     if (String(s.user_id) === String(uid)) continue;
     staffOpts += '<div data-uid="' + s.user_id + '" style="padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;transition:background .15s;" onmouseenter="this.style.background=\'rgba(168,85,247,.08)\'" onmouseleave="this.style.background=\'\'" onclick="crearOBuscarDM(\'' + s.user_id + '\')">' +
       '👤 <div style="flex:1;"><div style="font-weight:600;font-size:.85rem;">' + esc(s.nombre) + '</div>' +
       '<div style="font-size:.68rem;color:var(--muted);">' + esc(s.role || '') + '</div></div>' +
       '<span style="font-size:.75rem;color:#a855f7;">💬 Chatear</span></div>';
   }
+  var emptyMsg = '<div style="padding:20px;text-align:center;color:var(--muted);">No hay otros usuarios registrados.<br><small>Asegurate de que los usuarios tengan un perfil en staff_profiles.</small></div>';
   ov.innerHTML = '<div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:24px;width:380px;max-width:90vw;">' +
     '<h3 style="font-family:Syne,sans-serif;font-size:.95rem;font-weight:800;margin-bottom:16px;">💬 Mensaje directo</h3>' +
     '<p style="font-size:.78rem;color:var(--muted);margin-bottom:14px;">Seleccioná con quién querés chatear:</p>' +
-    '<div style="max-height:320px;overflow-y:auto;border:1px solid var(--border);border-radius:10px;">' + (staffOpts || '<div style="padding:20px;text-align:center;color:var(--muted);">No hay otros usuarios</div>') + '</div>' +
+    '<div style="max-height:320px;overflow-y:auto;border:1px solid var(--border);border-radius:10px;">' + (staffOpts || emptyMsg) + '</div>' +
     '<button onclick="document.getElementById(\'dmOverlayAdmin\').remove()" style="margin-top:14px;padding:8px 16px;background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:8px;color:var(--text);cursor:pointer;font-family:inherit;font-size:.82rem;width:100%;">Cerrar</button>' +
   '</div>';
   document.body.appendChild(ov);
