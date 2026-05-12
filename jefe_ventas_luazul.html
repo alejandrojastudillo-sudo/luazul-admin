@@ -3381,7 +3381,6 @@ function agregarComentarioGerente(id) {
   var texto = document.getElementById('nuevoComentarioGerente').value.trim();
   if (!texto) return;
   sbClient.from('notificaciones').insert({ tipo:'comentario', mensaje:texto, remitente_id:window._gerenteProfile.user_id, respuesta_a:id, created_at:new Date().toISOString() })
-    .then(function() { return sbClient.from('notificaciones').update({ updated_at: new Date().toISOString() }).eq('id', id); })
     .then(function(res) {
       if (res.error) throw res.error;
       document.getElementById('nuevoComentarioGerente').value = '';
@@ -3394,7 +3393,7 @@ function agregarComentarioGerente(id) {
 
 function resolverTicketGerente(id) {
   var texto = document.getElementById('nuevoComentarioGerente').value.trim();
-  var updateData = { estado: 'resuelto', prioridad: document.getElementById('detPrioridadGerente').value, updated_at: new Date().toISOString() };
+  var updateData = { estado: 'resuelto', prioridad: document.getElementById('detPrioridadGerente').value };
   var p = sbClient.from('notificaciones').update(updateData).eq('id', id).select().single();
   if (texto) {
     p = p.then(function(res) {
@@ -3415,7 +3414,7 @@ function actualizarTicketGerente(id) {
   var nuevoEstado = document.getElementById('detEstadoGerente').value;
   var nuevaPrioridad = document.getElementById('detPrioridadGerente').value;
   var texto = document.getElementById('nuevoComentarioGerente').value.trim();
-  var updateData = { estado: nuevoEstado, prioridad: nuevaPrioridad, updated_at: new Date().toISOString() };
+  var updateData = { estado: nuevoEstado, prioridad: nuevaPrioridad };
   var p = sbClient.from('notificaciones').update(updateData).eq('id', id).select().single();
   if (texto) {
     p = p.then(function(res) {
