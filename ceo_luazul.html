@@ -3193,32 +3193,33 @@ function confirmarRechazo(){
 
   if(!_rechazoPago){ cerrarModalRechazo(); return; }
 
+  // Usar el id (UUID) del cache local — misma estrategia que aprobarPago()
+  var _pagoId = String(_rechazoPago.id);
   var _clientId = String(_rechazoPago.cliente_id || _rechazoClientId);
   var _cuotaNum = parseInt(_rechazoPago.numero_cuota || _rechazoCuotaKey);
   var esCuota1 = _cuotaNum === 1;
   // Formato: CEO_rechazado|Motivo aquí
   var aprobadoPor = 'CEO_rechazado|' + motivo;
 
+  console.log('[rechazarPago] Usando id=' + _pagoId + ' cliente_id=' + _clientId + ' cuota=' + _cuotaNum);
+
   // Deshabilitar botón mientras procesa
   var btnConfirm = document.querySelector('#rechazoModal button[onclick="confirmarRechazo()"]');
   if(btnConfirm){ btnConfirm.disabled = true; btnConfirm.textContent = '⏳ Procesando...'; }
 
-  // PASO 1 — Rechazar el pago usando cliente_id + numero_cuota como clave (más robusto que id)
+  // PASO 1 — Rechazar el pago usando id (UUID) — misma lógica que aprobarPago()
   sbClient.from('pagos')
     .update({ estado: 'rechazado', aprobado_por: aprobadoPor })
-    .eq('cliente_id', _clientId)
-    .eq('numero_cuota', _cuotaNum)
-    .select()
+    .eq('id', _pagoId)
+    .select().single()
     .then(function(res){
       console.log('[rechazarPago] Supabase response:', JSON.stringify(res));
       if(res.error) throw res.error;
-      if(!res.data || res.data.length === 0){
-        throw new Error('No se encontró el pago para rechazar (cliente: ' + _clientId + ', cuota: ' + _cuotaNum + ')');
+      if(!res.data){
+        throw new Error('No se encontró el pago con id=' + _pagoId);
       }
       // Actualizar cache local
-      var cacheIdx = (_cachePagos||[]).findIndex(function(x){
-        return String(x.cliente_id) === _clientId && String(x.numero_cuota) === String(_cuotaNum);
-      });
+      var cacheIdx = (_cachePagos||[]).findIndex(function(x){ return String(x.id) === _pagoId; });
       if(cacheIdx >= 0){
         _cachePagos[cacheIdx].estado = 'rechazado';
         _cachePagos[cacheIdx].aprobado_por = aprobadoPor;
@@ -3233,14 +3234,14 @@ function confirmarRechazo(){
     })
     .then(function(ctRes){
       if(ctRes && ctRes.error){
-        console.warn('[rechazarPago] Error al rechazar contrato:', ctRes.error.message);
+        console.warn('[rechazarPago] Error contrato:', ctRes.error.message);
       }
       cerrarModalRechazo();
       renderPagosAprobacion();
       showToast('❌ Comprobante rechazado · Motivo: ' + motivo);
     })
     .catch(function(e){
-      console.error('[rechazarPago] Error completo:', e);
+      console.error('[rechazarPago] Error:', e);
       showToast('❌ Error al rechazar: ' + (e.message || ''));
       if(btnConfirm){ btnConfirm.disabled = false; btnConfirm.textContent = '❌ Confirmar Rechazo'; }
     });
