@@ -3847,6 +3847,13 @@ async function cargarStaffCeo() {
   } catch(e) { console.warn('[cargarStaffCeo] ERROR:', e.message || e); return []; }
 }
 
+function getUserNameCeo(uid) {
+  if (!uid) return 'Desconocido';
+  if (String(uid) === String(_ceoUid)) return 'CEO (Vos)';
+  var st = _staffCacheCeo.find(function(s) { return String(s.user_id) === String(uid); });
+  return st ? st.nombre : ('Usuario ' + String(uid).slice(0,6));
+}
+
 async function cargarCanalesCeo() {
   if (!sbClient || !_ceoUid) return [];
   try {
