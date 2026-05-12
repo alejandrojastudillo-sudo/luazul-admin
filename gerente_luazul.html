@@ -3511,9 +3511,10 @@ function renderDetalleTicketGerente(ticket, comentarios) {
     '<input type="file" id="nuevoAdjuntoTicketGerente" accept="image/*,application/pdf" style="margin-top:6px;width:100%;color:var(--muted);font-size:.82rem;">' +
     '<button class="mbtn ghost" style="margin-top:6px;font-size:.78rem;" onclick="subirAdjuntoATicketGerente('+ticket.id+')">➕ Subir adjunto</button>' +
     '</div>' +
-    '<textarea id="nuevoComentarioGerente" class="medit" rows="2" placeholder="Agregar comentario..." style="margin-top:10px;"></textarea>' +
-    '<div class="mact">' +
-    '<button class="mbtn gold" onclick="agregarComentarioGerente('+ticket.id+')">💬 Comentar</button>' +
+    '<textarea id="nuevoComentarioGerente" class="medit" rows="2" placeholder="Agregar comentario o razón de resolución..." style="margin-top:10px;"></textarea>' +
+    '<div class="mact" style="flex-wrap:wrap;gap:8px;">' +
+    (ticket.estado !== 'cerrado' ? '<button class="mbtn green" style="background:#16a34a;border-color:#16a34a;color:#fff;font-weight:700;" onclick="resolverTicketGerente('+ticket.id+')">✅ Resolver ticket</button>' : '') +
+    '<button class="mbtn gold" onclick="agregarComentarioGerente('+ticket.id+')">💬 Solo comentar</button>' +
     '<button class="mbtn purple" onclick="actualizarTicketGerente('+ticket.id+')">💾 Guardar cambios</button>' +
     '<button class="mbtn ghost" onclick="closeModal()">Cerrar</button>' +
     '</div>' +
@@ -3525,30 +3526,56 @@ function renderDetalleTicketGerente(ticket, comentarios) {
 function agregarComentarioGerente(id) {
   var texto = document.getElementById('nuevoComentarioGerente').value.trim();
   if (!texto) return;
-  sbClient.from('notificaciones').insert({ tipo:'comentario', mensaje:texto, remitente_id:window._gerenteProfile.user_id, respuesta_a:id, created_at:new Date() })
-    .then(function() { return sbClient.from('notificaciones').update({ updated_at: new Date() }).eq('id', id); })
-    .then(function() {
+  sbClient.from('notificaciones').insert({ tipo:'comentario', mensaje:texto, remitente_id:window._gerenteProfile.user_id, respuesta_a:id, created_at:new Date().toISOString() })
+    .then(function() { return sbClient.from('notificaciones').update({ updated_at: new Date().toISOString() }).eq('id', id); })
+    .then(function(res) {
+      if (res.error) throw res.error;
       document.getElementById('nuevoComentarioGerente').value = '';
       verTicketGerente(id);
       cargarTicketsGerente();
       showToast('✅ Comentario agregado');
     })
-    .catch(function(e) { showToast('❌ Error: '+e.message); });
+    .catch(function(e) { console.error('[agregarComentarioGerente] Error:', e); showToast('❌ Error: '+e.message); });
+}
+
+function resolverTicketGerente(id) {
+  var texto = document.getElementById('nuevoComentarioGerente').value.trim();
+  var updateData = { estado: 'resuelto', prioridad: document.getElementById('detPrioridadGerente').value, updated_at: new Date().toISOString() };
+  var p = sbClient.from('notificaciones').update(updateData).eq('id', id).select().single();
+  if (texto) {
+    p = p.then(function(res) {
+      if (res.error) throw res.error;
+      return sbClient.from('notificaciones').insert({ tipo:'comentario', mensaje:'✅ Ticket resuelto: ' + texto, remitente_id:window._gerenteProfile.user_id, respuesta_a:id, created_at:new Date().toISOString() });
+    });
+  }
+  p.then(function(res) {
+    if (res.error) throw res.error;
+    console.log('[resolverTicketGerente] Ticket '+id+' resuelto');
+    showToast('✅ Ticket resuelto correctamente');
+    verTicketGerente(id);
+    cargarTicketsGerente();
+  }).catch(function(e) { console.error('[resolverTicketGerente] Error:', e); showToast('❌ Error: '+e.message); });
 }
 
 function actualizarTicketGerente(id) {
   var nuevoEstado = document.getElementById('detEstadoGerente').value;
   var nuevaPrioridad = document.getElementById('detPrioridadGerente').value;
+  var texto = document.getElementById('nuevoComentarioGerente').value.trim();
   var updateData = { estado: nuevoEstado, prioridad: nuevaPrioridad, updated_at: new Date().toISOString() };
-  sbClient.from('notificaciones').update(updateData).eq('id', id).select().single()
-    .then(function(res) {
+  var p = sbClient.from('notificaciones').update(updateData).eq('id', id).select().single();
+  if (texto) {
+    p = p.then(function(res) {
       if (res.error) throw res.error;
-      console.log('[actualizarTicketGerente] Ticket '+id+' actualizado a estado: '+nuevoEstado);
-      showToast('✅ Ticket actualizado');
-      verTicketGerente(id);
-      cargarTicketsGerente();
-    })
-    .catch(function(e) { console.error('[actualizarTicketGerente] Error:', e); showToast('❌ Error: '+e.message); });
+      return sbClient.from('notificaciones').insert({ tipo:'comentario', mensaje:texto, remitente_id:window._gerenteProfile.user_id, respuesta_a:id, created_at:new Date().toISOString() });
+    });
+  }
+  p.then(function(res) {
+    if (res.error) throw res.error;
+    console.log('[actualizarTicketGerente] Ticket '+id+' actualizado a estado: '+nuevoEstado);
+    showToast('✅ Ticket actualizado' + (texto ? ' con comentario' : ''));
+    verTicketGerente(id);
+    cargarTicketsGerente();
+  }).catch(function(e) { console.error('[actualizarTicketGerente] Error:', e); showToast('❌ Error: '+e.message); });
 }
 
 async function subirAdjuntoATicketGerente(ticketId) {
@@ -3588,6 +3615,7 @@ window.verTicketGerente = verTicketGerente;
 window.renderDetalleTicketGerente = renderDetalleTicketGerente;
 window.agregarComentarioGerente = agregarComentarioGerente;
 window.actualizarTicketGerente = actualizarTicketGerente;
+window.resolverTicketGerente = resolverTicketGerente;
 window.subirAdjuntoATicketGerente = subirAdjuntoATicketGerente;
 
 // ═══════════════════════════════════════════════════════
