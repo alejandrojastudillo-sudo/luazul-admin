@@ -3100,18 +3100,133 @@ function aprobarPago(clientId, cuotaKey, dbKey){
     .catch(function(e){ showToast('\u274C Error al aprobar: ' + (e.message||'')); });
 }
 
+// ── Variables para el modal de rechazo ──
+var _rechazoClientId = null;
+var _rechazoCuotaKey = null;
+var _rechazoDbKey    = null;
+var _rechazoPago     = null;
+
 function rechazarPago(clientId, cuotaKey, dbKey){
-  if(!confirm('¿Rechazar este comprobante? El asesor deberá enviarlo nuevamente.')) return;
   var pago = (_cachePagos||[]).find(function(p){ return String(p.cliente_id)===String(clientId) && String(p.numero_cuota)===String(cuotaKey) && p.estado==='pendiente'; });
   if(!pago){ showToast('⚠️ Pago no encontrado'); return; }
-  sbClient.from('pagos').update({estado:'rechazado',aprobado_por:'CEO_rechazado'}).eq('id',pago.id)
+  _rechazoClientId = clientId;
+  _rechazoCuotaKey = cuotaKey;
+  _rechazoDbKey    = dbKey;
+  _rechazoPago     = pago;
+  abrirModalRechazo();
+}
+
+function abrirModalRechazo(){
+  // Crear modal si no existe
+  var existing = document.getElementById('rechazoModal');
+  if(existing){ existing.remove(); }
+
+  var motivos = [
+    { val: 'Comprobante ilegible o borroso', icon: '📷' },
+    { val: 'Monto del pago no coincide', icon: '💵' },
+    { val: 'Firma del comprobante borrosa', icon: '✍️' },
+    { val: 'Comprobante faltante o incompleto', icon: '📎' },
+    { val: 'Datos del cliente incorrectos', icon: '👤' },
+    { val: 'Pago de cuenta equivocada', icon: '🏦' },
+    { val: 'Revisar con el cliente', icon: '🔄' }
+  ];
+
+  var htmlMotivos = motivos.map(function(m){
+    return '<label style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:10px;cursor:pointer;transition:all .15s;" onmouseover="this.style.borderColor=\'rgba(248,113,113,.4)\';this.style.background=\'rgba(248,113,113,.06)\'" onmouseout="this.style.borderColor=\'rgba(255,255,255,.08)\';this.style.background=\'rgba(255,255,255,.03)\'">'
+      + '<input type="radio" name="motivoRechazo" value="' + m.val + '" style="accent-color:#f87171;width:16px;height:16px;cursor:pointer;" />'
+      + '<span style="font-size:1.1rem;">' + m.icon + '</span>'
+      + '<span style="font-size:.82rem;color:rgba(200,220,255,.85);">' + m.val + '</span>'
+      + '</label>';
+  }).join('');
+
+  var modal = document.createElement('div');
+  modal.id = 'rechazoModal';
+  modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.7);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;z-index:10000;padding:20px;';
+  modal.innerHTML = '<div style="background:linear-gradient(145deg,#0a1628,#0d1f3c);border:1px solid rgba(248,113,113,.3);border-radius:20px;padding:28px;max-width:460px;width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.5);">'
+    + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">'
+      + '<div style="font-size:1.1rem;font-weight:900;color:#f87171;">❌ Rechazar Comprobante</div>'
+      + '<button onclick="cerrarModalRechazo()" style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:8px;color:rgba(200,220,255,.6);font-size:1.1rem;cursor:pointer;padding:4px 10px;line-height:1;">✕</button>'
+    + '</div>'
+    + '<div style="font-size:.78rem;color:rgba(200,220,255,.55);margin-bottom:16px;line-height:1.5;">Seleccioná el motivo del rechazo. El cliente verá este motivo en su panel para poder corregir el envío.</div>'
+    + '<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:18px;" id="motivosList">'
+      + htmlMotivos
+      + '<label style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:10px;cursor:pointer;">'
+        + '<input type="radio" name="motivoRechazo" value="__otro__" style="accent-color:#f87171;width:16px;height:16px;cursor:pointer;" onclick="document.getElementById(\'motivoOtroInput\').style.display=\'block\';document.getElementById(\'motivoOtroInput\').focus();" />'
+        + '<span style="font-size:1.1rem;">💬</span>'
+        + '<span style="font-size:.82rem;color:rgba(200,220,255,.85);Otro motivo</span>'
+      + '</label>'
+    + '</div>'
+    + '<input type="text" id="motivoOtroInput" placeholder="Escribí el motivo del rechazo..." style="display:none;width:100%;padding:10px 14px;background:rgba(255,255,255,.05);border:1px solid rgba(248,113,113,.25);border-radius:10px;color:#fca5a5;font-size:.82rem;outline:none;margin-bottom:16px;font-family:inherit;" maxlength="200" />'
+    + '<div style="display:flex;gap:10px;">'
+      + '<button onclick="cerrarModalRechazo()" style="flex:1;padding:11px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:50px;font-family:inherit;font-size:.82rem;font-weight:700;color:rgba(200,220,255,.7);cursor:pointer;">Cancelar</button>'
+      + '<button onclick="confirmarRechazo()" style="flex:1;padding:11px;background:linear-gradient(135deg,#dc2626,#b91c1c);border:1px solid rgba(248,113,113,.4);border-radius:50px;font-family:inherit;font-size:.82rem;font-weight:700;color:white;cursor:pointer;">❌ Confirmar Rechazo</button>'
+    + '</div>'
+    + '</div>';
+  document.body.appendChild(modal);
+}
+
+function cerrarModalRechazo(){
+  var modal = document.getElementById('rechazoModal');
+  if(modal) modal.remove();
+  _rechazoClientId = null;
+  _rechazoCuotaKey = null;
+  _rechazoDbKey    = null;
+  _rechazoPago     = null;
+}
+
+function confirmarRechazo(){
+  // Obtener motivo seleccionado
+  var radioSelected = document.querySelector('input[name="motivoRechazo"]:checked');
+  if(!radioSelected){
+    showToast('⚠️ Seleccioná un motivo de rechazo', 'warn');
+    return;
+  }
+  var motivo = radioSelected.value;
+  if(motivo === '__otro__'){
+    var otroInput = document.getElementById('motivoOtroInput');
+    motivo = otroInput ? otroInput.value.trim() : '';
+    if(!motivo){
+      showToast('⚠️ Escribí el motivo del rechazo', 'warn');
+      return;
+    }
+  }
+
+  if(!_rechazoPago){ cerrarModalRechazo(); return; }
+
+  var _pagoId = _rechazoPago.id;
+  var _clientId = String(_rechazoClientId);
+  var _cuotaNum = parseInt(_rechazoCuotaKey);
+  var esCuota1 = _cuotaNum === 1;
+  // Formato: CEO_rechazado|Motivo aquí
+  var aprobadoPor = 'CEO_rechazado|' + motivo;
+
+  // Deshabilitar botón mientras procesa
+  var btnConfirm = document.querySelector('#rechazoModal button[onclick="confirmarRechazo()"]');
+  if(btnConfirm){ btnConfirm.disabled = true; btnConfirm.textContent = '⏳ Procesando...'; }
+
+  // PASO 1 — Rechazar el pago con motivo
+  sbClient.from('pagos').update({ estado: 'rechazado', aprobado_por: aprobadoPor }).eq('id', _pagoId)
     .then(function(res){
       if(res.error) throw res.error;
-      pago.estado = 'rechazado';
-      renderPagosAprobacion();
-      showToast('❌ Comprobante rechazado · El asesor deberá reenviarlo');
+      _rechazoPago.estado = 'rechazado';
+      _rechazoPago.aprobado_por = aprobadoPor;
+      // PASO 2 — Si es cuota 1, también rechazar el contrato asociado
+      if(esCuota1){
+        return sbClient.from('contratos')
+          .update({ estado: 'rechazado' })
+          .eq('cliente_id', _clientId)
+          .in('estado', ['pendiente', 'borrador', 'revisado']);
+      }
     })
-    .catch(function(e){ showToast('❌ Error: '+(e.message||'')); });
+    .then(function(){
+      cerrarModalRechazo();
+      renderPagosAprobacion();
+      showToast('❌ Comprobante rechazado · Motivo: ' + motivo);
+    })
+    .catch(function(e){
+      showToast('❌ Error: ' + (e.message || ''));
+      if(btnConfirm){ btnConfirm.disabled = false; btnConfirm.textContent = '❌ Confirmar Rechazo'; }
+    });
 }
 
 // ══════════════════════════════════════════════════════
