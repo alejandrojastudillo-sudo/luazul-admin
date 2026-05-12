@@ -12,6 +12,7 @@
 <title>Luazul Smart Travel · CEO v2 — 9 Regiones</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Mulish:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <style>
 :root{
   --cyan:#06b6d4;
@@ -207,6 +208,7 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
       <div class="tab" onclick="showTab('contratos_pend')" id="tab-contratos_pend" style="color:#a78bfa;">📋 Contratos</div>
       <div class="tab" onclick="showTab('comisiones_bloq')" id="tab-comisiones_bloq" style="color:#f87171;">🔒 Com. Bloqueadas</div>
       <div class="tab" onclick="showTab('comunicaciones')" id="tab-comunicaciones" style="color:#38bdf8;">📩 Comunicaciones</div>
+      <div class="tab" onclick="showTab('vouchers')" id="tab-vouchers" style="color:#fbbf24;">🎟️ Vouchers</div>
     </div>
 
     <!-- ══ OVERVIEW ══ -->
@@ -443,6 +445,18 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
         </div>
       </div>
       <div id="comunicacionesContainerCeo" style="min-height:300px;"></div>
+    </div>
+
+    <!-- ═══ VOUCHERS ═══ -->
+    <div class="tabpg" id="tabpg-vouchers">
+      <div class="sec-head">
+        <h2>🎟️ Generador de Vouchers</h2>
+        <div style="display:flex;gap:8px;">
+          <input type="text" id="voucherCliSearch" placeholder="Buscar cliente..." oninput="renderVoucherClientes()" style="padding:8px 12px;border-radius:9px;background:rgba(255,255,255,.05);border:1px solid var(--border);color:var(--fg);font-family:inherit;font-size:.78rem;width:220px;" />
+          <button onclick="renderVoucherClientes()" style="padding:8px 16px;border-radius:9px;background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.3);color:#fbbf24;font-family:inherit;font-size:.78rem;font-weight:700;cursor:pointer;">🔄 Actualizar</button>
+        </div>
+      </div>
+      <div id="voucherClientesBody" style="min-height:300px;"></div>
     </div>
 
   </main>
@@ -947,6 +961,7 @@ function showTab(id){
   if(id==='contratos_pend')    renderContratosPendientes();
   if(id==='comisiones_bloq')   renderComisionesBloqueadas();
   if(id==='comunicaciones')    renderComunicacionesCeo();
+  if(id==='vouchers')         renderVoucherClientes();
 }
 
 // ── POPULATE FILTERS ─────────────────────────────────
@@ -4468,6 +4483,339 @@ function lzDetectPrefix(val){
     if(val.indexOf(LZ_PHONE_PREFIXES[i].code)===0) return LZ_PHONE_PREFIXES[i].code;
   }
   return '+54';
+}
+
+/* ══════════════════════════════════════════════════════════════
+   VOUCHER GENERATOR — CEO PANEL
+   ══════════════════════════════════════════════════════════════ */
+
+var _voucherClientesCache = [];
+
+async function renderVoucherClientes() {
+  var container = document.getElementById('voucherClientesBody');
+  if (!container) return;
+  container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted);">Cargando clientes...</div>';
+  try {
+    var search = (document.getElementById('voucherCliSearch') || {}).value || '';
+    var { data: clientes, error } = await sbClient
+      .from('clientes')
+      .select('*')
+      .order('id', { ascending: true });
+    if (error) throw error;
+    _voucherClientesCache = clientes || [];
+    if (search) {
+      var s = search.toLowerCase();
+      _voucherClientesCache = _voucherClientesCache.filter(function(c) {
+        return (c.nombre || '').toLowerCase().indexOf(s) !== -1 ||
+               (c.email || '').toLowerCase().indexOf(s) !== -1;
+      });
+    }
+    if (!_voucherClientesCache.length) {
+      container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted);">No se encontraron clientes</div>';
+      return;
+    }
+    container.innerHTML = _voucherClientesCache.map(function(c) {
+      var total = parseInt(c.cuotas_total) || 1;
+      var pagadas = parseInt(c.cuotas_pagadas) || 0;
+      var pct = Math.round((pagadas / total) * 100);
+      var tieneVoucher = !!c.voucher_url;
+      var estadoColor = tieneVoucher ? '#4ade80' : (pct >= 80 ? '#fbbf24' : 'var(--muted)');
+      return '<div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">'
+        + '<div style="flex:1;min-width:200px;">'
+        + '<div style="font-size:.88rem;font-weight:700;color:var(--fg);">' + esc(c.nombre) + '</div>'
+        + '<div style="font-size:.72rem;color:var(--muted);margin-top:2px;">' + esc(c.destino || '') + ' · ' + pagadas + '/' + total + ' cuotas (' + pct + '%) · ' + (c.fecha_viaje || 'Sin fecha') + '</div>'
+        + '</div>'
+        + '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">'
+        + (tieneVoucher
+          ? '<a href="' + c.voucher_url + '" target="_blank" style="padding:7px 14px;border-radius:8px;background:linear-gradient(135deg,#059669,#34d399);color:white;font-size:.76rem;font-weight:700;text-decoration:none;">📄 Ver Voucher</a>'
+            + '<button onclick="abrirFormularioVoucher(\'' + c.id + '\')" style="padding:7px 14px;border-radius:8px;background:rgba(251,191,36,.12);border:1px solid rgba(251,191,36,.3);color:#fbbf24;font-size:.76rem;font-weight:700;cursor:pointer;font-family:inherit;">✏️ Regenerar</button>'
+          : '<button onclick="abrirFormularioVoucher(\'' + c.id + '\')" style="padding:7px 14px;border-radius:8px;background:linear-gradient(135deg,#d97706,#fbbf24);color:#1a1a2e;font-size:.76rem;font-weight:700;cursor:pointer;font-family:inherit;">🎟️ Generar Voucher</button>'
+        )
+        + '</div>'
+        + '</div>';
+    }).join('');
+  } catch (err) {
+    console.error('[renderVoucherClientes]', err);
+    container.innerHTML = '<div style="text-align:center;padding:40px;color:#f87171;">Error al cargar: ' + err.message + '</div>';
+  }
+}
+
+function abrirFormularioVoucher(clienteId) {
+  var cliente = _voucherClientesCache.find(function(c) { return c.id === clienteId; });
+  if (!cliente) {
+    showToast('❌ Cliente no encontrado');
+    return;
+  }
+  // Determine next voucher number
+  var voucherNum = 'LZ-' + (10000000 + Math.floor(Math.random() * 90000000));
+
+  var html = '<div class="modal-head">'
+    + '<h3 style="font-size:1.1rem;color:#fbbf24;">🎟️ Generar Voucher de Viaje</h3>'
+    + '</div>'
+    + '<div class="modal-body" style="max-height:75vh;overflow-y:auto;">'
+    + '<div style="background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.2);border-radius:12px;padding:14px;margin-bottom:18px;">'
+    + '<div style="font-size:.82rem;font-weight:700;color:#fbbf24;">Cliente: ' + esc(cliente.nombre) + '</div>'
+    + '<div style="font-size:.72rem;color:var(--muted);margin-top:4px;">Destino: ' + esc(cliente.destino || '—') + ' · Paquete: ' + esc(cliente.paquete || '—') + ' · ' + (cliente.personas || '?') + ' personas</div>'
+    + '</div>'
+
+    // Número de voucher
+    + '<div style="margin-bottom:16px;">'
+    + '<label style="display:block;font-size:.76rem;font-weight:600;color:var(--muted);margin-bottom:5px;">N° de Voucher</label>'
+    + '<input type="text" id="vNumVoucher" value="' + voucherNum + '" style="width:100%;padding:10px 14px;border-radius:10px;background:rgba(255,255,255,.05);border:1px solid var(--border);color:var(--fg);font-family:inherit;font-size:.84rem;" />'
+    + '</div>'
+
+    // Fechas de viaje
+    + '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:16px;">'
+    + '<div>'
+    + '<label style="display:block;font-size:.76rem;font-weight:600;color:var(--muted);margin-bottom:5px;">📅 Fecha de Ida</label>'
+    + '<input type="date" id="vFechaIda" value="' + (cliente.fecha_viaje || '') + '" style="width:100%;padding:10px;border-radius:10px;background:rgba(255,255,255,.05);border:1px solid var(--border);color:var(--fg);font-family:inherit;font-size:.82rem;" />'
+    + '</div>'
+    + '<div>'
+    + '<label style="display:block;font-size:.76rem;font-weight:600;color:var(--muted);margin-bottom:5px;">📅 Fecha de Vuelta</label>'
+    + '<input type="date" id="vFechaVuelta" style="width:100%;padding:10px;border-radius:10px;background:rgba(255,255,255,.05);border:1px solid var(--border);color:var(--fg);font-family:inherit;font-size:.82rem;" />'
+    + '</div>'
+    + '<div>'
+    + '<label style="display:block;font-size:.76rem;font-weight:600;color:var(--muted);margin-bottom:5px;">🌙 Noches</label>'
+    + '<input type="number" id="vNoches" value="' + (cliente.noches || 7) + '" min="1" max="30" style="width:100%;padding:10px;border-radius:10px;background:rgba(255,255,255,.05);border:1px solid var(--border);color:var(--fg);font-family:inherit;font-size:.82rem;" />'
+    + '</div>'
+    + '</div>'
+
+    // Hotel
+    + '<div style="margin-bottom:16px;">'
+    + '<label style="display:block;font-size:.76rem;font-weight:600;color:var(--muted);margin-bottom:5px;">🏨 Hotel</label>'
+    + '<input type="text" id="vHotel" placeholder="Nombre del hotel (ej: Hotel Atlântico 4 estrellas)" style="width:100%;padding:10px 14px;border-radius:10px;background:rgba(255,255,255,.05);border:1px solid var(--border);color:var(--fg);font-family:inherit;font-size:.84rem;" />'
+    + '</div>'
+
+    // Traslado
+    + '<div style="margin-bottom:20px;">'
+    + '<label style="display:block;font-size:.76rem;font-weight:600;color:var(--muted);margin-bottom:5px;">🚐 Traslado — Punto de Encuentro</label>'
+    + '<select id="vTrasladoTipo" onchange="toggleTrasladoOtro()" style="width:100%;padding:10px 14px;border-radius:10px;background:rgba(255,255,255,.05);border:1px solid var(--border);color:var(--fg);font-family:inherit;font-size:.84rem;margin-bottom:8px;">'
+    + '<option value="aeropuerto">✈️ Aeropuerto</option>'
+    + '<option value="terminal">🚌 Terminal de Ómnibus</option>'
+    + '<option value="otro">📍 Punto de encuentro a coordinar</option>'
+    + '</select>'
+    + '<div id="vTrasladoOtroWrap" style="display:none;">'
+    + '<input type="text" id="vTrasladoOtro" placeholder="Detalle del punto de encuentro..." style="width:100%;padding:10px 14px;border-radius:10px;background:rgba(255,255,255,.05);border:1px solid var(--border);color:var(--fg);font-family:inherit;font-size:.84rem;" />'
+    + '</div>'
+    + '</div>'
+
+    // Tours/Turf
+    + '<div style="margin-bottom:20px;">'
+    + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">'
+    + '<label style="font-size:.76rem;font-weight:600;color:var(--muted);">⛳ Tours / Turf incluidos</label>'
+    + '<button onclick="agregarTourVoucher()" style="padding:5px 12px;border-radius:7px;background:rgba(168,85,247,.12);border:1px solid rgba(168,85,247,.3);color:#a855f7;font-size:.72rem;font-weight:700;cursor:pointer;font-family:inherit;">+ Agregar Tour</button>'
+    + '</div>'
+    + '<div id="vToursContainer">'
+    + '<div class="v-tour-row" style="display:flex;gap:8px;margin-bottom:8px;align-items:center;">'
+    + '<input type="text" class="v-tour-nombre" placeholder="Nombre del tour" value="Tour por las islas" style="flex:2;padding:9px 12px;border-radius:9px;background:rgba(255,255,255,.05);border:1px solid var(--border);color:var(--fg);font-family:inherit;font-size:.8rem;" />'
+    + '<button onclick="this.parentElement.remove()" style="padding:7px 10px;border-radius:7px;background:rgba(248,113,113,.1);border:1px solid rgba(248,113,113,.25);color:#f87171;font-size:.72rem;cursor:pointer;font-family:inherit;">✕</button>'
+    + '</div>'
+    + '</div>'
+    + '</div>'
+
+    // Botones
+    + '<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px;">'
+    + '<button onclick="closeModal()" style="padding:10px 20px;border-radius:10px;background:rgba(255,255,255,.05);border:1px solid var(--border);color:var(--muted);font-family:inherit;font-size:.82rem;font-weight:600;cursor:pointer;">Cancelar</button>'
+    + '<button onclick="generarVoucherPDF(\'' + clienteId + '\')" id="btnGenerarVoucher" style="padding:10px 24px;border-radius:10px;background:linear-gradient(135deg,#d97706,#fbbf24);color:#1a1a2e;font-family:inherit;font-size:.82rem;font-weight:700;cursor:pointer;">🎟️ Generar Voucher PDF</button>'
+    + '</div>'
+    + '</div>';
+  document.getElementById('mbox').innerHTML = html;
+  openModal();
+}
+
+function toggleTrasladoOtro() {
+  var tipo = document.getElementById('vTrasladoTipo');
+  var wrap = document.getElementById('vTrasladoOtroWrap');
+  if (!tipo || !wrap) return;
+  wrap.style.display = tipo.value === 'otro' ? 'block' : 'none';
+}
+
+function agregarTourVoucher() {
+  var container = document.getElementById('vToursContainer');
+  if (!container) return;
+  var row = document.createElement('div');
+  row.className = 'v-tour-row';
+  row.style.cssText = 'display:flex;gap:8px;margin-bottom:8px;align-items:center;';
+  row.innerHTML = '<input type="text" class="v-tour-nombre" placeholder="Nombre del tour" style="flex:2;padding:9px 12px;border-radius:9px;background:rgba(255,255,255,.05);border:1px solid var(--border);color:var(--fg);font-family:inherit;font-size:.8rem;" />'
+    + '<button onclick="this.parentElement.remove()" style="padding:7px 10px;border-radius:7px;background:rgba(248,113,113,.1);border:1px solid rgba(248,113,113,.25);color:#f87171;font-size:.72rem;cursor:pointer;font-family:inherit;">✕</button>';
+  container.appendChild(row);
+}
+
+async function generarVoucherPDF(clienteId) {
+  var btn = document.getElementById('btnGenerarVoucher');
+  if (btn) btn.disabled = true;
+  try {
+    var cliente = _voucherClientesCache.find(function(c) { return c.id === clienteId; });
+    if (!cliente) throw new Error('Cliente no encontrado');
+
+    // Recoger datos del formulario
+    var numVoucher = document.getElementById('vNumVoucher').value.trim() || 'LZ-00000000';
+    var fechaIda = document.getElementById('vFechaIda').value;
+    var fechaVuelta = document.getElementById('vFechaVuelta').value;
+    var noches = document.getElementById('vNoches').value || '7';
+    var hotel = document.getElementById('vHotel').value.trim();
+    var trasladoTipo = document.getElementById('vTrasladoTipo').value;
+    var trasladoOtro = document.getElementById('vTrasladoOtro') ? document.getElementById('vTrasladoOtro').value.trim() : '';
+
+    // Validaciones
+    if (!hotel) { showToast('❌ Ingrese el nombre del hotel'); if (btn) btn.disabled = false; return; }
+    if (!fechaIda) { showToast('❌ Ingrese la fecha de ida'); if (btn) btn.disabled = false; return; }
+
+    // Determinar texto de traslado
+    var trasladoTexto = '';
+    if (trasladoTipo === 'aeropuerto') trasladoTexto = 'Traslado privado Aeropuerto - Hotel - Aeropuerto';
+    else if (trasladoTipo === 'terminal') trasladoTexto = 'Traslado privado Terminal de Ómnibus - Hotel - Terminal';
+    else if (trasladoTipo === 'otro' && trasladoOtro) trasladoTexto = 'Traslado desde ' + trasladoOtro;
+    else trasladoTexto = 'Traslado privado (punto a coordinar)';
+
+    // Recoger tours
+    var tourInputs = document.querySelectorAll('.v-tour-nombre');
+    var tours = [];
+    tourInputs.forEach(function(inp) {
+      var val = inp.value.trim();
+      if (val) tours.push(val);
+    });
+
+    // Formatear fechas
+    function formatFecha(fechaStr) {
+      if (!fechaStr) return '';
+      var parts = fechaStr.split('-');
+      var meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+      return parseInt(parts[2]) + ' de ' + meses[parseInt(parts[1]) - 1] + ' de ' + parts[0];
+    }
+    var fechaIdaFormatted = formatFecha(fechaIda);
+    var fechaVueltaFormatted = formatFecha(fechaVuelta);
+    var fechaHoy = new Date();
+    var fechaHoyFormatted = fechaHoy.getDate() + ' de ' + ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'][fechaHoy.getMonth()] + ' de ' + fechaHoy.getFullYear();
+
+    // Tours HTML
+    var toursHtml = tours.map(function(t) {
+      return '<li style="display:flex;gap:10px;margin-bottom:10px;align-items:flex-start;">'
+        + '<span style="width:28px;height:28px;background:#eef2ff;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;">⛳</span>'
+        + '<span style="font-size:14px;color:#1e293b;">' + t + '</span>'
+        + '</li>';
+    }).join('');
+
+    // Template HTML del Voucher PDF — basado en el diseño de Luazul
+    var templateHtml = '<!DOCTYPE html><html><head><meta charset="UTF-8">'
+      + '<style>'
+      + '*{margin:0;padding:0;box-sizing:border-box;}'
+      + 'body{background:#e8f0fe;font-family:"Segoe UI",Roboto,Helvetica,Arial,sans-serif;padding:30px 20px;color:#1e293b;}'
+      + '.voucher{max-width:700px;margin:0 auto;background:#ffffff;border-radius:20px;box-shadow:0 20px 40px -10px rgba(0,0,0,0.12);overflow:hidden;position:relative;}'
+      + '.voucher-bg{position:absolute;top:0;left:0;right:0;bottom:0;background:linear-gradient(135deg,rgba(11,61,145,0.03) 0%,rgba(0,34,102,0.02) 100%);pointer-events:none;}'
+      + '.header{background:linear-gradient(135deg,#0B3D91,#002266);color:white;padding:24px 30px;text-align:center;position:relative;}'
+      + '.header h1{font-size:22px;margin:8px 0 2px;letter-spacing:-0.3px;}'
+      + '.header p{font-size:11px;opacity:0.7;letter-spacing:0.5px;}'
+      + '.voucher-num{background:#e9f0ff;display:inline-block;padding:5px 16px;border-radius:30px;font-size:13px;font-weight:700;color:#0B3D91;margin:16px auto 0;text-align:center;}'
+      + '.content{padding:24px 30px 30px;position:relative;z-index:1;}'
+      + '.client-name{text-align:center;margin-bottom:6px;}'
+      + '.client-name h2{font-size:20px;font-weight:700;color:#0B3D91;}'
+      + '.client-contact{text-align:center;font-size:11px;color:#64748b;margin-bottom:18px;}'
+      + '.congrats{text-align:center;background:#f0fdf4;border-radius:14px;padding:16px;margin-bottom:20px;border:1px solid #bbf7d0;}'
+      + '.congrats h3{font-size:15px;font-weight:700;color:#166534;margin-bottom:4px;}'
+      + '.congrats .stamp{display:inline-block;border:3px solid #166534;border-radius:50%;padding:4px 14px;font-size:10px;font-weight:800;color:#166534;transform:rotate(-12deg);opacity:0.7;margin-top:6px;letter-spacing:1px;}'
+      + '.section-title{font-size:12px;text-transform:uppercase;letter-spacing:1.5px;color:#4b6b9f;margin-bottom:12px;border-left:3px solid #0B3D91;padding-left:10px;font-weight:700;}'
+      + '.services-box{background:#f8fafc;border-radius:14px;padding:16px;margin-bottom:20px;}'
+      + '.services-box ul{list-style:none;padding:0;margin:0;}'
+      + '.service-item{display:flex;gap:10px;margin-bottom:10px;align-items:flex-start;}'
+      + '.service-icon{width:28px;height:28px;background:#eef2ff;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;}'
+      + '.service-text{font-size:13px;color:#1e293b;line-height:1.4;}'
+      + '.dates-box{background:#f0f9ff;border-radius:14px;padding:16px;margin-bottom:20px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;text-align:center;}'
+      + '.dates-box .label{font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;}'
+      + '.dates-box .value{font-size:14px;font-weight:700;color:#0B3D91;}'
+      + '.notice{background:#fff7e5;border-left:4px solid #f59e0b;padding:12px 16px;border-radius:10px;margin-bottom:18px;font-size:12px;color:#92400e;line-height:1.5;}'
+      + '.notice strong{color:#b45309;}'
+      + '.steps{margin-bottom:20px;}'
+      + '.steps p{font-size:13px;color:#334155;line-height:1.5;}'
+      + '.contact-row{display:flex;gap:24px;justify-content:center;margin-bottom:20px;flex-wrap:wrap;}'
+      + '.contact-item{display:flex;align-items:center;gap:6px;font-size:12px;color:#475569;}'
+      + '.footer{text-align:center;border-top:1px solid #e2e8f0;padding-top:16px;margin-top:20px;}'
+      + '.footer .company{font-size:13px;font-weight:700;color:#1e293b;}'
+      + '.footer .cadastur{font-size:10px;color:#94a3b8;margin-top:2px;}'
+      + '.footer .signed{font-size:10px;color:#94a3b8;margin-top:6px;font-style:italic;}'
+      + '</style></head><body>'
+      + '<div class="voucher">'
+      + '<div class="voucher-bg"></div>'
+      + '<div class="header">'
+      + '<div style="font-size:28px;margin-bottom:4px;">🦋</div>'
+      + '<div style="font-size:18px;font-weight:800;letter-spacing:2px;">LUAZUL</div>'
+      + '<div style="font-size:10px;opacity:0.6;letter-spacing:1px;">SMART TRAVEL</div>'
+      + '</div>'
+      + '<div class="content">'
+      + '<div style="text-align:center;margin:18px 0;"><h1 style="font-size:18px;font-weight:800;color:#0B3D91;">VOUCHER DE VIAJE</h1><p style="font-size:11px;color:#64748b;margin-top:2px;">CONFIRMACIÓN DE PAGO TOTAL</p></div>'
+      + '<div style="text-align:center;"><div class="voucher-num">Voucher N°: ' + numVoucher + '</div></div>'
+      + '<div class="client-name"><h2>A NOMBRE DE: ' + esc(cliente.nombre) + '</h2></div>'
+      + '<div class="client-contact">contact: reservas@luazul.com.br</div>'
+      + '<div class="congrats">'
+      + '<h3>¡FELICITACIONES! SU PLAN DE AHORRO TURÍSTICO ESTÁ 100% PAGADO Y ACTIVADO</h3>'
+      + '<div class="stamp">PLAN PAGADO TOTALMENTE</div>'
+      + '</div>'
+      + '<div class="section-title">DETALLES DEL PAQUETE</div>'
+      + '<div class="services-box"><ul>'
+      + '<li class="service-item"><span class="service-icon">🏨</span><span class="service-text"><strong>' + noches + ' noches</strong> de alojamiento en <strong>' + hotel + '</strong></span></li>'
+      + '<li class="service-item"><span class="service-icon">🚐</span><span class="service-text">' + trasladoTexto + '</span></li>'
+      + toursHtml
+      + '<li class="service-item"><span class="service-icon">📱</span><span class="service-text">Asistencia personalizada 24/7 en español vía WhatsApp</span></li>'
+      + '</ul></div>'
+      + '<div class="dates-box">'
+      + '<div><div class="label">Fecha de Ida</div><div class="value">' + (fechaIdaFormatted || '—') + '</div></div>'
+      + '<div><div class="label">Fecha de Vuelta</div><div class="value">' + (fechaVueltaFormatted || '—') + '</div></div>'
+      + '<div><div class="label">Noches</div><div class="value">' + noches + '</div></div>'
+      + '</div>'
+      + '<div class="notice"><strong>IMPORTANTE:</strong> Vuelos internacionales y nacionales NO INCLUIDOS. El paquete se activa al llegar a destino.</div>'
+      + '<div class="steps"><div class="section-title">PASOS PARA RESERVAR SUS FECHAS</div><p>Póngase en contacto con nosotros para confirmar su fecha de viaje. Tenemos un plazo de 30 días para confirmar.</p></div>'
+      + '<div class="contact-row">'
+      + '<div class="contact-item">📱 WhatsApp: +55 (XX) XXXX-XXXX</div>'
+      + '<div class="contact-item">📧 reservas@luazul.com.br</div>'
+      + '</div>'
+      + '<div class="footer">'
+      + '<div class="company">Luazul Turismo e Exchange LTDA.</div>'
+      + '<div class="cadastur">CADASTUR N° 54.728.334/0001-05</div>'
+      + '<div class="signed">Firmado Digitalmente por Luazul Smart Travel</div>'
+      + '<div class="signed" style="margin-top:4px;">Fecha: ' + fechaHoyFormatted + '</div>'
+      + '</div>'
+      + '</div></div></body></html>';
+
+    // Generar PDF
+    var opt = {
+      margin: 0.4,
+      filename: 'Voucher_' + numVoucher + '.pdf',
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: { scale: 2, useCORS: true },
+      jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
+    };
+    var pdfBlob = await html2pdf().set(opt).from(templateHtml).outputPdf('blob');
+
+    // Subir a Supabase Storage
+    function generarUUID() {
+      return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+        var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+      });
+    }
+    var uuid = generarUUID();
+    var fileName = 'vouchers/voucher_' + uuid + '.pdf';
+    var { error: uploadErr } = await sbClient.storage.from('vouchers').upload(fileName, pdfBlob, { contentType: 'application/pdf' });
+    if (uploadErr) throw uploadErr;
+    var { data: urlData } = sbClient.storage.from('vouchers').getPublicUrl(fileName);
+    var pdfUrl = urlData.publicUrl;
+
+    // Guardar URL en el cliente
+    var { error: updateErr } = await sbClient
+      .from('clientes')
+      .update({ voucher_url: pdfUrl })
+      .eq('id', clienteId);
+    if (updateErr) throw updateErr;
+
+    closeModal();
+    showToast('✅ Voucher generado exitosamente');
+    renderVoucherClientes();
+  } catch (err) {
+    console.error('[generarVoucherPDF]', err);
+    showToast('❌ Error: ' + err.message);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
 }
 
 </script>
