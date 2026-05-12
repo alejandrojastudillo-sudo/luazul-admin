@@ -904,6 +904,7 @@ body::after {
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
         <h2 style="font-size:1rem;font-weight:900;">📩 Comunicaciones internas</h2>
         <div style="display:flex;gap:8px;">
+          <button onclick="abrirNuevoDM()" style="padding:8px 16px;border-radius:9px;background:rgba(168,85,247,.12);border:1px solid rgba(168,85,247,.3);color:#a855f7;font-family:inherit;font-size:.78rem;font-weight:700;cursor:pointer;">💬 Mensaje directo</button>
           <button class="tb-btn" onclick="abrirCrearCanal()" style="background:rgba(74,222,128,.1);border-color:rgba(74,222,128,.25);color:#4ade80;">➕ Nuevo Canal</button>
           <button class="tb-btn" onclick="volverAClientes()">← Volver a mis clientes</button>
         </div>
@@ -3049,13 +3050,41 @@ async function subirAdjuntoATicketAsesor(ticketId) {
 // 33. MÓDULO DE MENSAJERÍA INTERNA (ASESOR)
 // ──────────────────────────────────────────────────────────────────────────
 
+var _staffCacheAdmin = [];
+
+async function cargarStaffAdmin() {
+  if (_staffCacheAdmin.length) return _staffCacheAdmin;
+  try {
+    var res = await sbClient.from('staff_profiles').select('user_id, nombre, role');
+    if (res.error) throw res.error;
+    _staffCacheAdmin = res.data || [];
+    return _staffCacheAdmin;
+  } catch(e) { console.warn('[cargarStaffAdmin]', e); return []; }
+}
+
 async function cargarCanales() {
-  // Panel Asesor: solo canales donde el rol 'asesor' está en miembros
-  var query = sbClient.from('canales_equipo').select('*');
-  query = query.filter('miembros->>roles', 'cs', '{"asesor"}');
-  var { data, error } = await query;
-  if (error) { console.warn('[cargarCanales]', error.message); return []; }
-  return data || [];
+  if (!sbClient || !_currentProfile) return [];
+  try {
+    var res = await sbClient.from('canales_equipo').select('*');
+    if (res.error) throw res.error;
+    var todos = res.data || [];
+    var uid = _currentProfile.user_id;
+    var visibles = todos.filter(function(c) {
+      try {
+        var m = typeof c.miembros === 'string' ? JSON.parse(c.miembros) : (c.miembros || {});
+        if (c.tipo === 'directo') {
+          var users = m.usuarios || [];
+          return users.indexOf(uid) !== -1;
+        }
+        var roles = m.roles || [];
+        var users = m.usuarios || [];
+        var inRoles = roles.indexOf('asesor') !== -1 || roles.indexOf('todos') !== -1;
+        var inUsers = users.indexOf(uid) !== -1;
+        return inRoles || inUsers;
+      } catch(e) { return false; }
+    });
+    return visibles;
+  } catch(e) { console.warn('[cargarCanales]', e); return []; }
 }
 
 async function renderComunicaciones() {
@@ -3063,24 +3092,47 @@ async function renderComunicaciones() {
   if (!container) return;
   container.innerHTML = '<div style="padding:30px;text-align:center;color:var(--muted);">⏳ Cargando canales...</div>';
   try {
+    await cargarStaffAdmin();
     var canales = await cargarCanales();
-    if (!canales.length) {
-      container.innerHTML = '<div style="padding:40px;text-align:center;color:var(--muted);"><div style="font-size:2rem;margin-bottom:12px;">📭</div><p>No tenés canales asignados aún.</p></div>';
-      return;
-    }
+    var dms = canales.filter(function(c) { return c.tipo === 'directo'; });
+    var grupos = canales.filter(function(c) { return c.tipo !== 'directo'; });
+    var uid = _currentProfile.user_id;
+
     var html = '<div style="display:flex;gap:0;background:var(--surface);border:1px solid var(--border);border-radius:18px;overflow:hidden;min-height:500px;">';
-    // Panel izquierdo: lista de canales
-    html += '<div style="width:240px;flex-shrink:0;border-right:1px solid var(--border);padding:12px 0;">';
-    html += '<div style="font-size:.65rem;font-weight:800;text-transform:uppercase;letter-spacing:1.2px;color:var(--muted);padding:8px 16px 12px;">Canales</div>';
-    canales.forEach(function(c) {
-      html += '<div class="canal-item" data-canal="' + esc(String(c.id)) + '" style="padding:10px 16px;cursor:pointer;border-radius:0;transition:background .15s;font-size:.88rem;font-weight:600;display:flex;align-items:center;gap:8px;" onmouseenter="this.style.background=\'rgba(255,255,255,.04)\'" onmouseleave="this.style.background=\'\'">&#128172; ' + esc(c.nombre) + '</div>';
-    });
+    html += '<div style="width:260px;flex-shrink:0;border-right:1px solid var(--border);background:rgba(255,255,255,.02);overflow-y:auto;max-height:600px;">';
+
+    // DMs section
+    html += '<div style="padding:14px 16px;font-family:Syne,sans-serif;font-size:.7rem;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#a855f7;border-bottom:1px solid var(--border);">Mensajes directos (' + dms.length + ')</div>';
+    for (var i = 0; i < dms.length; i++) {
+      var c = dms[i];
+      var otherUser = '';
+      try {
+        var m = typeof c.miembros === 'string' ? JSON.parse(c.miembros) : (c.miembros || {});
+        var users = m.usuarios || [];
+        var otherId = users.filter(function(u) { return u !== uid; })[0];
+        if (otherId) {
+          var st = _staffCacheAdmin.find(function(s) { return String(s.user_id) === String(otherId); });
+          otherUser = st ? st.nombre : 'Usuario';
+        }
+      } catch(e) {}
+      html += '<div class="canal-item" data-canal="' + esc(String(c.id)) + '" style="padding:10px 16px;cursor:pointer;transition:background .15s;font-size:.85rem;font-weight:600;display:flex;align-items:center;gap:8px;">👤 ' + esc(otherUser || c.nombre) + '</div>';
+    }
+
+    // Channels section
+    html += '<div style="padding:14px 16px;font-family:Syne,sans-serif;font-size:.7rem;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--accent2);border-bottom:1px solid var(--border);margin-top:4px;">Canales (' + grupos.length + ')</div>';
+    for (var i = 0; i < grupos.length; i++) {
+      var c = grupos[i];
+      html += '<div class="canal-item" data-canal="' + esc(String(c.id)) + '" style="padding:10px 16px;cursor:pointer;transition:background .15s;font-size:.88rem;font-weight:600;display:flex;align-items:center;gap:8px;"># ' + esc(c.nombre) + '</div>';
+    }
+
+    if (!canales.length) {
+      html += '<div style="padding:20px;text-align:center;color:var(--muted);font-size:.82rem;">No hay canales. Usá los botones de arriba.</div>';
+    }
     html += '</div>';
-    // Panel derecho: mensajes
-    html += '<div id="mensajesPanel" style="flex:1;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:.9rem;">Seleccioná un canal para ver los mensajes</div>';
+    html += '<div id="mensajesPanel" style="flex:1;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:.9rem;">Seleccioná un canal o conversación</div>';
     html += '</div>';
     container.innerHTML = html;
-    // Event listeners para canales
+
     document.querySelectorAll('.canal-item').forEach(function(el) {
       el.addEventListener('click', function() {
         document.querySelectorAll('.canal-item').forEach(function(x){ x.style.background=''; x.style.color=''; });
@@ -3090,7 +3142,7 @@ async function renderComunicaciones() {
       });
     });
   } catch(e) {
-    container.innerHTML = '<div style="padding:30px;text-align:center;color:var(--red);">❌ Error al cargar comunicaciones: ' + esc(e.message) + '</div>';
+    container.innerHTML = '<div style="padding:30px;text-align:center;color:var(--red);">❌ Error: ' + esc(e.message) + '</div>';
   }
 }
 
@@ -3200,6 +3252,64 @@ async function enviarRespuesta(msgId, canalId) {
   await enviarMensaje(String(canalId), msgId);
 }
 
+// ── Mensaje directo (DM) ──
+function abrirNuevoDM() {
+  var ov = document.getElementById('dmOverlayAdmin');
+  if (ov) { ov.style.display = 'flex'; return; }
+  ov = document.createElement('div');
+  ov.id = 'dmOverlayAdmin';
+  ov.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.6);z-index:9999;display:flex;align-items:center;justify-content:center;';
+  ov.onclick = function(e) { if (e.target === ov) ov.remove(); };
+  var uid = _currentProfile ? _currentProfile.user_id : '';
+  var staffOpts = '';
+  for (var i = 0; i < _staffCacheAdmin.length; i++) {
+    var s = _staffCacheAdmin[i];
+    if (String(s.user_id) === String(uid)) continue;
+    staffOpts += '<div data-uid="' + s.user_id + '" style="padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;transition:background .15s;" onmouseenter="this.style.background=\'rgba(168,85,247,.08)\'" onmouseleave="this.style.background=\'\'" onclick="crearOBuscarDM(\'' + s.user_id + '\')">' +
+      '👤 <div style="flex:1;"><div style="font-weight:600;font-size:.85rem;">' + esc(s.nombre) + '</div>' +
+      '<div style="font-size:.68rem;color:var(--muted);">' + esc(s.role || '') + '</div></div>' +
+      '<span style="font-size:.75rem;color:#a855f7;">💬 Chatear</span></div>';
+  }
+  ov.innerHTML = '<div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:24px;width:380px;max-width:90vw;">' +
+    '<h3 style="font-family:Syne,sans-serif;font-size:.95rem;font-weight:800;margin-bottom:16px;">💬 Mensaje directo</h3>' +
+    '<p style="font-size:.78rem;color:var(--muted);margin-bottom:14px;">Seleccioná con quién querés chatear:</p>' +
+    '<div style="max-height:320px;overflow-y:auto;border:1px solid var(--border);border-radius:10px;">' + (staffOpts || '<div style="padding:20px;text-align:center;color:var(--muted);">No hay otros usuarios</div>') + '</div>' +
+    '<button onclick="document.getElementById(\'dmOverlayAdmin\').remove()" style="margin-top:14px;padding:8px 16px;background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:8px;color:var(--text);cursor:pointer;font-family:inherit;font-size:.82rem;width:100%;">Cerrar</button>' +
+  '</div>';
+  document.body.appendChild(ov);
+}
+
+async function crearOBuscarDM(targetUserId) {
+  if (document.getElementById('dmOverlayAdmin')) document.getElementById('dmOverlayAdmin').remove();
+  var uid = _currentProfile ? _currentProfile.user_id : '';
+  try {
+    var res = await sbClient.from('canales_equipo').select('*').eq('tipo', 'directo');
+    if (res.error) throw res.error;
+    var existing = null;
+    for (var i = 0; i < res.data.length; i++) {
+      var c = res.data[i];
+      try {
+        var m = typeof c.miembros === 'string' ? JSON.parse(c.miembros) : (c.miembros || {});
+        var users = m.usuarios || [];
+        if (users.indexOf(uid) !== -1 && users.indexOf(targetUserId) !== -1) { existing = c; break; }
+      } catch(e) {}
+    }
+    if (existing) { showToast('Conversación abierta'); renderComunicaciones(); return; }
+    var st = _staffCacheAdmin.find(function(s) { return String(s.user_id) === String(targetUserId); });
+    var otherName = st ? st.nombre : 'Usuario';
+    var ins = await sbClient.from('canales_equipo').insert({
+      nombre: 'DM: ' + otherName,
+      tipo: 'directo',
+      descripcion: 'Conversación directa',
+      miembros: { tipo: 'directo', usuarios: [uid, targetUserId] },
+      creado_por: uid
+    });
+    if (ins.error) throw ins.error;
+    showToast('Conversación creada con ' + otherName);
+    renderComunicaciones();
+  } catch(err) { console.error('[crearOBuscarDM]', err); showToast('Error: ' + (err.message || err)); }
+}
+
 // ── Crear nuevo canal ──
 function abrirCrearCanal() {
   var ov = document.getElementById('crearCanalOverlay');
@@ -3208,6 +3318,11 @@ function abrirCrearCanal() {
   ov.id = 'crearCanalOverlay';
   ov.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.6);z-index:9999;display:flex;align-items:center;justify-content:center;';
   ov.onclick = function(e) { if (e.target === ov) cerrarCrearCanal(); };
+  var userCheckboxes = '';
+  for (var i = 0; i < _staffCacheAdmin.length; i++) {
+    var s = _staffCacheAdmin[i];
+    userCheckboxes += '<label style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:.85rem;cursor:pointer;"><input type="checkbox" class="nc-user-cb" value="' + esc(s.user_id) + '" /> 👤 ' + esc(s.nombre) + ' <span style="font-size:.68rem;color:var(--muted);">(' + esc(s.role || '') + ')</span></label>';
+  }
   ov.innerHTML = '<div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:24px;width:420px;max-width:90vw;">' +
     '<h3 style="font-family:Syne,sans-serif;font-size:.95rem;font-weight:800;margin-bottom:16px;">&#x2795; Nuevo Canal</h3>' +
     '<label style="display:block;margin-bottom:12px;">' +
@@ -3219,11 +3334,15 @@ function abrirCrearCanal() {
       '<input id="ncDesc" type="text" placeholder="Descripción breve..." style="width:100%;margin-top:4px;padding:8px 12px;background:rgba(255,255,255,.04);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-family:inherit;font-size:.85rem;" />' +
     '</label>' +
     '<div style="margin-bottom:16px;">' +
-      '<span style="font-size:.78rem;font-weight:600;color:var(--muted);display:block;margin-bottom:8px;">¿Quién puede ver este canal?</span>' +
+      '<span style="font-size:.78rem;font-weight:600;color:var(--muted);display:block;margin-bottom:8px;">Roles con acceso</span>' +
       '<label style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:.85rem;cursor:pointer;"><input type="checkbox" id="ncRolCeo" /> CEO</label>' +
       '<label style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:.85rem;cursor:pointer;"><input type="checkbox" id="ncRolGerente" /> Gerente</label>' +
       '<label style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:.85rem;cursor:pointer;"><input type="checkbox" id="ncRolJefe" /> Jefe de Ventas</label>' +
       '<label style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:.85rem;cursor:pointer;"><input type="checkbox" id="ncRolAsesor" checked /> Asesor</label>' +
+    '</div>' +
+    '<div style="margin-bottom:16px;">' +
+      '<span style="font-size:.78rem;font-weight:600;color:#a855f7;display:block;margin-bottom:8px;">Usuarios específicos (opcional)</span>' +
+      '<div style="max-height:160px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:10px;">' + (userCheckboxes || '<div style="font-size:.78rem;color:var(--muted);">No hay usuarios disponibles</div>') + '</div>' +
     '</div>' +
     '<div style="display:flex;gap:10px;justify-content:flex-end;">' +
       '<button onclick="cerrarCrearCanal()" style="padding:8px 16px;background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:8px;color:var(--text);cursor:pointer;font-family:inherit;font-size:.82rem;">Cancelar</button>' +
@@ -3246,14 +3365,19 @@ async function crearNuevoCanal() {
   if (document.getElementById('ncRolGerente').checked) roles.push('gerente');
   if (document.getElementById('ncRolJefe').checked) roles.push('jefe_ventas');
   if (document.getElementById('ncRolAsesor').checked) roles.push('asesor');
+  var usuarios = [];
+  document.querySelectorAll('.nc-user-cb:checked').forEach(function(cb) { usuarios.push(cb.value); });
   if (!nombre || !nombre.value.trim()) { showToast('⚠️ Ingresá un nombre para el canal'); return; }
-  if (!roles.length) { showToast('⚠️ Seleccioná al menos un rol'); return; }
+  if (!roles.length && !usuarios.length) { showToast('⚠️ Seleccioná al menos un rol o usuario'); return; }
+  var miembros = {};
+  if (roles.length) miembros.roles = roles;
+  if (usuarios.length) miembros.usuarios = usuarios;
   try {
     var { error } = await sbClient.from('canales_equipo').insert({
       nombre: nombre.value.trim(),
       descripcion: desc ? desc.value.trim() : '',
-      tipo: 'publico',
-      miembros: { roles: roles },
+      tipo: 'grupo',
+      miembros: miembros,
       creado_por: _currentProfile.user_id
     });
     if (error) throw error;
