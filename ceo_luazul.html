@@ -60,6 +60,7 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
 .tabpg{display:none;animation:fi .3s ease;}
 .tabpg.active{display:block;}
 @keyframes fi{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+@keyframes pulse-badge{0%,100%{transform:scale(1);opacity:1;}50%{transform:scale(1.25);opacity:.85;}}
 
 /* STATS */
 .stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:22px;}
@@ -643,6 +644,7 @@ function cLogin(){
           if (ap) ap.style.display = 'block';
           onDone();
           initApp();
+          setTimeout(iniciarNotificacionesCeo, 2000); // iniciar notificaciones 2s después del login
         });
     })
     .catch(onErr);
@@ -728,6 +730,7 @@ document.addEventListener('DOMContentLoaded', function(){
           if (lw) lw.style.display = 'none';
           if (ap) ap.style.display = 'block';
           initApp();
+          setTimeout(iniciarNotificacionesCeo, 2000);
           return;
         }
       }
@@ -3854,6 +3857,113 @@ function getUserNameCeo(uid) {
   return st ? st.nombre : ('Usuario ' + String(uid).slice(0,6));
 }
 
+// ── Badge de mensajes no leídos + notificación toast ──
+var _unreadCountCeo = 0;
+var _lastMsgTimestampCeo = 0;
+var _notifIntervalCeo = null;
+
+async function contarNoLeidosCeo() {
+  if (!sbClient || !_ceoUid) return 0;
+  try {
+    // Obtener IDs de mensajes que el CEO ya vio
+    var vistosRes = await sbClient.from('mensajes_vistos').select('mensaje_id').eq('usuario_id', _ceoUid);
+    var vistosIds = [];
+    if (!vistosRes.error && vistosRes.data) {
+      vistosIds = vistosRes.data.map(function(v) { return v.mensaje_id; });
+    }
+    // Obtener canales del CEO
+    var canalesRes = await sbClient.from('canales_equipo').select('id,tipo,miembros');
+    if (canalesRes.error) return 0;
+    var misCanalesIds = [];
+    for (var i = 0; i < canalesRes.data.length; i++) {
+      var c = canalesRes.data[i];
+      try {
+        var m = typeof c.miembros === 'string' ? JSON.parse(c.miembros) : (c.miembros || {});
+        if (c.tipo === 'directo') {
+          var users = m.usuarios || [];
+          if (users.indexOf(_ceoUid) !== -1) misCanalesIds.push(c.id);
+        } else {
+          var roles = m.roles || [];
+          var users = m.usuarios || [];
+          if (roles.indexOf('ceo') !== -1 || roles.indexOf('todos') !== -1 || users.indexOf(_ceoUid) !== -1) {
+            misCanalesIds.push(c.id);
+          }
+        }
+      } catch(e) {}
+    }
+    if (!misCanalesIds.length) return 0;
+    // Contar mensajes no leídos donde el CEO no es el remitente
+    var res = await sbClient.from('mensajes_equipo')
+      .select('id, remitente_id, canal_id, created_at')
+      .in('canal_id', misCanalesIds)
+      .order('created_at', { ascending: false })
+      .limit(200);
+    if (res.error) return 0;
+    var noLeidos = 0;
+    var newestId = null;
+    var newestTime = 0;
+    for (var i = 0; i < res.data.length; i++) {
+      var msg = res.data[i];
+      if (String(msg.remitente_id) === String(_ceoUid)) continue;
+      if (vistosIds.indexOf(msg.id) === -1) {
+        noLeidos++;
+        if (!newestId || msg.created_at > newestTime) {
+          newestId = msg.id;
+          newestTime = msg.created_at;
+        }
+      }
+    }
+    return noLeidos;
+  } catch(e) { console.warn('[contarNoLeidosCeo]', e); return 0; }
+}
+
+async function actualizarBadgeCeo() {
+  var count = await contarNoLeidosCeo();
+  _unreadCountCeo = count;
+  var tab = document.getElementById('tab-comunicaciones');
+  if (!tab) return;
+  // Remover badge anterior
+  var oldBadge = tab.querySelector('.msg-badge');
+  if (oldBadge) oldBadge.remove();
+  if (count > 0) {
+    var badge = document.createElement('span');
+    badge.className = 'msg-badge';
+    badge.style.cssText = 'background:#ef4444;color:white;font-size:.6rem;font-weight:800;min-width:16px;height:16px;border-radius:99px;display:inline-flex;align-items:center;justify-content:center;margin-left:5px;padding:0 4px;animation:pulse-badge 2s infinite;';
+    badge.textContent = count > 99 ? '99+' : count;
+    tab.appendChild(badge);
+  }
+}
+
+async function marcarLeidosCeo(canalId) {
+  if (!sbClient || !_ceoUid) return;
+  try {
+    var res = await sbClient.from('mensajes_equipo').select('id').eq('canal_id', canalId);
+    if (res.error || !res.data) return;
+    var msgIds = res.data.map(function(m) { return m.mensaje_id || m.id; });
+    if (!msgIds.length) return;
+    // Insertar en mensajes_vistos (ignorar duplicados)
+    var inserts = msgIds.map(function(mid) {
+      return { mensaje_id: mid, usuario_id: _ceoUid };
+    });
+    await sbClient.from('mensajes_vistos').upsert(inserts, { onConflict: 'mensaje_id,usuario_id' });
+  } catch(e) { console.warn('[marcarLeidosCeo]', e); }
+}
+
+function iniciarNotificacionesCeo() {
+  if (_notifIntervalCeo) return;
+  actualizarBadgeCeo();
+  _notifIntervalCeo = setInterval(function() {
+    contarNoLeidosCeo().then(function(count) {
+      if (count > _unreadCountCeo) {
+        // Hay mensajes nuevos - mostrar notificación
+        showToast('💬 Tenés ' + count + ' mensaje' + (count > 1 ? 's' : '') + ' sin leer');
+      }
+      _unreadCountCeo = count;
+      actualizarBadgeCeo();
+    });
+  }, 30000); // cada 30 segundos
+}
+
 async function cargarCanalesCeo() {
   if (!sbClient || !_ceoUid) return [];
   try {
@@ -3967,6 +4077,8 @@ async function renderComunicacionesCeo() {
         el.style.color = isDM ? '#a855f7' : '#67e8f9';
         el.style.borderLeft = '3px solid ' + (isDM ? '#a855f7' : '#67e8f9');
         cargarMensajesCanalCeo(_canalActivoCeo);
+        marcarLeidosCeo(_canalActivoCeo);
+        actualizarBadgeCeo();
       });
     });
 
