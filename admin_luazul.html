@@ -3250,7 +3250,7 @@ async function enviarMensaje(canalId, respuestaA) {
       canal_id: parseInt(canalId),
       respuesta_a: respuestaA || null,
       tipo_mensaje: 'aviso'
-    });
+    }).select();
     if (error) throw error;
     showToast('✅ Mensaje enviado');
     cargarMensajesCanal(canalId);
@@ -3318,7 +3318,7 @@ async function crearOBuscarDM(targetUserId) {
       descripcion: 'Conversación directa',
       miembros: { tipo: 'directo', usuarios: [uid, targetUserId] },
       creado_por: uid
-    });
+    }).select();
     if (ins.error) throw ins.error;
     showToast('Conversación creada con ' + otherName);
     renderComunicaciones();
@@ -3394,7 +3394,7 @@ async function crearNuevoCanal() {
       tipo: 'grupo',
       miembros: miembros,
       creado_por: _currentProfile.user_id
-    });
+    }).select();
     if (error) throw error;
     showToast('✅ Canal "' + nombre.value.trim() + '" creado');
     cerrarCrearCanal();

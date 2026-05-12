@@ -4038,7 +4038,7 @@ async function crearOBuscarDMCeo(targetUserId) {
     };
     console.log('[crearOBuscarDMCeo] insertando:', JSON.stringify(datosInsert));
     console.log('[crearOBuscarDMCeo] _ceoUid:', _ceoUid, '| targetUserId:', targetUserId);
-    var ins = await sbClient.from('canales_equipo').insert(datosInsert);
+    var ins = await sbClient.from('canales_equipo').insert(datosInsert).select();
     if (ins.error) {
       console.error('[crearOBuscarDMCeo] error Supabase:', JSON.stringify(ins.error));
       throw ins.error;
@@ -4121,7 +4121,7 @@ async function crearNuevoCanal() {
       tipo: 'grupo',
       miembros: miembros,
       creado_por: _ceoUid
-    });
+    }).select();
     if (ins.error) throw ins.error;
     showToast('Canal "' + nombre.value.trim() + '" creado');
     cerrarCrearCanal();
@@ -4306,7 +4306,7 @@ async function crearNuevoCanal() {
       tipo: 'publico',
       miembros: { roles: roles },
       creado_por: _ceoUid
-    });
+    }).select();
     if (ins.error) throw ins.error;
     showToast('Canal "' + nombre.value.trim() + '" creado');
     cerrarCrearCanal();

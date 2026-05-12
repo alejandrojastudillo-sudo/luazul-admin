@@ -3689,7 +3689,7 @@ async function enviarMensajeJefe(canalId, respuestaA) {
     var ins = await sbClient.from('mensajes_equipo').insert({
       remitente_id: window._gerenteProfile.user_id, asunto: asunto, cuerpo: cuerpo,
       canal_id: canalId, respuesta_a: respuestaA || null, tipo_mensaje: 'aviso'
-    });
+    }).select();
     if (ins.error) throw ins.error;
     showToast('Mensaje enviado');
     cargarMensajesCanalJefe(canalId);
@@ -3750,7 +3750,7 @@ async function crearOBuscarDMJefe(targetUserId) {
     var ins = await sbClient.from('canales_equipo').insert({
       nombre: 'DM: ' + otherName, tipo: 'directo', descripcion: 'Conversación directa',
       miembros: { tipo: 'directo', usuarios: [uid, targetUserId] }, creado_por: uid
-    });
+    }).select();
     if (ins.error) throw ins.error;
     showToast('Conversación creada con ' + otherName);
     renderComunicacionesJefe();
@@ -3807,7 +3807,7 @@ async function crearNuevoCanal() {
     var ins = await sbClient.from('canales_equipo').insert({
       nombre: nombre.value.trim(), descripcion: desc ? desc.value.trim() : '',
       tipo: 'grupo', miembros: miembros, creado_por: window._gerenteProfile.user_id
-    });
+    }).select();
     if (ins.error) throw ins.error;
     showToast('Canal "' + nombre.value.trim() + '" creado');
     cerrarCrearCanal();
