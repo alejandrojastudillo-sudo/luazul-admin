@@ -4029,14 +4029,20 @@ async function crearOBuscarDMCeo(targetUserId) {
     var st = _staffCacheCeo.find(function(s) { return String(s.user_id) === String(targetUserId); });
     var otherName = st ? st.nombre : 'Usuario';
     // Create DM channel
-    var ins = await sbClient.from('canales_equipo').insert({
+    var datosInsert = {
       nombre: 'DM: ' + otherName,
       tipo: 'directo',
       descripcion: 'Conversación directa',
       miembros: { tipo: 'directo', usuarios: [_ceoUid, targetUserId] },
       creado_por: _ceoUid
-    });
-    if (ins.error) throw ins.error;
+    };
+    console.log('[crearOBuscarDMCeo] insertando:', JSON.stringify(datosInsert));
+    console.log('[crearOBuscarDMCeo] _ceoUid:', _ceoUid, '| targetUserId:', targetUserId);
+    var ins = await sbClient.from('canales_equipo').insert(datosInsert);
+    if (ins.error) {
+      console.error('[crearOBuscarDMCeo] error Supabase:', JSON.stringify(ins.error));
+      throw ins.error;
+    }
     _canalActivoCeo = String(ins.data[0].id);
     showToast('Conversación creada con ' + otherName);
     renderComunicacionesCeo();
