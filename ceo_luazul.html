@@ -3829,22 +3829,22 @@ var _ROLE_NAMES = {1:'CEO', 2:'Gerente', 3:'Asesor', 4:'Jefe de Ventas', 5:'Admi
 async function cargarStaffCeo() {
   if (_staffCacheCeo.length) return _staffCacheCeo;
   try {
-    // Usar columnas que existen: id, user_id, nombre, apellido, role_id, badge
-    var res = await sbClient.from('staff_profiles').select('id, user_id, nombre, apellido, role_id, badge, activo');
-    console.log('[cargarStaffCeo] resultado:', res.data ? res.data.length + ' registros' : 'sin datos', res.error || '');
+    // select('*') porque es lo que usa el panel para cargar gerentes/vendedores (columnas confirmadas)
+    var res = await sbClient.from('staff_profiles').select('*');
+    console.log('[cargarStaffCeo] filas:', res.data ? res.data.length : 0, 'error:', res.error ? res.error.message : 'ninguno');
     if (res.error) throw res.error;
     _staffCacheCeo = (res.data || []).map(function(r) {
       return {
         user_id: r.user_id || r.id,
         nombre: (r.nombre || '') + (r.apellido ? ' ' + r.apellido : ''),
         role: _ROLE_NAMES[r.role_id] || ('Rol ' + (r.role_id || '?')),
-        badge: r.badge || '',
+        badge: r.badge || r.email || '',
         activo: r.activo !== false
       };
     });
-    console.log('[cargarStaffCeo] cache listo:', _staffCacheCeo.length, 'usuarios');
+    console.log('[cargarStaffCeo] cache listo:', _staffCacheCeo.length, 'usuarios', _staffCacheCeo);
     return _staffCacheCeo;
-  } catch(e) { console.warn('[cargarStaffCeo]', e); return []; }
+  } catch(e) { console.warn('[cargarStaffCeo] ERROR:', e.message || e); return []; }
 }
 
 async function cargarCanalesCeo() {

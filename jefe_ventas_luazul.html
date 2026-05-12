@@ -3485,21 +3485,21 @@ var _ROLE_NAMES = {1:'CEO', 2:'Gerente', 3:'Asesor', 4:'Jefe de Ventas', 5:'Admi
 async function cargarStaffJefe() {
   if (_staffCacheJefe.length) return _staffCacheJefe;
   try {
-    var res = await sbClient.from('staff_profiles').select('id, user_id, nombre, apellido, role_id, badge, activo');
-    console.log('[cargarStaffJefe] resultado:', res.data ? res.data.length + ' registros' : 'sin datos', res.error || '');
+    var res = await sbClient.from('staff_profiles').select('*');
+    console.log('[cargarStaffJefe] filas:', res.data ? res.data.length : 0, 'error:', res.error ? res.error.message : 'ninguno');
     if (res.error) throw res.error;
     _staffCacheJefe = (res.data || []).map(function(r) {
       return {
         user_id: r.user_id || r.id,
         nombre: (r.nombre || '') + (r.apellido ? ' ' + r.apellido : ''),
         role: _ROLE_NAMES[r.role_id] || ('Rol ' + (r.role_id || '?')),
-        badge: r.badge || '',
+        badge: r.badge || r.email || '',
         activo: r.activo !== false
       };
     });
     console.log('[cargarStaffJefe] cache listo:', _staffCacheJefe.length, 'usuarios');
     return _staffCacheJefe;
-  } catch(e) { console.warn('[cargarStaffJefe]', e); return []; }
+  } catch(e) { console.warn('[cargarStaffJefe] ERROR:', e.message || e); return []; }
 }
 
 async function cargarCanalesJefe() {
