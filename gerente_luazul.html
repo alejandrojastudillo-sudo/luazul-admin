@@ -361,28 +361,54 @@ const LZ_LOAD = {
     ]);
     var regRes = ronda1[0], grRes = ronda1[1];
     if (regRes.error) throw regRes.error;
+    if (grRes.error) console.warn('⚠️ gerente_regiones query error:', grRes.error);
 
     var regiones = regRes.data || [];
     var rIds     = (grRes.data || []).map(function(r) { return r.region_id; });
 
-    // ── Staff: para gerente, obtener por región (roles 3 y 5) ──
+    // ── Staff: para gerente, obtener por región O por manager_id (fallback) ──
     var staffRes;
     if (rIds.length) {
+      // Consulta principal: filtrar por regiones asignadas al gerente
       staffRes = await sbClient.from('staff_profiles')
         .select('*')
         .in('region_id', rIds)
         .in('role_id', [ROLE_SELLER, ROLE_SALES_LEADER]);
     } else {
-      staffRes = await sbClient.from('staff_profiles').select('*').eq('id', -1);
+      // Fallback: si no hay regiones en gerente_regiones, buscar por manager_id
+      console.log('⚠️ Sin regiones en gerente_regiones, usando fallback manager_id para gerente:', profile.id, profile.user_id);
+      staffRes = await sbClient.from('staff_profiles')
+        .select('*')
+        .eq('manager_id', profile.id)
+        .in('role_id', [ROLE_SELLER, ROLE_SALES_LEADER]);
     }
     if (staffRes.error) throw staffRes.error;
     var staff = (staffRes.data || []).map(_lzMapStaff);
 
+    // Si venía por regiones, deduplicar con manager_id para incluir staff asignado directamente
+    if (rIds.length && staff.length === 0) {
+      console.log('⚠️ Region filter returned 0 staff, trying manager_id fallback');
+      var fallbackRes = await sbClient.from('staff_profiles')
+        .select('*')
+        .eq('manager_id', profile.id)
+        .in('role_id', [ROLE_SELLER, ROLE_SALES_LEADER]);
+      if (!fallbackRes.error && fallbackRes.data && fallbackRes.data.length) {
+        staff = fallbackRes.data.map(_lzMapStaff);
+      }
+    }
+
     var cliQuery = sbClient.from('clientes').select('*');
     if (rIds.length) {
       cliQuery = cliQuery.in('region_id', rIds);
+    } else if (staff.length > 0) {
+      // Fallback clientes: obtener clientes de los vendedores del equipo
+      var sellerIds = staff.filter(function(s){ return s.role_id === ROLE_SELLER; }).map(function(s){ return s.id; });
+      if (sellerIds.length) {
+        cliQuery = cliQuery.in('seller_id', sellerIds);
+      } else {
+        cliQuery = cliQuery.eq('region_id', -1);
+      }
     } else {
-      // Si el gerente no tiene regiones asignadas, no mostrar clientes
       cliQuery = cliQuery.eq('region_id', -1);
     }
 
@@ -408,7 +434,7 @@ const LZ_LOAD = {
     var pagos         = (!pagRes.error && pagRes.data) ? pagRes.data.map(_lzMapPago) : [];
     var notificaciones = notifRes.data || [];
 
-    return { regiones: regiones, staff: staff, clientes: clientes, pagos: pagos, notificaciones: notificaciones };
+    return { regiones: regiones, staff: staff, clientes: clientes, pagos: pagos, notificaciones: notificaciones, gerenteRegionIds: rIds };
   }
 };
 
@@ -445,10 +471,12 @@ async function loadClients() {
     window._cacheSalesLeaders = staff.filter(function(s) { return s.role_id === LZ.ROLE_SALES_LEADER; });
     _memCache[NK]     = notificaciones;
     window._cacheRegiones    = regiones;
-    window._gerenteRegionIds = regiones.map(function(r) { return r.id; });
+    window._gerenteRegionIds = result.gerenteRegionIds || [];
     console.log('📦 Datos cargados:', {
       clientes: _memCache[DB_KEY].length,
       staff:    _memCache[VK].length,
+      jefes:    window._cacheSalesLeaders.length,
+      gerenteRegionIds: result.gerenteRegionIds || [],
       notificaciones: notificaciones.length
     });
     renderAll();
