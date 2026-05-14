@@ -4798,13 +4798,14 @@ async function generarVoucherPDF(clienteId) {
 
       + '</div></div>';
 
-    // Generar PDF
+    // Generar PDF — forzar 1 sola pagina
     var opt = {
       margin: 0,
       filename: 'Voucher_' + numVoucher + '.pdf',
       image: { type: 'jpeg', quality: 0.98 },
       html2canvas: { scale: 2, useCORS: true, width: W, height: H, backgroundColor: '#ffffff' },
-      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait', hotfixes: ['px_scaling'] }
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait', hotfixes: ['px_scaling'] },
+      pagebreak: { mode: 'avoid-all' }
     };
 
     // Crear contenedor temporal VISIBLE para renderizar (html2canvas necesita que este en el viewport)
@@ -4820,6 +4821,12 @@ async function generarVoucherPDF(clienteId) {
 
     // Limpiar contenedor temporal
     document.body.removeChild(tempDiv);
+
+    // Abrir voucher en pantalla completa en nueva pestana
+    try {
+      var pdfUrlBlob = URL.createObjectURL(pdfBlob);
+      window.open(pdfUrlBlob, '_blank');
+    } catch(fsErr) { console.warn('[fullscreen]', fsErr); }
 
     // Subir a Supabase Storage
     function generarUUID() {
