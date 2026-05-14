@@ -4541,7 +4541,7 @@ async function renderVoucherClientes() {
 }
 
 function abrirFormularioVoucher(clienteId) {
-  var cliente = _voucherClientesCache.find(function(c) { return c.id === clienteId; });
+  var cliente = _voucherClientesCache.find(function(c) { return String(c.id) === String(clienteId); });
   if (!cliente) {
     showToast('❌ Cliente no encontrado');
     return;
@@ -4645,7 +4645,7 @@ async function generarVoucherPDF(clienteId) {
   var btn = document.getElementById('btnGenerarVoucher');
   if (btn) btn.disabled = true;
   try {
-    var cliente = _voucherClientesCache.find(function(c) { return c.id === clienteId; });
+    var cliente = _voucherClientesCache.find(function(c) { return String(c.id) === String(clienteId); });
     if (!cliente) throw new Error('Cliente no encontrado');
 
     // Recoger datos del formulario
