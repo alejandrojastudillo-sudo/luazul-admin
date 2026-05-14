@@ -1526,8 +1526,8 @@ async function saveVendor() {
   var telefono2 = (document.getElementById('vT2').value || '').trim();
   var domicilio = (document.getElementById('vDom').value || '').trim();
   var cbu = (document.getElementById('vCBU').value || '').trim();
-  // regionId eliminado – los vendedores no necesitan región
   var managerId = window._gerenteProfile ? parseInt(window._gerenteProfile.id) : null;
+  var myRegIds = window._gerenteRegionIds || [];
 
   if (!nombre || !email || !pass) {
     showToast('⚠️ Nombre, email y contraseña son obligatorios');
@@ -1535,6 +1535,10 @@ async function saveVendor() {
   }
   if (!email.includes('@') || !email.includes('.')) {
     showToast('⚠️ Ingresá un email válido');
+    return;
+  }
+  if (!myRegIds.length) {
+    showToast('⚠️ Tu cuenta de gerente no tiene regiones asignadas. Pedile al CEO que te asigne regiones.');
     return;
   }
 
@@ -1569,7 +1573,7 @@ async function saveVendor() {
         p_role_id: 3,
         p_nombre: primerNombre,
         p_apellido: apellidoStr,
-        p_region_ids: [],
+        p_region_ids: myRegIds,
         p_telefono1: telefono1 || null,
         p_telefono2: telefono2 || null,
         p_ciudad: null,
@@ -3948,6 +3952,11 @@ window.enviarRespuestaGerente      = enviarRespuestaGerente;
       showToast('⚠️ Sesión no válida. Recargá el panel.');
       return;
     }
+    var myRegionIds = window._gerenteRegionIds || [];
+    if (!myRegionIds.length) {
+      showToast('⚠️ Tu cuenta de gerente no tiene regiones asignadas. Pedile al CEO que te asigne regiones.');
+      return;
+    }
 
     var btn = document.querySelector('#modal .mbtn.gold');
     var originalText = btn ? btn.textContent : '✅ Crear Jefe de Ventas';
@@ -3983,7 +3992,7 @@ window.enviarRespuestaGerente      = enviarRespuestaGerente;
           p_role_id:    ROLE_SALES_LEADER,
           p_nombre:     primerNombre,
           p_apellido:   apellidoStr,
-          p_region_ids: [],
+          p_region_ids: myRegionIds,
           p_telefono1:  telefono1 || null,
           p_telefono2:  telefono2 || null,
           p_ciudad:     ciudad,
