@@ -2089,7 +2089,7 @@ function saveNewGerente(){
       role_id:    ROLE_MANAGER,
       nombre:     nombres[0],
       apellido:   nombres.slice(1).join(' ')||'',
-      activo:     true,
+      badge:      email, activo:     true,
       region_id:  regionIds.length > 0 ? regionIds[0] : null,
       ciudad:     (document.getElementById('gCiudad').value||'').trim()||null,
       telefono1:  (document.getElementById('gTel1').value||'').trim()||null,
@@ -2106,7 +2106,8 @@ function saveNewGerente(){
     var newGer = mapGerente(ins.data);
     newGer.region_ids = regionIds;
     if(regionIds.length > 0){
-      var rels = regionIds.map(function(rid){ return{gerente_id:ins.data.id, region_id:rid}; });
+      var gerUUID = ins.data.user_id || uid;
+      var rels = regionIds.map(function(rid){ return{gerente_id:gerUUID, region_id:rid}; });
       return sbClient.from('gerente_regiones').insert(rels).then(function(){ return newGer; });
     }
     return newGer;
