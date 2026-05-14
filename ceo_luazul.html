@@ -4522,8 +4522,8 @@ async function renderVoucherClientes() {
       var estadoColor = tieneVoucher ? '#4ade80' : (pct >= 80 ? '#fbbf24' : 'var(--muted)');
       return '<div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">'
         + '<div style="flex:1;min-width:200px;">'
-        + '<div style="font-size:.88rem;font-weight:700;color:var(--fg);">' + esc(c.nombre) + '</div>'
-        + '<div style="font-size:.72rem;color:var(--muted);margin-top:2px;">' + esc(c.destino || '') + ' · ' + pagadas + '/' + total + ' cuotas (' + pct + '%) · ' + (c.fecha_viaje || 'Sin fecha') + '</div>'
+        + '<div style="font-size:.88rem;font-weight:700;color:var(--fg);">' + escCeo(c.nombre) + '</div>'
+        + '<div style="font-size:.72rem;color:var(--muted);margin-top:2px;">' + escCeo(c.destino || '') + ' · ' + pagadas + '/' + total + ' cuotas (' + pct + '%) · ' + escCeo(c.fecha_viaje || 'Sin fecha') + '</div>'
         + '</div>'
         + '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">'
         + (tieneVoucher
@@ -4554,8 +4554,8 @@ function abrirFormularioVoucher(clienteId) {
     + '</div>'
     + '<div class="modal-body" style="max-height:75vh;overflow-y:auto;">'
     + '<div style="background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.2);border-radius:12px;padding:14px;margin-bottom:18px;">'
-    + '<div style="font-size:.82rem;font-weight:700;color:#fbbf24;">Cliente: ' + esc(cliente.nombre) + '</div>'
-    + '<div style="font-size:.72rem;color:var(--muted);margin-top:4px;">Destino: ' + esc(cliente.destino || '—') + ' · Paquete: ' + esc(cliente.paquete || '—') + ' · ' + (cliente.personas || '?') + ' personas</div>'
+    + '<div style="font-size:.82rem;font-weight:700;color:#fbbf24;">Cliente: ' + escCeo(cliente.nombre) + '</div>'
+    + '<div style="font-size:.72rem;color:var(--muted);margin-top:4px;">Destino: ' + escCeo(cliente.destino || '—') + ' · Paquete: ' + escCeo(cliente.paquete || '—') + ' · ' + (cliente.personas || '?') + ' personas</div>'
     + '</div>'
 
     // Número de voucher
@@ -4744,7 +4744,7 @@ async function generarVoucherPDF(clienteId) {
       + '<div class="content">'
       + '<div style="text-align:center;margin:18px 0;"><h1 style="font-size:18px;font-weight:800;color:#0B3D91;">VOUCHER DE VIAJE</h1><p style="font-size:11px;color:#64748b;margin-top:2px;">CONFIRMACIÓN DE PAGO TOTAL</p></div>'
       + '<div style="text-align:center;"><div class="voucher-num">Voucher N°: ' + numVoucher + '</div></div>'
-      + '<div class="client-name"><h2>A NOMBRE DE: ' + esc(cliente.nombre) + '</h2></div>'
+      + '<div class="client-name"><h2>A NOMBRE DE: ' + escCeo(cliente.nombre) + '</h2></div>'
       + '<div class="client-contact">contact: reservas@luazul.com.br</div>'
       + '<div class="congrats">'
       + '<h3>¡FELICITACIONES! SU PLAN DE AHORRO TURÍSTICO ESTÁ 100% PAGADO Y ACTIVADO</h3>'
