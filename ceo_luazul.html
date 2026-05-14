@@ -4690,94 +4690,94 @@ async function generarVoucherPDF(clienteId) {
     var fechaHoy = new Date();
     var fechaHoyFormatted = fechaHoy.getDate() + ' de ' + ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'][fechaHoy.getMonth()] + ' de ' + fechaHoy.getFullYear();
 
-    // Tours — generar como filas de tabla para html2canvas
+    // Tours — generar como filas de tabla para el voucher
     var toursRows = tours.map(function(t) {
-      return '<tr><td style="vertical-align:top;width:20px;font-size:11px;padding-top:3px;">⛳</td><td style="font-size:9px;color:#1e293b;line-height:1.4;padding:3px 0;border-bottom:1px solid #f0f0f0;">' + t + '</td></tr>';
+      return '<tr><td style="vertical-align:top;width:22px;font-size:14px;padding-top:5px;">&#9679;</td><td style="font-size:14px;color:#1e293b;line-height:1.5;padding:5px 0;border-bottom:1px solid #e2e8f0;">' + t + '</td></tr>';
     }).join('');
 
-    // Template HTML del Voucher PDF — TABLA COMPLETA para compatibilidad html2canvas
+    // Template HTML del Voucher PDF — TABLA COMPLETA
     var W = 794, H = 1123;
 
     // Tours como filas de tabla
     var toursHTML = tours.map(function(t) {
-      return '<tr><td style="width:16px;vertical-align:top;font-size:9px;color:#0B3D91;padding:2px 6px 2px 0;">&#9679;</td><td style="font-size:9px;color:#1e293b;line-height:1.35;padding:2px 0;border-bottom:1px solid #f1f5f9;">' + t + '</td></tr>';
+      return '<tr><td style="width:22px;vertical-align:top;font-size:14px;color:#0B3D91;padding:5px 8px 5px 0;">&#9679;</td><td style="font-size:14px;color:#1e293b;line-height:1.5;padding:5px 0;border-bottom:1px solid #e2e8f0;">' + t + '</td></tr>';
     }).join('');
 
     var templateHtml = '<table width="' + W + '" height="' + H + '" cellpadding="0" cellspacing="0" style="background:#ffffff;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#1e293b;">'
 
       // ═══ HEADER ═══
-      + '<tr><td style="background:#0B3D91;padding:14px 30px 12px;text-align:center;">'
+      + '<tr><td style="background:#0B3D91;padding:22px 40px 20px;text-align:center;">'
       + '<table width="100%" cellpadding="0" cellspacing="0"><tr>'
-      + '<td style="text-align:center;width:50px;vertical-align:middle;">'
-      + '<div style="width:38px;height:38px;border-radius:50%;border:2px solid rgba(255,255,255,0.8);margin:0 auto;overflow:hidden;background:#fff;"><img src="' + LOGO_LUAZUL + '" style="width:32px;height:32px;border-radius:50%;" /></div>'
+      + '<td style="text-align:center;width:70px;vertical-align:middle;">'
+      + '<div style="width:56px;height:56px;border-radius:50%;border:3px solid rgba(255,255,255,0.8);margin:0 auto;overflow:hidden;background:#fff;"><img src="' + LOGO_LUAZUL + '" style="width:48px;height:48px;border-radius:50%;" /></div>'
       + '</td>'
       + '<td style="vertical-align:middle;">'
-      + '<div style="font-size:17px;font-weight:800;letter-spacing:3px;color:#fff;">LUAZUL</div>'
-      + '<div style="font-size:7px;color:rgba(255,255,255,0.6);letter-spacing:2px;">SMART TRAVEL</div>'
+      + '<div style="font-size:26px;font-weight:800;letter-spacing:4px;color:#fff;">LUAZUL</div>'
+      + '<div style="font-size:11px;color:rgba(255,255,255,0.65);letter-spacing:2px;">SMART TRAVEL</div>'
       + '</td>'
       + '<td style="text-align:center;vertical-align:middle;">'
-      + '<div style="font-size:14px;font-weight:800;letter-spacing:1.5px;color:#fff;">VOUCHER DE VIAJE</div>'
-      + '<div style="font-size:7px;color:rgba(255,255,255,0.65);letter-spacing:1px;">CONFIRMACI&Oacute;N DE PAGO TOTAL</div>'
+      + '<div style="font-size:22px;font-weight:800;letter-spacing:2px;color:#fff;">VOUCHER DE VIAJE</div>'
+      + '<div style="font-size:11px;color:rgba(255,255,255,0.65);letter-spacing:1.5px;">CONFIRMACI&Oacute;N DE PAGO TOTAL</div>'
       + '</td>'
-      + '<td style="width:50px;"></td>'
+      + '<td style="width:70px;"></td>'
       + '</tr></table>'
       + '</td></tr>'
 
       // ═══ NUMERO VOUCHER ═══
-      + '<tr><td style="background:#e9f0ff;text-align:center;padding:5px 0;">'
-      + '<span style="font-size:10px;font-weight:700;color:#0B3D91;">Voucher N&deg; ' + numVoucher + '</span>'
+      + '<tr><td style="background:#e9f0ff;text-align:center;padding:10px 0;">'
+      + '<span style="font-size:16px;font-weight:700;color:#0B3D91;letter-spacing:1px;">Voucher N&deg; ' + numVoucher + '</span>'
       + '</td></tr>'
 
       // ═══ CUERPO ═══
-      + '<tr><td style="padding:10px 30px 0;">'
+      + '<tr><td style="padding:24px 40px 0;">'
 
       // Cliente
-      + '<div style="text-align:center;padding:4px 0 8px;">'
-      + '<div style="font-size:12px;font-weight:700;color:#0B3D91;">A NOMBRE DE: ' + escCeo(cliente.nombre) + '</div>'
-      + '<div style="font-size:7.5px;color:#64748b;margin-top:1px;">contacto: reservas@luazul.com.br</div>'
+      + '<div style="text-align:center;padding:8px 0 16px;">'
+      + '<div style="font-size:20px;font-weight:700;color:#0B3D91;">A NOMBRE DE: ' + escCeo(cliente.nombre) + '</div>'
+      + '<div style="font-size:12px;color:#64748b;margin-top:3px;">contacto: reservas@luazul.com.br</div>'
       + '</div>'
 
       // Felicidades
-      + '<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:7px 14px;text-align:center;margin-bottom:8px;">'
-      + '<div style="font-size:9.5px;font-weight:700;color:#166534;">\u00A1FELICITACIONES! SU PLAN DE AHORRO TUR&Iacute;STICO EST&Aacute; 100% PAGADO Y ACTIVADO.</div>'
+      + '<div style="background:#f0fdf4;border:2px solid #bbf7d0;border-radius:8px;padding:16px 20px;text-align:center;margin-bottom:18px;">'
+      + '<div style="font-size:16px;font-weight:700;color:#166534;line-height:1.5;">\u00A1FELICITACIONES! SU PLAN DE AHORRO TUR&Iacute;STICO EST&Aacute; 100% PAGADO Y ACTIVADO.</div>'
       + '</div>'
 
       // Servicios
-      + '<table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:8px;">'
-      + '<tr><td style="width:16px;vertical-align:top;font-size:9px;color:#0B3D91;padding:2px 6px 2px 0;">&#9679;</td><td style="font-size:9px;color:#1e293b;line-height:1.35;padding:2px 0;border-bottom:1px solid #f1f5f9;"><b>' + noches + ' noches</b> de alojamiento en hotel 4 estrellas (' + hotel + ')</td></tr>'
-      + '<tr><td style="width:16px;vertical-align:top;font-size:9px;color:#0B3D91;padding:2px 6px 2px 0;">&#9679;</td><td style="font-size:9px;color:#1e293b;line-height:1.35;padding:2px 0;border-bottom:1px solid #f1f5f9;">' + trasladoTexto + '</td></tr>'
+      + '<table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:18px;">'
+      + '<tr><td style="width:22px;vertical-align:top;font-size:14px;color:#0B3D91;padding:5px 8px 5px 0;">&#9679;</td><td style="font-size:14px;color:#1e293b;line-height:1.5;padding:5px 0;border-bottom:1px solid #e2e8f0;"><b>' + noches + ' noches</b> de alojamiento en hotel 4 estrellas (' + hotel + ')</td></tr>'
+      + '<tr><td style="width:22px;vertical-align:top;font-size:14px;color:#0B3D91;padding:5px 8px 5px 0;">&#9679;</td><td style="font-size:14px;color:#1e293b;line-height:1.5;padding:5px 0;border-bottom:1px solid #e2e8f0;">' + trasladoTexto + '</td></tr>'
       + toursHTML
-      + '<tr><td style="width:16px;vertical-align:top;font-size:9px;color:#0B3D91;padding:2px 6px 2px 0;">&#9679;</td><td style="font-size:9px;color:#1e293b;line-height:1.35;padding:2px 0;border-bottom:1px solid #f1f5f9;">Asistencia personalizada 24/7 en espa&ntilde;ol v&iacute;a WhatsApp</td></tr>'
+      + '<tr><td style="width:22px;vertical-align:top;font-size:14px;color:#0B3D91;padding:5px 8px 5px 0;">&#9679;</td><td style="font-size:14px;color:#1e293b;line-height:1.5;padding:5px 0;border-bottom:1px solid #e2e8f0;">Asistencia personalizada 24/7 en espa&ntilde;ol v&iacute;a WhatsApp</td></tr>'
       + '</table>'
 
       // Importante
-      + '<div style="background:#fef2f2;border-left:3px solid #dc2626;padding:5px 8px;border-radius:3px;margin-bottom:8px;">'
-      + '<div style="font-size:8px;color:#991b1b;line-height:1.4;"><b>IMPORTANTE:</b> Vuelos internacionales y nacionales NO INCLUIDOS. El paquete se activa al llegar a destino.</div>'
+      + '<div style="background:#fef2f2;border-left:4px solid #dc2626;padding:12px 14px;border-radius:4px;margin-bottom:18px;">'
+      + '<div style="font-size:13px;color:#991b1b;line-height:1.6;"><b>IMPORTANTE:</b> Vuelos internacionales y nacionales NO INCLUIDOS. El paquete se activa al llegar a destino.</div>'
       + '</div>'
 
       // Pasos
-      + '<div style="background:#f0f9ff;border:1px solid #d0e5ff;border-radius:6px;padding:7px 10px;margin-bottom:8px;">'
-      + '<div style="font-size:9px;font-weight:800;color:#0B3D91;text-transform:uppercase;letter-spacing:1px;margin-bottom:3px;">Pasos para reservar sus fechas</div>'
-      + '<div style="font-size:8px;color:#334155;line-height:1.4;">1. P&oacute;ngase en contacto con nosotros para confirmar su fecha de viaje.</div>'
-      + '<div style="font-size:8px;color:#334155;line-height:1.4;">2. Tenemos un plazo de 30 d&iacute;as para confirmar.</div>'
-      + '<div style="font-size:8px;color:#334155;line-height:1.4;">3. Recibir&aacute; su voucher definitivo con los detalles de su viaje.</div>'
+      + '<div style="background:#f0f9ff;border:2px solid #d0e5ff;border-radius:8px;padding:16px 18px;margin-bottom:18px;">'
+      + '<div style="font-size:15px;font-weight:800;color:#0B3D91;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:8px;">Pasos para reservar sus fechas</div>'
+      + '<div style="font-size:13px;color:#334155;line-height:1.6;padding:2px 0;">1. P&oacute;ngase en contacto con nosotros para confirmar su fecha de viaje.</div>'
+      + '<div style="font-size:13px;color:#334155;line-height:1.6;padding:2px 0;">2. Tenemos un plazo de 30 d&iacute;as para confirmar.</div>'
+      + '<div style="font-size:13px;color:#334155;line-height:1.6;padding:2px 0;">3. Recibir&aacute; su voucher definitivo con los detalles de su viaje.</div>'
       + '</div>'
 
       // Contacto
-      + '<div style="margin-bottom:6px;">'
-      + '<div style="font-size:8px;color:#334155;padding:1px 0;">\uD83D\uDCDE +55 (XX) XXXX-XXXX &nbsp;&nbsp; \uD83D\uDCE7 reservas@luazul.com.br &nbsp;&nbsp; \uD83D\uDCF1 WhatsApp: +55 (XX) XXXX-XXXX</div>'
+      + '<div style="margin-bottom:10px;">'
+      + '<div style="font-size:13px;color:#334155;padding:2px 0;line-height:1.5;">\uD83D\uDCDE +55 (XX) XXXX-XXXX &nbsp;&nbsp; \uD83D\uDCE7 reservas@luazul.com.br &nbsp;&nbsp; \uD83D\uDCF1 WhatsApp: +55 (XX) XXXX-XXXX</div>'
       + '</div>'
 
       // Footer
-      + '<div style="border-top:1px solid #cbd5e1;padding-top:6px;">'
+      + '<div style="border-top:2px solid #cbd5e1;padding-top:10px;">'
       + '<table width="100%" cellpadding="0" cellspacing="0"><tr>'
       + '<td style="vertical-align:top;">'
-      + '<div style="font-size:8px;color:#334155;">Luazul Turismo e Exchange LTDA,</div>'
-      + '<div style="font-size:7px;color:#64748b;margin-top:1px;">CADASTUR N&deg; 54.728.334/0001-05</div>'
+      + '<div style="font-size:13px;color:#334155;">Luazul Turismo e Exchange LTDA,</div>'
+      + '<div style="font-size:11px;color:#64748b;margin-top:2px;">CADASTUR N&deg; 54.728.334/0001-05</div>'
       + '</td>'
       + '<td style="vertical-align:top;text-align:right;">'
-      + '<div style="font-size:7px;color:#64748b;">Firmado Digitalmente por <b style="color:#0B3D91;">Luazul Smart Travel</b></div>'
-      + '<div style="font-size:7px;color:#64748b;margin-top:1px;">Fecha: ' + fechaHoyFormatted + '</div>'
+      + '<div style="font-size:11px;color:#64748b;">Firmado Digitalmente por <b style="color:#0B3D91;">Luazul Smart Travel</b></div>'
+      + '<div style="font-size:11px;color:#64748b;margin-top:2px;">Fecha: ' + fechaHoyFormatted + '</div>'
       + '</td>'
       + '</tr></table></div>'
 
