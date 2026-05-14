@@ -4690,107 +4690,84 @@ async function generarVoucherPDF(clienteId) {
     var fechaHoy = new Date();
     var fechaHoyFormatted = fechaHoy.getDate() + ' de ' + ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'][fechaHoy.getMonth()] + ' de ' + fechaHoy.getFullYear();
 
-    // Tours HTML
-    var toursHtml = tours.map(function(t) {
-      return '<li style="display:flex;gap:10px;margin-bottom:10px;align-items:flex-start;">'
-        + '<span style="width:28px;height:28px;background:#eef2ff;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;">⛳</span>'
-        + '<span style="font-size:14px;color:#1e293b;">' + t + '</span>'
-        + '</li>';
+    // Tours — generar como filas de tabla para html2canvas
+    var toursRows = tours.map(function(t) {
+      return '<tr><td style="vertical-align:top;width:20px;font-size:11px;padding-top:3px;">⛳</td><td style="font-size:9px;color:#1e293b;line-height:1.4;padding:3px 0;border-bottom:1px solid #f0f0f0;">' + t + '</td></tr>';
     }).join('');
 
-    // Template HTML del Voucher PDF — optimizado para 1 página A4
-    var templateHtml = '<!DOCTYPE html><html><head><meta charset="UTF-8">'
-      + '<style>'
-      + '@page{margin:0;size:A4;}'
-      + '*{margin:0;padding:0;box-sizing:border-box;}'
-      + 'body{background:#f0f4fa;font-family:"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:#1e293b;}'
-      + '.voucher{width:210mm;height:297mm;margin:0 auto;background:#ffffff;position:relative;overflow:hidden;display:flex;flex-direction:column;}'
-      + '.header{background:linear-gradient(135deg,#0B3D91 0%,#002266 100%);color:white;padding:14px 24px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}'
-      + '.header-brand{display:flex;align-items:center;gap:10px;}'
-      + '.header-brand .logo{width:36px;height:36px;border-radius:50%;overflow:hidden;flex-shrink:0;}'
-      + '.header-brand .logo img{width:100%;height:100%;object-fit:contain;}'
-      + '.header-brand .name{font-size:16px;font-weight:800;letter-spacing:2px;}'
-      + '.header-brand .sub{font-size:8px;opacity:.6;letter-spacing:1px;}'
-      + '.header-title{text-align:center;}'
-      + '.header-title h1{font-size:16px;font-weight:800;letter-spacing:1px;}'
-      + '.header-title p{font-size:8px;opacity:.7;}'
-      + '.voucher-badge{background:#e9f0ff;display:inline-block;padding:3px 14px;border-radius:20px;font-size:10px;font-weight:700;color:#0B3D91;margin:10px auto 0;text-align:center;}'
-      + '.content{padding:12px 20px 10px;flex:1;display:flex;flex-direction:column;gap:10px;}'
-      + '.client-row{text-align:center;padding:6px 0;border-bottom:1px solid #e2e8f0;}'
-      + '.client-row h2{font-size:16px;font-weight:700;color:#0B3D91;}'
-      + '.client-row .email{font-size:9px;color:#64748b;}'
-      + '.congrats{text-align:center;background:#f0fdf4;border-radius:10px;padding:8px 12px;border:1px solid #bbf7d0;}'
-      + '.congrats h3{font-size:11px;font-weight:700;color:#166534;}'
-      + '.congrats .stamp{display:inline-block;border:2px solid #166534;border-radius:50%;padding:2px 10px;font-size:8px;font-weight:800;color:#166534;transform:rotate(-12deg);opacity:.7;margin-top:3px;letter-spacing:1px;}'
-      + '.section-title{font-size:9px;text-transform:uppercase;letter-spacing:1.2px;color:#4b6b9f;border-left:3px solid #0B3D91;padding-left:8px;font-weight:700;margin-bottom:4px;}'
-      + '.dates-box{background:#f0f9ff;border-radius:10px;padding:10px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center;}'
-      + '.dates-box .label{font-size:8px;color:#64748b;text-transform:uppercase;letter-spacing:.4px;}'
-      + '.dates-box .value{font-size:12px;font-weight:700;color:#0B3D91;}'
-      + '.services-box{background:#f8fafc;border-radius:10px;padding:10px 12px;}'
-      + '.services-box ul{list-style:none;}'
-      + '.service-item{display:flex;gap:8px;margin-bottom:5px;align-items:flex-start;}'
-      + '.service-icon{width:22px;height:22px;background:#eef2ff;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0;}'
-      + '.service-text{font-size:10px;color:#1e293b;line-height:1.3;}'
-      + '.notice{background:#fff7e5;border-left:3px solid #f59e0b;padding:8px 12px;border-radius:8px;font-size:9px;color:#92400e;line-height:1.4;}'
-      + '.notice strong{color:#b45309;}'
-      + '.bottom-row{display:flex;gap:16px;align-items:flex-start;justify-content:space-between;margin-top:auto;padding-top:8px;border-top:1px solid #e2e8f0;}'
-      + '.qr-section{text-align:center;flex-shrink:0;}'
-      + '.qr-section .qr-label{font-size:8px;color:#64748b;margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px;}'
-      + '.qr-section canvas,.qr-section img{width:80px!important;height:80px!important;}'
-      + '.footer-info{flex:1;text-align:left;}'
-      + '.footer-info .company{font-size:11px;font-weight:700;color:#1e293b;}'
-      + '.footer-info .cadastur{font-size:8px;color:#94a3b8;margin-top:2px;}'
-      + '.footer-info .contact{font-size:8px;color:#64748b;margin-top:3px;}'
-      + '.footer-info .signed{font-size:8px;color:#94a3b8;margin-top:4px;font-style:italic;}'
-      + '</style></head><body>'
-      + '<div class="voucher">'
-      + '<div class="header">'
-      + '<div class="header-brand"><div class="logo"><img src="' + LOGO_LUAZUL + '" alt="Luazul" style="width:100%;height:100%;object-fit:contain;border-radius:50%;" /></div><div><div class="name">LUAZUL</div><div class="sub">SMART TRAVEL</div></div></div>'
-      + '<div class="header-title"><h1>VOUCHER DE VIAJE</h1><p>CONFIRMACION DE PAGO TOTAL</p></div>'
-      + '<div></div>'
-      + '</div>'
-      + '<div style="text-align:center;"><div class="voucher-badge">Voucher N: ' + numVoucher + '</div></div>'
-      + '<div class="content">'
-      + '<div class="client-row"><h2>A NOMBRE DE: ' + escCeo(cliente.nombre) + '</h2><div class="email">reservas@luazul.com.br</div></div>'
-      + '<div class="congrats"><h3>FELICITACIONES! SU PLAN DE AHORRO TURISTICO ESTA 100% PAGADO Y ACTIVADO</h3><div class="stamp">PLAN PAGADO TOTALMENTE</div></div>'
-      + '<div class="dates-box">'
-      + '<div><div class="label">Fecha de Ida</div><div class="value">' + (fechaIdaFormatted || '—') + '</div></div>'
-      + '<div><div class="label">Fecha de Vuelta</div><div class="value">' + (fechaVueltaFormatted || '—') + '</div></div>'
-      + '<div><div class="label">Noches</div><div class="value">' + noches + '</div></div>'
-      + '</div>'
-      + '<div class="section-title">DETALLES DEL PAQUETE</div>'
-      + '<div class="services-box"><ul>'
-      + '<li class="service-item"><span class="service-icon">🏨</span><span class="service-text"><strong>' + noches + ' noches</strong> de alojamiento en <strong>' + hotel + '</strong></span></li>'
-      + '<li class="service-item"><span class="service-icon">🚐</span><span class="service-text">' + trasladoTexto + '</span></li>'
-      + toursHtml
-      + '<li class="service-item"><span class="service-icon">📱</span><span class="service-text">Asistencia personalizada 24/7 en espanol via WhatsApp</span></li>'
-      + '</ul></div>'
-      + '<div class="notice"><strong>IMPORTANTE:</strong> Vuelos internacionales y nacionales NO INCLUIDOS. El paquete se activa al llegar a destino.</div>'
-      + '<div class="bottom-row">'
-      + '<div class="footer-info">'
-      + '<div class="company">Luazul Turismo e Exchange LTDA.</div>'
-      + '<div class="cadastur">CADASTUR N 54.728.334/0001-05</div>'
-      + '<div class="contact">WhatsApp: +55 (XX) XXXX-XXXX | reservas@luazul.com.br</div>'
-      + '<div class="signed">Firmado Digitalmente por Luazul Smart Travel</div>'
-      + '<div class="signed">Fecha: ' + fechaHoyFormatted + '</div>'
-      + '</div>'
-      + '<div class="qr-section"><div class="qr-label">Codigo QR</div><div id="qrVoucher"></div></div>'
-      + '</div>'
-      + '</div></div></body></html>';
+    // Template HTML del Voucher PDF — compatible con html2canvas
+    var W = 794, H = 1123;
+    var templateHtml = '<div style="width:' + W + 'px;height:' + H + 'px;background:#ffffff;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#1e293b;overflow:hidden;">'
+      // Header
+      + '<div style="background:#0B3D91;color:white;padding:12px 20px;">'
+      + '<table width="100%" cellpadding="0" cellspacing="0"><tr>'
+      + '<td style="vertical-align:middle;"><table cellpadding="0" cellspacing="0"><tr>'
+      + '<td style="vertical-align:middle;width:34px;height:34px;"><img src="' + LOGO_LUAZUL + '" style="width:34px;height:34px;border-radius:50%;" /></td>'
+      + '<td style="padding-left:8px;"><div style="font-size:15px;font-weight:800;letter-spacing:2px;color:white;">LUAZUL</div><div style="font-size:7px;color:rgba(255,255,255,0.6);letter-spacing:1px;">SMART TRAVEL</div></td>'
+      + '</tr></table></td>'
+      + '<td style="text-align:center;vertical-align:middle;"><div style="font-size:15px;font-weight:800;letter-spacing:1px;color:white;">VOUCHER DE VIAJE</div><div style="font-size:7px;color:rgba(255,255,255,0.7);">CONFIRMACION DE PAGO TOTAL</div></td>'
+      + '<td width="120"></td>'
+      + '</tr></table></div>'
+      // Badge
+      + '<div style="text-align:center;padding:8px 0 4px;"><span style="background:#e9f0ff;display:inline-block;padding:3px 14px;border-radius:20px;font-size:10px;font-weight:700;color:#0B3D91;">Voucher N: ' + numVoucher + '</span></div>'
+      // Content
+      + '<div style="padding:4px 20px 0;">'
+      // Cliente
+      + '<div style="text-align:center;padding:5px 0;border-bottom:1px solid #e2e8f0;">'
+      + '<div style="font-size:15px;font-weight:700;color:#0B3D91;">A NOMBRE DE: ' + escCeo(cliente.nombre) + '</div>'
+      + '<div style="font-size:8px;color:#64748b;">reservas@luazul.com.br</div></div>'
+      // Felicidades
+      + '<div style="text-align:center;background:#f0fdf4;border-radius:8px;padding:7px 10px;border:1px solid #bbf7d0;margin-top:8px;">'
+      + '<div style="font-size:10px;font-weight:700;color:#166534;">FELICITACIONES! SU PLAN DE AHORRO TURISTICO ESTA 100% PAGADO Y ACTIVADO</div>'
+      + '<div style="display:inline-block;border:2px solid #166534;border-radius:50%;padding:2px 8px;font-size:7px;font-weight:800;color:#166534;transform:rotate(-12deg);opacity:0.7;margin-top:2px;letter-spacing:1px;">PLAN PAGADO TOTALMENTE</div></div>'
+      // Fechas
+      + '<div style="background:#f0f9ff;border-radius:8px;padding:8px;margin-top:8px;">'
+      + '<table width="100%" cellpadding="0" cellspacing="4"><tr>'
+      + '<td style="text-align:center;width:33%;"><div style="font-size:7px;color:#64748b;text-transform:uppercase;letter-spacing:.4px;">Fecha de Ida</div><div style="font-size:11px;font-weight:700;color:#0B3D91;margin-top:2px;">' + (fechaIdaFormatted || '—') + '</div></td>'
+      + '<td style="text-align:center;width:34%;border-left:1px solid #d0e5ff;border-right:1px solid #d0e5ff;"><div style="font-size:7px;color:#64748b;text-transform:uppercase;letter-spacing:.4px;">Fecha de Vuelta</div><div style="font-size:11px;font-weight:700;color:#0B3D91;margin-top:2px;">' + (fechaVueltaFormatted || '—') + '</div></td>'
+      + '<td style="text-align:center;width:33%;"><div style="font-size:7px;color:#64748b;text-transform:uppercase;letter-spacing:.4px;">Noches</div><div style="font-size:11px;font-weight:700;color:#0B3D91;margin-top:2px;">' + noches + '</div></td>'
+      + '</tr></table></div>'
+      // Sección título
+      + '<div style="font-size:8px;text-transform:uppercase;letter-spacing:1.2px;color:#4b6b9f;border-left:3px solid #0B3D91;padding-left:7px;font-weight:700;margin-top:8px;">DETALLES DEL PAQUETE</div>'
+      // Servicios
+      + '<div style="background:#f8fafc;border-radius:8px;padding:8px 10px;margin-top:4px;">'
+      + '<table width="100%" cellpadding="0" cellspacing="0"><tr><td style="vertical-align:top;width:20px;font-size:11px;padding-top:1px;">🏨</td><td style="font-size:9px;color:#1e293b;line-height:1.4;padding:3px 0;border-bottom:1px solid #f0f0f0;"><strong>' + noches + ' noches</strong> de alojamiento en <strong>' + hotel + '</strong></td></tr>'
+      + '<tr><td style="vertical-align:top;width:20px;font-size:11px;padding-top:3px;">🚐</td><td style="font-size:9px;color:#1e293b;line-height:1.4;padding:3px 0;border-bottom:1px solid #f0f0f0;">' + trasladoTexto + '</td></tr>'
+      + toursRows
+      + '<tr><td style="vertical-align:top;width:20px;font-size:11px;padding-top:3px;">📱</td><td style="font-size:9px;color:#1e293b;line-height:1.4;padding:3px 0;">Asistencia personalizada 24/7 en espanol via WhatsApp</td></tr>'
+      + '</table></div>'
+      // Notice
+      + '<div style="background:#fff7e5;border-left:3px solid #f59e0b;padding:7px 10px;border-radius:6px;font-size:8px;color:#92400e;line-height:1.4;margin-top:8px;"><strong style="color:#b45309;">IMPORTANTE:</strong> Vuelos internacionales y nacionales NO INCLUIDOS. El paquete se activa al llegar a destino.</div>'
+      // Bottom
+      + '<div style="border-top:1px solid #e2e8f0;padding-top:8px;margin-top:8px;">'
+      + '<table width="100%" cellpadding="0" cellspacing="0"><tr>'
+      + '<td style="vertical-align:top;">'
+      + '<div style="font-size:10px;font-weight:700;color:#1e293b;">Luazul Turismo e Exchange LTDA.</div>'
+      + '<div style="font-size:7px;color:#94a3b8;margin-top:2px;">CADASTUR N 54.728.334/0001-05</div>'
+      + '<div style="font-size:7px;color:#64748b;margin-top:2px;">WhatsApp: +55 (XX) XXXX-XXXX | reservas@luazul.com.br</div>'
+      + '<div style="font-size:7px;color:#94a3b8;margin-top:3px;font-style:italic;">Firmado Digitalmente por Luazul Smart Travel</div>'
+      + '<div style="font-size:7px;color:#94a3b8;margin-top:1px;">Fecha: ' + fechaHoyFormatted + '</div>'
+      + '</td>'
+      + '<td style="vertical-align:top;text-align:center;width:90px;">'
+      + '<div style="font-size:7px;color:#64748b;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px;">Codigo QR</div>'
+      + '<div id="qrVoucher"></div>'
+      + '</td>'
+      + '</tr></table></div>'
+      + '</div></div>';
 
     // Generar PDF
     var opt = {
       margin: 0,
       filename: 'Voucher_' + numVoucher + '.pdf',
       image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: { scale: 2, useCORS: true, width: 794, height: 1123 },
+      html2canvas: { scale: 2, useCORS: true, width: W, height: H, backgroundColor: '#ffffff' },
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait', hotfixes: ['px_scaling'] }
     };
 
     // Crear contenedor temporal VISIBLE para renderizar con QR (html2canvas no renderiza fuera del viewport)
     var tempDiv = document.createElement('div');
     tempDiv.id = 'tempVoucherPDF_' + Date.now();
-    tempDiv.style.cssText = 'position:fixed;top:0;left:0;width:794px;height:1123px;z-index:99999;opacity:1;background:#fff;overflow:hidden;';
+    tempDiv.style.cssText = 'position:absolute;top:0;left:0;width:' + W + 'px;height:' + H + 'px;z-index:99999;opacity:1;background:#fff;overflow:hidden;';
     tempDiv.innerHTML = templateHtml;
     document.body.appendChild(tempDiv);
 
