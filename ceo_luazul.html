@@ -4620,7 +4620,7 @@ function abrirFormularioVoucher(clienteId) {
     + '</div>'
     + '</div>';
   document.getElementById('mbox').innerHTML = html;
-  openModal();
+  document.getElementById('modal').classList.add('open');
 }
 
 function toggleTrasladoOtro() {
