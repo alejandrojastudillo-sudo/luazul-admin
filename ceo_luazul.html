@@ -2089,7 +2089,7 @@ function saveNewGerente(){
       role_id:    ROLE_MANAGER,
       nombre:     nombres[0],
       apellido:   nombres.slice(1).join(' ')||'',
-      badge:      email, activo: true,
+      activo:     true,
       region_id:  regionIds.length > 0 ? regionIds[0] : null,
       ciudad:     (document.getElementById('gCiudad').value||'').trim()||null,
       telefono1:  (document.getElementById('gTel1').value||'').trim()||null,
