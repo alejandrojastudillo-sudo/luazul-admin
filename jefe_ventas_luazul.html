@@ -236,6 +236,11 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;back
 .ctile.proxima{background:var(--yellow-bg);color:var(--yellow);border:1px solid var(--yellow-bd);animation:pulse-yellow 1.5s infinite;}
 .ctile.futura{background:rgba(255,255,255,.04);color:var(--muted);border:1px solid var(--border);}
 @keyframes pulse-yellow{0%,100%{opacity:1}50%{opacity:.6}}
+@keyframes pulse-badge{0%,100%{transform:scale(1);opacity:1;}50%{transform:scale(1.25);opacity:.85;}}
+.lz-phone-wrap{display:flex;gap:0;}
+.lz-phone-wrap select{width:auto;min-width:110px;padding:7px 6px 7px 8px;font-size:.78rem;border:1px solid rgba(100,160,255,.15);border-right:none;border-radius:8px 0 0 8px;background:rgba(100,160,255,.06);color:rgba(200,220,255,.85);font-family:Mulish,sans-serif;appearance:auto;cursor:pointer;flex-shrink:0;}
+.lz-phone-wrap select:focus{outline:none;border-color:rgba(0,210,255,.4);}
+.lz-phone-wrap input{border-radius:0 8px 8px 0!important;flex:1;}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
@@ -355,14 +360,10 @@ const LZ_LOAD = {
   loadData: async function(profile, userRole, sbClient) {
 
     // ── RONDA 1: regiones + staff + gerente_regiones en paralelo ──
-    // El jefe obtiene sus regiones a través del gerente (manager_id → user_id del gerente)
-    var gerenteData = await sbClient.from('staff_profiles').select('user_id').eq('id', profile.manager_id).single();
-    var gerenteUserId = (gerenteData.data && gerenteData.data.user_id) ? gerenteData.data.user_id : profile.user_id;
-
     var ronda1 = await Promise.all([
       sbClient.from('regiones').select('id,nombre,bandera,pais,color,activo').eq('activo', true).order('pais,nombre'),
       sbClient.from('staff_profiles_view').select('*').or('manager_id.eq.' + profile.id + ',user_id.eq.' + profile.user_id),
-      sbClient.from('gerente_regiones').select('region_id').eq('gerente_id', gerenteUserId)
+      sbClient.from('gerente_regiones').select('region_id').eq('gerente_id', profile.user_id)
     ]);
     var regRes = ronda1[0], staffRes = ronda1[1], grRes = ronda1[2];
     if (regRes.error)   throw regRes.error;
@@ -391,7 +392,7 @@ const LZ_LOAD = {
       : Promise.resolve({ data: [], error: null });
 
     var notifPromise = sbClient.from('notificaciones').select('*')
-      .or('destinatario_id.eq.' + profile.id + ',destinatario_rol.eq.jefe_ventas')
+      .or('destinatario_id.eq.' + profile.id + ',destinatario_rol.eq.manager')
       .order('created_at', { ascending: false }).limit(200);
 
     var ronda3 = await Promise.all([pagosPromise, notifPromise]);
@@ -695,7 +696,7 @@ async function _sbUpdateVendor(vid, data) {
 }
 
 async function _sbApprovePayment(pagoId) {
-  var result = await sbClient.from('pagos').update({ estado: 'aprobado', aprobado_por: 'jefe_ventas' }).eq('id', pagoId);
+  var result = await sbClient.from('pagos').update({ estado: 'aprobado', aprobado_por: 'gerente' }).eq('id', pagoId);
   if (result.error) throw result.error;
   return true;
 }
@@ -850,6 +851,7 @@ function gLogin() {
       LZ_AUTH.setPanelSession(LZ_AUTH.PANEL_KEYS.jefe_ventas);
       LZ_AUTH._showApp('loginWrap', 'app');
       initApp();
+      setTimeout(iniciarNotificacionesJefe, 2000);
     })
     .catch(function(e) {
       errEl.style.display = 'block';
@@ -1068,6 +1070,7 @@ function initApp() {
     if (lo) lo.parentNode.removeChild(lo);
     document.documentElement.style.visibility = 'visible';
     renderAll(); refreshBadge(); populateVFilt(); populateVendDashSel(); populatePagoFiltros(); renderEquipoDash(); renderPasswords();
+    setTimeout(iniciarNotificacionesJefe, 2000);
   });
 }
 
@@ -1567,45 +1570,6 @@ function delVendor(vid) {
   document.getElementById('modal').classList.add('open');
 }
 
-// ── Comprobantes de comisión (vendedor) ──
-function adjuntarCompVend(vid) {
-  var v = vby(vid);
-  if (!v) { showToast('Asesor no encontrado'); return; }
-  var fileInput = document.getElementById('caVCfile');
-  var nomInput = document.getElementById('caVCnom');
-  var montoInput = document.getElementById('caVCmonto');
-  if (!fileInput || !fileInput.files || !fileInput.files.length) { showToast('Seleccioná un archivo'); return; }
-  var nombre = (nomInput ? nomInput.value.trim() : '') || 'Comprobante ' + new Date().toLocaleDateString('es-AR');
-  var monto = montoInput ? montoInput.value.trim() : '';
-  var reader = new FileReader();
-  reader.onload = function(e) {
-    var comps = v.comprobantes || [];
-    comps.push({ nombre: nombre, monto: monto, fecha: new Date().toLocaleDateString('es-AR'), data: e.target.result });
-    sbClient.from('staff_profiles').update({ comprobantes_json: comps }).eq('user_id', vid)
-      .then(function(res) {
-        if (res.error) throw res.error;
-        v.comprobantes = comps;
-        editVendor(vid);
-        showToast('✅ Comprobante adjuntado');
-      })
-      .catch(function(err) { showToast('❌ Error: ' + (err.message || '')); });
-  };
-  reader.readAsDataURL(fileInput.files[0]);
-}
-
-function borrarCompVend(vid, idx) {
-  var v = vby(vid);
-  if (!v || !v.comprobantes) return;
-  v.comprobantes.splice(idx, 1);
-  sbClient.from('staff_profiles').update({ comprobantes_json: v.comprobantes }).eq('user_id', vid)
-    .then(function(res) {
-      if (res.error) throw res.error;
-      editVendor(vid);
-      showToast('✅ Comprobante eliminado');
-    })
-    .catch(function(err) { showToast('❌ Error: ' + (err.message || '')); });
-}
-
 function confirmarDelVendor(vid) {
   var repSel = document.getElementById('delVendReplacement');
   var repId = repSel ? repSel.value : '';
@@ -1662,7 +1626,7 @@ function toggleVendor(vid) {
   var v = vs.filter(function(x) { return String(x.user_id) === String(vid); })[0];
   if (!v) return;
   var nuevoActivo = !v.activo;
-  _sbUpdateVendor(v.user_id, { activo: nuevoActivo }).then(function() {
+  _sbUpdateVendor(v.id, { activo: nuevoActivo }).then(function() {
     _memCache[VK] = vs.map(function(x) { if (String(x.user_id) === String(vid)) x.activo = nuevoActivo; return x; });
     renderAll(); showToast('Estado de asesor actualizado en Supabase');
   });
@@ -1709,7 +1673,7 @@ function confirmarReasignacion(clientId) {
     if (sbClient && c && v && v.user_id) {
       sbClient.from('notificaciones').insert([{
         tipo: 'comunicado', mensaje: '🚚 Gestión RE-ASIGNADA: Se te ha asignado el cobro del cliente ' + c.nombre + ' por parte del Gerente.',
-        destinatario_id: v.id, destinatario_rol: 'seller', remitente_id: window._gerenteProfile ? window._gerenteProfile.user_id : null,
+        destinatario_id: v.user_id, destinatario_rol: 'seller', remitente_id: window._gerenteProfile ? window._gerenteProfile.user_id : null,
         cliente_id: parseInt(clientId), leida: false
       }]);
     }
@@ -1725,14 +1689,14 @@ function populateVFilt() {
   var vs = (_memCache[VK] || []) || [];
   var cur = sel.value;
   sel.innerHTML = '<option value="">Todos los vendedores</option>' + vs.map(function(v) {
-    return '<option value="' + v.id + '"' + (cur === String(v.id) ? ' selected' : '') + '>' + esc(v.nombre) + '</option>';
+    return '<option value="' + v.user_id + '"' + (cur === v.user_id ? ' selected' : '') + '>' + esc(v.nombre) + '</option>';
   }).join('');
 }
 
 function esClienteDelJefe(cliente) {
-  var jefeId = window._gerenteProfile ? window._gerenteProfile.id : null;
+  var jefeId = window._gerenteProfile ? (window._gerenteProfile.user_id || window._gerenteProfile.id) : null;
   if (!jefeId) return false;
-  var vendedor = (_memCache[VK] || []).find(function(v) { return String(v.id) === String(cliente.vid); });
+  var vendedor = (_memCache[VK] || []).find(function(v) { return String(v.user_id) === String(cliente.vid); });
   if (!vendedor) return false;
   return String(vendedor.manager_id) === String(jefeId);
 }
@@ -1763,7 +1727,7 @@ function renderClients() {
       + '<div class="tc"><span class="bdg ' + c.estado + '">' + c.estado + '</span></div>'
       + '<div class="tc" onclick="event.stopPropagation()">'
       + '<div style="display:flex;gap:5px;">'
-      + '<button onclick="openGerenteMora(' + c.id + ')" title="' + (c.mora && c.mora.filter(function(m) { return !m.resuelta; }).length ? 'Ver mora (' + c.mora.filter(function(m) { return !m.resuelta; }).length + ' activa/s)' : 'Registrar gestión de mora') + '" style="width:32px;height:32px;border-radius:8px;background:' + (c.mora && c.mora.filter(function(m) { return !m.resuelta; }).length ? 'rgba(249,115,22,.15)' : 'rgba(255,255,255,.06)') + ';border:1px solid ' + (c.mora && c.mora.filter(function(m) { return !m.resuelta; }).length ? 'rgba(249,115,22,.35)' : 'rgba(255,255,255,.12)') + ';color:' + (c.mora && c.mora.filter(function(m) { return !m.resuelta; }).length ? '#f97316' : 'rgba(180,200,240,.5)') + ';cursor:pointer;font-size:.9rem;display:flex;align-items:center;justify-content:center;">' + (c.mora && c.mora.filter(function(m) { return !m.resuelta; }).length ? '⚠️' : '📋') + '</button>'
+      + '<button onclick="gerenteMora(' + c.id + ')" title="' + (c.mora && c.mora.filter(function(m) { return !m.resuelta; }).length ? 'Ver mora (' + c.mora.filter(function(m) { return !m.resuelta; }).length + ' activa/s)' : 'Registrar gestión de mora') + '" style="width:32px;height:32px;border-radius:8px;background:' + (c.mora && c.mora.filter(function(m) { return !m.resuelta; }).length ? 'rgba(249,115,22,.15)' : 'rgba(255,255,255,.06)') + ';border:1px solid ' + (c.mora && c.mora.filter(function(m) { return !m.resuelta; }).length ? 'rgba(249,115,22,.35)' : 'rgba(255,255,255,.12)') + ';color:' + (c.mora && c.mora.filter(function(m) { return !m.resuelta; }).length ? '#f97316' : 'rgba(180,200,240,.5)') + ';cursor:pointer;font-size:.9rem;display:flex;align-items:center;justify-content:center;">' + (c.mora && c.mora.filter(function(m) { return !m.resuelta; }).length ? '⚠️' : '📋') + '</button>'
       + '</div></div></div>';
   }).join('');
 }
@@ -2265,7 +2229,7 @@ function renderVendDash() {
   var completos = cs.filter(function(c) { return c.estado === 'completo'; }).length;
   var bajas = cs.filter(function(c) { return c.estado === 'baja'; }).length;
   var pendPagos = ns.filter(function(n) { return n.tipo === 'payment' && !n.aprobada; }).length;
-  var totalPendiente = cs.filter(function(c) { return c.estado === 'activo' || c.estado === 'atraso'; }).reduce(function(s, c) { var tot = parseFloat(c.total_usd) || parseFloat(c.monto_cuota || 0) * 10; var pag = (parseInt(c.cuotas_pagadas) || 0) * (parseFloat(c.monto_cuota) || 0); return s + (tot - pag); }, 0);
+  var totalPendiente = cs.filter(function(c) { return c.estado === 'activo' || c.estado === 'atraso'; }).reduce(function(s, c) { var tot = parseFloat(c.monto_total) || parseFloat(c.monto_cuota || 0) * 10; var pag = (parseInt(c.cuotas_pagadas) || 0) * (parseFloat(c.monto_cuota) || 0); return s + (tot - pag); }, 0);
   var comisionProyectada = totalPendiente * (cm.tasaActual / 100);
   var scoreVend = 100; // simplified
   var scoreLbl = scoreVend >= 80 ? '🟢 Excelente' : scoreVend >= 60 ? '🟡 Bueno' : '🔴 Requiere atención';
@@ -2293,7 +2257,7 @@ function renderVendDash() {
   }).join('');
   var clientRows = cs.slice(0, 15).map(function(c) {
     var pagado = (parseInt(c.cuotas_pagadas || 0) * parseFloat(c.monto_cuota || 0));
-    var total_c = parseFloat(c.total_usd || 0) || (parseFloat(c.monto_cuota || 0) * 10);
+    var total_c = parseFloat(c.monto_total || 0) || (parseFloat(c.monto_cuota || 0) * 10);
     var pctBar = total_c > 0 ? Math.min(100, Math.round(pagado / total_c * 100)) : 0;
     return '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer;" onclick="openClientDetail(' + c.id + ')">'
       + '<div class="sem ' + c._s + '"></div>'
@@ -2502,7 +2466,7 @@ function renderMoraTab() {
         + '<div style="display:flex;gap:6px;">'
         + '<button onclick="notificarAsesorMora(' + c.id + ')" style="padding:6px 12px;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.3);color:var(--gold);border-radius:8px;font-size:.75rem;cursor:pointer;">📨 Notificar asesor</button>'
         + '<button onclick="openReasignarCobro(' + c.id + ')" style="padding:6px 12px;background:rgba(6,182,212,.12);border:1px solid rgba(6,182,212,.3);color:#06b6d4;border-radius:8px;font-size:.75rem;cursor:pointer;">🔄 Re-asignar Cobro</button>'
-        + '<button onclick="openGerenteMora(' + c.id + ')" style="padding:6px 12px;background:rgba(59,130,246,.1);border:1px solid var(--blue-bd);color:#93c5fd;border-radius:8px;font-size:.75rem;cursor:pointer;">📋 Ver/Gestionar</button>'
+        + '<button onclick="gerenteMora(' + c.id + ')" style="padding:6px 12px;background:rgba(59,130,246,.1);border:1px solid var(--blue-bd);color:#93c5fd;border-radius:8px;font-size:.75rem;cursor:pointer;">📋 Ver/Gestionar</button>'
         + '</div></div>';
     }).join('');
   }
@@ -2530,7 +2494,7 @@ function renderMoraTab() {
         + (moraCount > 0 ? '<div style="font-size:.72rem;color:#f97316;margin-bottom:8px;">⚠️ ' + moraCount + ' gestión(es) sin resolver</div>' : '')
         + (moraHist.length ? '<div style="font-size:.7rem;color:var(--muted);margin-bottom:8px;">Último contacto: ' + moraHist[moraHist.length - 1].fecha + '</div>' : '')
         + '<div style="display:flex;gap:6px;">'
-        + '<button onclick="openGerenteMora(' + c.id + ')" style="padding:6px 14px;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);color:#fca5a5;border-radius:8px;font-size:.75rem;font-weight:700;cursor:pointer;">📋 Gestionar mora</button>'
+        + '<button onclick="gerenteMora(' + c.id + ')" style="padding:6px 14px;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);color:#fca5a5;border-radius:8px;font-size:.75rem;font-weight:700;cursor:pointer;">📋 Gestionar mora</button>'
         + '<button onclick="openReasignarCobro(' + c.id + ')" style="padding:6px 14px;background:rgba(6,182,212,.12);border:1px solid rgba(6,182,212,.3);color:#06b6d4;border-radius:8px;font-size:.75rem;font-weight:700;cursor:pointer;">🔄 Re-asignar Cobro</button>'
         + '<button onclick="openClientDetail(' + c.id + ')" style="padding:6px 10px;background:var(--card);border:1px solid var(--border2);color:var(--muted);border-radius:8px;font-size:.75rem;cursor:pointer;">👤 Ver cliente</button>'
         + '</div></div>';
@@ -2596,7 +2560,7 @@ function renderEquipoDash() {
     var retV = vc.length > 0 ? Math.round((vc.length - bajasV) / vc.length * 100) : 100;
     var moraV = vc.length > 0 ? Math.round(atV / vc.length * 100) : 0;
     var scoreV = Math.min(100, Math.round((retV * 0.3) + (Math.max(0, 100 - moraV * 2) * 0.3) + (Math.min(100, cm.ventasMes / 3 * 100) * 0.25) + (Math.min(100, compV / Math.max(1, vc.length) * 100 * 0.15))));
-    return { v: v, n: vc.length, rec: rec, cm: cm, at: atV, comp: compV, ret: retV, mora: moraV, score: scoreV, tkProm: vc.length > 0 ? Math.round(vc.reduce(function(s, c) { return s + (parseFloat(c.total_usd) || parseFloat(c.monto_cuota || 0) * 10); }, 0) / vc.length) : 0 };
+    return { v: v, n: vc.length, rec: rec, cm: cm, at: atV, comp: compV, ret: retV, mora: moraV, score: scoreV, tkProm: vc.length > 0 ? Math.round(vc.reduce(function(s, c) { return s + (parseFloat(c.monto_total) || parseFloat(c.monto_cuota || 0) * 10); }, 0) / vc.length) : 0 };
   }).sort(function(a, b) { return b.rec - a.rec; });
   var maxRec = vData[0] ? Math.max(1, vData[0].rec) : 1;
   var byMonth = {};
@@ -2895,7 +2859,7 @@ function showToast(msg, dur) { var t = document.getElementById('toast'); t.textC
   var ADMIN_ROLES = ['owner', 'super_admin'];
   var LZ_AUTH = {
     KEYS: { auth: 'lz_auth', username: 'lz_username', nombre: 'lz_nombre', role: 'lz_role', badge: 'lz_badge', color: 'lz_color', access: 'lz_access' },
-    PANEL_KEYS: { ceo: 'luazul_ceo', gerente: 'luazul_gerente', jefe_ventas: 'luazul_jefe_ventas' },
+    PANEL_KEYS: { ceo: 'luazul_ceo', gerente: 'luazul_gerente' },
     guard: function (options) {
       var opts = options || {};
       var panelKey    = opts.panelKey    || null;
@@ -2908,7 +2872,7 @@ function showToast(msg, dur) { var t = document.getElementById('toast'); t.textC
         if (onSuccess) onSuccess();
         return true;
       }
-      if (window._gerenteProfile && String(window._gerenteProfile.role_id) === '5') {
+      if (window._gerenteProfile && String(window._gerenteProfile.role_id) === '2') {
         LZ_AUTH._showApp(loginWrapId, appId);
         if (onSuccess) onSuccess();
         return true;
@@ -3023,7 +2987,7 @@ window.verVoucherGerente = function(clientId) {
       var contratoEstado = ctRes.data ? ctRes.data.estado : null;
       var pagoCompleto = (parseInt(c.cuotas_pagadas) === parseInt(c.cuotas_total));
       var tieneFirma = c.firma_url && c.firma_url.length > 100;
-      var contratoAutorizado = (contratoEstado === 'autorizado_ceo' || contratoEstado === 'firmado');
+      var contratoAutorizado = (contratoEstado === 'autorizado_ceo');
       var desbloqueado = pagoCompleto && tieneFirma && contratoAutorizado;
       var modalHtml = '<div class="mhead"><div><h2>🎫 Voucher de ' + esc(c.nombre) + '</h2></div><button class="mclose" onclick="closeModal()">✕</button></div>';
       if (desbloqueado) {
@@ -3326,24 +3290,17 @@ async function guardarTicketGerente() {
       var urlRes = sbClient.storage.from('ticket_adjuntos').getPublicUrl(fileName);
       adjuntosUrls.push(urlRes.data.publicUrl);
     }
-    // 2. Crear ticket directamente en tabla notificaciones
-    var rpcRes = await sbClient.from('notificaciones').insert({
-      tipo: categoria || 'soporte',
-      mensaje: desc,
-      remitente_id: window._gerenteProfile.user_id,
-      cliente_id: clienteId ? parseInt(clienteId) : null,
-      vendedor_id: vendedorId ? parseInt(vendedorId) : null,
-      region_id: regionId ? parseInt(regionId) : null,
-      asignado_a: asignado || null,
-      prioridad: prioridad || 'media',
-      categoria: categoria || 'general',
-      estado: 'abierto',
-      nivel_actual: 1,
-      adjuntos: adjuntosUrls.length ? adjuntosUrls : [],
-      leida: false
-    }).select().single();
+    // 2. Crear ticket vía RPC
+    var rpcRes = await sbClient.rpc('crear_ticket', {
+      p_tipo: categoria, p_mensaje: desc, p_remitente_id: window._gerenteProfile.user_id,
+      p_cliente_id: clienteId, p_vendedor_id: vendedorId, p_region_id: regionId,
+      p_asignado_a: asignado, p_prioridad: prioridad, p_categoria: categoria
+    });
     if (rpcRes.error) throw rpcRes.error;
-    // 3. Ticket creado (adjuntos ya incluidos en el insert)
+    // 3. Si hay adjuntos, guardarlos en el registro del ticket
+    if (adjuntosUrls.length && rpcRes.data) {
+      await sbClient.from('notificaciones').update({ adjuntos: adjuntosUrls }).eq('id', rpcRes.data);
+    }
     showToast('✅ Ticket creado' + (adjuntosUrls.length ? ' con ' + adjuntosUrls.length + ' adjunto(s)' : ''));
     closeModal();
     cargarTicketsGerente();
@@ -3494,267 +3451,408 @@ window.subirAdjuntoATicketGerente = subirAdjuntoATicketGerente;
 // ══  esté incluido en el campo miembros->roles
 // ═══════════════════════════════════════════════════════
 
-var _canalActivoGerente = null;
+var _canalActivoJefe = null;
+var _staffCacheJefe = [];
+var _ROLE_NAMES = {1:'CEO', 2:'Gerente', 3:'Asesor', 4:'Jefe de Ventas', 5:'Admin'};
 
-// Gerente ve solo canales donde su rol ('gerente' / role_id=2) está en miembros
-async function cargarCanalesGerente() {
-  if (!sbClient || !window._gerenteProfile) return [];
+async function cargarStaffJefe() {
+  if (_staffCacheJefe.length) return _staffCacheJefe;
   try {
-    // Traer todos los canales públicos más los que incluyen el rol gerente
-    var res = await sbClient.from('canales_equipo').select('*').order('nombre');
-    if (res.error) { console.warn('[cargarCanalesGerente]', res.error); return []; }
-    var todos = res.data || [];
-    // Filtrar: canales públicos O que tengan 'gerente' o role_id=2 en miembros->roles
-    var visibles = todos.filter(function(c) {
-      if (!c.miembros) return false; // sin metadata → no visible
-      var roles = null;
-      try {
-        // miembros puede ser objeto JSON {roles:[...]} o array o string
-        var m = typeof c.miembros === 'string' ? JSON.parse(c.miembros) : c.miembros;
-        roles = m.roles || m || [];
-      } catch(e) { roles = []; }
-      if (!Array.isArray(roles)) roles = [];
-      return roles.indexOf('jefe_ventas') !== -1 || roles.indexOf('5') !== -1 || roles.indexOf(5) !== -1 || roles.indexOf('todos') !== -1;
+    var res = await sbClient.from('staff_profiles').select('*');
+    if (res.error) throw res.error;
+    _staffCacheJefe = (res.data || []).map(function(r) {
+      return {
+        user_id: r.user_id || r.id,
+        nombre: (r.nombre || '') + (r.apellido ? ' ' + r.apellido : ''),
+        role: _ROLE_NAMES[r.role_id] || ('Rol ' + (r.role_id || '?')),
+        badge: r.badge || r.email || '',
+        activo: r.activo !== false
+      };
     });
-    return visibles;
-  } catch(err) {
-    console.warn('[cargarCanalesGerente]', err);
-    return [];
+    return _staffCacheJefe;
+  } catch(e) { console.warn('[cargarStaffJefe] ERROR:', e.message || e); return []; }
+}
+
+// ── Badge de mensajes no leídos ──
+var _unreadCountJefe = 0;
+var _lastMsgTimestampJefe = 0;
+var _notifIntervalJefe = null;
+
+async function contarNoLeidosJefe() {
+  if (!sbClient || !window._gerenteProfile) return 0;
+  try {
+    var userId = window._gerenteProfile.user_id;
+    var vistosRes = await sbClient.from('mensajes_vistos').select('mensaje_id').eq('usuario_id', userId);
+    var vistosIds = [];
+    if (!vistosRes.error && vistosRes.data) {
+      vistosIds = vistosRes.data.map(function(v) { return v.mensaje_id; });
+    }
+    var canalesRes = await sbClient.from('canales_equipo').select('id,tipo,miembros');
+    if (canalesRes.error) return 0;
+    var misCanalesIds = [];
+    for (var i = 0; i < canalesRes.data.length; i++) {
+      var c = canalesRes.data[i];
+      try {
+        var m = typeof c.miembros === 'string' ? JSON.parse(c.miembros) : (c.miembros || {});
+        if (c.tipo === 'directo') {
+          var users = m.usuarios || [];
+          if (users.indexOf(userId) !== -1) misCanalesIds.push(c.id);
+        } else {
+          var roles = m.roles || [];
+          var users = m.usuarios || [];
+          if (roles.indexOf('jefe_ventas') !== -1 || roles.indexOf('todos') !== -1 || users.indexOf(userId) !== -1) {
+            misCanalesIds.push(c.id);
+          }
+        }
+      } catch(e) {}
+    }
+    if (!misCanalesIds.length) return 0;
+    var res = await sbClient.from('mensajes_equipo')
+      .select('id, remitente_id, canal_id, created_at')
+      .in('canal_id', misCanalesIds)
+      .order('created_at', { ascending: false })
+      .limit(200);
+    if (res.error) return 0;
+    var noLeidos = 0;
+    for (var i = 0; i < res.data.length; i++) {
+      var msg = res.data[i];
+      if (String(msg.remitente_id) === String(userId)) continue;
+      if (vistosIds.indexOf(msg.id) === -1) noLeidos++;
+    }
+    return noLeidos;
+  } catch(e) { return 0; }
+}
+
+async function actualizarBadgeJefe() {
+  var count = await contarNoLeidosJefe();
+  _unreadCountJefe = count;
+  var tab = document.getElementById('tab-comunicaciones');
+  if (!tab) return;
+  var oldBadge = tab.querySelector('.msg-badge');
+  if (oldBadge) oldBadge.remove();
+  if (count > 0) {
+    var badge = document.createElement('span');
+    badge.className = 'msg-badge';
+    badge.style.cssText = 'background:#ef4444;color:white;font-size:.6rem;font-weight:800;min-width:16px;height:16px;border-radius:99px;display:inline-flex;align-items:center;justify-content:center;margin-left:5px;padding:0 4px;animation:pulse-badge 2s infinite;';
+    badge.textContent = count > 99 ? '99+' : count;
+    tab.appendChild(badge);
   }
 }
 
-async function getUserNameGerente(userId) {
+async function marcarLeidosJefe(canalId) {
+  if (!sbClient || !window._gerenteProfile) return;
+  try {
+    var userId = window._gerenteProfile.user_id;
+    var res = await sbClient.from('mensajes_equipo').select('id').eq('canal_id', canalId);
+    if (res.error || !res.data) return;
+    var msgIds = res.data.map(function(m) { return m.id; });
+    if (!msgIds.length) return;
+    var inserts = msgIds.map(function(mid) { return { mensaje_id: mid, usuario_id: userId }; });
+    await sbClient.from('mensajes_vistos').upsert(inserts, { onConflict: 'mensaje_id,usuario_id' });
+  } catch(e) {}
+}
+
+function iniciarNotificacionesJefe() {
+  if (_notifIntervalJefe) return;
+  actualizarBadgeJefe();
+  _notifIntervalJefe = setInterval(function() {
+    contarNoLeidosJefe().then(function(count) {
+      if (count > _unreadCountJefe) showToast('\ud83d\udcac Ten\u00e9s ' + count + ' mensaje' + (count > 1 ? 's' : '') + ' sin leer');
+      _unreadCountJefe = count;
+      actualizarBadgeJefe();
+    });
+  }, 30000);
+}
+
+async function cargarCanalesJefe() {
+  if (!sbClient || !window._gerenteProfile) return [];
+  var uid = window._gerenteProfile.user_id;
+  try {
+    var res = await sbClient.from('canales_equipo').select('*').order('nombre');
+    if (res.error) return [];
+    var todos = res.data || [];
+    var visibles = todos.filter(function(c) {
+      try {
+        var m = typeof c.miembros === 'string' ? JSON.parse(c.miembros) : (c.miembros || {});
+        if (c.tipo === 'directo') {
+          var users = m.usuarios || [];
+          return users.indexOf(uid) !== -1;
+        }
+        var roles = m.roles || [];
+        var users = m.usuarios || [];
+        return roles.indexOf('jefe_ventas') !== -1 || roles.indexOf('todos') !== -1 || users.indexOf(uid) !== -1;
+      } catch(e) { return false; }
+    });
+    return visibles;
+  } catch(err) { return []; }
+}
+var cargarCanalesGerente = cargarCanalesJefe;
+
+async function getUserNameJefe(userId) {
   if (!userId) return 'Sistema';
-  // Buscar en cache de vendedores del gerente
-  var vs = _memCache[VK] || [];
+  var vs = _staffCacheJefe.length ? _staffCacheJefe : _memCache[VK] || [];
   for (var i = 0; i < vs.length; i++) {
     if (String(vs[i].user_id) === String(userId)) return vs[i].nombre;
   }
-  // Fallback: perfil del gerente mismo
   if (window._gerenteProfile && String(window._gerenteProfile.user_id) === String(userId)) {
-    return window._gerenteProfile.nombre || 'Gerente';
+    return window._gerenteProfile.nombre || 'Jefe de Ventas';
   }
-  // Fallback a DB
   try {
     var r = await sbClient.from('staff_profiles').select('nombre').eq('user_id', userId).single();
     return (r.data && r.data.nombre) ? r.data.nombre : 'Usuario';
   } catch(e) { return 'Usuario'; }
 }
+var getUserNameGerente = getUserNameJefe;
 
-async function renderComunicacionesGerente() {
+async function renderComunicacionesJefe() {
   var container = document.getElementById('comunicacionesContainerGerente');
   if (!container) return;
-  container.innerHTML = '<div style="color:var(--muted);padding:20px;">⏳ Cargando canales...</div>';
+  container.innerHTML = '<div style="color:var(--muted);padding:20px;">Cargando canales...</div>';
   try {
-    var canales = await cargarCanalesGerente();
-    if (!canales.length) {
-      container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted);">No tenés canales asignados.<br><small style="font-size:.75rem;">El CEO debe configurar los canales en la tabla <code>canales_equipo</code> con tu rol en el campo <code>miembros</code>.</small></div>';
-      return;
-    }
+    await cargarStaffJefe();
+    var canales = await cargarCanalesJefe();
+    var dms = canales.filter(function(c) { return c.tipo === 'directo'; });
+    var grupos = canales.filter(function(c) { return c.tipo !== 'directo'; });
+    var uid = window._gerenteProfile.user_id;
+
     var html = '<div style="display:flex;gap:0;border:1px solid var(--border);border-radius:16px;overflow:hidden;min-height:500px;">';
-    // Panel izquierdo — lista de canales
-    html += '<div style="width:240px;flex-shrink:0;border-right:1px solid var(--border);background:rgba(255,255,255,.02);">';
-    html += '<div style="padding:14px 16px;font-family:Syne,sans-serif;font-size:.78rem;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#67e8f9;border-bottom:1px solid var(--border);">📡 Canales</div>';
-    for (var i = 0; i < canales.length; i++) {
-      var c = canales[i];
-      var isActive = _canalActivoGerente && String(_canalActivoGerente) === String(c.id);
-      html += '<div class="canal-item-g" data-canal="' + c.id + '" style="padding:12px 16px;cursor:pointer;border-bottom:1px solid var(--border);font-size:.85rem;font-weight:600;transition:background .15s;' + (isActive ? 'background:rgba(103,232,249,.10);color:#67e8f9;border-left:3px solid #67e8f9;' : 'color:var(--text);border-left:3px solid transparent;') + '">' +
+    html += '<div style="width:260px;flex-shrink:0;border-right:1px solid var(--border);background:rgba(255,255,255,.02);overflow-y:auto;max-height:600px;">';
+
+    // DMs section
+    html += '<div style="padding:14px 16px;font-family:Syne,sans-serif;font-size:.7rem;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#a855f7;border-bottom:1px solid var(--border);">Mensajes directos (' + dms.length + ')</div>';
+    for (var i = 0; i < dms.length; i++) {
+      var c = dms[i];
+      var otherUser = '';
+      try {
+        var m = typeof c.miembros === 'string' ? JSON.parse(c.miembros) : (c.miembros || {});
+        var users = m.usuarios || [];
+        var otherId = users.filter(function(u) { return u !== uid; })[0];
+        if (otherId) {
+          var st = _staffCacheJefe.find(function(s) { return String(s.user_id) === String(otherId); });
+          otherUser = st ? st.nombre : 'Usuario';
+        }
+      } catch(e) {}
+      html += '<div class="canal-item-g" data-canal="' + c.id + '" style="padding:12px 16px;cursor:pointer;border-bottom:1px solid var(--border);font-size:.85rem;font-weight:600;transition:background .15s;color:var(--text);border-left:3px solid transparent;">' +
+        '\ud83d\udc64 ' + esc(otherUser || c.nombre) + '</div>';
+    }
+
+    // Channels section
+    html += '<div style="padding:14px 16px;font-family:Syne,sans-serif;font-size:.7rem;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#67e8f9;border-bottom:1px solid var(--border);margin-top:4px;">Canales (' + grupos.length + ')</div>';
+    for (var i = 0; i < grupos.length; i++) {
+      var c = grupos[i];
+      html += '<div class="canal-item-g" data-canal="' + c.id + '" style="padding:12px 16px;cursor:pointer;border-bottom:1px solid var(--border);font-size:.85rem;font-weight:600;transition:background .15s;color:var(--text);border-left:3px solid transparent;">' +
         '# ' + esc(c.nombre) +
         (c.descripcion ? '<div style="font-size:.68rem;color:var(--muted);font-weight:400;margin-top:2px;">' + esc(c.descripcion) + '</div>' : '') +
         '</div>';
     }
+
+    if (!canales.length) {
+      html += '<div style="padding:20px;text-align:center;color:var(--muted);font-size:.82rem;">No hay canales. Us\u00e1 los botones de arriba.</div>';
+    }
     html += '</div>';
-    // Panel derecho — mensajes
     html += '<div id="mensajesPanelGerente" style="flex:1;display:flex;flex-direction:column;">';
-    html += '<div style="padding:20px;color:var(--muted);text-align:center;margin:auto;">← Seleccioná un canal para ver los mensajes</div>';
+    html += '<div style="padding:20px;color:var(--muted);text-align:center;margin:auto;">Seleccion\u00e1 un canal o conversaci\u00f3n</div>';
     html += '</div>';
     html += '</div>';
     container.innerHTML = html;
 
-    // Event listeners para selección de canal
     document.querySelectorAll('#comunicacionesContainerGerente .canal-item-g').forEach(function(el) {
       el.addEventListener('click', function() {
-        _canalActivoGerente = el.getAttribute('data-canal');
+        _canalActivoJefe = el.getAttribute('data-canal');
         document.querySelectorAll('#comunicacionesContainerGerente .canal-item-g').forEach(function(x) {
-          x.style.background = '';
-          x.style.color = 'var(--text)';
-          x.style.borderLeft = '3px solid transparent';
+          x.style.background = ''; x.style.color = 'var(--text)'; x.style.borderLeft = '3px solid transparent';
         });
-        el.style.background = 'rgba(103,232,249,.10)';
-        el.style.color = '#67e8f9';
-        el.style.borderLeft = '3px solid #67e8f9';
-        cargarMensajesCanalGerente(_canalActivoGerente);
+        el.style.background = 'rgba(103,232,249,.10)'; el.style.color = '#67e8f9'; el.style.borderLeft = '3px solid #67e8f9';
+        cargarMensajesCanalJefe(_canalActivoJefe);
+        marcarLeidosJefe(_canalActivoJefe);
+        actualizarBadgeJefe();
       });
     });
-
-    if (_canalActivoGerente) cargarMensajesCanalGerente(_canalActivoGerente);
-
-  } catch (err) {
-    console.error('[renderComunicacionesGerente]', err);
-    container.innerHTML = '<div style="padding:20px;color:var(--red);">❌ Error al cargar comunicaciones: ' + esc(err.message || err) + '</div>';
+  } catch(err) {
+    console.error('[renderComunicacionesJefe]', err);
+    container.innerHTML = '<div style="padding:20px;color:var(--red);">Error: ' + esc(err.message || err) + '</div>';
   }
 }
 
-async function cargarMensajesCanalGerente(canalId) {
+async function cargarMensajesCanalJefe(canalId) {
   var panel = document.getElementById('mensajesPanelGerente');
   if (!panel) return;
-  panel.innerHTML = '<div style="padding:20px;color:var(--muted);">⏳ Cargando mensajes...</div>';
+  panel.innerHTML = '<div style="padding:20px;color:var(--muted);">Cargando mensajes...</div>';
   try {
-    var res = await sbClient.from('mensajes_equipo')
-      .select('*')
-      .eq('canal_id', canalId)
-      .is('respuesta_a', null)
-      .order('created_at', { ascending: true });
+    var res = await sbClient.from('mensajes_equipo').select('*').eq('canal_id', canalId).is('respuesta_a', null).order('created_at', { ascending: true });
     if (res.error) throw res.error;
     var mensajes = res.data || [];
-
     var msgsHtml = '';
-    for (var i = 0; i < mensajes.length; i++) {
-      msgsHtml += await renderMensajeGerente(mensajes[i]);
-    }
-    if (!msgsHtml) {
-      msgsHtml = '<div style="text-align:center;padding:40px;color:var(--muted);">Sin mensajes en este canal. ¡Sé el primero en escribir!</div>';
-    }
-
-    var myUserId = window._gerenteProfile ? window._gerenteProfile.user_id : null;
+    for (var i = 0; i < mensajes.length; i++) { msgsHtml += await renderMensajeJefe(mensajes[i]); }
+    if (!msgsHtml) msgsHtml = '<div style="text-align:center;padding:40px;color:var(--muted);">Sin mensajes. S\u00e9 el primero en escribir.</div>';
     panel.innerHTML =
-      '<div id="msgsScrollAreaG" style="flex:1;overflow-y:auto;padding:16px;max-height:420px;">' + msgsHtml + '</div>' +
+      '<div id="msgsScrollAreaJefe" style="flex:1;overflow-y:auto;padding:16px;max-height:420px;">' + msgsHtml + '</div>' +
       '<div style="padding:12px 16px;border-top:1px solid var(--border);background:rgba(255,255,255,.02);">' +
         '<div style="display:flex;gap:8px;align-items:flex-end;">' +
-          '<textarea id="nuevoMensajeGerente" rows="2" placeholder="Escribí tu mensaje..." style="flex:1;background:rgba(255,255,255,.04);border:1px solid var(--border2);border-radius:10px;color:var(--text);font-family:Mulish,sans-serif;font-size:.85rem;padding:10px;resize:none;transition:border-color .2s;" onfocus="this.style.borderColor=\'#67e8f9\'" onblur="this.style.borderColor=\'var(--border2)\'"></textarea>' +
-          '<button onclick="enviarMensajeGerente(\'' + canalId + '\')" style="padding:10px 18px;background:linear-gradient(135deg,#0891b2,#06b6d4);border:none;border-radius:10px;color:white;font-family:Mulish,sans-serif;font-size:.82rem;font-weight:700;cursor:pointer;white-space:nowrap;">✉️ Enviar</button>' +
+          '<textarea id="nuevoMensajeJefe" rows="2" placeholder="Escrib\u00ed tu mensaje..." style="flex:1;background:rgba(255,255,255,.04);border:1px solid var(--border2);border-radius:10px;color:var(--text);font-family:inherit;font-size:.85rem;padding:10px;resize:none;"></textarea>' +
+          '<button onclick="enviarMensajeJefe(\'' + canalId + '\')" style="padding:10px 18px;background:linear-gradient(135deg,#0891b2,#06b6d4);border:none;border-radius:10px;color:white;font-family:inherit;font-size:.82rem;font-weight:700;cursor:pointer;white-space:nowrap;">Enviar</button>' +
         '</div>' +
       '</div>';
-
-    var scrollEl = document.getElementById('msgsScrollAreaG');
+    var scrollEl = document.getElementById('msgsScrollAreaJefe');
     if (scrollEl) scrollEl.scrollTop = scrollEl.scrollHeight;
-
-  } catch (err) {
-    console.error('[cargarMensajesCanalGerente]', err);
-    panel.innerHTML = '<div style="padding:20px;color:var(--red);">❌ Error al cargar mensajes: ' + esc(err.message || err) + '</div>';
+  } catch(err) {
+    console.error('[cargarMensajesCanalJefe]', err);
+    panel.innerHTML = '<div style="padding:20px;color:var(--red);">Error: ' + esc(err.message || err) + '</div>';
   }
 }
+var cargarMensajesCanalGerente = cargarMensajesCanalJefe;
 
-async function renderMensajeGerente(m) {
-  var remitente = await getUserNameGerente(m.remitente_id);
-  var fecha = m.created_at ? new Date(m.created_at).toLocaleString('es-AR', { day:'2-digit', month:'2-digit', year:'2-digit', hour:'2-digit', minute:'2-digit' }) : '—';
-  var tipoColor = m.tipo_mensaje === 'urgente' ? 'var(--red)' : m.tipo_mensaje === 'aviso' ? 'var(--gold)' : 'var(--blue)';
-  var myUserId = window._gerenteProfile ? window._gerenteProfile.user_id : null;
-  var esMio = myUserId && String(m.remitente_id) === String(myUserId);
-
-  // Respuestas anidadas
+async function renderMensajeJefe(m) {
+  var remitente = await getUserNameJefe(m.remitente_id);
+  var fecha = m.created_at ? new Date(m.created_at).toLocaleString('es-AR', { day:'2-digit', month:'2-digit', year:'2-digit', hour:'2-digit', minute:'2-digit' }) : '';
+  var uid = window._gerenteProfile ? window._gerenteProfile.user_id : '';
+  var esMio = uid && String(m.remitente_id) === String(uid);
   var respuestasHtml = '';
   try {
     var hijosRes = await sbClient.from('mensajes_equipo').select('*').eq('respuesta_a', m.id).order('created_at', { ascending: true });
-    if (!hijosRes.error && hijosRes.data) {
-      for (var i = 0; i < hijosRes.data.length; i++) {
-        respuestasHtml += await renderMensajeGerente(hijosRes.data[i]);
-      }
-    }
-  } catch(e) { /* sin respuestas */ }
-
-  var idMsg = m.id;
-  var idCanal = m.canal_id;
-
+    if (!hijosRes.error && hijosRes.data) { for (var i = 0; i < hijosRes.data.length; i++) { respuestasHtml += await renderMensajeJefe(hijosRes.data[i]); } }
+  } catch(e) {}
   return '<div style="margin-bottom:16px;padding-left:' + (m.respuesta_a ? '24px' : '0') + ';border-left:' + (m.respuesta_a ? '3px solid var(--border2)' : 'none') + ';">' +
     '<div style="background:' + (esMio ? 'rgba(103,232,249,.07)' : 'rgba(255,255,255,.03)') + ';border:1px solid ' + (esMio ? 'rgba(103,232,249,.2)' : 'var(--border)') + ';border-radius:12px;padding:12px 14px;">' +
-      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap;">' +
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">' +
         '<span style="font-weight:700;font-size:.82rem;color:' + (esMio ? '#67e8f9' : 'var(--text)') + ';">' + esc(remitente) + '</span>' +
         '<span style="font-size:.65rem;color:var(--muted);">' + fecha + '</span>' +
-        (m.tipo_mensaje ? '<span style="font-size:.62rem;padding:2px 7px;border-radius:6px;background:rgba(255,255,255,.06);color:' + tipoColor + ';font-weight:700;text-transform:uppercase;">' + esc(m.tipo_mensaje) + '</span>' : '') +
       '</div>' +
-      (m.asunto ? '<div style="font-weight:700;font-size:.85rem;margin-bottom:4px;">' + esc(m.asunto) + '</div>' : '') +
       '<div style="font-size:.85rem;line-height:1.5;white-space:pre-wrap;">' + esc(m.cuerpo || '') + '</div>' +
-      '<div style="margin-top:8px;">' +
-        '<button onclick="mostrarRespuestaGerente(\'' + idMsg + '\')" style="background:none;border:none;cursor:pointer;font-size:.72rem;color:var(--muted);padding:0;font-family:Mulish,sans-serif;transition:color .15s;" onmouseover="this.style.color=\'#67e8f9\'" onmouseout="this.style.color=\'var(--muted)\'">↩️ Responder</button>' +
-      '</div>' +
-      '<div id="resp-g-' + idMsg + '" style="display:none;margin-top:10px;">' +
-        '<textarea id="respuestaTextoG-' + idMsg + '" rows="2" placeholder="Escribí tu respuesta..." style="width:100%;background:rgba(255,255,255,.04);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-family:Mulish,sans-serif;font-size:.82rem;padding:8px;resize:none;"></textarea>' +
-        '<button onclick="enviarRespuestaGerente(\'' + idMsg + '\', \'' + idCanal + '\')" style="margin-top:6px;padding:6px 14px;background:linear-gradient(135deg,#0891b2,#06b6d4);border:none;border-radius:8px;color:white;font-family:Mulish,sans-serif;font-size:.78rem;font-weight:700;cursor:pointer;">Enviar respuesta</button>' +
+      '<div style="margin-top:8px;"><button onclick="mostrarRespuestaJefe(\'' + m.id + '\')" style="background:none;border:none;cursor:pointer;font-size:.72rem;color:var(--muted);padding:0;font-family:inherit;">Responder</button></div>' +
+      '<div id="resp-jefe-' + m.id + '" style="display:none;margin-top:10px;">' +
+        '<textarea id="respuestaTextoJefe-' + m.id + '" rows="2" placeholder="Escrib\u00ed tu respuesta..." style="width:100%;background:rgba(255,255,255,.04);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-family:inherit;font-size:.82rem;padding:8px;resize:none;"></textarea>' +
+        '<button onclick="enviarRespuestaJefe(\'' + m.id + '\', \'' + m.canal_id + '\')" style="margin-top:6px;padding:6px 14px;background:linear-gradient(135deg,#0891b2,#06b6d4);border:none;border-radius:8px;color:white;font-family:inherit;font-size:.78rem;font-weight:700;cursor:pointer;">Enviar respuesta</button>' +
       '</div>' +
     '</div>' +
     (respuestasHtml ? '<div style="margin-top:8px;">' + respuestasHtml + '</div>' : '') +
   '</div>';
 }
+var renderMensajeGerente = renderMensajeJefe;
 
-function mostrarRespuestaGerente(msgId) {
-  var el = document.getElementById('resp-g-' + msgId);
+function mostrarRespuestaJefe(msgId) {
+  var el = document.getElementById('resp-jefe-' + msgId);
   if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
 }
+var mostrarRespuestaGerente = mostrarRespuestaJefe;
 
-async function enviarMensajeGerente(canalId, respuestaA) {
-  if (!sbClient || !window._gerenteProfile) { showToast('⚠️ Sesión no válida'); return; }
+async function enviarMensajeJefe(canalId, respuestaA) {
+  if (!sbClient || !window._gerenteProfile) { showToast('Sesi\u00f3n no v\u00e1lida'); return; }
   var cuerpo, asunto;
   if (respuestaA) {
-    var el = document.getElementById('respuestaTextoG-' + respuestaA);
+    var el = document.getElementById('respuestaTextoJefe-' + respuestaA);
     cuerpo = el ? el.value.trim() : '';
     asunto = 'Re: mensaje';
   } else {
-    var el = document.getElementById('nuevoMensajeGerente');
+    var el = document.getElementById('nuevoMensajeJefe');
     cuerpo = el ? el.value.trim() : '';
     asunto = 'Mensaje Jefe de Ventas';
   }
-  if (!cuerpo) { showToast('⚠️ Escribí algo antes de enviar'); return; }
+  if (!cuerpo) { showToast('Escrib\u00ed algo antes de enviar'); return; }
   try {
     var ins = await sbClient.from('mensajes_equipo').insert({
-      remitente_id: window._gerenteProfile.user_id,
-      asunto: asunto,
-      cuerpo: cuerpo,
-      canal_id: canalId,
-      respuesta_a: respuestaA || null,
-      tipo_mensaje: 'aviso',
-      created_at: new Date().toISOString()
-    });
+      remitente_id: window._gerenteProfile.user_id, asunto: asunto, cuerpo: cuerpo,
+      canal_id: canalId, respuesta_a: respuestaA || null, tipo_mensaje: 'aviso'
+    }).select();
     if (ins.error) throw ins.error;
-    showToast('✅ Mensaje enviado');
-    cargarMensajesCanalGerente(canalId);
-  } catch (err) {
-    console.error('[enviarMensajeGerente]', err);
-    showToast('❌ Error al enviar: ' + (err.message || err));
+    showToast('Mensaje enviado');
+    cargarMensajesCanalJefe(canalId);
+  } catch(err) { console.error('[enviarMensajeJefe]', err); showToast('Error al enviar: ' + (err.message || err)); }
+}
+var enviarMensajeGerente = enviarMensajeJefe;
+
+async function enviarRespuestaJefe(msgId, canalId) { await enviarMensajeJefe(canalId, msgId); }
+var enviarRespuestaGerente = enviarRespuestaJefe;
+
+// ── Mensaje directo (DM) Jefe de Ventas ──
+async function abrirNuevoDMJefe() {
+  var ov = document.getElementById('dmOverlayJefe');
+  if (ov) { ov.style.display = 'flex'; return; }
+  _staffCacheJefe = [];
+  var staff = await cargarStaffJefe();
+  var uid = window._gerenteProfile ? window._gerenteProfile.user_id : '';
+  ov = document.createElement('div');
+  ov.id = 'dmOverlayJefe';
+  ov.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.6);z-index:9999;display:flex;align-items:center;justify-content:center;';
+  ov.onclick = function(e) { if (e.target === ov) ov.remove(); };
+  var staffOpts = '';
+  for (var i = 0; i < staff.length; i++) {
+    var s = staff[i];
+    if (String(s.user_id) === String(uid)) continue;
+    staffOpts += '<div data-uid="' + s.user_id + '" style="padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;transition:background .15s;" onmouseenter="this.style.background=\'rgba(168,85,247,.08)\'" onmouseleave="this.style.background=\'\'" onclick="crearOBuscarDMJefe(\'' + s.user_id + '\')">' +
+      '\ud83d\udc64 <div style="flex:1;"><div style="font-weight:600;font-size:.85rem;">' + esc(s.nombre) + '</div>' +
+      '<div style="font-size:.68rem;color:var(--muted);">' + esc(s.role || '') + '</div></div>' +
+      '<span style="font-size:.75rem;color:#a855f7;">\ud83d\udcac Chatear</span></div>';
   }
+  var emptyMsg = '<div style="padding:20px;text-align:center;color:var(--muted);">No hay otros usuarios registrados.<br><small>Asegurate de que los usuarios tengan un perfil en staff_profiles.</small></div>';
+  ov.innerHTML = '<div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:24px;width:380px;max-width:90vw;">' +
+    '<h3 style="font-family:Syne,sans-serif;font-size:.95rem;font-weight:800;margin-bottom:16px;">\ud83d\udcac Mensaje directo</h3>' +
+    '<p style="font-size:.78rem;color:var(--muted);margin-bottom:14px;">Seleccion\u00e1 con qui\u00e9n quer\u00e9s chatear:</p>' +
+    '<div style="max-height:320px;overflow-y:auto;border:1px solid var(--border);border-radius:10px;">' + (staffOpts || emptyMsg) + '</div>' +
+    '<button onclick="document.getElementById(\'dmOverlayJefe\').remove()" style="margin-top:14px;padding:8px 16px;background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:8px;color:var(--text);cursor:pointer;font-family:inherit;font-size:.82rem;width:100%;">Cerrar</button>' +
+  '</div>';
+  document.body.appendChild(ov);
 }
 
-async function enviarRespuestaGerente(msgId, canalId) {
-  await enviarMensajeGerente(canalId, msgId);
+async function crearOBuscarDMJefe(targetUserId) {
+  if (document.getElementById('dmOverlayJefe')) document.getElementById('dmOverlayJefe').remove();
+  var uid = window._gerenteProfile ? window._gerenteProfile.user_id : '';
+  try {
+    var res = await sbClient.from('canales_equipo').select('*').eq('tipo', 'directo');
+    if (res.error) throw res.error;
+    var existing = null;
+    for (var i = 0; i < res.data.length; i++) {
+      var c = res.data[i];
+      try {
+        var m = typeof c.miembros === 'string' ? JSON.parse(c.miembros) : (c.miembros || {});
+        var users = m.usuarios || [];
+        if (users.indexOf(uid) !== -1 && users.indexOf(targetUserId) !== -1) { existing = c; break; }
+      } catch(e) {}
+    }
+    if (existing) { showToast('Conversaci\u00f3n abierta'); renderComunicacionesJefe(); return; }
+    var st = _staffCacheJefe.find(function(s) { return String(s.user_id) === String(targetUserId); });
+    var otherName = st ? st.nombre : 'Usuario';
+    var ins = await sbClient.from('canales_equipo').insert({
+      nombre: 'DM: ' + otherName, tipo: 'directo', descripcion: 'Conversaci\u00f3n directa',
+      miembros: { tipo: 'directo', usuarios: [uid, targetUserId] }, creado_por: uid
+    }).select();
+    if (ins.error) throw ins.error;
+    showToast('Conversaci\u00f3n creada con ' + otherName);
+    renderComunicacionesJefe();
+  } catch(err) { console.error('[crearOBuscarDMJefe]', err); showToast('Error: ' + (err.message || err)); }
 }
 
 // ── Crear nuevo canal ──
 function abrirCrearCanal() {
   var ov = document.getElementById('crearCanalOverlay');
   if (ov) { ov.style.display = 'flex'; return; }
+  var uid = window._gerenteProfile ? window._gerenteProfile.user_id : '';
+  var staffOpts = '';
+  for (var i = 0; i < _staffCacheJefe.length; i++) {
+    var s = _staffCacheJefe[i];
+    if (String(s.user_id) === String(uid)) continue;
+    staffOpts += '<label style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:.82rem;cursor:pointer;"><input type="checkbox" class="nc-user-cb" value="' + s.user_id + '" /> ' + esc(s.nombre) + ' <span style="font-size:.65rem;color:var(--muted);">(' + esc(s.role || '') + ')</span></label>';
+  }
   ov = document.createElement('div');
   ov.id = 'crearCanalOverlay';
   ov.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.6);z-index:9999;display:flex;align-items:center;justify-content:center;';
   ov.onclick = function(e) { if (e.target === ov) cerrarCrearCanal(); };
-  ov.innerHTML = '<div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:24px;width:420px;max-width:90vw;">' +
+  ov.innerHTML = '<div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:24px;width:460px;max-width:90vw;max-height:85vh;overflow-y:auto;">' +
     '<h3 style="font-family:Syne,sans-serif;font-size:.95rem;font-weight:800;margin-bottom:16px;">&#x2795; Nuevo Canal</h3>' +
-    '<label style="display:block;margin-bottom:12px;">' +
-      '<span style="font-size:.78rem;font-weight:600;color:var(--muted);">Nombre del canal</span>' +
-      '<input id="ncNombre" type="text" placeholder="Ej: general-moras" style="width:100%;margin-top:4px;padding:8px 12px;background:rgba(255,255,255,.04);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-family:inherit;font-size:.85rem;" />' +
-    '</label>' +
-    '<label style="display:block;margin-bottom:12px;">' +
-      '<span style="font-size:.78rem;font-weight:600;color:var(--muted);">Descripción</span>' +
-      '<input id="ncDesc" type="text" placeholder="Descripción breve..." style="width:100%;margin-top:4px;padding:8px 12px;background:rgba(255,255,255,.04);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-family:inherit;font-size:.85rem;" />' +
-    '</label>' +
-    '<div style="margin-bottom:16px;">' +
-      '<span style="font-size:.78rem;font-weight:600;color:var(--muted);display:block;margin-bottom:8px;">¿Quién puede ver este canal?</span>' +
+    '<label style="display:block;margin-bottom:12px;"><span style="font-size:.78rem;font-weight:600;color:var(--muted);">Nombre del canal</span><input id="ncNombre" type="text" placeholder="Ej: seguimiento-cliente-X" style="width:100%;margin-top:4px;padding:8px 12px;background:rgba(255,255,255,.04);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-family:inherit;font-size:.85rem;" /></label>' +
+    '<label style="display:block;margin-bottom:12px;"><span style="font-size:.78rem;font-weight:600;color:var(--muted);">Descripci\u00f3n</span><input id="ncDesc" type="text" placeholder="Descripci\u00f3n breve..." style="width:100%;margin-top:4px;padding:8px 12px;background:rgba(255,255,255,.04);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-family:inherit;font-size:.85rem;" /></label>' +
+    '<div style="margin-bottom:12px;"><span style="font-size:.78rem;font-weight:600;color:var(--muted);display:block;margin-bottom:8px;">Roles con acceso</span>' +
       '<label style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:.85rem;cursor:pointer;"><input type="checkbox" id="ncRolCeo" /> CEO</label>' +
       '<label style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:.85rem;cursor:pointer;"><input type="checkbox" id="ncRolGerente" /> Gerente</label>' +
       '<label style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:.85rem;cursor:pointer;"><input type="checkbox" id="ncRolJefe" checked /> Jefe de Ventas</label>' +
-      '<label style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:.85rem;cursor:pointer;"><input type="checkbox" id="ncRolAsesor" /> Asesor</label>' +
-    '</div>' +
-    '<div style="display:flex;gap:10px;justify-content:flex-end;">' +
-      '<button onclick="cerrarCrearCanal()" style="padding:8px 16px;background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:8px;color:var(--text);cursor:pointer;font-family:inherit;font-size:.82rem;">Cancelar</button>' +
-      '<button onclick="crearNuevoCanal()" style="padding:8px 20px;background:linear-gradient(135deg,#0891b2,#06b6d4);border:none;border-radius:8px;color:white;font-weight:700;cursor:pointer;font-family:inherit;font-size:.82rem;">Crear Canal</button>' +
-    '</div>' +
-  '</div>';
+      '<label style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:.85rem;cursor:pointer;"><input type="checkbox" id="ncRolAsesor" /> Asesor</label></div>' +
+    '<div style="margin-bottom:16px;"><span style="font-size:.78rem;font-weight:600;color:var(--muted);display:block;margin-bottom:8px;">Usuarios espec\u00edficos <span style="font-size:.68rem;color:var(--muted);font-weight:400;">(opcional)</span></span>' +
+      '<div style="max-height:150px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:8px;">' + (staffOpts || '<div style="padding:8px;color:var(--muted);font-size:.82rem;">No hay otros usuarios</div>') + '</div></div>' +
+    '<div style="display:flex;gap:10px;justify-content:flex-end;"><button onclick="cerrarCrearCanal()" style="padding:8px 16px;background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:8px;color:var(--text);cursor:pointer;font-family:inherit;font-size:.82rem;">Cancelar</button><button onclick="crearNuevoCanal()" style="padding:8px 20px;background:linear-gradient(135deg,#0891b2,#06b6d4);border:none;border-radius:8px;color:white;font-weight:700;cursor:pointer;font-family:inherit;font-size:.82rem;">Crear Canal</button></div></div>';
   document.body.appendChild(ov);
 }
 
-function cerrarCrearCanal() {
-  var ov = document.getElementById('crearCanalOverlay');
-  if (ov) ov.remove();
-}
+function cerrarCrearCanal() { var ov = document.getElementById('crearCanalOverlay'); if (ov) ov.remove(); }
 
 async function crearNuevoCanal() {
   var nombre = document.getElementById('ncNombre');
@@ -3764,34 +3862,36 @@ async function crearNuevoCanal() {
   if (document.getElementById('ncRolGerente').checked) roles.push('gerente');
   if (document.getElementById('ncRolJefe').checked) roles.push('jefe_ventas');
   if (document.getElementById('ncRolAsesor').checked) roles.push('asesor');
-  if (!nombre || !nombre.value.trim()) { showToast('⚠️ Ingresá un nombre para el canal'); return; }
-  if (!roles.length) { showToast('⚠️ Seleccioná al menos un rol'); return; }
+  var usuarios = [];
+  document.querySelectorAll('.nc-user-cb:checked').forEach(function(cb) { usuarios.push(cb.value); });
+  if (!nombre || !nombre.value.trim()) { showToast('Ingres\u00e1 un nombre para el canal'); return; }
+  if (!roles.length && !usuarios.length) { showToast('Seleccion\u00e1 al menos un rol o usuario'); return; }
   try {
+    var miembros = { roles: roles };
+    if (usuarios.length) miembros.usuarios = usuarios;
     var ins = await sbClient.from('canales_equipo').insert({
-      nombre: nombre.value.trim(),
-      descripcion: desc ? desc.value.trim() : '',
-      tipo: 'publico',
-      miembros: { roles: roles },
-      creado_por: window._gerenteProfile.user_id
-    });
+      nombre: nombre.value.trim(), descripcion: desc ? desc.value.trim() : '',
+      tipo: 'grupo', miembros: miembros, creado_por: window._gerenteProfile.user_id
+    }).select();
     if (ins.error) throw ins.error;
-    showToast('✅ Canal "' + nombre.value.trim() + '" creado');
+    showToast('Canal "' + nombre.value.trim() + '" creado');
     cerrarCrearCanal();
-    renderComunicacionesGerente();
-  } catch(err) {
-    console.error('[crearNuevoCanal]', err);
-    showToast('❌ Error: ' + (err.message || err));
-  }
+    renderComunicacionesJefe();
+  } catch(err) { console.error('[crearNuevoCanal]', err); showToast('Error: ' + (err.message || err)); }
 }
 
-// Exportar funciones de comunicaciones al scope global
-window.renderComunicacionesGerente = renderComunicacionesGerente;
-window.cargarMensajesCanalGerente  = cargarMensajesCanalGerente;
-window.enviarMensajeGerente        = enviarMensajeGerente;
+// Exportar funciones al scope global (backward compat + new)
+window.renderComunicacionesGerente = renderComunicacionesJefe;
+window.cargarMensajesCanalGerente  = cargarMensajesCanalJefe;
+window.enviarMensajeGerente        = enviarMensajeJefe;
 window.enviarRespuestaGerente      = enviarRespuestaGerente;
-
-
 window.mostrarRespuestaGerente     = mostrarRespuestaGerente;
+window.abrirNuevoDMJefe            = abrirNuevoDMJefe;
+window.crearOBuscarDMJefe          = crearOBuscarDMJefe;
+window.abrirCrearCanal             = abrirCrearCanal;
+window.crearNuevoCanal             = crearNuevoCanal;
+window.enviarMensajeJefe           = enviarMensajeJefe;
+window.enviarRespuestaJefe         = enviarRespuestaJefe;
 
 // ===================== MI LEGAJO (JEFE DE VENTAS) - ESTILO VENDEDOR =====================
 async function renderMiLegajoJefe() {
