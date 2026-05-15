@@ -143,14 +143,32 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
 .lz-phone-wrap select:focus{outline:none;border-color:rgba(0,210,255,.4);}
 .lz-phone-wrap input{border-radius:0 8px 8px 0!important;flex:1;}
 
-/* ── CATÁLOGO & REFERIDOS ── */
-.catalogo-item{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:6px;transition:transform .2s;}
-.catalogo-item:hover{transform:translateY(-2px);}
-.catalogo-info .destino{font-family:'Syne',sans-serif;font-weight:800;font-size:.95rem;}
-.catalogo-info .paquete{font-size:.78rem;color:var(--muted);}
-.catalogo-info .precio{font-size:1.1rem;font-weight:800;color:var(--gold);}
-.catalogo-actions{display:flex;gap:6px;margin-top:auto;padding-top:8px;border-top:1px solid var(--border);}
-.catalogo-actions button{padding:5px 10px;border-radius:7px;cursor:pointer;font-size:.75rem;font-weight:700;border:1px solid;}
+/* ── CATÁLOGO DE PRECIOS (PRO) ── */
+.cat-table-wrap{border:1px solid var(--border);border-radius:14px;overflow:hidden;background:var(--surface);}
+.cat-table-head{display:grid;grid-template-columns:18% 20% 8% 8% 10% 12% 6% 8% 10%;padding:10px 14px;background:rgba(255,255,255,.03);border-bottom:1px solid var(--border);font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);gap:6px;align-items:center;}
+.cat-table-row{display:grid;grid-template-columns:18% 20% 8% 8% 10% 12% 6% 8% 10%;padding:10px 14px;border-bottom:1px solid var(--border);font-size:.82rem;gap:6px;align-items:center;transition:background .15s;}
+.cat-table-row:hover{background:rgba(255,255,255,.02);}
+.cat-table-row.inactive{opacity:.45;}
+.cat-dest-group{display:grid;grid-template-columns:1fr;padding:8px 14px;background:rgba(167,139,250,.06);border-bottom:1px solid var(--border);font-family:'Syne',sans-serif;font-weight:800;font-size:.85rem;color:var(--purple);}
+.cat-dest-group span{font-size:.68rem;color:var(--muted);font-family:'Mulish',sans-serif;font-weight:600;margin-left:8px;}
+.cat-status{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:20px;font-size:.7rem;font-weight:700;cursor:pointer;transition:all .15s;border:1px solid;}
+.cat-status.active{background:rgba(34,197,94,.1);color:#22c55e;border-color:rgba(34,197,94,.25);}
+.cat-status.inactive{background:rgba(239,68,68,.08);color:#ef4444;border-color:rgba(239,68,68,.2);}
+.cat-act-btn{padding:5px 8px;border-radius:7px;cursor:pointer;font-size:.75rem;font-weight:700;border:1px solid;background:transparent;color:var(--muted);transition:all .15s;}
+.cat-act-btn:hover{transform:translateY(-1px);}
+.cat-act-btn.edit{border-color:rgba(59,130,246,.3);color:#60a5fa;}
+.cat-act-btn.edit:hover{background:rgba(59,130,246,.1);}
+.cat-act-btn.dup{border-color:rgba(167,139,250,.3);color:#a78bfa;}
+.cat-act-btn.dup:hover{background:rgba(167,139,250,.1);}
+.cat-act-btn.del{border-color:rgba(239,68,68,.3);color:#f87171;}
+.cat-act-btn.del:hover{background:rgba(239,68,68,.1);}
+.cat-ppm{font-size:.72rem;color:var(--cyan,#06b6d4);font-weight:600;}
+.cat-empty{text-align:center;padding:50px;color:var(--muted);font-size:.88rem;}
+.cat-kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:20px;}
+.cat-kpi{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;}
+.cat-kpi .cat-kpi-v{font-family:'Syne',sans-serif;font-size:1.3rem;font-weight:800;}
+.cat-kpi .cat-kpi-l{font-size:.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-top:2px;}
+@media(max-width:900px){.cat-table-head,.cat-table-row{grid-template-columns:1fr;gap:4px;}.cat-table-head{display:none;}.cat-table-row{padding:14px;}.cat-ppm{margin-top:2px;}}
 .ref-badge{padding:3px 10px;border-radius:20px;font-size:.7rem;font-weight:700;}
 .ref-badge.confirmado{background:var(--green-bg);color:var(--green);border:1px solid var(--green-bd);}
 .ref-badge.pendiente{background:var(--gold-bg);color:var(--gold);border:1px solid var(--gold-bd);}
@@ -283,7 +301,7 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
           <select class="msel" id="vendDashSel" onchange="renderVendDash()" style="min-width:200px;">
             <option value="">— Seleccionar asesor —</option>
           </select>
-          <button class="addbtn" onclick="openAddVendorCeo()">➕ Nuevo Asesor</button>
+          <!-- Botón Nuevo Asesor eliminado por jerarquía: solo Gerentes/Jefes crean Vendedores -->
           <button id="btnVerPerfilVend" style="display:none;padding:9px 18px;border-radius:10px;background:rgba(251,191,36,.12);border:1px solid rgba(251,191,36,.3);color:#fbbf24;font-family:inherit;font-size:.82rem;font-weight:700;cursor:pointer;" onclick="openVendPerfilCeo()">👔 Ver perfil y comisiones</button>
         </div>
       </div>
@@ -502,6 +520,7 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
     <div class="tabpg" id="tabpg-simulador">
       <div class="sec-head">
         <h2>📊 Simulador de Cuotas</h2>
+        <button class="addbtn" onclick="showTab('catalogo')" style="background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.25);color:#fbbf24;">🏷️ Gestionar precios</button>
       </div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px;margin-bottom:24px;">
         <div>
@@ -565,14 +584,33 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
     </div>
 
 
-    <!-- ══ CATÁLOGO DE PRECIOS (CRUD CEO) ══ -->
+    <!-- ══ CATÁLOGO DE PRECIOS Y SIMULADOR (CRUD PROFESIONAL) ══ -->
     <div class="tabpg" id="tabpg-catalogo">
       <div class="sec-head">
         <h2>🏷️ Catálogo de Precios y Paquetes</h2>
-        <button class="addbtn" onclick="openAddCatalogo()">➕ Nuevo paquete</button>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="addbtn" onclick="openAddDestino()">🌍 Nuevo destino</button>
+          <button class="addbtn" onclick="openAddPaquete()">➕ Nuevo paquete</button>
+        </div>
       </div>
-      <div id="catalogoGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;margin-top:20px;">
-        <div style="text-align:center;padding:40px;color:var(--muted);">Cargando catálogo...</div>
+      <div id="catKpis" class="cat-kpi-row"></div>
+      <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;align-items:center;">
+        <select id="catFiltroDestino" onchange="renderCatalogo()" class="msel" style="width:auto;min-width:160px;">
+          <option value="">Todos los destinos</option>
+        </select>
+        <select id="catFiltroEstado" onchange="renderCatalogo()" class="msel" style="width:auto;">
+          <option value="">Todos los estados</option>
+          <option value="true">✅ Activos</option>
+          <option value="false">❌ Inactivos</option>
+        </select>
+        <input type="text" id="catBusqueda" placeholder="🔍 Buscar paquete..." oninput="renderCatalogo()" class="medit" style="width:220px;">
+        <div style="margin-left:auto;font-size:.75rem;color:var(--muted);"><span id="catCount">0</span> paquetes</div>
+      </div>
+      <div class="cat-table-wrap">
+        <div class="cat-table-head">
+          <div>Destino</div><div>Paquete</div><div>Pers.</div><div>Noches</div><div>Precio USD</div><div>USD/pers/mes</div><div>Orden</div><div>Estado</div><div>Acciones</div>
+        </div>
+        <div id="catalogoBody"></div>
       </div>
     </div>
 
@@ -608,7 +646,7 @@ var ROLE_MANAGER = 2;  // Gerente
 var ROLE_SELLER  = 3;  // Asesor/Vendedor
 var ROLE_SALES_LEADER = 5; // Jefe de Ventas
 var RK = 'luazul_ceo_regiones';
-var _cacheGerentes=null, _cacheVendedores=null, _cacheClientes=null, _cachePagos=null, _cacheRegiones=null;
+var _cacheGerentes=null, _cacheVendedores=null, _cacheClientes=null, _cachePagos=null, _cacheRegiones=null, _cacheSalesLeaders=null;
 // UUID del CEO autenticado — se setea en cLogin / DOMContentLoaded
 // Necesario para RPC resolver_mora(p_aprobado_por)
 var _ceoUid = null;
@@ -660,6 +698,23 @@ function cargarDatosSupabase(){
     .then(function(vRes){
       if(vRes.error) throw vRes.error;
       _cacheVendedores=(vRes.data||[]).map(mapVendedor);
+      return sbClient.from('staff_profiles')
+        .select('*')
+        .eq('role_id',ROLE_SALES_LEADER);
+    })
+    .then(function(jRes){
+      if(jRes.error) throw jRes.error;
+      _cacheSalesLeaders=(jRes.data||[]).map(function(r){
+        return{id:r.id,user_id:r.user_id,rid:r.region_id||'',
+          nombre:(r.nombre||'')+(r.apellido?' '+r.apellido:''),
+          email:r.badge||'',activo:r.activo!==false,
+          manager_id:r.manager_id||null,role_id:r.role_id||null,
+          com_pct:r.com_pct||0,
+          fechaAlta:r.fecha_alta?r.fecha_alta.slice(0,10):'',
+          ciudad:r.ciudad||'',telefono1:r.telefono1||'',telefono2:r.telefono2||'',
+          domicilio:r.domicilio||'',cbu:r.cbu||'',
+          comprobantes:JSON.parse(r.comprobantes_json||'[]'),_raw:r};
+      });
       return sbClient.from('clientes')
         .select('id,user_id,seller_id,nombre,email,telefono,documento,estado,destino,paquete,fecha_viaje,monto_cuota,cuotas_total,cuotas_pagadas,total_usd,fecha_alta,notas,region_id');
     })
@@ -690,6 +745,7 @@ function mapVendedor(r){
   return{id:r.id,user_id:r.user_id,rid:r.region_id||'',
     nombre:(r.nombre||'')+(r.apellido?' '+r.apellido:''),
     email:r.badge||'',activo:r.activo!==false,
+    manager_id:r.manager_id||null,role_id:r.role_id||null,com_pct:r.com_pct||0,
     fechaAlta:r.fecha_alta?r.fecha_alta.slice(0,10):'',
     ciudad:r.ciudad||'',telefono1:r.telefono1||'',telefono2:r.telefono2||'',
     domicilio:r.domicilio||'',cbu:r.cbu||'',
@@ -704,6 +760,56 @@ function mapCliente(r){
     cuotas_pagadas:parseInt(r.cuotas_pagadas)||0,total_usd:parseFloat(r.total_usd)||0,
     fechaAlta:r.fecha_alta?r.fecha_alta.slice(0,10):'',notas:r.notas||'',_raw:r};
 }
+
+// ── COMISIÓN JEFE DE VENTAS (15% sobre recaudación de equipo) ──
+function calcComisionJefe(jefe, allClients, allVendedores) {
+    var misVendedores = (allVendedores || []).filter(function(v) {
+      return String(v.manager_id) === String(jefe.id);
+    });
+    var vendedoresIds = misVendedores.map(function(v) { return v.id; });
+    var clientesEquipo = allClients.filter(function(c) {
+      return vendedoresIds.indexOf(c.seller_id) !== -1;
+    });
+    var totalRecaudado = clientesEquipo.reduce(function(s, c) {
+      return s + (parseInt(c.cuotas_pagadas) || 0) * (parseFloat(c.monto_cuota) || 0);
+    }, 0);
+    var comisionNeta = totalRecaudado * 0.15;
+    return {
+      neta: Math.round(comisionNeta * 100) / 100,
+      tasaActual: 15,
+      equipoSize: misVendedores.length,
+      totalClientesEquipo: clientesEquipo.length,
+      totalRecaudado: Math.round(totalRecaudado * 100) / 100
+    };
+  }
+
+// ── Buscar staff por user_id en cualquiera de los 3 caches ──
+function findStaffByUid(uid) {
+    var caches = [_cacheGerentes, _cacheSalesLeaders, _cacheVendedores];
+    for (var ci = 0; ci < caches.length; ci++) {
+      var cache = caches[ci];
+      if (!cache) continue;
+      for (var i = 0; i < cache.length; i++) {
+        if (String(cache[i].user_id) === String(uid)) return cache[i];
+      }
+    }
+    return null;
+  }
+
+// ── Modal unificado para pagar comisiones a cualquier rol ──
+function mostrarModalPagoStaff(staffUid, montoMax, rolTipo) {
+    var staff = findStaffByUid(staffUid);
+    if (!staff) return;
+    var rolLabel = rolTipo === 'gerente' ? '👔 Gerente' : rolTipo === 'jefe' ? '🎯 Jefe de Ventas' : '🧑‍💼 Asesor';
+    var html = '<div class="mhead"><div><h2>💰 Pagar Comisión a ' + esc(staff.nombre) + '</h2><p style="font-size:.78rem;color:var(--muted);">' + rolLabel + '</p></div><button class="mclose" onclick="closeModal()">✕</button></div>' +
+      '<div class="mbody">' +
+      '<div class="manager-input-group"><label>Monto a pagar (USD)</label><input id="montoComision" type="number" step="1" max="' + montoMax + '" value="' + montoMax + '" /></div>' +
+      '<div class="manager-input-group"><label>Descripción</label><input id="descComision" placeholder="Ej: Comisión Marzo 2026" /></div>' +
+      '<div class="manager-input-group"><label>Comprobante (archivo)</label><input id="fileComision" type="file" accept="image/*,application/pdf" /></div>' +
+      '</div><div class="mact"><button class="mbtn gold" onclick="procesarPagoComision('' + staffUid + '')">✅ Registrar Pago</button><button class="mbtn ghost" onclick="closeModal()">Cancelar</button></div>';
+    document.getElementById('mbox').innerHTML = html;
+    document.getElementById('modal').classList.add('open');
+  }
 
 // ── AUTH ──────────────────────────────────────────────
 // [SUPABASE PHASE 2] — Emails autorizados para el panel CEO
@@ -1349,6 +1455,35 @@ function renderRegiones(){
       +'<div style="font-size:.72rem;color:var(--muted);">Gerente: <strong style="color:var(--text);">'+(g.nombre||'Sin asignar')+'</strong></div>'
       +'<div style="font-size:.7rem;color:var(--muted);">'+(g.ciudad||'')+'</div>'
       +'</div></div>'
+      // ── Jefes de Ventas de esta región ──
+      +(function(){
+        var jefesR = (_cacheSalesLeaders||[]).filter(function(j){ return String(j.rid)===rid_str; });
+        if(!jefesR.length) return '';
+        var jhtml = '<div style="margin-bottom:12px;">'
+          +'<div style="font-size:.68rem;font-weight:700;letter-spacing:.05em;color:var(--gold);margin-bottom:6px;text-transform:uppercase;">⭐ Jefes de Ventas</div>';
+        for(var jj=0;jj<jefesR.length;jj++){
+          var jf=jefesR[jj];
+          var jfId=String(jf.user_id||jf.id);
+          var susV=rv.filter(function(vv){ return String(vv.manager_id)===jfId; });
+          var susC=rc.filter(function(cc){
+            return susV.some(function(vv){ return String(vv.user_id||vv.id)===String(cc.vid); });
+          });
+          var susRec=susC.reduce(function(s,c){ return s+(parseInt(c.cuotas_pagadas)||0)*(parseFloat(c.monto_cuota)||0); },0);
+          var comJ=susRec*0.15;
+          jhtml+='<div style="background:rgba(245,158,11,.06);border-left:3px solid var(--gold);border-radius:8px;padding:8px 12px;margin-bottom:5px;">'
+            +'<div style="display:flex;justify-content:space-between;align-items:center;">'
+            +'<div>'
+            +'<span style="font-weight:700;font-size:.82rem;">👑 '+esc(jf.nombre||'—')+'</span>'
+            +'<span style="font-size:.65rem;padding:2px 7px;border-radius:10px;background:rgba(245,158,11,.15);color:var(--gold);margin-left:6px;font-weight:700;">Jefe de Ventas</span>'
+            +'</div>'
+            +'<span style="font-size:.72rem;color:var(--gold);">Comis. 15%: '+fmtUSD(comJ)+'</span>'
+            +'</div>'
+            +'<div style="font-size:.7rem;color:var(--muted);margin-top:4px;margin-left:4px;">📋 '+susV.length+' vendedor'+(susV.length!==1?'es':'')+' · 👥 '+susC.length+' clientes</div>'
+            +'</div>';
+        }
+        jhtml+='</div>';
+        return jhtml;
+      })()
       +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;">'
       +'<div style="background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:8px;padding:9px;text-align:center;">'
       +'<div style="font-family:Syne,sans-serif;font-size:1.3rem;font-weight:800;">'+rv.length+'</div>'
@@ -1736,44 +1871,8 @@ function saveObjCEO(){
 
 // ── CREAR CLIENTE DESDE CEO ───────────────────────────
 function openAddClienteCeo(){
-  var vs = vend();
-  var flags={AR:'🇦🇷',CL:'🇨🇱',UY:'🇺🇾',PY:'🇵🇾',BO:'🇧🇴',PE:'🇵🇪',CO:'🇨🇴'};
-  var nomPais={AR:'Argentina',CL:'Chile',UY:'Uruguay',PY:'Paraguay',BO:'Bolivia',PE:'Perú',CO:'Colombia'};
-  var rs = reg();
-  var porPais = {};
-  rs.forEach(function(r){ var p=r.pais||'AR'; if(!porPais[p])porPais[p]=[]; porPais[p].push(r); });
-  var regOpts = '<option value="">— Sin región —</option>';
-  Object.keys(porPais).forEach(function(pais){
-    regOpts += '<optgroup label="'+(flags[pais]||'')+' '+(nomPais[pais]||pais)+'">';
-    porPais[pais].forEach(function(r){ regOpts += '<option value="'+r.id+'">'+r.nombre+'</option>'; });
-    regOpts += '</optgroup>';
-  });
-  var vendOpts = '<option value="">— Seleccionar asesor —</option>';
-  vs.forEach(function(v){
-    var r = rby(v.rid);
-    vendOpts += '<option value="'+v.id+'">'+(r.bandera||'')+' '+v.nombre+'</option>';
-  });
-  document.getElementById('mbox').innerHTML =
-    '<div class="mhead"><div><h2>➕ Nuevo Cliente</h2><p>Crear cliente y asignarlo a un asesor</p></div>'+
-    '<button class="mclose" onclick="closeModal()">✕</button></div>'+
-    '<div class="mbody"><div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'+
-    '<div class="mitem"><div class="ml">Nombre completo</div><input class="medit" id="ccNombre" placeholder="Ej: Ana García" /></div>'+
-    '<div class="mitem"><div class="ml">Email</div><input class="medit" id="ccEmail" placeholder="ana@email.com" /></div>'+
-    '<div class="mitem"><div class="ml">Teléfono</div><div class="lz-phone-wrap">'+lzBuildPhoneSelect('prefix_ccTel','')+'<input class="medit" id="ccTel" placeholder="9 11 1234-5678" value="+54 " /></div></div>'+
-    '<div class="mitem"><div class="ml">DNI / Documento</div><input class="medit" id="ccDoc" placeholder="12345678" /></div>'+
-    '<div class="mitem"><div class="ml">Destino</div><select class="medit" id="ccDest"><option value="">— Seleccionar —</option><option>Cabo Frío</option><option>Búzios</option><option>Arraial do Cabo</option><option>Copacabana</option><option>Río de Janeiro</option></select></div>'+
-    '<div class="mitem"><div class="ml">Paquete</div><input class="medit" id="ccPkg" placeholder="Ej: 2 pax · 10 cuotas" /></div>'+
-    '<div class="mitem"><div class="ml">Total USD</div><input class="medit" id="ccTotal" type="number" min="0" placeholder="1500" /></div>'+
-    '<div class="mitem"><div class="ml">Cuotas</div><select class="medit" id="ccCuotas"><option value="6">6 cuotas</option><option value="10" selected>10 cuotas</option><option value="12">12 cuotas</option><option value="18">18 cuotas</option></select></div>'+
-    '<div class="mitem"><div class="ml">Fecha de viaje</div><input class="medit" id="ccFecha" type="date" /></div>'+
-    '<div class="mitem"><div class="ml">Ciudad / Región</div><select class="medit" id="ccRegion">'+regOpts+'</select></div>'+
-    '<div class="mitem" style="grid-column:span 2;"><div class="ml">Asesor asignado</div><select class="medit" id="ccVendedor">'+vendOpts+'</select></div>'+
-    '</div></div>'+
-    '<div class="mact">'+
-    '<button class="mbtn purple" onclick="saveNewClienteCeo()">✅ Crear Cliente</button>'+
-    '<button class="mbtn ghost" onclick="closeModal()">Cancelar</button></div>';
-  document.getElementById('modal').classList.add('open');
-}
+    showToast('⛔ Los clientes deben ser creados por un asesor asignado.');
+  }
 
 function saveNewClienteCeo(){
   var nombre  = (document.getElementById('ccNombre').value||'').trim();
@@ -1933,95 +2032,12 @@ function renderPwVendors(){
 // ── GESTIÓN DE ASESORES (CEO) ────────────────────────
 
 function openAddVendorCeo(){
-  var rs = reg();
-  // Agrupar por país para el select
-  var flags={AR:'🇦🇷',CL:'🇨🇱',UY:'🇺🇾',PY:'🇵🇾',BO:'🇧🇴',PE:'🇵🇪',CO:'🇨🇴'};
-  var nomPais={AR:'Argentina',CL:'Chile',UY:'Uruguay',PY:'Paraguay',BO:'Bolivia',PE:'Perú',CO:'Colombia'};
-  var porPais={};
-  rs.forEach(function(r){ var p=r.pais||'AR'; if(!porPais[p])porPais[p]=[]; porPais[p].push(r); });
-  var regOpts='<option value="">— Seleccionar ciudad/región —</option>';
-  Object.keys(porPais).forEach(function(pais){
-    regOpts+='<optgroup label="'+(flags[pais]||'')+' '+(nomPais[pais]||pais)+'">';
-    porPais[pais].forEach(function(r){ regOpts+='<option value="'+r.id+'">'+r.nombre+'</option>'; });
-    regOpts+='</optgroup>';
-  });
-  document.getElementById('mbox').innerHTML =
-    '<div class="mhead"><div><h2>➕ Nuevo Asesor</h2><p>Completá los datos del nuevo asesor</p></div>'+
-    '<button class="mclose" onclick="closeModal()">✕</button></div>'+
-    '<div class="mbody">'+
-    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'+
-    '<div class="mitem"><div class="ml">Nombre completo</div><input class="medit" id="caVN" placeholder="Ej: Laura Mendoza" /></div>'+
-    '<div class="mitem"><div class="ml">Email</div><input class="medit" id="caVE" placeholder="laura@luazul.com" /></div>'+
-    '<div class="mitem"><div class="ml">Contraseña</div><div class="lz-pass-wrap"><input class="medit" id="caVP" type="password" placeholder="Contraseña de acceso" /><button type="button" class="lz-eye-btn" onclick="lzToggle(\'caVP\',this)" tabindex="-1"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg></button></div></div>'+
-    '<div class="mitem"><div class="ml">Ciudad / Región</div><select class="medit" id="caVR">'+regOpts+'</select></div>'+
-    '<div class="mitem"><div class="ml">Teléfono principal</div><div class="lz-phone-wrap">'+lzBuildPhoneSelect('prefix_caVT1','')+'<input class="medit" id="caVT1" placeholder="9 11 1234-5678" value="+54 " /></div></div>'+
-    '<div class="mitem"><div class="ml">Teléfono de referencia</div><div class="lz-phone-wrap">'+lzBuildPhoneSelect('prefix_caVT2','')+'<input class="medit" id="caVT2" placeholder="9 351 9876-5432" value="+54 " /></div></div>'+
-    '<div class="mitem" style="grid-column:span 2;"><div class="ml">Domicilio</div><input class="medit" id="caVDom" placeholder="Av. Corrientes 1234, Buenos Aires" /></div>'+
-    '<div class="mitem" style="grid-column:span 2;">'+
-      '<div class="ml">💰 CBU / Alias bancario</div>'+
-      '<input class="medit" id="caVCBU" placeholder="CBU o Alias" style="font-family:monospace;" />'+
-    '</div>'+
-    '</div>'+
-    '</div>'+
-    '<div class="mact">'+
-    '<button class="mbtn purple" onclick="saveNewVendorCeo()">✅ Crear Asesor</button>'+
-    '<button class="mbtn ghost" onclick="closeModal()">Cancelar</button></div>';
-  document.getElementById('modal').classList.add('open');
-}
+    showToast('⛔ Los asesores deben ser creados por un Jefe de Ventas. Usá el panel de Gerente/Jefe.');
+  }
 
 function saveNewVendorCeo(){
-  var nombre = (document.getElementById('caVN').value||'').trim();
-  var email  = (document.getElementById('caVE').value||'').trim().toLowerCase();
-  var pass   = (document.getElementById('caVP').value||'').trim();
-  var rid    = document.getElementById('caVR').value;
-  if(!nombre||!email||!pass){ showToast('⚠️ Nombre, email y contraseña son obligatorios'); return; }
-
-  var btn = document.querySelector('#modal .mbtn.purple');
-  if(btn){btn.disabled=true; btn.textContent='⏳ Creando...';}
-  function onDone(){ if(btn){btn.disabled=false; btn.textContent='✅ Crear Asesor';} }
-
-  sbClient.auth.signUp({ email: email, password: pass, options:{ data:{ nombre: nombre, role: 'seller' } } })
-    .then(function(signUp){
-      if(signUp.error) throw signUp.error;
-      var uid = signUp.data.user ? signUp.data.user.id : null;
-      var nombres = nombre.split(' ');
-      var profileData = {
-        role_id:   ROLE_SELLER,
-        nombre:    nombres[0],
-        apellido:  nombres.slice(1).join(' ')||'',
-        badge:     email,
-        activo:    true,
-        region_id: rid||null,
-        telefono1: (document.getElementById('caVT1').value||'').trim()||null,
-        telefono2: (document.getElementById('caVT2').value||'').trim()||null,
-        domicilio: (document.getElementById('caVDom').value||'').trim()||null,
-        cbu:       (document.getElementById('caVCBU').value||'').trim()||null,
-        fecha_alta: new Date().toISOString().slice(0,10),
-        comprobantes_json: '[]'
-      };
-      if(uid) profileData.user_id = uid;
-      return sbClient.from('staff_profiles').insert(profileData).select().single();
-    })
-    .then(function(ins){
-      if(ins.error) throw ins.error;
-      _cacheVendedores = _cacheVendedores||[];
-      _cacheVendedores.push(mapVendedor(ins.data));
-      closeModal(); populateAllFilters();
-      var rNombre = rid ? (reg().find(function(x){return String(x.id)===String(rid);})||{}).nombre||'' : '';
-      showToast('✅ Asesor '+nombre+' creado'+(rNombre?' · '+rNombre:''));
-      onDone();
-    })
-    .catch(function(e){
-      console.error('saveNewVendorCeo:', e);
-      var msg = e.message || 'Verificá los datos';
-      if(msg.indexOf('already registered') !== -1 || msg.indexOf('already been registered') !== -1)
-        msg = 'Ese email ya existe en Supabase Auth. Usá otro email o borrá el usuario anterior.';
-      else if(msg.indexOf('duplicate') !== -1 || msg.indexOf('unique') !== -1)
-        msg = 'Ya existe un perfil con esos datos.';
-      showToast('❌ Error al crear asesor: ' + msg);
-      onDone();
-    });
-}
+    showToast('⛔ No se pueden crear asesores directamente desde CEO. Un Jefe de Ventas debe hacerlo.');
+  }
 
 function openVendPerfilCeo(){
   var vid = document.getElementById('vendDashSel').value;
@@ -2987,11 +3003,37 @@ function renderPagoComisiones(){
     html += '<div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:rgba(245,158,11,.8);margin-bottom:12px;">👔 Gerentes Regionales</div>';
     gs.forEach(function(g){ html += buildCardGerente(g); });
   }
+  // ── Jefes de Ventas ──
+  var jfs = _cacheSalesLeaders || [];
+  if(jfs.length){
+    html += '<div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--gold);margin:20px 0 12px;">🎯 Jefes de Ventas</div>';
+    for(var ji=0;ji<jfs.length;ji++){
+      var jefe=jfs[ji];
+      var cmJ=calcComisionJefe(jefe,cs,vs);
+      var netaJ=cmJ.neta;
+      var pagadoJ=0;
+      if(jefe.comprobantes&&jefe.comprobantes.length){
+        pagadoJ=jefe.comprobantes.reduce(function(s,c){return s+(parseFloat(c.monto)||0);},0);
+      }
+      var pendJ=Math.max(0,netaJ-pagadoJ);
+      var pctJ=Math.min(100,(pagadoJ/(netaJ||1))*100);
+      var rJ=rby(jefe.rid);
+      html+='<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:12px;">'
+        +'<div style="display:flex;justify-content:space-between;"><div><strong>🎯 '+esc(jefe.nombre)+'</strong><br><span style="font-size:.7rem;">'+esc(jefe.email||'')+' · '+(rJ?rJ.bandera+' '+rJ.nombre:'—')+' · Equipo: '+cmJ.equipoSize+' vendedores</span></div>'
+        +'<div style="text-align:right;"><span style="color:var(--gold);">Comisión neta: '+fmtM(netaJ)+'</span><br>'
+        +'<span style="font-size:.68rem;color:var(--muted);">Tasa 15% · '+cmJ.totalClientesEquipo+' clientes · Recaudado: '+fmtM(cmJ.totalRecaudado)+'</span><br>'
+        +'<span style="color:var(--green);">Pagado: '+fmtM(pagadoJ)+'</span></div></div>'
+        +'<div style="margin:12px 0;height:6px;background:rgba(255,255,255,.07);border-radius:3px;overflow:hidden;">'
+        +'<div style="height:100%;width:'+pctJ+'%;background:var(--green);border-radius:3px;"></div></div>'
+        +'<div><button onclick="mostrarModalPagoStaff(''+jefe.user_id+'','+pendJ.toFixed(2)+','jefe')" class="mbtn gold" style="margin-top:4px;">💰 Pagar comisión</button>&nbsp;'
+        +'<button onclick="verCompCentral('vendedor',''+jefe.user_id+'')" class="mbtn ghost">📎 Historial</button></div></div>';
+    }
+  }
   if(vs.length){
     html += '<div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:rgba(167,139,250,.8);margin:20px 0 12px;">🧑‍💼 Asesores de Ventas</div>';
     vs.forEach(function(v){ html += buildCardVendedor(v); });
   }
-  if(!gs.length && !vs.length){
+  if(!gs.length && !vs.length && !jfs.length){
     html = '<div style="text-align:center;padding:60px;color:rgba(180,200,240,.4);">Sin equipo cargado</div>';
   }
 
@@ -5500,72 +5542,248 @@ async function cerrarTicket(ticketId) {
 //  CATÁLOGO DE PRECIOS — CRUD CEO
 // ══════════════════════════════════════════════════════
 
+var _catCache = [];
+
 async function renderCatalogo() {
-  var c = document.getElementById('catalogoGrid'); if (!c) return;
-  c.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted);">Cargando...</div>';
+  var body = document.getElementById('catalogoBody');
+  if (!body) return;
+  body.innerHTML = '<div class="cat-empty">Cargando catálogo...</div>';
   try {
-    var r = await sbClient.from('catalogo_precios').select('*').order('orden');
-    if (r.error) throw r.error; var d = r.data || [];
-    if (!d.length) { c.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted);">📦 Sin paquetes</div>'; return; }
-    var h = '';
-    for (var i = 0; i < d.length; i++) {
-      var it = d[i];
-      h += '<div class="catalogo-item"><div class="catalogo-info"><div class="destino">' + esc(it.nombre_destino) + '</div><div class="paquete">' + esc(it.paquete) + '</div><div class="precio">USD ' + it.precio_usd + '</div><div style="font-size:.72rem;color:var(--muted);">' + it.personas + ' pers. · ' + it.noches + ' noches · ' + (it.activo?'✅ Activo':'❌ Inactivo') + '</div></div><div class="catalogo-actions"><button style="background:var(--purple-bg);border-color:var(--purple-bd);color:var(--purple);" onclick="openEditCatalogo(' + it.id + ')">✏️</button><button style="background:var(--red-bg);border-color:var(--red-bd);color:#f87171;" onclick="deleteCatalogo(' + it.id + ')">🗑</button></div></div>';
+    var r = await sbClient.from('catalogo_precios').select('*').order('nombre_destino', { ascending: true }).order('orden', { ascending: true });
+    if (r.error) throw r.error;
+    _catCache = r.data || [];
+    // Populate destino filter
+    var fDest = document.getElementById('catFiltroDestino');
+    if (fDest && fDest.options.length <= 1) {
+      var dests = [];
+      var seen = {};
+      _catCache.forEach(function(p) { if (!seen[p.nombre_destino]) { seen[p.nombre_destino] = true; dests.push(p.nombre_destino); } });
+      dests.forEach(function(d) { var o = document.createElement('option'); o.value = d; o.textContent = d; fDest.appendChild(o); });
     }
-    c.innerHTML = h;
-  } catch (e) { c.innerHTML = '<div style="color:var(--red);padding:20px;">❌ ' + esc(e.message) + '</div>'; }
+    // Apply filters
+    var fDestVal = (document.getElementById('catFiltroDestino') || {}).value || '';
+    var fEstVal = (document.getElementById('catFiltroEstado') || {}).value || '';
+    var fBusq = ((document.getElementById('catBusqueda') || {}).value || '').toLowerCase();
+    var filtered = _catCache.filter(function(p) {
+      if (fDestVal && p.nombre_destino !== fDestVal) return false;
+      if (fEstVal !== '' && String(p.activo) !== fEstVal) return false;
+      if (fBusq && (p.paquete || '').toLowerCase().indexOf(fBusq) === -1 && (p.nombre_destino || '').toLowerCase().indexOf(fBusq) === -1) return false;
+      return true;
+    });
+    document.getElementById('catCount').textContent = filtered.length;
+    // KPIs
+    var activos = _catCache.filter(function(p) { return p.activo; });
+    var destinosUnicos = []; var seenD = {};
+    activos.forEach(function(p) { if (!seenD[p.nombre_destino]) { seenD[p.nombre_destino] = true; destinosUnicos.push(p.nombre_destino); } });
+    var minPrecio = activos.length ? Math.min.apply(null, activos.map(function(p) { return p.precio_usd / p.personas; })) : 0;
+    var kpiHtml = '<div class="cat-kpi"><div class="cat-kpi-v" style="color:var(--gold);">' + _catCache.length + '</div><div class="cat-kpi-l">Total paquetes</div></div>'
+      + '<div class="cat-kpi"><div class="cat-kpi-v" style="color:var(--green);">' + activos.length + '</div><div class="cat-kpi-l">Activos</div></div>'
+      + '<div class="cat-kpi"><div class="cat-kpi-v" style="color:var(--purple);">' + destinosUnicos.length + '</div><div class="cat-kpi-l">Destinos</div></div>'
+      + '<div class="cat-kpi"><div class="cat-kpi-v" style="color:var(--cyan,#06b6d4);">USD ' + Math.round(minPrecio) + '</div><div class="cat-kpi-l">Mínimo por persona</div></div>';
+    document.getElementById('catKpis').innerHTML = kpiHtml;
+    if (!filtered.length) { body.innerHTML = '<div class="cat-empty">📦 No se encontraron paquetes</div>'; return; }
+    // Render grouped by destination
+    var html = '';
+    var lastDest = '';
+    for (var i = 0; i < filtered.length; i++) {
+      var p = filtered[i];
+      if (p.nombre_destino !== lastDest) {
+        lastDest = p.nombre_destino;
+        var destCount = filtered.filter(function(x) { return x.nombre_destino === lastDest; }).length;
+        html += '<div class="cat-dest-group">' + esc(lastDest) + '<span>' + destCount + ' paquete' + (destCount > 1 ? 's' : '') + ' · slug: ' + esc(p.slug) + '</span></div>';
+      }
+      var ppm10 = p.personas > 0 ? Math.round((p.precio_usd / 10) / p.personas) : 0;
+      html += '<div class="cat-table-row' + (p.activo ? '' : ' inactive') + '">'
+        + '<div style="font-weight:700;font-size:.78rem;">' + esc(p.nombre_destino) + '</div>'
+        + '<div>' + esc(p.paquete) + '</div>'
+        + '<div>' + p.personas + '</div>'
+        + '<div>' + p.noches + '</div>'
+        + '<div style="font-weight:800;color:var(--gold);">USD ' + p.precio_usd.toLocaleString('es-AR') + '</div>'
+        + '<div class="cat-ppm">USD ' + ppm10 + '<span style="font-size:.62rem;color:var(--muted);"> /10c</span></div>'
+        + '<div style="color:var(--muted);">' + (p.orden || 0) + '</div>'
+        + '<div><span class="cat-status ' + (p.activo ? 'active' : 'inactive') + '" onclick="toggleCatalogoActivo(' + p.id + ')">' + (p.activo ? '● Activo' : '○ Inactivo') + '</span></div>'
+        + '<div style="display:flex;gap:4px;">'
+        + '<button class="cat-act-btn edit" onclick="openEditCatalogo(' + p.id + ')" title="Editar">✏️</button>'
+        + '<button class="cat-act-btn dup" onclick="duplicateCatalogo(' + p.id + ')" title="Duplicar">📋</button>'
+        + '<button class="cat-act-btn del" onclick="deleteCatalogo(' + p.id + ')" title="Desactivar">🗑</button>'
+        + '</div></div>';
+    }
+    body.innerHTML = html;
+  } catch (e) { body.innerHTML = '<div class="cat-empty" style="color:#f87171;">❌ ' + esc(e.message) + '</div>'; }
 }
 
-function openAddCatalogo() {
-  var h = '<div class="mhead"><div><h2>➕ Nuevo Paquete</h2></div><button class="mclose" onclick="closeModal()">✕</button></div><div class="mbody" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
-    + '<div class="mitem"><div class="ml">Destino *</div><input id="catDestino" class="medit"></div>'
-    + '<div class="mitem"><div class="ml">Slug *</div><input id="catSlug" class="medit"></div>'
-    + '<div class="mitem"><div class="ml">Paquete *</div><input id="catPaquete" class="medit"></div>'
-    + '<div class="mitem"><div class="ml">Personas *</div><input id="catPersonas" type="number" class="medit"></div>'
-    + '<div class="mitem"><div class="ml">Noches</div><input id="catNoches" type="number" class="medit" value="7"></div>'
-    + '<div class="mitem"><div class="ml">Precio USD *</div><input id="catPrecio" type="number" class="medit"></div>'
-    + '<div class="mitem"><div class="ml">Orden</div><input id="catOrden" type="number" class="medit"></div>'
-    + '<div class="mitem"><div class="ml">Activo</div><select id="catActivo" class="msel"><option value="true">Sí</option><option value="false">No</option></select></div>'
-    + '</div><div class="mact"><button class="mbtn gold" onclick="saveAddCatalogo()">💾 Guardar</button><button class="mbtn ghost" onclick="closeModal()">Cancelar</button></div>';
-  document.getElementById('mbox').innerHTML = h; document.getElementById('modal').classList.add('open');
+function _catSlugify(text) {
+  return (text || '').toLowerCase().trim().replace(/\s+/g, '-').replace(/[^a-z0-9\u00e0-\u00ff-]/g, '').replace(/-+/g, '-').replace(/^-|-$/g, '');
 }
 
-async function saveAddCatalogo() {
-  var d = { nombre_destino:document.getElementById('catDestino').value.trim(), slug:document.getElementById('catSlug').value.trim().toLowerCase(), paquete:document.getElementById('catPaquete').value.trim(), personas:parseInt(document.getElementById('catPersonas').value,10), noches:parseInt(document.getElementById('catNoches').value,10)||7, precio_usd:parseFloat(document.getElementById('catPrecio').value), orden:parseInt(document.getElementById('catOrden').value,10)||0, activo:document.getElementById('catActivo').value==='true' };
-  if (!d.nombre_destino||!d.slug||!d.paquete||!d.personas||!d.precio_usd) { showToast('⚠️ Completá campos obligatorios'); return; }
-  var b = document.querySelector('#modal .mbtn.gold'); if (b) b.disabled = true;
-  try { var r = await sbClient.from('catalogo_precios').insert([d]); if (r.error) throw r.error; showToast('✅ Agregado'); closeModal(); renderCatalogo(); }
-  catch(e) { showToast('❌ '+e.message); } finally { if(b) b.disabled = false; }
+function openAddDestino() {
+  var h = '<div class="mhead"><div><h2>🌍 Nuevo Destino</h2><p>Se creará el destino con un paquete base que podrás editar</p></div><button class="mclose" onclick="closeModal()">✕</button></div>'
+    + '<div class="mbody" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
+    + '<div class="mitem"><div class="ml">Nombre del destino *</div><input id="newDestNombre" class="medit" placeholder="Ej: Búzios" oninput="document.getElementById(\'newDestSlug\').value=_catSlugify(this.value)"></div>'
+    + '<div class="mitem"><div class="ml">Slug (URL) *</div><input id="newDestSlug" class="medit" placeholder="Ej: buzios"></div>'
+    + '<div class="mitem"><div class="ml">Paquete base *</div><input id="newDestPaquete" class="medit" placeholder="Ej: Escapada en Pareja" value="Paquete Base"></div>'
+    + '<div class="mitem"><div class="ml">Personas *</div><input id="newDestPersonas" type="number" class="medit" value="2" min="1"></div>'
+    + '<div class="mitem"><div class="ml">Noches</div><input id="newDestNoches" type="number" class="medit" value="7" min="1"></div>'
+    + '<div class="mitem"><div class="ml">Precio USD *</div><input id="newDestPrecio" type="number" class="medit" placeholder="Ej: 3500" min="1"></div>'
+    + '</div>'
+    + '<div class="mact"><button class="mbtn gold" onclick="saveAddDestino()">💾 Crear destino</button><button class="mbtn ghost" onclick="closeModal()">Cancelar</button></div>';
+  document.getElementById('mbox').innerHTML = h;
+  document.getElementById('modal').classList.add('open');
+}
+
+async function saveAddDestino() {
+  var nombre = document.getElementById('newDestNombre').value.trim();
+  var slug = document.getElementById('newDestSlug').value.trim();
+  var paquete = document.getElementById('newDestPaquete').value.trim();
+  var personas = parseInt(document.getElementById('newDestPersonas').value, 10);
+  var noches = parseInt(document.getElementById('newDestNoches').value, 10) || 7;
+  var precio = parseFloat(document.getElementById('newDestPrecio').value);
+  if (!nombre || !slug || !paquete || !personas || !precio) { showToast('⚠️ Completá todos los campos obligatorios'); return; }
+  var d = { nombre_destino: nombre, slug: slug, paquete: paquete, personas: personas, noches: noches, precio_usd: precio, orden: 0, activo: true };
+  var btn = document.querySelector('#modal .mbtn.gold'); if (btn) btn.disabled = true;
+  try { var r = await sbClient.from('catalogo_precios').insert([d]); if (r.error) throw r.error; showToast('✅ Destino "' + nombre + '" creado con paquete base'); closeModal(); renderCatalogo(); }
+  catch (e) { showToast('❌ ' + e.message); } finally { if (btn) btn.disabled = false; }
+}
+
+function openAddPaquete(defaultSlug) {
+  // Build destination options from cache
+  var destOpts = '';
+  var seen = {};
+  _catCache.forEach(function(p) { if (!seen[p.slug]) { seen[p.slug] = true; destOpts += '<option value="' + esc(p.slug) + '"' + (defaultSlug && p.slug === defaultSlug ? ' selected' : '') + '>' + esc(p.nombre_destino) + ' (' + esc(p.slug) + ')</option>'; } });
+  if (!destOpts) { showToast('⚠️ Primero creá un destino'); return; }
+  var h = '<div class="mhead"><div><h2>➕ Nuevo Paquete</h2></div><button class="mclose" onclick="closeModal()">✕</button></div>'
+    + '<div class="mbody" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
+    + '<div class="mitem"><div class="ml">Destino *</div><select id="catPkgDest" class="msel">' + destOpts + '</select></div>'
+    + '<div class="mitem"><div class="ml">Nombre del paquete *</div><input id="catPkgNombre" class="medit" placeholder="Ej: Escapada en Pareja"></div>'
+    + '<div class="mitem"><div class="ml">Personas *</div><input id="catPkgPersonas" type="number" class="medit" value="2" min="1"></div>'
+    + '<div class="mitem"><div class="ml">Noches</div><input id="catPkgNoches" type="number" class="medit" value="7" min="1"></div>'
+    + '<div class="mitem"><div class="ml">Precio total USD *</div><input id="catPkgPrecio" type="number" class="medit" placeholder="Ej: 3500" min="1"></div>'
+    + '<div class="mitem"><div class="ml">Orden</div><input id="catPkgOrden" type="number" class="medit" value="0"></div>'
+    + '</div>'
+    + '<div id="catPkgPreview" style="margin:12px 24px;padding:12px;background:rgba(0,0,0,.2);border-radius:10px;font-size:.78rem;color:var(--muted);text-align:center;">Ingresá los datos para ver la estimación</div>'
+    + '<div class="mact"><button class="mbtn gold" onclick="saveAddPaquete()">💾 Guardar paquete</button><button class="mbtn ghost" onclick="closeModal()">Cancelar</button></div>';
+  document.getElementById('mbox').innerHTML = h;
+  document.getElementById('modal').classList.add('open');
+  // Add live preview
+  ['catPkgPersonas','catPkgPrecio','catPkgNoches'].forEach(function(id) {
+    var el = document.getElementById(id); if (el) el.addEventListener('input', _catPkgPreview);
+  });
+}
+
+function _catPkgPreview() {
+  var pers = parseInt((document.getElementById('catPkgPersonas') || {}).value, 10) || 0;
+  var prec = parseFloat((document.getElementById('catPkgPrecio') || {}).value) || 0;
+  var noch = parseInt((document.getElementById('catPkgNoches') || {}).value, 10) || 0;
+  var el = document.getElementById('catPkgPreview'); if (!el) return;
+  if (!pers || !prec) { el.innerHTML = 'Ingresá los datos para ver la estimación'; return; }
+  var ppm10 = Math.round((prec / 10) / pers);
+  var ppd = noch > 0 ? Math.round(prec / noch / pers) : 0;
+  el.innerHTML = 'USD ' + ppm10 + '/persona/mes (10 cuotas) · USD ' + ppd + '/persona/día (' + noch + ' noches)';
+}
+
+async function saveAddPaquete() {
+  var slug = document.getElementById('catPkgDest').value;
+  var paquete = document.getElementById('catPkgNombre').value.trim();
+  var personas = parseInt(document.getElementById('catPkgPersonas').value, 10);
+  var noches = parseInt(document.getElementById('catPkgNoches').value, 10) || 7;
+  var precio = parseFloat(document.getElementById('catPkgPrecio').value);
+  var orden = parseInt(document.getElementById('catPkgOrden').value, 10) || 0;
+  if (!slug || !paquete || !personas || !precio) { showToast('⚠️ Completá los campos obligatorios'); return; }
+  // Get destino name from cache
+  var destObj = _catCache.find(function(p) { return p.slug === slug; });
+  var nombreDestino = destObj ? destObj.nombre_destino : slug;
+  var d = { nombre_destino: nombreDestino, slug: slug, paquete: paquete, personas: personas, noches: noches, precio_usd: precio, orden: orden, activo: true };
+  var btn = document.querySelector('#modal .mbtn.gold'); if (btn) btn.disabled = true;
+  try { var r = await sbClient.from('catalogo_precios').insert([d]); if (r.error) throw r.error; showToast('✅ Paquete "' + paquete + '" agregado'); closeModal(); renderCatalogo(); }
+  catch (e) { showToast('❌ ' + e.message); } finally { if (btn) btn.disabled = false; }
 }
 
 async function openEditCatalogo(id) {
-  var r = await sbClient.from('catalogo_precios').select('*').eq('id',id).single();
-  if (r.error) { showToast('Error'); return; } var d = r.data;
-  var h = '<div class="mhead"><div><h2>✏️ Editar</h2><p>ID '+d.id+'</p></div><button class="mclose" onclick="closeModal()">✕</button></div><div class="mbody" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
-    + '<div class="mitem"><div class="ml">Destino</div><input id="eDest" class="medit" value="'+esc(d.nombre_destino)+'"></div>'
-    + '<div class="mitem"><div class="ml">Slug</div><input id="eSlug" class="medit" value="'+esc(d.slug)+'"></div>'
-    + '<div class="mitem"><div class="ml">Paquete</div><input id="ePaq" class="medit" value="'+esc(d.paquete)+'"></div>'
-    + '<div class="mitem"><div class="ml">Personas</div><input id="ePer" type="number" class="medit" value="'+d.personas+'"></div>'
-    + '<div class="mitem"><div class="ml">Noches</div><input id="eNoc" type="number" class="medit" value="'+d.noches+'"></div>'
-    + '<div class="mitem"><div class="ml">Precio</div><input id="ePre" type="number" class="medit" value="'+d.precio_usd+'"></div>'
-    + '<div class="mitem"><div class="ml">Orden</div><input id="eOrd" type="number" class="medit" value="'+(d.orden||0)+'"></div>'
-    + '<div class="mitem"><div class="ml">Activo</div><select id="eAct" class="msel"><option value="true"'+(d.activo?' selected':'')+'>Sí</option><option value="false"'+(!d.activo?' selected':'')+'>No</option></select></div>'
-    + '</div><div class="mact"><button class="mbtn gold" onclick="saveEditCatalogo('+d.id+')">💾</button><button class="mbtn ghost" onclick="closeModal()">Cancelar</button></div>';
-  document.getElementById('mbox').innerHTML = h; document.getElementById('modal').classList.add('open');
+  var r = await sbClient.from('catalogo_precios').select('*').eq('id', id).single();
+  if (r.error) { showToast('❌ Error al cargar'); return; }
+  var d = r.data;
+  var h = '<div class="mhead"><div><h2>✏️ Editar Paquete</h2><p style="font-size:.72rem;color:var(--muted);">ID: ' + d.id + '</p></div><button class="mclose" onclick="closeModal()">✕</button></div>'
+    + '<div class="mbody" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
+    + '<div class="mitem"><div class="ml">Destino</div><input id="eCatDest" class="medit" value="' + esc(d.nombre_destino) + '"></div>'
+    + '<div class="mitem"><div class="ml">Slug (URL)</div><input id="eCatSlug" class="medit" value="' + esc(d.slug) + '"></div>'
+    + '<div class="mitem"><div class="ml">Paquete</div><input id="eCatPaq" class="medit" value="' + esc(d.paquete) + '"></div>'
+    + '<div class="mitem"><div class="ml">Personas</div><input id="eCatPer" type="number" class="medit" value="' + d.personas + '" min="1"></div>'
+    + '<div class="mitem"><div class="ml">Noches</div><input id="eCatNoc" type="number" class="medit" value="' + d.noches + '" min="1"></div>'
+    + '<div class="mitem"><div class="ml">Precio USD</div><input id="eCatPre" type="number" class="medit" value="' + d.precio_usd + '" min="1"></div>'
+    + '<div class="mitem"><div class="ml">Orden</div><input id="eCatOrd" type="number" class="medit" value="' + (d.orden || 0) + '"></div>'
+    + '<div class="mitem"><div class="ml">Estado</div><select id="eCatAct" class="msel"><option value="true"' + (d.activo ? ' selected' : '') + '>✅ Activo</option><option value="false"' + (!d.activo ? ' selected' : '') + '>❌ Inactivo</option></select></div>'
+    + '</div>'
+    + '<div id="eCatPreview" style="margin:12px 24px;padding:12px;background:rgba(0,0,0,.2);border-radius:10px;font-size:.78rem;color:var(--muted);text-align:center;">USD ' + Math.round((d.precio_usd / 10) / d.personas) + '/persona/mes (10 cuotas)</div>'
+    + '<div class="mact"><button class="mbtn gold" onclick="saveEditCatalogo(' + d.id + ')">💾 Guardar cambios</button><button class="mbtn ghost" onclick="closeModal()">Cancelar</button></div>';
+  document.getElementById('mbox').innerHTML = h;
+  document.getElementById('modal').classList.add('open');
+  ['eCatPer','eCatPre','eCatNoc'].forEach(function(id) {
+    var el = document.getElementById(id); if (el) el.addEventListener('input', function() {
+      var p = parseInt(document.getElementById('eCatPer').value,10)||1;
+      var pr = parseFloat(document.getElementById('eCatPre').value)||0;
+      document.getElementById('eCatPreview').innerHTML = 'USD ' + Math.round((pr/10)/p) + '/persona/mes (10 cuotas)';
+    });
+  });
 }
 
 async function saveEditCatalogo(id) {
-  var u = { nombre_destino:document.getElementById('eDest').value.trim(), slug:document.getElementById('eSlug').value.trim().toLowerCase(), paquete:document.getElementById('ePaq').value.trim(), personas:parseInt(document.getElementById('ePer').value,10), noches:parseInt(document.getElementById('eNoc').value,10)||7, precio_usd:parseFloat(document.getElementById('ePre').value), orden:parseInt(document.getElementById('eOrd').value,10)||0, activo:document.getElementById('eAct').value==='true' };
-  if (!u.nombre_destino||!u.paquete||!u.personas||!u.precio_usd) { showToast('⚠️ Completá campos'); return; }
-  var b = document.querySelector('#modal .mbtn.gold'); if(b) b.disabled = true;
-  try { var r = await sbClient.from('catalogo_precios').update(u).eq('id',id); if(r.error) throw r.error; showToast('✅'); closeModal(); renderCatalogo(); }
-  catch(e) { showToast('❌ '+e.message); } finally { if(b) b.disabled=false; }
+  var u = {
+    nombre_destino: document.getElementById('eCatDest').value.trim(),
+    slug: document.getElementById('eCatSlug').value.trim().toLowerCase(),
+    paquete: document.getElementById('eCatPaq').value.trim(),
+    personas: parseInt(document.getElementById('eCatPer').value, 10),
+    noches: parseInt(document.getElementById('eCatNoc').value, 10) || 7,
+    precio_usd: parseFloat(document.getElementById('eCatPre').value),
+    orden: parseInt(document.getElementById('eCatOrd').value, 10) || 0,
+    activo: document.getElementById('eCatAct').value === 'true'
+  };
+  if (!u.nombre_destino || !u.paquete || !u.personas || !u.precio_usd) { showToast('⚠️ Completá campos obligatorios'); return; }
+  var btn = document.querySelector('#modal .mbtn.gold'); if (btn) btn.disabled = true;
+  try { var r = await sbClient.from('catalogo_precios').update(u).eq('id', id); if (r.error) throw r.error; showToast('✅ Paquete actualizado'); closeModal(); renderCatalogo(); }
+  catch (e) { showToast('❌ ' + e.message); } finally { if (btn) btn.disabled = false; }
+}
+
+async function toggleCatalogoActivo(id) {
+  var item = _catCache.find(function(p) { return p.id === id; });
+  if (!item) return;
+  var newStatus = !item.activo;
+  try { var r = await sbClient.from('catalogo_precios').update({ activo: newStatus }).eq('id', id); if (r.error) throw r.error; showToast(newStatus ? '✅ Activado' : '🔴 Desactivado'); renderCatalogo(); }
+  catch (e) { showToast('❌ ' + e.message); }
 }
 
 async function deleteCatalogo(id) {
-  if (!confirm('¿Desactivar paquete?')) return;
-  try { var r = await sbClient.from('catalogo_precios').update({activo:false}).eq('id',id); if(r.error) throw r.error; showToast('✅'); renderCatalogo(); }
-  catch(e) { showToast('❌ '+e.message); }
+  if (!confirm('⚠️ ¿Desactivar este paquete? Podés reactivarlo después.')) return;
+  try { var r = await sbClient.from('catalogo_precios').update({ activo: false }).eq('id', id); if (r.error) throw r.error; showToast('✅ Paquete desactivado'); renderCatalogo(); }
+  catch (e) { showToast('❌ ' + e.message); }
+}
+
+async function duplicateCatalogo(id) {
+  var item = _catCache.find(function(p) { return p.id === id; });
+  if (!item) return;
+  var h = '<div class="mhead"><div><h2>📋 Duplicar Paquete</h2><p style="font-size:.72rem;color:var(--muted);">Clonar: ' + esc(item.paquete) + ' (' + item.personas + ' pers.)</p></div><button class="mclose" onclick="closeModal()">✕</button></div>'
+    + '<div class="mbody" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
+    + '<div class="mitem"><div class="ml">Nombre del nuevo paquete *</div><input id="dupNombre" class="medit" value="' + esc(item.paquete) + ' (copia)"></div>'
+    + '<div class="mitem"><div class="ml">Personas *</div><input id="dupPersonas" type="number" class="medit" value="' + item.personas + '" min="1"></div>'
+    + '<div class="mitem"><div class="ml">Precio USD *</div><input id="dupPrecio" type="number" class="medit" value="' + item.precio_usd + '"></div>'
+    + '<div class="mitem"><div class="ml">Noches</div><input id="dupNoches" type="number" class="medit" value="' + item.noches + '"></div>'
+    + '</div>'
+    + '<div class="mact"><button class="mbtn gold" onclick="saveDuplicate(' + id + ')">💾 Crear copia</button><button class="mbtn ghost" onclick="closeModal()">Cancelar</button></div>';
+  document.getElementById('mbox').innerHTML = h;
+  document.getElementById('modal').classList.add('open');
+}
+
+async function saveDuplicate(srcId) {
+  var src = _catCache.find(function(p) { return p.id === srcId; });
+  if (!src) return;
+  var nombre = document.getElementById('dupNombre').value.trim();
+  var personas = parseInt(document.getElementById('dupPersonas').value, 10);
+  var precio = parseFloat(document.getElementById('dupPrecio').value);
+  var noches = parseInt(document.getElementById('dupNoches').value, 10) || 7;
+  if (!nombre || !personas || !precio) { showToast('⚠️ Completá campos obligatorios'); return; }
+  var d = { nombre_destino: src.nombre_destino, slug: src.slug, paquete: nombre, personas: personas, noches: noches, precio_usd: precio, orden: (src.orden || 0) + 1, activo: true };
+  var btn = document.querySelector('#modal .mbtn.gold'); if (btn) btn.disabled = true;
+  try { var r = await sbClient.from('catalogo_precios').insert([d]); if (r.error) throw r.error; showToast('✅ Paquete duplicado'); closeModal(); renderCatalogo(); }
+  catch (e) { showToast('❌ ' + e.message); } finally { if (btn) btn.disabled = false; }
 }
 
 
