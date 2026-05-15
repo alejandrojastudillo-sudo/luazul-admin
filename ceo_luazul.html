@@ -478,7 +478,7 @@ var ROLE_SALES_LEADER = 5; // Jefe de Ventas
 var RK = 'luazul_ceo_regiones';
 var _cacheGerentes=null, _cacheVendedores=null, _cacheClientes=null, _cachePagos=null, _cacheRegiones=null;
 // UUID del CEO autenticado — se setea en cLogin / DOMContentLoaded
-// Necesario para RPC resolver_mora(p_aprobado_por)
+// Usado para: aprobado_por, crear canales, enviar mensajes, etc.
 var _ceoUid = null;
 var _regFiltMode = 'activo'; // 'activo' = solo con datos | 'todas' = las 26
 
@@ -519,7 +519,7 @@ function cargarDatosSupabase(){
       if(grRes.error) throw grRes.error;
       var grData=grRes.data||[];
       _cacheGerentes.forEach(function(g){
-        g.region_ids=grData.filter(function(x){return x.gerente_id===g.id;}).map(function(x){return x.region_id;});
+        g.region_ids=grData.filter(function(x){return x.gerente_id===g.user_id;}).map(function(x){return x.region_id;});
       });
       return sbClient.from('staff_profiles')
         .select('*')
@@ -528,6 +528,13 @@ function cargarDatosSupabase(){
     .then(function(vRes){
       if(vRes.error) throw vRes.error;
       _cacheVendedores=(vRes.data||[]).map(mapVendedor);
+      return sbClient.from('staff_profiles')
+        .select('*')
+        .eq('role_id', ROLE_SALES_LEADER);
+    })
+    .then(function(jRes){
+      if(jRes.error) throw jRes.error;
+      _cacheJefes=(jRes.data||[]).map(mapGerente);
       return sbClient.from('clientes')
         .select('id,user_id,seller_id,nombre,email,telefono,documento,estado,destino,paquete,fecha_viaje,monto_cuota,cuotas_total,cuotas_pagadas,total_usd,fecha_alta,notas,region_id');
     })
@@ -651,7 +658,7 @@ function cLogin(){
           // ✅ Email + role_id=1 verificados
           var meta = result.data.user.user_metadata || {};
           var nombre = profRes.data.nombre || meta.nombre || meta.full_name || email.split('@')[0];
-          // Guardar UUID del CEO para RPCs posteriores (resolver_mora, etc.)
+          // Guardar UUID del CEO para aprobaciones, mensajes, canales, etc.
           _ceoUid = String(result.data.user.id);
           try { sessionStorage.setItem('luazul_ceo','1'); sessionStorage.setItem('luazul_ceo_nombre', nombre); } catch(e){}
           var lw = document.getElementById('loginWrap');
@@ -794,6 +801,7 @@ function renderAll(){
 function reg(){return _cacheRegiones||dbg(RK)||[];}
 function ger(){return _cacheGerentes||[];}
 function vend(){return _cacheVendedores||[];}
+function jefes(){return _cacheJefes||[];}
 function cli(){return (_cacheClientes||[]).map(enrich);}
 
 // ── SELECTOR DE REGIONES con checkboxes por país ───────
@@ -837,7 +845,7 @@ function enrich(c){
 }
 function rby(id){return reg().find(function(r){return String(r.id)===String(id);})||{nombre:'—',bandera:''};}
 function gby(id){return ger().find(function(g){return String(g.id)===String(id);})||{nombre:'—'};}
-function vby(id){return vend().find(function(v){return String(v.user_id)===String(id);})||{nombre:'Sin asignar',id:'',user_id:''};}
+function vby(id){return vend().find(function(v){return String(v.id)===String(id)||String(v.user_id)===String(id);})||{nombre:'Sin asignar',id:'',user_id:''};}
 function fmtTs(ts){var d=Math.round((Date.now()-ts)/60000);return d<60?'Hace '+d+' min':d<1440?'Hace '+Math.round(d/60)+' h':'Hace '+Math.round(d/1440)+' días';}
 function fmtUSD(n){return 'USD '+Math.round(n).toLocaleString('es-AR');}
 function getClientMonth(c){
@@ -1042,6 +1050,7 @@ function renderOverview(){
   document.getElementById('oStats').innerHTML=[
     {i:'🌎',v:rs.length,      l:'Regiones activas',  c:''},
     {i:'👔',v:gs.length,      l:'Gerentes',           c:'var(--purple)'},
+    {i:'⭐',v:jefes().length, l:'Jefes de Ventas',    c:'#10b981'},
     {i:'🧑‍💼',v:vs.length,     l:'Asesores',           c:'var(--gold)'},
     {i:'👥',v:cs.length,      l:'Clientes totales',   c:''},
     {i:'✅',v:activos,         l:'Activos',            c:'var(--green)'},
@@ -1441,7 +1450,8 @@ function renderPagos(){
 }
 
 function aprobarPagoSb(pagoId){
-  sbClient.from('pagos').update({estado:'aprobado',aprobado_por:'CEO',fecha_pago:new Date().toISOString()}).eq('id',pagoId).select().single()
+  var _ceoId = _ceoUid || 'CEO';
+  sbClient.from('pagos').update({estado:'aprobado',aprobado_por:_ceoId,fecha_pago:new Date().toISOString()}).eq('id',pagoId).select().single()
     .then(function(res){
       if(res.error) throw res.error;
       var idx = (_cachePagos||[]).findIndex(function(x){ return String(x.id)===String(pagoId); });
@@ -1456,13 +1466,30 @@ function aprobarTodos(){
   var pend = (_cachePagos||[]).filter(function(n){ return n.estado==='pendiente'; });
   if(!pend.length){ showToast('Sin pagos pendientes'); return; }
   var ids = pend.map(function(n){ return n.id; });
-  sbClient.from('pagos').update({estado:'aprobado',aprobado_por:'CEO',fecha_pago:new Date().toISOString()}).in('id',ids)
+  var _ceoId = _ceoUid || 'CEO';
+  sbClient.from('pagos').update({estado:'aprobado',aprobado_por:_ceoId,fecha_pago:new Date().toISOString()}).in('id',ids)
     .then(function(res){
       if(res.error) throw res.error;
-      (_cachePagos||[]).forEach(function(n){ if(ids.indexOf(n.id)>=0){ n.estado='aprobado'; n.aprobado_por='CEO'; } });
-      renderPagos();
-      showToast('✅ '+pend.length+' pagos aprobados por CEO');
+      (_cachePagos||[]).forEach(function(n){ if(ids.indexOf(n.id)>=0){ n.estado='aprobado'; n.aprobado_por=_ceoId; } });
+      // Actualizar cuotas_pagadas de cada cliente afectado
+      var updates = [];
+      pend.forEach(function(p){
+        var c = (_cacheClientes||[]).find(function(x){ return String(x.id)===String(p.cliente_id); });
+        if(c){
+          var cuotaNum = parseInt(p.numero_cuota);
+          var cuotasAct = parseInt(c.cuotas_pagadas)||0;
+          if(cuotaNum > cuotasAct){
+            var nuevoEstado = cuotaNum >= parseInt(c.cuotas_total||10) ? 'completo' : c.estado;
+            updates.push(
+              sbClient.from('clientes').update({cuotas_pagadas:cuotaNum, estado:nuevoEstado}).eq('id',String(p.cliente_id))
+                .then(function(){ c.cuotas_pagadas=cuotaNum; c.estado=nuevoEstado; })
+            );
+          }
+        }
+      });
+      return updates.length ? Promise.all(updates) : Promise.resolve();
     })
+    .then(function(){ renderPagos(); showToast('✅ '+pend.length+' pagos aprobados · clientes actualizados'); })
     .catch(function(e){ showToast('❌ Error: '+(e.message||'')); });
 }
 
@@ -1474,8 +1501,8 @@ function getPendingPayments(){
     if (p.estado !== 'pendiente') return false;
     // Siempre mostrar cuota 1 pendiente
     if (parseInt(p.numero_cuota) === 1) return true;
-    // Mostrar solo pagos del mes actual
-    var fecha = p.created_at ? new Date(p.created_at) : null;
+    // Mostrar solo pagos del mes actual (por fecha_vencimiento)
+    var fecha = p.fecha_vencimiento ? new Date(p.fecha_vencimiento) : (p.created_at ? new Date(p.created_at) : null);
     if (!fecha) return false;
     return fecha.getMonth() === mesActual && fecha.getFullYear() === anioActual;
   }).map(function(p){
@@ -1742,12 +1769,9 @@ function saveCeoUser(uid, idx){
   if(!nuevaPass){showToast('Ingresa una nueva contrasena');return;}
   if(nuevaPass.length < 8){showToast('Minimo 8 caracteres');return;}
   if(nuevaPass !== confirmaPass){showToast('Las contrasenas no coinciden');return;}
-  var users=getCeoUsers().map(function(u){
-    if(String(u.id)===String(uid)){ u.password=nuevaPass.trim(); }
-    return u;
-  });
-  dbs(CEO_USERS_KEY,users);
-  showToast('Contrasena actualizada correctamente');
+  // Nota: cambiar contrasena de auth requiere Service Role Key (backend).
+  // Redirigimos al Dashboard de Supabase para completar el cambio.
+  showToast('ℹ️ Para cambiar la contrasena, usá el Dashboard de Supabase → Authentication → Users → Edit.');
   var inp1=document.getElementById('ceou-pass-'+idx);
   var inp2=document.getElementById('ceou-pass2-'+idx);
   if(inp1) inp1.value='';
@@ -2072,6 +2096,7 @@ function saveNewGerente(){
   var pass   = (document.getElementById('gPass').value||'').trim();
   var regionIds = getSelectedRegionIds();
   if(!nombre||!email||!pass){ showToast('⚠️ Nombre, email y contraseña son obligatorios'); return; }
+  if(regionIds.length===0){ showToast('⚠️ Seleccioná al menos una región'); return; }
 
   var btn = document.querySelector('#modal .mbtn.purple');
   if(btn){btn.disabled=true; btn.textContent='⏳ Creando...';}
@@ -2136,6 +2161,7 @@ function openGerDetail(gid){
   var g = ger().find(function(x){ return String(x.user_id)===String(gid); });
   if(!g){ showToast('⚠️ Gerente no encontrado'); return; }
   var r = rby(g.rid);
+  var gJefes = jefes().filter(function(j){ return j._raw && String(j._raw.manager_id)===String(g.id); });
   var comps = g.comprobantes || [];
   var compsHTML = comps.length
     ? comps.map(function(c, i){
@@ -2164,6 +2190,27 @@ function openGerDetail(gid){
     '<div style="grid-column:span 2;background:rgba(251,191,36,.07);border:1px solid rgba(251,191,36,.2);border-radius:10px;padding:10px 14px;">'+
     '<div style="font-size:.65rem;color:#fbbf24;font-weight:700;margin-bottom:4px;">💰 CBU / ALIAS BANCARIO</div>'+
     '<div style="font-family:monospace;font-size:.88rem;color:var(--text);">'+(g.cbu||'<span style="color:var(--muted);">No cargado</span>')+'</div></div>'+
+    '</div>'+
+    '<div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#10b981;margin-bottom:8px;">⭐ Jefes de Ventas ('+gJefes.length+')</div>'+
+    '<div style="max-height:200px;overflow-y:auto;margin-bottom:14px;">'+
+    (gJefes.length ? gJefes.map(function(j){
+      var jVends=vend().filter(function(v){return String(v._raw.manager_id)===String(j.id);});
+      var jIni=(j.nombre||'??').split(' ').map(function(w){return w[0];}).join('').slice(0,2).toUpperCase();
+      return '<div style="background:rgba(16,185,129,.06);border:1px solid rgba(16,185,129,.2);border-radius:10px;padding:12px;margin-bottom:8px;">'
+        +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">'
+        +'<div style="width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,#059669,#10b981);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:.72rem;color:#fff;">'+jIni+'</div>'
+        +'<div style="flex:1;min-width:0;">'
+        +'<div style="font-weight:700;font-size:.88rem;">'+j.nombre+'</div>'
+        +'<div style="font-size:.68rem;color:var(--muted);">'+(j.email||'Sin email')+'</div>'
+        +'</div>'
+        +'<span class="bpill '+(j.activo?'on':'off')+'">'+(j.activo?'Activo':'Inactivo')+'</span>'
+        +'</div>'
+        +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:.72rem;">'
+        +(j.telefono1?'<div style="color:var(--muted);">📞 '+(j.telefono1||'—')+'</div>':'')
+        +(j.ciudad?'<div style="color:var(--muted);">📍 '+(j.ciudad||'')+'</div>':'')
+        +'<div style="color:var(--muted);">👔 Vendedores a cargo: <strong style="color:var(--text);">'+jVends.length+'</strong></div>'
+        +'</div></div>';
+    }).join('') : '<div style="text-align:center;padding:14px;color:var(--muted);font-size:.82rem;">Este gerente no tiene jefes de ventas asignados</div>')+
     '</div>'+
     '<div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--gold);margin-bottom:8px;">📎 Comprobantes de Comisión</div>'+
     '<div id="gerCompsWrap" style="max-height:180px;overflow-y:auto;margin-bottom:12px;">'+compsHTML+'</div>'+
@@ -2275,10 +2322,10 @@ function saveEditGerente(gid){
     .then(function(res){
       if(res.error) throw res.error;
       var updatedData = res.data;
-      return sbClient.from('gerente_regiones').delete().eq('gerente_id', g.id)
+      return sbClient.from('gerente_regiones').delete().eq('gerente_id', g.user_id)
         .then(function(){
           if(newRegionIds.length > 0){
-            var rels = newRegionIds.map(function(rid){ return{gerente_id:g.id, region_id:rid}; });
+            var rels = newRegionIds.map(function(rid){ return{gerente_id:g.user_id, region_id:rid}; });
             return sbClient.from('gerente_regiones').insert(rels);
           }
         })
@@ -3073,7 +3120,7 @@ function aprobarPago(clientId, cuotaKey, dbKey){
 
   // PASO 1 — Aprobar el pago en tabla `pagos`
   sbClient.from('pagos')
-    .update({ estado: 'aprobado', aprobado_por: 'CEO', fecha_pago: new Date().toISOString() })
+    .update({ estado: 'aprobado', aprobado_por: _ceoUidNow || 'CEO', fecha_pago: new Date().toISOString() })
     .eq('id', _pagoId)
     .select().single()
     .then(function(res){
@@ -3099,15 +3146,17 @@ function aprobarPago(clientId, cuotaKey, dbKey){
       }
     })
     .then(function(){
-      // PASO 3 — RPC resolver_mora (Checkpoint v3.1 §5A)
-      // Limpia mora del cliente si corresponde. p_cliente_id es UUID string.
-      if(_ceoUidNow) {
-        return sbClient.rpc('resolver_mora', {
-          p_cliente_id:   _clientId,
-          p_aprobado_por: _ceoUidNow
-        }).then(function(rpcRes){
-          if(rpcRes.error) console.warn('[RPC] resolver_mora:', rpcRes.error.message);
-        });
+      // PASO 3 — Resolver mora directamente en tabla clientes
+      // Limpia mora_json y actualiza estado si el cliente estaba en mora
+      var c = (_cacheClientes||[]).find(function(x){ return String(x.id) === _clientId; });
+      if(c && c.mora_json){
+        return sbClient.from('clientes')
+          .update({ mora_json: null, estado: 'activo' })
+          .eq('id', _clientId)
+          .then(function(){
+            c.mora_json = null;
+            c.estado = 'activo';
+          });
       }
     })
     .then(function(){
@@ -3393,63 +3442,77 @@ function marcarRevisadoCEO(contratoId){
 }
 
 // ══════════════════════════════════════════════════════
-//  COMISIONES BLOQUEADAS — Checkpoint v3.1 §5A + vista SQL
-//  Lee la vista comisiones_bloqueadas generada en el SQL.
-//  Muestra asesores con clientes en mora y el monto congelado.
+//  COMISIONES BLOQUEADAS
+//  Calcula desde cache: asesores con clientes en mora
+//  y el monto de comision congelado.
 // ══════════════════════════════════════════════════════
 function renderComisionesBloqueadas(){
   var el = document.getElementById('comisionesBloqBody');
   if(!el) return;
-  el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted);">\u23F3 Cargando comisiones bloqueadas...</div>';
 
-  sbClient.from('comisiones_bloqueadas')
-    .select('*')
-    .order('monto_comision_congelado_usd', { ascending: false })
-    .then(function(res){
-      if(res.error) throw res.error;
-      var rows = res.data || [];
-      if(!rows.length){
-        el.innerHTML = '<div style="text-align:center;padding:50px;background:rgba(5,18,55,.5);border:1px solid rgba(100,160,255,.15);border-radius:18px;">'
-          + '<div style="font-size:2.5rem;margin-bottom:14px;">\uD83D\uDCB0</div>'
-          + '<div style="font-size:1rem;font-weight:700;margin-bottom:6px;">Sin comisiones bloqueadas</div>'
-          + '<div style="font-size:.78rem;color:rgba(200,220,255,.6);">Todos los asesores tienen su comisión desbloqueada. \u00a1Buen trabajo!</div>'
-          + '</div>';
-        return;
-      }
+  // Construir datos desde cache local (sin vista SQL)
+  var vs = vend() || [];
+  var cs = cli() || [];
+  var bloqMap = {};
 
-      var totalCongelado = rows.reduce(function(s, r){ return s + (parseFloat(r.monto_comision_congelado_usd) || 0); }, 0);
-
-      var html = '<div style="background:rgba(248,113,113,.06);border:1px solid rgba(248,113,113,.2);border-radius:14px;padding:16px 20px;margin-bottom:20px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">'
-        + '<div style="font-size:.72rem;color:var(--muted);">Total comisiones congeladas</div>'
-        + '<div style="font-size:1.4rem;font-weight:900;color:#f87171;">USD ' + totalCongelado.toLocaleString('es-AR', {maximumFractionDigits:0}) + '</div>'
-        + '</div>';
-
-      html += '<div style="display:flex;flex-direction:column;gap:12px;">';
-      rows.forEach(function(r){
-        var pct   = parseFloat(r.porcentaje_comision) || 0;
-        var monto = parseFloat(r.monto_comision_congelado_usd) || 0;
-        html += '<div style="background:rgba(5,18,55,.65);border:1px solid rgba(248,113,113,.2);border-radius:14px;padding:18px 20px;">'
-          + '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px;">'
-          +   '<div>'
-          +     '<div style="font-weight:800;font-size:.9rem;">' + (r.asesor_nombre || '\u2014') + '</div>'
-          +     '<div style="font-size:.72rem;color:rgba(200,220,255,.6);margin-top:2px;">' + (r.asesor_email || '') + ' \u00b7 Com: ' + pct + '%</div>'
-          +   '</div>'
-          +   '<div style="text-align:right;">'
-          +     '<div style="font-size:1.1rem;font-weight:900;color:#f87171;">USD ' + monto.toLocaleString('es-AR', {maximumFractionDigits:0}) + '</div>'
-          +     '<div style="font-size:.68rem;color:var(--muted);">' + (r.clientes_en_mora || 0) + ' cliente' + ((r.clientes_en_mora||0)===1?'':'s') + ' en mora</div>'
-          +   '</div>'
-          + '</div>'
-          + '<div style="font-size:.7rem;color:rgba(248,113,113,.6);padding:6px 10px;background:rgba(248,113,113,.06);border-radius:8px;">'
-          +   '\uD83D\uDD12 Comisi\u00f3n congelada hasta que el CEO apruebe los pagos en mora'
-          + '</div>'
-          + '</div>';
-      });
-      html += '</div>';
-      el.innerHTML = html;
-    })
-    .catch(function(e){
-      el.innerHTML = '<div style="padding:30px;color:#f87171;text-align:center;">\u274C Error al cargar vista: ' + (e.message||'') + '<br><small>Verificar que la vista comisiones_bloqueadas exista en Supabase.</small></div>';
+  vs.forEach(function(v){
+    var clientesMora = cs.filter(function(c){ return String(c.vid)===String(v.id) && c.mora_json && (Array.isArray(c.mora_json)?c.mora_json.length>0:true); });
+    if(!clientesMora.length) return;
+    var totalMonto = 0;
+    clientesMora.forEach(function(c){
+      var cuotasPend = (parseInt(c.cuotas_total)||0) - (parseInt(c.cuotas_pagadas)||0);
+      totalMonto += cuotasPend * (parseFloat(c.monto_cuota)||0);
     });
+    var pctCom = calcComision(v);
+    bloqMap[v.id] = {
+      asesor_nombre: v.nombre,
+      asesor_email: v.email,
+      porcentaje_comision: pctCom,
+      monto_comision_congelado_usd: totalMonto * pctCom / 100,
+      clientes_en_mora: clientesMora.length
+    };
+  });
+
+  var rows = Object.values(bloqMap).sort(function(a,b){ return (b.monto_comision_congelado_usd||0)-(a.monto_comision_congelado_usd||0); });
+
+  if(!rows.length){
+    el.innerHTML = '<div style="text-align:center;padding:50px;background:rgba(5,18,55,.5);border:1px solid rgba(100,160,255,.15);border-radius:18px;">'
+      + '<div style="font-size:2.5rem;margin-bottom:14px;">\uD83D\uDCB0</div>'
+      + '<div style="font-size:1rem;font-weight:700;margin-bottom:6px;">Sin comisiones bloqueadas</div>'
+      + '<div style="font-size:.78rem;color:rgba(200,220,255,.6);">Todos los asesores tienen su comisi\u00f3n desbloqueada. \u00a1Buen trabajo!</div>'
+      + '</div>';
+    return;
+  }
+
+  var totalCongelado = rows.reduce(function(s, r){ return s + (parseFloat(r.monto_comision_congelado_usd) || 0); }, 0);
+
+  var html = '<div style="background:rgba(248,113,113,.06);border:1px solid rgba(248,113,113,.2);border-radius:14px;padding:16px 20px;margin-bottom:20px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">'
+    + '<div style="font-size:.72rem;color:var(--muted);">Total comisiones congeladas</div>'
+    + '<div style="font-size:1.4rem;font-weight:900;color:#f87171;">USD ' + totalCongelado.toLocaleString('es-AR', {maximumFractionDigits:0}) + '</div>'
+    + '</div>';
+
+  html += '<div style="display:flex;flex-direction:column;gap:12px;">';
+  rows.forEach(function(r){
+    var pct   = parseFloat(r.porcentaje_comision) || 0;
+    var monto = parseFloat(r.monto_comision_congelado_usd) || 0;
+    html += '<div style="background:rgba(5,18,55,.65);border:1px solid rgba(248,113,113,.2);border-radius:14px;padding:18px 20px;">'
+      + '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px;">'
+      +   '<div>'
+      +     '<div style="font-weight:800;font-size:.9rem;">' + (r.asesor_nombre || '\u2014') + '</div>'
+      +     '<div style="font-size:.72rem;color:rgba(200,220,255,.6);margin-top:2px;">' + (r.asesor_email || '') + ' \u00b7 Com: ' + pct + '%</div>'
+      +   '</div>'
+      +   '<div style="text-align:right;">'
+      +     '<div style="font-size:1.1rem;font-weight:900;color:#f87171;">USD ' + monto.toLocaleString('es-AR', {maximumFractionDigits:0}) + '</div>'
+      +     '<div style="font-size:.68rem;color:var(--muted);">' + (r.clientes_en_mora || 0) + ' cliente' + ((r.clientes_en_mora||0)===1?'':'s') + ' en mora</div>'
+      +   '</div>'
+      + '</div>'
+      + '<div style="font-size:.7rem;color:rgba(248,113,113,.6);padding:6px 10px;background:rgba(248,113,113,.06);border-radius:8px;">'
+      +   '\uD83D\uDD12 Comisi\u00f3n congelada hasta que el CEO apruebe los pagos en mora'
+      + '</div>'
+      + '</div>';
+  });
+  html += '</div>';
+  el.innerHTML = html;
 }
 
 // ══════════════════════════════════════════════════════
@@ -3845,7 +3908,7 @@ function escCeo(s) {
 
 var _canalActivoCeo = null;
 var _staffCacheCeo = [];
-var _ROLE_NAMES = {1:'CEO', 2:'Gerente', 3:'Asesor', 4:'Jefe de Ventas', 5:'Admin'};
+var _ROLE_NAMES = {1:'CEO', 2:'Gerente', 3:'Asesor', 4:'Cliente', 5:'Jefe de Ventas'};
 
 async function cargarStaffCeo() {
   if (_staffCacheCeo.length) return _staffCacheCeo;
@@ -4386,72 +4449,6 @@ async function enviarMensajeCeo(canalId, respuestaA) {
 
 async function enviarRespuestaCeo(msgId, canalId) {
   await enviarMensajeCeo(canalId, msgId);
-}
-
-// ── Crear nuevo canal (CEO) ──
-function abrirCrearCanal() {
-  var ov = document.getElementById('crearCanalOverlay');
-  if (ov) { ov.style.display = 'flex'; return; }
-  ov = document.createElement('div');
-  ov.id = 'crearCanalOverlay';
-  ov.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.6);z-index:9999;display:flex;align-items:center;justify-content:center;';
-  ov.onclick = function(e) { if (e.target === ov) cerrarCrearCanal(); };
-  ov.innerHTML = '<div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:24px;width:420px;max-width:90vw;">' +
-    '<h3 style="font-family:Syne,sans-serif;font-size:.95rem;font-weight:800;margin-bottom:16px;">Nuevo Canal</h3>' +
-    '<label style="display:block;margin-bottom:12px;">' +
-      '<span style="font-size:.78rem;font-weight:600;color:var(--muted);">Nombre del canal</span>' +
-      '<input id="ncNombre" type="text" placeholder="Ej: general-moras" style="width:100%;margin-top:4px;padding:8px 12px;background:rgba(255,255,255,.04);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-family:inherit;font-size:.85rem;" />' +
-    '</label>' +
-    '<label style="display:block;margin-bottom:12px;">' +
-      '<span style="font-size:.78rem;font-weight:600;color:var(--muted);">Descripción</span>' +
-      '<input id="ncDesc" type="text" placeholder="Descripción breve..." style="width:100%;margin-top:4px;padding:8px 12px;background:rgba(255,255,255,.04);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-family:inherit;font-size:.85rem;" />' +
-    '</label>' +
-    '<div style="margin-bottom:16px;">' +
-      '<span style="font-size:.78rem;font-weight:600;color:var(--muted);display:block;margin-bottom:8px;">¿Quién puede ver este canal?</span>' +
-      '<label style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:.85rem;cursor:pointer;"><input type="checkbox" id="ncRolCeo" checked /> CEO</label>' +
-      '<label style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:.85rem;cursor:pointer;"><input type="checkbox" id="ncRolGerente" /> Gerente</label>' +
-      '<label style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:.85rem;cursor:pointer;"><input type="checkbox" id="ncRolJefe" /> Jefe de Ventas</label>' +
-      '<label style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:.85rem;cursor:pointer;"><input type="checkbox" id="ncRolAsesor" /> Asesor</label>' +
-    '</div>' +
-    '<div style="display:flex;gap:10px;justify-content:flex-end;">' +
-      '<button onclick="cerrarCrearCanal()" style="padding:8px 16px;background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:8px;color:var(--text);cursor:pointer;font-family:inherit;font-size:.82rem;">Cancelar</button>' +
-      '<button onclick="crearNuevoCanal()" style="padding:8px 20px;background:linear-gradient(135deg,#0891b2,#06b6d4);border:none;border-radius:8px;color:white;font-weight:700;cursor:pointer;font-family:inherit;font-size:.82rem;">Crear Canal</button>' +
-    '</div>' +
-  '</div>';
-  document.body.appendChild(ov);
-}
-
-function cerrarCrearCanal() {
-  var ov = document.getElementById('crearCanalOverlay');
-  if (ov) ov.remove();
-}
-
-async function crearNuevoCanal() {
-  var nombre = document.getElementById('ncNombre');
-  var desc = document.getElementById('ncDesc');
-  var roles = [];
-  if (document.getElementById('ncRolCeo').checked) roles.push('ceo');
-  if (document.getElementById('ncRolGerente').checked) roles.push('gerente');
-  if (document.getElementById('ncRolJefe').checked) roles.push('jefe_ventas');
-  if (document.getElementById('ncRolAsesor').checked) roles.push('asesor');
-  if (!nombre || !nombre.value.trim()) { showToast('Ingresá un nombre para el canal'); return; }
-  if (!roles.length) { showToast('Seleccioná al menos un rol'); return; }
-  try {
-    var ins = await sbClient.from('canales_equipo').insert({
-      nombre: nombre.value.trim(),
-      descripcion: desc ? desc.value.trim() : '',
-      tipo: 'publico',
-      miembros: { roles: roles },
-      creado_por: _ceoUid
-    }).select();
-    if (ins.error) throw ins.error;
-    showToast('Canal "' + nombre.value.trim() + '" creado');
-    cerrarCrearCanal();
-    renderComunicacionesCeo();
-  } catch(err) {
-    console.error('[crearNuevoCanal]', err);
-    showToast('Error: ' + (err.message || err));
-  }
 }
 
 /* ── Country phone prefix selector helper ── */

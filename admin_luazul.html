@@ -80,10 +80,12 @@ function mapClientFromSB(c) {
     nombre: c.nombre || '', email: c.email || '', telefono: c.telefono || '',
     documento: c.documento || '', domicilio: c.domicilio || '', estado: c.estado || 'activo',
     destino: c.destino || '', paquete: c.paquete || '', fecha_viaje: c.fecha_viaje || '',
+    personas: c.personas || null, noches: c.noches || null,
     monto_cuota: parseFloat(c.monto_cuota) || 0, cuotas_total: parseInt(c.cuotas_total) || 10,
     cuotas_pagadas: parseInt(c.cuotas_pagadas) || 0, total_usd: parseFloat(c.total_usd) || 0,
     fechaAlta: c.fecha_alta ? c.fecha_alta.slice(0, 10) : '', notas: c.notas || '',
-    mora_json: c.mora_json || '[]'
+    mora_json: c.mora_json || '[]',
+    firma_url: c.firma_url || null, codigo_referido: c.codigo_referido || ''
   };
 }
 
@@ -567,7 +569,6 @@ body::after {
 .ctile.proxima { background:var(--yellow-bg); color:var(--yellow); border:1px solid var(--yellow-bd); animation:pulse-yellow 1.5s infinite; }
 .ctile.futura  { background:rgba(255,255,255,0.04); color:var(--muted); border:1px solid var(--border); }
 @keyframes pulse-yellow { 0%,100%{opacity:1} 50%{opacity:0.6} }
-@keyframes pulse-badge{0%,100%{transform:scale(1);opacity:1;}50%{transform:scale(1.25);opacity:.85;}}
 
 .modal-actions,.mact { display:flex; flex-wrap:wrap; gap:12px; margin-top:20px; padding-top:20px; border-top:1px solid var(--border); }
 .m-btn { display:inline-flex; align-items:center; gap:8px; padding:10px 22px; border-radius:14px; font-size:.85rem; font-weight:700; font-family:'Montserrat',sans-serif; cursor:pointer; transition:all .2s; border:none; }
@@ -905,7 +906,6 @@ body::after {
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
         <h2 style="font-size:1rem;font-weight:900;">📩 Comunicaciones internas</h2>
         <div style="display:flex;gap:8px;">
-          <button onclick="abrirNuevoDM()" style="padding:8px 16px;border-radius:9px;background:rgba(168,85,247,.12);border:1px solid rgba(168,85,247,.3);color:#a855f7;font-family:inherit;font-size:.78rem;font-weight:700;cursor:pointer;">💬 Mensaje directo</button>
           <button class="tb-btn" onclick="abrirCrearCanal()" style="background:rgba(74,222,128,.1);border-color:rgba(74,222,128,.25);color:#4ade80;">➕ Nuevo Canal</button>
           <button class="tb-btn" onclick="volverAClientes()">← Volver a mis clientes</button>
         </div>
@@ -1122,7 +1122,6 @@ function adminLogin() {
       loadClients();
       setTimeout(refreshAdminNotifBadge, 100);
       showToast('✅ Bienvenido, ' + profile.nombre);
-      setTimeout(iniciarNotificacionesAdmin, 2000);
     })
     .catch(function(err) {
       loginAttempts++;
@@ -1809,14 +1808,16 @@ function refreshAdminNotifBadge() {
     .select('id', { count: 'exact', head: true })
     .eq('leida', false)
     .eq('destinatario_id', _currentProfile.id);
-  // Menciones / mensajes internos no leídos
-  var mensajesPromise = sbClient.from('mensajes_equipo_menciones')
+  // Mensajes no leídos via mensajes_vistos
+  var mensajesPromise = sbClient.from('mensajes_equipo')
     .select('id', { count: 'exact', head: true })
-    .eq('usuario_id', _currentProfile.user_id)
-    .eq('leido', false);
-  Promise.all([notifPromise, mensajesPromise]).then(function(results) {
+    .not('remitente_id', _currentProfile.user_id);
+  var vistosPromise = sbClient.from('mensajes_vistos')
+    .select('mensaje_id', { count: 'exact', head: true })
+    .eq('usuario_id', _currentProfile.user_id);
+  Promise.all([notifPromise, mensajesPromise, vistosPromise]).then(function(results) {
     var countNotif = results[0].count || 0;
-    var countMsg   = results[1].count || 0;
+    var countMsg   = (results[1].count || 0) - (results[2].count || 0);
     var total = countNotif + countMsg;
     var dot = document.getElementById('adminNotifDot');
     var lbl = document.getElementById('adminNotifLabel');
@@ -2076,7 +2077,9 @@ async function enviarComprobante(clientId) {
       estado:          'pendiente',
       fecha_pago:      fecha || new Date().toISOString().slice(0, 10),
       comprobante_url: publicUrl || null,
-      seller_id:       _currentProfile ? (parseInt(_currentProfile.id, 10) || null) : null
+      seller_id:       _currentProfile ? (parseInt(_currentProfile.id, 10) || null) : null,
+      region_id:       _currentProfile ? (_currentProfile.region_id || null) : null,
+      leida:           false
     }]);
     if (insRes.error) throw insRes.error;
 
@@ -2267,13 +2270,14 @@ async function obtenerNombreJefe(managerId) {
   try {
     var { data, error } = await sbClient
       .from('staff_profiles')
-      .select('nombre')
+      .select('nombre, apellido')
       .eq('id', managerId)
       .eq('role_id', 5)
       .single();
     if (error || !data) return 'Sin jefe asignado';
-    _jefeCache = { managerId: managerId, nombre: data.nombre };
-    return data.nombre;
+    var fullName = (data.nombre || '') + (data.apellido ? ' ' + data.apellido : '');
+    _jefeCache = { managerId: managerId, nombre: fullName };
+    return fullName;
   } catch(e) {
     console.warn('Error al obtener jefe:', e);
     return 'Sin jefe asignado';
@@ -2561,10 +2565,10 @@ function openAddModal() {
     '<div class="modal-grid">'+
     '<div class="m-item"><div class="m-label">Nombre completo</div><input class="edit-input" id="nNombre" placeholder="Ej: Juan Pérez" /></div>'+
     '<div class="m-item"><div class="m-label">Email</div><input class="edit-input" id="nEmail" placeholder="juan@email.com" /></div>'+
-    '<div class="m-item"><div class="m-label">Contraseña (panel cliente)</div><div class=\'lz-pass-wrap\' style=\'position:relative;display:inline-flex;\'><input class=\'edit-input\' id=\'nPass\' placeholder=\'Contraseña\' type=\'password\' style=\'padding-right:50px!important;\' /><button type=\'button\' class=\'lz-eye-btn\' onclick=\'lzToggle(\\'nPass\\',this)\' tabindex=\'-1\'><svg width=\'15\' height=\'15\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'currentColor\' stroke-width=\'2\' stroke-linecap=\'round\' stroke-linejoin=\'round\'><path d=\'M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z\'/><circle cx=\'12\' cy=\'12\' r=\'3\'/></svg></button></div></div>'+
+    '<div class="m-item"><div class="m-label">Contraseña (panel cliente)</div><input class="edit-input" id="nPass" placeholder="Contraseña" type="password" /></div>'+
     '<div class="m-item"><div class="m-label">Documento</div><input class="edit-input" id="nDoc" placeholder="DNI 32.456.789" /></div>'+
-    '<div class="m-item"><div class="m-label">Teléfono principal</div><div class="lz-phone-wrap">'+lzBuildPhoneSelect('prefix_nTel1','+54')+'<input class="edit-input" id="nTel1" placeholder="9 11 1234-5678" value="+54 " /></div></div>'+
-    '<div class="m-item"><div class="m-label">Teléfono de referencia</div><div class="lz-phone-wrap">'+lzBuildPhoneSelect('prefix_nTel2','+54')+'<input class="edit-input" id="nTel2" placeholder="9 351 9876-5432" value="+54 " /></div></div>'+
+    '<div class="m-item"><div class="m-label">Teléfono principal</div><input class="edit-input" id="nTel1" placeholder="+54 9 11 1234-5678" /></div>'+
+    '<div class="m-item"><div class="m-label">Teléfono de referencia</div><input class="edit-input" id="nTel2" placeholder="+54 9 351 9876-5432" /></div>'+
     '<div class="m-item" style="grid-column:span 2;"><div class="m-label">Domicilio</div><input class="edit-input" id="nDomicilio" placeholder="Av. Corrientes 1234, Buenos Aires" /></div>'+
     '<div class="m-item"><div class="m-label">Destino</div><select class="edit-input" id="nDest">'+
     '<option value="Cabo Frío, Brasil">🏖️ Cabo Frío</option><option value="Arraial do Cabo, Brasil">🌊 Arraial do Cabo</option>'+
@@ -2904,26 +2908,29 @@ function guardarTicketAsesor() {
   if (!desc) { showToast('⚠️ La descripción es obligatoria'); return; }
   var btn = document.querySelector('#modal .m-btn.primary');
   if (btn) btn.disabled = true;
-  sbClient.rpc('crear_ticket', {
-    p_tipo:         categoria,
-    p_mensaje:      desc,
-    p_remitente_id: _currentProfile.user_id,
-    p_cliente_id:   clienteId,
-    p_vendedor_id:  _currentProfile.id,
-    p_region_id:    _currentProfile.region_id || null,
-    p_asignado_a:   null,
-    p_prioridad:    prioridad,
-    p_categoria:    categoria
-  }).then(function(result) {
+  // Crear ticket directamente en tabla notificaciones
+  sbClient.from('notificaciones').insert({
+    tipo: categoria || 'soporte',
+    mensaje: desc,
+    remitente_id: _currentProfile.user_id,
+    cliente_id: clienteId,
+    vendedor_id: _currentProfile.id,
+    region_id: _currentProfile.region_id || null,
+    asignado_a: null,
+    prioridad: prioridad || 'media',
+    categoria: categoria || 'general',
+    estado: 'abierto',
+    nivel_actual: 1,
+    leida: false,
+    adjuntos: [],
+    created_at: new Date().toISOString()
+  }).select().single().then(function(result) {
     if (result && result.error) throw result.error;
     closeModal();
     cargarTicketsAsesor();
     showToast('✅ Ticket enviado. Gerencia fue notificada.');
   }).catch(function(err) {
-    console.error('Error RPC crear_ticket completo:', err);
-    if (err.details) console.error('Detalles:', err.details);
-    if (err.hint) console.error('Hint:', err.hint);
-    if (err.code) console.error('Código:', err.code);
+    console.error('Error creando ticket:', err);
     showToast('❌ Error: ' + (err.message || 'No se pudo crear el ticket'));
   }).finally(function() { if (btn) btn.disabled = false; });
 }
@@ -3052,149 +3059,13 @@ async function subirAdjuntoATicketAsesor(ticketId) {
 // 33. MÓDULO DE MENSAJERÍA INTERNA (ASESOR)
 // ──────────────────────────────────────────────────────────────────────────
 
-var _staffCacheAdmin = [];
-var _ROLE_NAMES = {1:'CEO', 2:'Gerente', 3:'Asesor', 4:'Jefe de Ventas', 5:'Admin'};
-
-async function cargarStaffAdmin() {
-  if (_staffCacheAdmin.length) return _staffCacheAdmin;
-  try {
-    var res = await sbClient.from('staff_profiles').select('*');
-    console.log('[cargarStaffAdmin] filas:', res.data ? res.data.length : 0, 'error:', res.error ? res.error.message : 'ninguno');
-    if (res.error) throw res.error;
-    _staffCacheAdmin = (res.data || []).map(function(r) {
-      return {
-        user_id: r.user_id || r.id,
-        nombre: (r.nombre || '') + (r.apellido ? ' ' + r.apellido : ''),
-        role: _ROLE_NAMES[r.role_id] || ('Rol ' + (r.role_id || '?')),
-        badge: r.badge || r.email || '',
-        activo: r.activo !== false
-      };
-    });
-    console.log('[cargarStaffAdmin] cache listo:', _staffCacheAdmin.length, 'usuarios');
-    return _staffCacheAdmin;
-  } catch(e) { console.warn('[cargarStaffAdmin] ERROR:', e.message || e); return []; }
-}
-
-// ── Badge de mensajes no leídos ──
-var _unreadCountAdmin = 0;
-var _lastMsgTimestampAdmin = 0;
-var _notifIntervalAdmin = null;
-
-async function contarNoLeidosAdmin() {
-  if (!sbClient || !_currentProfile) return 0;
-  try {
-    var userId = _currentProfile.user_id;
-    var vistosRes = await sbClient.from('mensajes_vistos').select('mensaje_id').eq('usuario_id', userId);
-    var vistosIds = [];
-    if (!vistosRes.error && vistosRes.data) {
-      vistosIds = vistosRes.data.map(function(v) { return v.mensaje_id; });
-    }
-    var canalesRes = await sbClient.from('canales_equipo').select('id,tipo,miembros');
-    if (canalesRes.error) return 0;
-    var misCanalesIds = [];
-    for (var i = 0; i < canalesRes.data.length; i++) {
-      var c = canalesRes.data[i];
-      try {
-        var m = typeof c.miembros === 'string' ? JSON.parse(c.miembros) : (c.miembros || {});
-        if (c.tipo === 'directo') {
-          var users = m.usuarios || [];
-          if (users.indexOf(userId) !== -1) misCanalesIds.push(c.id);
-        } else {
-          var roles = m.roles || [];
-          var users = m.usuarios || [];
-          if (roles.indexOf('asesor') !== -1 || roles.indexOf('todos') !== -1 || users.indexOf(userId) !== -1) {
-            misCanalesIds.push(c.id);
-          }
-        }
-      } catch(e) {}
-    }
-    if (!misCanalesIds.length) return 0;
-    var res = await sbClient.from('mensajes_equipo')
-      .select('id, remitente_id, canal_id, created_at')
-      .in('canal_id', misCanalesIds)
-      .order('created_at', { ascending: false })
-      .limit(200);
-    if (res.error) return 0;
-    var noLeidos = 0;
-    for (var i = 0; i < res.data.length; i++) {
-      var msg = res.data[i];
-      if (String(msg.remitente_id) === String(userId)) continue;
-      if (vistosIds.indexOf(msg.id) === -1) {
-        noLeidos++;
-      }
-    }
-    return noLeidos;
-  } catch(e) { console.warn('[contarNoLeidosAdmin]', e); return 0; }
-}
-
-async function actualizarBadgeAdmin() {
-  var count = await contarNoLeidosAdmin();
-  _unreadCountAdmin = count;
-  var tab = document.querySelector('[data-f="comunicaciones"]');
-  if (!tab) return;
-  var oldBadge = tab.querySelector('.msg-badge');
-  if (oldBadge) oldBadge.remove();
-  if (count > 0) {
-    var badge = document.createElement('span');
-    badge.className = 'msg-badge';
-    badge.style.cssText = 'background:#ef4444;color:white;font-size:.6rem;font-weight:800;min-width:16px;height:16px;border-radius:99px;display:inline-flex;align-items:center;justify-content:center;margin-left:5px;padding:0 4px;animation:pulse-badge 2s infinite;';
-    badge.textContent = count > 99 ? '99+' : count;
-    tab.appendChild(badge);
-  }
-}
-
-async function marcarLeidosAdmin(canalId) {
-  if (!sbClient || !_currentProfile) return;
-  try {
-    var userId = _currentProfile.user_id;
-    var res = await sbClient.from('mensajes_equipo').select('id').eq('canal_id', canalId);
-    if (res.error || !res.data) return;
-    var msgIds = res.data.map(function(m) { return m.mensaje_id || m.id; });
-    if (!msgIds.length) return;
-    var inserts = msgIds.map(function(mid) {
-      return { mensaje_id: mid, usuario_id: userId };
-    });
-    await sbClient.from('mensajes_vistos').upsert(inserts, { onConflict: 'mensaje_id,usuario_id' });
-  } catch(e) { console.warn('[marcarLeidosAdmin]', e); }
-}
-
-function iniciarNotificacionesAdmin() {
-  if (_notifIntervalAdmin) return;
-  actualizarBadgeAdmin();
-  _notifIntervalAdmin = setInterval(function() {
-    contarNoLeidosAdmin().then(function(count) {
-      if (count > _unreadCountAdmin) {
-        showToast('💬 Tenés ' + count + ' mensaje' + (count > 1 ? 's' : '') + ' sin leer');
-      }
-      _unreadCountAdmin = count;
-      actualizarBadgeAdmin();
-    });
-  }, 30000);
-}
-
 async function cargarCanales() {
-  if (!sbClient || !_currentProfile) return [];
-  try {
-    var res = await sbClient.from('canales_equipo').select('*');
-    if (res.error) throw res.error;
-    var todos = res.data || [];
-    var uid = _currentProfile.user_id;
-    var visibles = todos.filter(function(c) {
-      try {
-        var m = typeof c.miembros === 'string' ? JSON.parse(c.miembros) : (c.miembros || {});
-        if (c.tipo === 'directo') {
-          var users = m.usuarios || [];
-          return users.indexOf(uid) !== -1;
-        }
-        var roles = m.roles || [];
-        var users = m.usuarios || [];
-        var inRoles = roles.indexOf('asesor') !== -1 || roles.indexOf('todos') !== -1;
-        var inUsers = users.indexOf(uid) !== -1;
-        return inRoles || inUsers;
-      } catch(e) { return false; }
-    });
-    return visibles;
-  } catch(e) { console.warn('[cargarCanales]', e); return []; }
+  // Panel Asesor: solo canales donde el rol 'asesor' está en miembros
+  var query = sbClient.from('canales_equipo').select('*');
+  query = query.filter('miembros->>roles', 'cs', '{"asesor"}');
+  var { data, error } = await query;
+  if (error) { console.warn('[cargarCanales]', error.message); return []; }
+  return data || [];
 }
 
 async function renderComunicaciones() {
@@ -3202,60 +3073,34 @@ async function renderComunicaciones() {
   if (!container) return;
   container.innerHTML = '<div style="padding:30px;text-align:center;color:var(--muted);">⏳ Cargando canales...</div>';
   try {
-    await cargarStaffAdmin();
     var canales = await cargarCanales();
-    var dms = canales.filter(function(c) { return c.tipo === 'directo'; });
-    var grupos = canales.filter(function(c) { return c.tipo !== 'directo'; });
-    var uid = _currentProfile.user_id;
-
-    var html = '<div style="display:flex;gap:0;background:var(--surface);border:1px solid var(--border);border-radius:18px;overflow:hidden;min-height:500px;">';
-    html += '<div style="width:260px;flex-shrink:0;border-right:1px solid var(--border);background:rgba(255,255,255,.02);overflow-y:auto;max-height:600px;">';
-
-    // DMs section
-    html += '<div style="padding:14px 16px;font-family:Syne,sans-serif;font-size:.7rem;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#a855f7;border-bottom:1px solid var(--border);">Mensajes directos (' + dms.length + ')</div>';
-    for (var i = 0; i < dms.length; i++) {
-      var c = dms[i];
-      var otherUser = '';
-      try {
-        var m = typeof c.miembros === 'string' ? JSON.parse(c.miembros) : (c.miembros || {});
-        var users = m.usuarios || [];
-        var otherId = users.filter(function(u) { return u !== uid; })[0];
-        if (otherId) {
-          var st = _staffCacheAdmin.find(function(s) { return String(s.user_id) === String(otherId); });
-          otherUser = st ? st.nombre : 'Usuario';
-        }
-      } catch(e) {}
-      html += '<div class="canal-item" data-canal="' + esc(String(c.id)) + '" style="padding:10px 16px;cursor:pointer;transition:background .15s;font-size:.85rem;font-weight:600;display:flex;align-items:center;gap:8px;">👤 ' + esc(otherUser || c.nombre) + '</div>';
-    }
-
-    // Channels section
-    html += '<div style="padding:14px 16px;font-family:Syne,sans-serif;font-size:.7rem;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--accent2);border-bottom:1px solid var(--border);margin-top:4px;">Canales (' + grupos.length + ')</div>';
-    for (var i = 0; i < grupos.length; i++) {
-      var c = grupos[i];
-      html += '<div class="canal-item" data-canal="' + esc(String(c.id)) + '" style="padding:10px 16px;cursor:pointer;transition:background .15s;font-size:.88rem;font-weight:600;display:flex;align-items:center;gap:8px;"># ' + esc(c.nombre) + '</div>';
-    }
-
     if (!canales.length) {
-      html += '<div style="padding:20px;text-align:center;color:var(--muted);font-size:.82rem;">No hay canales. Usá los botones de arriba.</div>';
+      container.innerHTML = '<div style="padding:40px;text-align:center;color:var(--muted);"><div style="font-size:2rem;margin-bottom:12px;">📭</div><p>No tenés canales asignados aún.</p></div>';
+      return;
     }
+    var html = '<div style="display:flex;gap:0;background:var(--surface);border:1px solid var(--border);border-radius:18px;overflow:hidden;min-height:500px;">';
+    // Panel izquierdo: lista de canales
+    html += '<div style="width:240px;flex-shrink:0;border-right:1px solid var(--border);padding:12px 0;">';
+    html += '<div style="font-size:.65rem;font-weight:800;text-transform:uppercase;letter-spacing:1.2px;color:var(--muted);padding:8px 16px 12px;">Canales</div>';
+    canales.forEach(function(c) {
+      html += '<div class="canal-item" data-canal="' + esc(String(c.id)) + '" style="padding:10px 16px;cursor:pointer;border-radius:0;transition:background .15s;font-size:.88rem;font-weight:600;display:flex;align-items:center;gap:8px;" onmouseenter="this.style.background=\'rgba(255,255,255,.04)\'" onmouseleave="this.style.background=\'\'">&#128172; ' + esc(c.nombre) + '</div>';
+    });
     html += '</div>';
-    html += '<div id="mensajesPanel" style="flex:1;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:.9rem;">Seleccioná un canal o conversación</div>';
+    // Panel derecho: mensajes
+    html += '<div id="mensajesPanel" style="flex:1;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:.9rem;">Seleccioná un canal para ver los mensajes</div>';
     html += '</div>';
     container.innerHTML = html;
-
+    // Event listeners para canales
     document.querySelectorAll('.canal-item').forEach(function(el) {
       el.addEventListener('click', function() {
         document.querySelectorAll('.canal-item').forEach(function(x){ x.style.background=''; x.style.color=''; });
         el.style.background = 'rgba(59,130,246,.12)';
         el.style.color = 'var(--accent2)';
-        var canalIdAdmin = el.getAttribute('data-canal');
-        cargarMensajesCanal(canalIdAdmin);
-        marcarLeidosAdmin(canalIdAdmin);
-        actualizarBadgeAdmin();
+        cargarMensajesCanal(el.getAttribute('data-canal'));
       });
     });
   } catch(e) {
-    container.innerHTML = '<div style="padding:30px;text-align:center;color:var(--red);">❌ Error: ' + esc(e.message) + '</div>';
+    container.innerHTML = '<div style="padding:30px;text-align:center;color:var(--red);">❌ Error al cargar comunicaciones: ' + esc(e.message) + '</div>';
   }
 }
 
@@ -3352,7 +3197,7 @@ async function enviarMensaje(canalId, respuestaA) {
       canal_id: parseInt(canalId),
       respuesta_a: respuestaA || null,
       tipo_mensaje: 'aviso'
-    }).select();
+    });
     if (error) throw error;
     showToast('✅ Mensaje enviado');
     cargarMensajesCanal(canalId);
@@ -3365,68 +3210,6 @@ async function enviarRespuesta(msgId, canalId) {
   await enviarMensaje(String(canalId), msgId);
 }
 
-// ── Mensaje directo (DM) ──
-async function abrirNuevoDM() {
-  var ov = document.getElementById('dmOverlayAdmin');
-  if (ov) { ov.style.display = 'flex'; return; }
-  // Forzar recarga del cache de staff para asegurar lista actualizada
-  _staffCacheAdmin = [];
-  var staff = await cargarStaffAdmin();
-  var uid = _currentProfile ? _currentProfile.user_id : '';
-  ov = document.createElement('div');
-  ov.id = 'dmOverlayAdmin';
-  ov.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.6);z-index:9999;display:flex;align-items:center;justify-content:center;';
-  ov.onclick = function(e) { if (e.target === ov) ov.remove(); };
-  var staffOpts = '';
-  for (var i = 0; i < staff.length; i++) {
-    var s = staff[i];
-    if (String(s.user_id) === String(uid)) continue;
-    staffOpts += '<div data-uid="' + s.user_id + '" style="padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;transition:background .15s;" onmouseenter="this.style.background=\'rgba(168,85,247,.08)\'" onmouseleave="this.style.background=\'\'" onclick="crearOBuscarDM(\'' + s.user_id + '\')">' +
-      '👤 <div style="flex:1;"><div style="font-weight:600;font-size:.85rem;">' + esc(s.nombre) + '</div>' +
-      '<div style="font-size:.68rem;color:var(--muted);">' + esc(s.role || '') + '</div></div>' +
-      '<span style="font-size:.75rem;color:#a855f7;">💬 Chatear</span></div>';
-  }
-  var emptyMsg = '<div style="padding:20px;text-align:center;color:var(--muted);">No hay otros usuarios registrados.<br><small>Asegurate de que los usuarios tengan un perfil en staff_profiles.</small></div>';
-  ov.innerHTML = '<div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:24px;width:380px;max-width:90vw;">' +
-    '<h3 style="font-family:Syne,sans-serif;font-size:.95rem;font-weight:800;margin-bottom:16px;">💬 Mensaje directo</h3>' +
-    '<p style="font-size:.78rem;color:var(--muted);margin-bottom:14px;">Seleccioná con quién querés chatear:</p>' +
-    '<div style="max-height:320px;overflow-y:auto;border:1px solid var(--border);border-radius:10px;">' + (staffOpts || emptyMsg) + '</div>' +
-    '<button onclick="document.getElementById(\'dmOverlayAdmin\').remove()" style="margin-top:14px;padding:8px 16px;background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:8px;color:var(--text);cursor:pointer;font-family:inherit;font-size:.82rem;width:100%;">Cerrar</button>' +
-  '</div>';
-  document.body.appendChild(ov);
-}
-
-async function crearOBuscarDM(targetUserId) {
-  if (document.getElementById('dmOverlayAdmin')) document.getElementById('dmOverlayAdmin').remove();
-  var uid = _currentProfile ? _currentProfile.user_id : '';
-  try {
-    var res = await sbClient.from('canales_equipo').select('*').eq('tipo', 'directo');
-    if (res.error) throw res.error;
-    var existing = null;
-    for (var i = 0; i < res.data.length; i++) {
-      var c = res.data[i];
-      try {
-        var m = typeof c.miembros === 'string' ? JSON.parse(c.miembros) : (c.miembros || {});
-        var users = m.usuarios || [];
-        if (users.indexOf(uid) !== -1 && users.indexOf(targetUserId) !== -1) { existing = c; break; }
-      } catch(e) {}
-    }
-    if (existing) { showToast('Conversación abierta'); renderComunicaciones(); return; }
-    var st = _staffCacheAdmin.find(function(s) { return String(s.user_id) === String(targetUserId); });
-    var otherName = st ? st.nombre : 'Usuario';
-    var ins = await sbClient.from('canales_equipo').insert({
-      nombre: 'DM: ' + otherName,
-      tipo: 'directo',
-      descripcion: 'Conversación directa',
-      miembros: { tipo: 'directo', usuarios: [uid, targetUserId] },
-      creado_por: uid
-    }).select();
-    if (ins.error) throw ins.error;
-    showToast('Conversación creada con ' + otherName);
-    renderComunicaciones();
-  } catch(err) { console.error('[crearOBuscarDM]', err); showToast('Error: ' + (err.message || err)); }
-}
-
 // ── Crear nuevo canal ──
 function abrirCrearCanal() {
   var ov = document.getElementById('crearCanalOverlay');
@@ -3435,11 +3218,6 @@ function abrirCrearCanal() {
   ov.id = 'crearCanalOverlay';
   ov.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.6);z-index:9999;display:flex;align-items:center;justify-content:center;';
   ov.onclick = function(e) { if (e.target === ov) cerrarCrearCanal(); };
-  var userCheckboxes = '';
-  for (var i = 0; i < _staffCacheAdmin.length; i++) {
-    var s = _staffCacheAdmin[i];
-    userCheckboxes += '<label style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:.85rem;cursor:pointer;"><input type="checkbox" class="nc-user-cb" value="' + esc(s.user_id) + '" /> 👤 ' + esc(s.nombre) + ' <span style="font-size:.68rem;color:var(--muted);">(' + esc(s.role || '') + ')</span></label>';
-  }
   ov.innerHTML = '<div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:24px;width:420px;max-width:90vw;">' +
     '<h3 style="font-family:Syne,sans-serif;font-size:.95rem;font-weight:800;margin-bottom:16px;">&#x2795; Nuevo Canal</h3>' +
     '<label style="display:block;margin-bottom:12px;">' +
@@ -3451,15 +3229,11 @@ function abrirCrearCanal() {
       '<input id="ncDesc" type="text" placeholder="Descripción breve..." style="width:100%;margin-top:4px;padding:8px 12px;background:rgba(255,255,255,.04);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-family:inherit;font-size:.85rem;" />' +
     '</label>' +
     '<div style="margin-bottom:16px;">' +
-      '<span style="font-size:.78rem;font-weight:600;color:var(--muted);display:block;margin-bottom:8px;">Roles con acceso</span>' +
+      '<span style="font-size:.78rem;font-weight:600;color:var(--muted);display:block;margin-bottom:8px;">¿Quién puede ver este canal?</span>' +
       '<label style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:.85rem;cursor:pointer;"><input type="checkbox" id="ncRolCeo" /> CEO</label>' +
       '<label style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:.85rem;cursor:pointer;"><input type="checkbox" id="ncRolGerente" /> Gerente</label>' +
       '<label style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:.85rem;cursor:pointer;"><input type="checkbox" id="ncRolJefe" /> Jefe de Ventas</label>' +
       '<label style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:.85rem;cursor:pointer;"><input type="checkbox" id="ncRolAsesor" checked /> Asesor</label>' +
-    '</div>' +
-    '<div style="margin-bottom:16px;">' +
-      '<span style="font-size:.78rem;font-weight:600;color:#a855f7;display:block;margin-bottom:8px;">Usuarios específicos (opcional)</span>' +
-      '<div style="max-height:160px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:10px;">' + (userCheckboxes || '<div style="font-size:.78rem;color:var(--muted);">No hay usuarios disponibles</div>') + '</div>' +
     '</div>' +
     '<div style="display:flex;gap:10px;justify-content:flex-end;">' +
       '<button onclick="cerrarCrearCanal()" style="padding:8px 16px;background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:8px;color:var(--text);cursor:pointer;font-family:inherit;font-size:.82rem;">Cancelar</button>' +
@@ -3482,21 +3256,16 @@ async function crearNuevoCanal() {
   if (document.getElementById('ncRolGerente').checked) roles.push('gerente');
   if (document.getElementById('ncRolJefe').checked) roles.push('jefe_ventas');
   if (document.getElementById('ncRolAsesor').checked) roles.push('asesor');
-  var usuarios = [];
-  document.querySelectorAll('.nc-user-cb:checked').forEach(function(cb) { usuarios.push(cb.value); });
   if (!nombre || !nombre.value.trim()) { showToast('⚠️ Ingresá un nombre para el canal'); return; }
-  if (!roles.length && !usuarios.length) { showToast('⚠️ Seleccioná al menos un rol o usuario'); return; }
-  var miembros = {};
-  if (roles.length) miembros.roles = roles;
-  if (usuarios.length) miembros.usuarios = usuarios;
+  if (!roles.length) { showToast('⚠️ Seleccioná al menos un rol'); return; }
   try {
     var { error } = await sbClient.from('canales_equipo').insert({
       nombre: nombre.value.trim(),
       descripcion: desc ? desc.value.trim() : '',
-      tipo: 'grupo',
-      miembros: miembros,
+      tipo: 'publico',
+      miembros: { roles: roles },
       creado_por: _currentProfile.user_id
-    }).select();
+    });
     if (error) throw error;
     showToast('✅ Canal "' + nombre.value.trim() + '" creado');
     cerrarCrearCanal();
@@ -3783,10 +3552,6 @@ body{background:#f0f4fa;font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif
 .cta{background:linear-gradient(135deg,#0B3D91,#002266);color:white;border-radius:20px;padding:22px;text-align:center;margin:20px 0;}
 .cta a{display:inline-block;background:#25D366;color:#fff;text-decoration:none;padding:12px 32px;border-radius:40px;font-weight:700;margin-top:16px;}
 .footer{text-align:center;font-size:11px;color:#8aa0c0;border-top:1px solid #e2e8f0;padding-top:20px;margin-top:28px;}
-.lz-phone-wrap{display:flex;gap:0;}
-.lz-phone-wrap select{width:auto;min-width:110px;padding:7px 6px 7px 8px;font-size:.78rem;border:1px solid rgba(100,160,255,.15);border-right:none;border-radius:8px 0 0 8px;background:rgba(100,160,255,.06);color:rgba(200,220,255,.85);font-family:Mulish,sans-serif;appearance:auto;cursor:pointer;flex-shrink:0;}
-.lz-phone-wrap select:focus{outline:none;border-color:rgba(0,210,255,.4);}
-.lz-phone-wrap input{border-radius:0 8px 8px 0!important;flex:1;}
 </style>
 </head>
 <body>
@@ -3990,7 +3755,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 loadClients();
                 // FIX: Cargar badge al restaurar sesión también
                 setTimeout(refreshAdminNotifBadge, 100);
-                setTimeout(iniciarNotificacionesAdmin, 2000);
               });
             });
         }
@@ -4001,10 +3765,6 @@ document.addEventListener('DOMContentLoaded', function() {
     LZ_AUTH._showLogin('loginWrap','app');
   }
 });
-var LZ_PHONE_PREFIXES=[{code:'+54',flag:'🇦🇷',label:'Argentina'},{code:'+55',flag:'🇧🇷',label:'Brasil'},{code:'+56',flag:'🇨🇱',label:'Chile'},{code:'+57',flag:'🇨🇴',label:'Colombia'},{code:'+52',flag:'🇲🇽',label:'México'},{code:'+598',flag:'🇺🇾',label:'Uruguay'},{code:'+58',flag:'🇻🇪',label:'Venezuela'},{code:'+34',flag:'🇪🇸',label:'España'},{code:'+1',flag:'🇺🇸',label:'USA'},{code:'+595',flag:'🇵🇾',label:'Paraguay'},{code:'+591',flag:'🇧🇴',label:'Bolivia'},{code:'+51',flag:'🇵🇪',label:'Perú'},{code:'+593',flag:'🇪🇨',label:'Ecuador'},{code:'+507',flag:'🇵🇦',label:'Panamá'},{code:'+506',flag:'🇨🇷',label:'Costa Rica'}];
-function lzBuildPhoneSelect(sId,cVal){var o=LZ_PHONE_PREFIXES.map(function(p){return '<option value="'+p.code+'"'+(cVal===p.code?' selected':'')+'>'+p.flag+' '+p.code+'</option>';}).join('');return '<select id="'+sId+'" onchange="lzSyncPhonePrefix(\''+sId+'\',\''+sId.replace('prefix_','')+'\')">'+o+'</select>';}
-function lzSyncPhonePrefix(pId,iId){var s=document.getElementById(pId);var i=document.getElementById(iId);if(!s||!i)return;i.value=s.value+' '+i.value.replace(/^\+\d+\s*/,'');}
-function lzDetectPrefix(v){if(!v)return '+54';v=v.trim();for(var i=0;i<LZ_PHONE_PREFIXES.length;i++){if(v.indexOf(LZ_PHONE_PREFIXES[i].code)===0)return LZ_PHONE_PREFIXES[i].code;}return '+54';}
 </script>
 </body>
 </html>

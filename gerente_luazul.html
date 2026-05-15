@@ -254,6 +254,7 @@ const ROLE_MANAGER      = 2;
 const ROLE_SELLER       = 3;
 const ROLE_CLIENT       = 4;
 const ROLE_SALES_LEADER = 5;  // Jefe de Ventas
+var LZ_JEFE_ROLE_IDS = [5];  // role_id para Jefe de Ventas
 
 // ── 2. UTILIDADES PURAS ──────────────────────────────────────────
 function _lzEsc(s) {
@@ -366,36 +367,37 @@ const LZ_LOAD = {
     var regiones = regRes.data || [];
     var rIds     = (grRes.data || []).map(function(r) { return r.region_id; });
 
-    // ── Staff: para gerente, obtener por región O por manager_id (fallback) ──
-    var staffRes;
-    if (rIds.length) {
-      // Consulta principal: filtrar por regiones asignadas al gerente
-      staffRes = await sbClient.from('staff_profiles')
-        .select('*')
-        .in('region_id', rIds)
-        .in('role_id', [ROLE_SELLER, ROLE_SALES_LEADER]);
-    } else {
-      // Fallback: si no hay regiones en gerente_regiones, buscar por manager_id
-      console.log('⚠️ Sin regiones en gerente_regiones, usando fallback manager_id para gerente:', profile.id, profile.user_id);
-      staffRes = await sbClient.from('staff_profiles')
-        .select('*')
-        .eq('manager_id', profile.id)
-        .in('role_id', [ROLE_SELLER, ROLE_SALES_LEADER]);
-    }
-    if (staffRes.error) throw staffRes.error;
-    var staff = (staffRes.data || []).map(_lzMapStaff);
+    // ── Staff: para gerente, obtener por región + siempre complementar con manager_id ──
+    var staffSet = {};
+    var staffPromises = [];
 
-    // Si venía por regiones, deduplicar con manager_id para incluir staff asignado directamente
-    if (rIds.length && staff.length === 0) {
-      console.log('⚠️ Region filter returned 0 staff, trying manager_id fallback');
-      var fallbackRes = await sbClient.from('staff_profiles')
+    // Consulta 1: por regiones asignadas al gerente
+    if (rIds.length) {
+      staffPromises.push(
+        sbClient.from('staff_profiles')
+          .select('*')
+          .in('region_id', rIds)
+          .in('role_id', [ROLE_SELLER].concat(LZ_JEFE_ROLE_IDS))
+          .then(function(res) {
+            if (!res.error && res.data) res.data.forEach(function(s) { staffSet[s.id] = s; });
+          })
+      );
+    }
+
+    // Consulta 2: siempre por manager_id (para captar jefes sin region_id)
+    staffPromises.push(
+      sbClient.from('staff_profiles')
         .select('*')
         .eq('manager_id', profile.id)
-        .in('role_id', [ROLE_SELLER, ROLE_SALES_LEADER]);
-      if (!fallbackRes.error && fallbackRes.data && fallbackRes.data.length) {
-        staff = fallbackRes.data.map(_lzMapStaff);
-      }
-    }
+        .in('role_id', [ROLE_SELLER].concat(LZ_JEFE_ROLE_IDS))
+        .then(function(res) {
+          if (!res.error && res.data) res.data.forEach(function(s) { staffSet[s.id] = s; });
+        })
+    );
+
+    await Promise.all(staffPromises);
+    var staff = Object.values(staffSet).map(_lzMapStaff);
+    console.log('📦 Staff cargado:', staff.length, '(regiones:', rIds.length, '| manager_id:', profile.id, ')');
 
     var cliQuery = sbClient.from('clientes').select('*');
     if (rIds.length) {
@@ -468,7 +470,7 @@ async function loadClients() {
         notificaciones = result.notificaciones, regiones = result.regiones;
     _memCache[DB_KEY] = clientes.map(LZ.enrich);
     _memCache[VK]     = staff.filter(function(s) { return s.role_id === LZ.ROLE_SELLER; });
-    window._cacheSalesLeaders = staff.filter(function(s) { return s.role_id === LZ.ROLE_SALES_LEADER; });
+    window._cacheSalesLeaders = staff.filter(function(s) { return LZ_JEFE_ROLE_IDS.indexOf(s.role_id) >= 0; });
     _memCache[NK]     = notificaciones;
     window._cacheRegiones    = regiones;
     window._gerenteRegionIds = result.gerenteRegionIds || [];
@@ -1205,7 +1207,7 @@ function renderOverview() {
   var maxRec = 1;
   // Separar vendedores (role_id=3) y jefes (role_id=5)
   var vendedores = allStaff.filter(function(v) { return v.role_id === ROLE_SELLER; });
-  var jefes = allStaff.filter(function(v) { return v.role_id === ROLE_SALES_LEADER; });
+  var jefes = allStaff.filter(function(v) { return LZ_JEFE_ROLE_IDS.indexOf(v.role_id) >= 0; });
 
   // 1. Tarjetas de vendedores
   var vp = vendedores.map(function(v) {
@@ -1303,7 +1305,7 @@ function renderVendors() {
     var rec = vc.reduce(function(s, c) { return s + (parseInt(c.cuotas_pagadas) || 0) * (parseFloat(c.monto_cuota) || 0); }, 0);
     var at = vc.filter(function(c) { return c.estado === 'atraso'; }).length;
     var al = ns.filter(function(n) { return String(n.vid) === String(v.id) && !n.leida; }).length;
-    var esJefe = (v.role_id === ROLE_SALES_LEADER);
+    var esJefe = LZ_JEFE_ROLE_IDS.indexOf(v.role_id) >= 0;
     var cm = esJefe ? calcComisionJefe(v, cs) : calcComision(v, cs);
     var ini = v.nombre.split(' ').map(function(w) { return w[0]; }).join('').slice(0, 2).toUpperCase();
     var badgeJefe = esJefe ? '<span style="font-size:.6rem;padding:2px 7px;border-radius:10px;background:rgba(245,158,11,.2);color:#f59e0b;font-weight:700;margin-left:4px;">⭐ Jefe</span>' : '';
@@ -1416,16 +1418,16 @@ function renderSalesLeaders() {
       + '<div style="margin-top:8px;font-size:.8rem;"><span style="color:var(--gold);">💰 Su comisión (15%):</span> <strong style="color:var(--green);">USD ' + jefeCm.neta.toFixed(2) + '</strong></div>'
       + '</div>'
       + '<div class="vactions" onclick="event.stopPropagation()">'
-      + '<button class="vcbtn p" onclick="openVendorDetail(\'' + v.user_id + '\')")>👥 Ver equipo</button>'
-      + '<button class="vcbtn" onclick="editVendor(\'' + v.user_id + '\')")>✏️ Editar</button>'
-      + '<button class="vcbtn" onclick="toggleVendor(\'' + v.user_id + '\')")>' + (v.activo ? '⏸️' : '▶️') + '</button>'
+      + '<button class="vcbtn p" onclick="openVendorDetail(\'' + v.user_id + '\')">👥 Ver equipo</button>'
+      + '<button class="vcbtn" onclick="editVendor(\'' + v.user_id + '\')">✏️ Editar</button>'
+      + '<button class="vcbtn" onclick="toggleVendor(\'' + v.user_id + '\')">' + (v.activo ? '⏸️' : '▶️') + '</button>'
       + '</div></div>';
   }).join('') || '<div class="empty"><div class="ei">⭐</div><p>No hay jefes de ventas creados.</p></div>';
 }
 
 function openVendorDetail(vid) {
   var v = vby(vid);
-  var esJefe = (v.role_id === ROLE_SALES_LEADER);
+  var esJefe = LZ_JEFE_ROLE_IDS.indexOf(v.role_id) >= 0;
   var cs = ((_memCache[DB_KEY] || []) || []).map(enrich);
   var misClientes = cs.filter(function(c) { return String(c.vid) === String(vid); }).sort(function(a, b) { return a._p - b._p; });
   var rec = misClientes.reduce(function(s, c) { return s + (parseInt(c.cuotas_pagadas) || 0) * (parseFloat(c.monto_cuota) || 0); }, 0);
@@ -1435,7 +1437,7 @@ function openVendorDetail(vid) {
   var clientesEquipo = [];
   if (esJefe) {
     miEquipo = (_memCache[VK] || []).filter(function(vend) {
-      return vend.role_id === ROLE_SELLER && String(vend.manager_id) === String(v.id);
+      return LZ_JEFE_ROLE_IDS.indexOf(vend.role_id) < 0 && String(vend.manager_id) === String(v.id);
     });
     var equipoIds = miEquipo.map(function(vend) { return vend.id; });
     clientesEquipo = cs.filter(function(c) {
@@ -1629,7 +1631,7 @@ async function saveVendor() {
 
 function editVendor(vid) {
   var v = vby(vid);
-  var esJefe = (v.role_id === ROLE_SALES_LEADER);
+  var esJefe = LZ_JEFE_ROLE_IDS.indexOf(v.role_id) >= 0;
   var comps = v.comprobantes || [];
   var compsHTML = comps.length
     ? comps.map(function(c, i) {
@@ -1706,6 +1708,63 @@ function saveEditVend(vid) {
     });
 }
 
+// ── Comprobantes de comisión (vendedor/jefe) ──
+function adjuntarCompVend(vid) {
+  var v = vby(vid);
+  if (!v) { showToast('Asesor no encontrado'); return; }
+  var fileInput = document.getElementById('caVCfile');
+  var nomInput = document.getElementById('caVCnom');
+  var montoInput = document.getElementById('caVCmonto');
+  if (!fileInput || !fileInput.files || !fileInput.files.length) { showToast('Seleccioná un archivo'); return; }
+  var nombre = (nomInput ? nomInput.value.trim() : '') || 'Comprobante ' + new Date().toLocaleDateString('es-AR');
+  var monto = montoInput ? montoInput.value.trim() : '';
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    var comps = v.comprobantes || [];
+    comps.push({ nombre: nombre, monto: monto, fecha: new Date().toLocaleDateString('es-AR'), data: e.target.result });
+    sbClient.from('staff_profiles').update({ comprobantes_json: comps }).eq('user_id', vid)
+      .then(function(res) {
+        if (res.error) throw res.error;
+        v.comprobantes = comps;
+        editVendor(vid); // Re-renderizar modal
+        showToast('✅ Comprobante adjuntado');
+      })
+      .catch(function(err) { showToast('❌ Error: ' + (err.message || '')); });
+  };
+  reader.readAsDataURL(fileInput.files[0]);
+}
+
+function borrarCompVend(vid, idx) {
+  var v = vby(vid);
+  if (!v || !v.comprobantes) return;
+  v.comprobantes.splice(idx, 1);
+  sbClient.from('staff_profiles').update({ comprobantes_json: v.comprobantes }).eq('user_id', vid)
+    .then(function(res) {
+      if (res.error) throw res.error;
+      editVendor(vid); // Re-renderizar modal
+      showToast('✅ Comprobante eliminado');
+    })
+    .catch(function(err) { showToast('❌ Error: ' + (err.message || '')); });
+}
+
+function verCompVend(vid, idx) {
+  var v = vby(vid);
+  if (!v || !v.comprobantes || !v.comprobantes[idx]) return;
+  var comp = v.comprobantes[idx];
+  if (comp.data) {
+    var w = window.open('', '_blank');
+    if (comp.data.indexOf('application/pdf') >= 0) {
+      w.document.write('<embed src="' + comp.data + '" width="100%" height="100%" type="application/pdf">');
+    } else {
+      w.document.write('<img src="' + comp.data + '" style="max-width:100%;max-height:100vh;" />');
+    }
+  } else if (comp.url) {
+    window.open(comp.url, '_blank');
+  } else {
+    showToast('No hay archivo para mostrar');
+  }
+}
+
 function delVendor(vid) {
   var vs = (_memCache[VK] || []).filter(function(v) { return String(v.user_id) !== String(vid) && v.activo; });
   var clientesAfectados = (_memCache[DB_KEY] || []).filter(function(c) { return String(c.vid) === String(vid); });
@@ -1752,36 +1811,12 @@ function confirmarDelVendor(vid) {
   }).catch(function(e) { showToast('❌ Error: ' + e.message); });
 }
 
-function verCompVend(vid, idx) {
-  var vs = (_memCache[VK] || []) || [];
-  var v = null;
-  for (var i = 0; i < vs.length; i++) { if (String(vs[i].user_id) === String(vid)) { v = vs[i]; break; } }
-  if (!v || !v.comprobantes || !v.comprobantes[idx]) return;
-  var c = v.comprobantes[idx];
-  if (!c.data) return;
-  var w = window.open('', '_blank');
-  w.document.open(); w.document.close();
-  if (c.tipo && c.tipo.indexOf('image') === 0) {
-    var img = w.document.createElement('img');
-    img.src = c.data;
-    img.style.cssText = 'max-width:100%;display:block;margin:auto;';
-    w.document.body.style.cssText = 'margin:0;background:#111;display:flex;align-items:center;justify-content:center;min-height:100vh;';
-    w.document.body.appendChild(img);
-  } else {
-    var fr = w.document.createElement('iframe');
-    fr.src = c.data;
-    fr.style.cssText = 'width:100%;height:100vh;border:0;';
-    w.document.body.style.margin = '0';
-    w.document.body.appendChild(fr);
-  }
-}
-
 function toggleVendor(vid) {
   var vs = _memCache[VK] || [];
   var v = vs.filter(function(x) { return String(x.user_id) === String(vid); })[0];
   if (!v) return;
   var nuevoActivo = !v.activo;
-  _sbUpdateVendor(v.id, { activo: nuevoActivo }).then(function() {
+  _sbUpdateVendor(v.user_id, { activo: nuevoActivo }).then(function() {
     _memCache[VK] = vs.map(function(x) { if (String(x.user_id) === String(vid)) x.activo = nuevoActivo; return x; });
     renderAll(); showToast('Estado de asesor actualizado en Supabase');
   });
@@ -1828,7 +1863,7 @@ function confirmarReasignacion(clientId) {
     if (sbClient && c && v && v.user_id) {
       sbClient.from('notificaciones').insert([{
         tipo: 'comunicado', mensaje: '🚚 Gestión RE-ASIGNADA: Se te ha asignado el cobro del cliente ' + c.nombre + ' por parte del Gerente.',
-        destinatario_id: v.user_id, destinatario_rol: 'seller', remitente_id: window._gerenteProfile ? window._gerenteProfile.user_id : null,
+        destinatario_id: v.id, destinatario_rol: 'seller', remitente_id: window._gerenteProfile ? window._gerenteProfile.user_id : null,
         cliente_id: parseInt(clientId), leida: false
       }]);
     }
@@ -2297,7 +2332,9 @@ function openGerenteMora(id) {
    + '<button class="mbtn ghost" onclick="closeModal()">Cerrar</button>'
   + '</div></div>';
   document.getElementById('modal').classList.add('open');
-}  // ← Esta llave cierra la función gerenteMora (original)
+}  // ← Esta llave cierra la función openGerenteMora
+// Alias para compatibilidad con botones que llaman gerenteMora()
+var gerenteMora = openGerenteMora;
 
 // ══════════════════════════════════════════════════════
 //  GESTIÓN DE MORA (GERENTE) – async/await corregido
@@ -2375,7 +2412,7 @@ function renderVendDash() {
   var completos = cs.filter(function(c) { return c.estado === 'completo'; }).length;
   var bajas = cs.filter(function(c) { return c.estado === 'baja'; }).length;
   var pendPagos = ns.filter(function(n) { return n.tipo === 'payment' && !n.aprobada; }).length;
-  var totalPendiente = cs.filter(function(c) { return c.estado === 'activo' || c.estado === 'atraso'; }).reduce(function(s, c) { var tot = parseFloat(c.monto_total) || parseFloat(c.monto_cuota || 0) * 10; var pag = (parseInt(c.cuotas_pagadas) || 0) * (parseFloat(c.monto_cuota) || 0); return s + (tot - pag); }, 0);
+  var totalPendiente = cs.filter(function(c) { return c.estado === 'activo' || c.estado === 'atraso'; }).reduce(function(s, c) { var tot = parseFloat(c.total_usd) || (parseFloat(c.monto_cuota || 0) * (parseInt(c.cuotas_total) || 10)); var pag = (parseInt(c.cuotas_pagadas) || 0) * (parseFloat(c.monto_cuota) || 0); return s + (tot - pag); }, 0);
   var comisionProyectada = totalPendiente * (cm.tasaActual / 100);
   var scoreVend = 100; // simplified
   var scoreLbl = scoreVend >= 80 ? '🟢 Excelente' : scoreVend >= 60 ? '🟡 Bueno' : '🔴 Requiere atención';
@@ -2403,7 +2440,7 @@ function renderVendDash() {
   }).join('');
   var clientRows = cs.slice(0, 15).map(function(c) {
     var pagado = (parseInt(c.cuotas_pagadas || 0) * parseFloat(c.monto_cuota || 0));
-    var total_c = parseFloat(c.monto_total || 0) || (parseFloat(c.monto_cuota || 0) * 10);
+    var total_c = parseFloat(c.total_usd || 0) || (parseFloat(c.monto_cuota || 0) * (parseInt(c.cuotas_total) || 10));
     var pctBar = total_c > 0 ? Math.min(100, Math.round(pagado / total_c * 100)) : 0;
     return '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer;" onclick="openClientDetail(' + c.id + ')">'
       + '<div class="sem ' + c._s + '"></div>'
@@ -2706,7 +2743,7 @@ function renderEquipoDash() {
     var retV = vc.length > 0 ? Math.round((vc.length - bajasV) / vc.length * 100) : 100;
     var moraV = vc.length > 0 ? Math.round(atV / vc.length * 100) : 0;
     var scoreV = Math.min(100, Math.round((retV * 0.3) + (Math.max(0, 100 - moraV * 2) * 0.3) + (Math.min(100, cm.ventasMes / 3 * 100) * 0.25) + (Math.min(100, compV / Math.max(1, vc.length) * 100 * 0.15))));
-    return { v: v, n: vc.length, rec: rec, cm: cm, at: atV, comp: compV, ret: retV, mora: moraV, score: scoreV, tkProm: vc.length > 0 ? Math.round(vc.reduce(function(s, c) { return s + (parseFloat(c.monto_total) || parseFloat(c.monto_cuota || 0) * 10); }, 0) / vc.length) : 0 };
+    return { v: v, n: vc.length, rec: rec, cm: cm, at: atV, comp: compV, ret: retV, mora: moraV, score: scoreV, tkProm: vc.length > 0 ? Math.round(vc.reduce(function(s, c) { return s + (parseFloat(c.total_usd) || parseFloat(c.monto_cuota || 0) * (parseInt(c.cuotas_total) || 10)); }, 0) / vc.length) : 0 };
   }).sort(function(a, b) { return b.rec - a.rec; });
   var maxRec = vData[0] ? Math.max(1, vData[0].rec) : 1;
   var byMonth = {};
@@ -3133,7 +3170,7 @@ window.verVoucherGerente = function(clientId) {
       var contratoEstado = ctRes.data ? ctRes.data.estado : null;
       var pagoCompleto = (parseInt(c.cuotas_pagadas) === parseInt(c.cuotas_total));
       var tieneFirma = c.firma_url && c.firma_url.length > 100;
-      var contratoAutorizado = (contratoEstado === 'autorizado_ceo');
+      var contratoAutorizado = (contratoEstado === 'autorizado_ceo' || contratoEstado === 'firmado');
       var desbloqueado = pagoCompleto && tieneFirma && contratoAutorizado;
       var modalHtml = '<div class="mhead"><div><h2>🎫 Voucher de ' + esc(c.nombre) + '</h2></div><button class="mclose" onclick="closeModal()">✕</button></div>';
       if (desbloqueado) {
@@ -3432,17 +3469,24 @@ async function guardarTicketGerente() {
       var urlRes = sbClient.storage.from('ticket_adjuntos').getPublicUrl(fileName);
       adjuntosUrls.push(urlRes.data.publicUrl);
     }
-    // 2. Crear ticket vía RPC
-    var rpcRes = await sbClient.rpc('crear_ticket', {
-      p_tipo: categoria, p_mensaje: desc, p_remitente_id: window._gerenteProfile.user_id,
-      p_cliente_id: clienteId, p_vendedor_id: vendedorId, p_region_id: regionId,
-      p_asignado_a: asignado, p_prioridad: prioridad, p_categoria: categoria
-    });
+    // 2. Crear ticket directamente en tabla notificaciones
+    var rpcRes = await sbClient.from('notificaciones').insert({
+      tipo: categoria || 'soporte',
+      mensaje: desc,
+      remitente_id: window._gerenteProfile.user_id,
+      cliente_id: clienteId ? parseInt(clienteId) : null,
+      vendedor_id: vendedorId ? parseInt(vendedorId) : null,
+      region_id: regionId ? parseInt(regionId) : null,
+      asignado_a: asignado || null,
+      prioridad: prioridad || 'media',
+      categoria: categoria || 'general',
+      estado: 'abierto',
+      nivel_actual: 1,
+      adjuntos: adjuntosUrls.length ? adjuntosUrls : [],
+      leida: false
+    }).select().single();
     if (rpcRes.error) throw rpcRes.error;
-    // 3. Si hay adjuntos, guardarlos en el registro del ticket
-    if (adjuntosUrls.length && rpcRes.data) {
-      await sbClient.from('notificaciones').update({ adjuntos: adjuntosUrls }).eq('id', rpcRes.data);
-    }
+    // 3. Ticket creado (adjuntos ya incluidos en el insert)
     showToast('✅ Ticket creado' + (adjuntosUrls.length ? ' con ' + adjuntosUrls.length + ' adjunto(s)' : ''));
     closeModal();
     cargarTicketsGerente();
