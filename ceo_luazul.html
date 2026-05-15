@@ -12,8 +12,8 @@
 <title>Luazul Smart Travel · CEO v2 — 9 Regiones</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Mulish:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <style>
 :root{
   --cyan:#06b6d4;
@@ -211,6 +211,12 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
       <div class="tab" onclick="showTab('comisiones_bloq')" id="tab-comisiones_bloq" style="color:#f87171;">🔒 Com. Bloqueadas</div>
       <div class="tab" onclick="showTab('comunicaciones')" id="tab-comunicaciones" style="color:#38bdf8;">📩 Comunicaciones</div>
       <div class="tab" onclick="showTab('vouchers')" id="tab-vouchers" style="color:#fbbf24;">🎟️ Vouchers</div>
+      <div class="tab" onclick="showTab('catalogo')" id="tab-catalogo" style="color:#fbbf24;">🏷️ Catálogo</div>
+      <div class="tab" onclick="showTab('premios_referidos')" id="tab-premios_referidos" style="color:#fbbf24;">🎁 Premios Referidos</div>
+      <div class="tab" onclick="showTab('auditoria')" id="tab-auditoria" style="color:#fca5a5;">👁️ Auditoría</div>
+      <div class="tab" onclick="showTab('divisas')" id="tab-divisas" style="color:#22d3ee;">💱 Divisas</div>
+      <div class="tab" onclick="showTab('simulador')" id="tab-simulador" style="color:#a78bfa;">📊 Simulador</div>
+      <div class="tab" onclick="showTab('tickets')" id="tab-tickets" style="color:#fb923c;">🎫 Tickets</div>
     </div>
 
     <!-- ══ OVERVIEW ══ -->
@@ -461,6 +467,112 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
       <div id="voucherClientesBody" style="min-height:300px;"></div>
     </div>
 
+    <!-- ═══ DIVISAS ═══ -->
+    <div class="tabpg" id="tabpg-divisas">
+      <div class="sec-head">
+        <h2>💱 Divisas — Cotizaciones y Márgenes</h2>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button onclick="actualizarCotizaciones()" style="padding:8px 18px;border-radius:9px;background:linear-gradient(135deg,#06b6d4,#22d3ee);border:none;color:#000;font-family:inherit;font-size:.78rem;font-weight:700;cursor:pointer;">🔄 Actualizar cotizaciones</button>
+          <button onclick="renderDivisas()" style="padding:8px 16px;border-radius:9px;background:rgba(255,255,255,.05);border:1px solid var(--border);color:var(--muted);font-family:inherit;font-size:.78rem;font-weight:700;cursor:pointer;">🔁 Recargar</button>
+        </div>
+      </div>
+      <div id="divisasLastUpdate" style="font-size:.72rem;color:var(--muted);margin-bottom:12px;"></div>
+      <div class="twrap" id="divisasTableWrap">
+        <div class="thead-ceo" style="grid-template-columns:1.2fr 1fr 1fr .8fr .8fr 1.4fr .8fr;">
+          <div>Moneda</div><div>Compra</div><div>Venta</div><div>Margen %</div><div>Fuente</div><div>Última actualización</div><div>Acciones</div>
+        </div>
+        <div id="divisasBody"></div>
+      </div>
+    </div>
+
+    <!-- ═══ SIMULADOR DE CUOTAS ═══ -->
+    <div class="tabpg" id="tabpg-simulador">
+      <div class="sec-head">
+        <h2>📊 Simulador de Cuotas</h2>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px;margin-bottom:24px;">
+        <div>
+          <div class="ml">Destino</div>
+          <select id="simDestino" class="msel" style="width:100%;" onchange="simOnDestinoChange()">
+            <option value="">Cargando destinos...</option>
+          </select>
+        </div>
+        <div>
+          <div class="ml">Paquete</div>
+          <select id="simPaquete" class="msel" style="width:100%;" onchange="simCalcular()">
+            <option value="">Seleccione destino primero</option>
+          </select>
+        </div>
+        <div>
+          <div class="ml">Cuotas</div>
+          <select id="simCuotas" class="msel" style="width:100%;" onchange="simCalcular()">
+            <option value="6">6 cuotas</option>
+            <option value="10">10 cuotas</option>
+            <option value="12" selected>12 cuotas</option>
+            <option value="18">18 cuotas</option>
+          </select>
+        </div>
+      </div>
+      <div id="simResultado" style="min-height:200px;"></div>
+    </div>
+
+    <div class="tabpg" id="tabpg-catalogo">
+      <div class="sec-head"><h2>🏷️ Catálogo de Precios</h2>
+        <button class="addbtn" onclick="openAddCatalogo()" style="background:var(--gold-bg);border:1px solid var(--gold-bd);color:var(--gold);">➕ Nuevo paquete</button>
+      </div>
+      <div id="catalogoGrid" style="margin-top:16px;"></div>
+    </div>
+
+    <!-- ═══ TAB: PREMIOS REFERIDOS ═══ -->
+    <div class="tabpg" id="tabpg-premios_referidos">
+      <div class="sec-head"><h2>🎁 Premios por Referidos</h2>
+        <button onclick="renderPremiosReferidos()" style="padding:8px 16px;border-radius:9px;background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.25);color:#fbbf24;font-family:inherit;font-size:.78rem;font-weight:700;cursor:pointer;">🔄 Actualizar</button>
+      </div>
+      <div id="premiosReferidosBody" style="margin-top:16px;"></div>
+    </div>
+
+    <!-- ═══ TAB: AUDITORÍA ═══ -->
+    <div class="tabpg" id="tabpg-auditoria">
+      <div class="sec-head"><h2>👁️ Registro de Actividad</h2>
+        <button onclick="renderAuditoria()" style="padding:8px 16px;border-radius:9px;background:rgba(252,165,165,.1);border:1px solid rgba(252,165,165,.25);color:#fca5a5;font-family:inherit;font-size:.78rem;font-weight:700;cursor:pointer;">🔄 Refrescar</button>
+      </div>
+      <div id="auditoriaBody" style="margin-top:16px;"></div>
+    </div>
+
+    <!-- ═══ TICKETS ═══ -->
+    <div class="tabpg" id="tabpg-tickets">
+      <div class="sec-head">
+        <h2>🎫 Sistema de Tickets de Soporte</h2>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;">
+          <button onclick="modalNuevoTicket()" style="padding:8px 16px;border-radius:9px;background:var(--gold-bg);border:1px solid var(--gold-bd);color:var(--gold);font-family:inherit;font-size:.78rem;font-weight:700;cursor:pointer;">➕ Nuevo Ticket</button>
+          <button onclick="renderTickets()" style="padding:8px 16px;border-radius:9px;background:rgba(255,255,255,.05);border:1px solid var(--border);color:var(--muted);font-family:inherit;font-size:.78rem;font-weight:700;cursor:pointer;">🔄 Actualizar</button>
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;">
+        <select id="ticketEstadoFilt" class="msel" onchange="renderTickets()">
+          <option value="todos">Todos los estados</option>
+          <option value="abierto">Abiertos</option>
+          <option value="en_progreso">En progreso</option>
+          <option value="resuelto">Resueltos</option>
+          <option value="cerrado">Cerrados</option>
+        </select>
+        <select id="ticketPrioridadFilt" class="msel" onchange="renderTickets()">
+          <option value="todos">Todas las prioridades</option>
+          <option value="urgente">🔴 Urgente</option>
+          <option value="alta">🟠 Alta</option>
+          <option value="media">🟡 Media</option>
+          <option value="baja">🟢 Baja</option>
+        </select>
+        <div class="sbox"><span>🔍</span><input type="text" id="ticketSearch" placeholder="Buscar tickets..." oninput="renderTickets()"></div>
+      </div>
+      <div class="twrap">
+        <div class="trow-ceo" style="grid-template-columns:100px 2fr 1fr 90px 80px 110px 50px 70px;">
+          <div>Nº Ticket</div><div>Asunto</div><div>Cliente / Vendedor</div><div>Estado</div><div>Prioridad</div><div>Actividad</div><div>Nv.</div><div>Acciones</div>
+        </div>
+        <div id="ticketsBody"></div>
+      </div>
+    </div>
+
   </main>
 </div>
 
@@ -478,7 +590,7 @@ var ROLE_SALES_LEADER = 5; // Jefe de Ventas
 var RK = 'luazul_ceo_regiones';
 var _cacheGerentes=null, _cacheVendedores=null, _cacheClientes=null, _cachePagos=null, _cacheRegiones=null;
 // UUID del CEO autenticado — se setea en cLogin / DOMContentLoaded
-// Usado para: aprobado_por, crear canales, enviar mensajes, etc.
+// Necesario para RPC resolver_mora(p_aprobado_por)
 var _ceoUid = null;
 var _regFiltMode = 'activo'; // 'activo' = solo con datos | 'todas' = las 26
 
@@ -519,7 +631,7 @@ function cargarDatosSupabase(){
       if(grRes.error) throw grRes.error;
       var grData=grRes.data||[];
       _cacheGerentes.forEach(function(g){
-        g.region_ids=grData.filter(function(x){return x.gerente_id===g.user_id;}).map(function(x){return x.region_id;});
+        g.region_ids=grData.filter(function(x){return x.gerente_id===g.id;}).map(function(x){return x.region_id;});
       });
       return sbClient.from('staff_profiles')
         .select('*')
@@ -528,13 +640,6 @@ function cargarDatosSupabase(){
     .then(function(vRes){
       if(vRes.error) throw vRes.error;
       _cacheVendedores=(vRes.data||[]).map(mapVendedor);
-      return sbClient.from('staff_profiles')
-        .select('*')
-        .eq('role_id', ROLE_SALES_LEADER);
-    })
-    .then(function(jRes){
-      if(jRes.error) throw jRes.error;
-      _cacheJefes=(jRes.data||[]).map(mapGerente);
       return sbClient.from('clientes')
         .select('id,user_id,seller_id,nombre,email,telefono,documento,estado,destino,paquete,fecha_viaje,monto_cuota,cuotas_total,cuotas_pagadas,total_usd,fecha_alta,notas,region_id');
     })
@@ -658,7 +763,7 @@ function cLogin(){
           // ✅ Email + role_id=1 verificados
           var meta = result.data.user.user_metadata || {};
           var nombre = profRes.data.nombre || meta.nombre || meta.full_name || email.split('@')[0];
-          // Guardar UUID del CEO para aprobaciones, mensajes, canales, etc.
+          // Guardar UUID del CEO para RPCs posteriores (resolver_mora, etc.)
           _ceoUid = String(result.data.user.id);
           try { sessionStorage.setItem('luazul_ceo','1'); sessionStorage.setItem('luazul_ceo_nombre', nombre); } catch(e){}
           var lw = document.getElementById('loginWrap');
@@ -801,7 +906,6 @@ function renderAll(){
 function reg(){return _cacheRegiones||dbg(RK)||[];}
 function ger(){return _cacheGerentes||[];}
 function vend(){return _cacheVendedores||[];}
-function jefes(){return _cacheJefes||[];}
 function cli(){return (_cacheClientes||[]).map(enrich);}
 
 // ── SELECTOR DE REGIONES con checkboxes por país ───────
@@ -845,7 +949,7 @@ function enrich(c){
 }
 function rby(id){return reg().find(function(r){return String(r.id)===String(id);})||{nombre:'—',bandera:''};}
 function gby(id){return ger().find(function(g){return String(g.id)===String(id);})||{nombre:'—'};}
-function vby(id){return vend().find(function(v){return String(v.id)===String(id)||String(v.user_id)===String(id);})||{nombre:'Sin asignar',id:'',user_id:''};}
+function vby(id){return vend().find(function(v){return String(v.user_id)===String(id);})||{nombre:'Sin asignar',id:'',user_id:''};}
 function fmtTs(ts){var d=Math.round((Date.now()-ts)/60000);return d<60?'Hace '+d+' min':d<1440?'Hace '+Math.round(d/60)+' h':'Hace '+Math.round(d/1440)+' días';}
 function fmtUSD(n){return 'USD '+Math.round(n).toLocaleString('es-AR');}
 function getClientMonth(c){
@@ -972,6 +1076,13 @@ function showTab(id){
   if(id==='comisiones_bloq')   renderComisionesBloqueadas();
   if(id==='comunicaciones')    renderComunicacionesCeo();
   if(id==='vouchers')         renderVoucherClientes();
+  // ── Checkpoint v3.2: DIVISAS, SIMULADOR, TICKETS ──
+  if(id==='catalogo')         renderCatalogo();
+  if(id==='premios_referidos') renderPremiosReferidos();
+  if(id==='auditoria')        renderAuditoria();
+  if(id==='divisas')          renderDivisas();
+  if(id==='simulador')        simLoadDestinos();
+  if(id==='tickets')          renderTickets();
 }
 
 // ── POPULATE FILTERS ─────────────────────────────────
@@ -1050,7 +1161,6 @@ function renderOverview(){
   document.getElementById('oStats').innerHTML=[
     {i:'🌎',v:rs.length,      l:'Regiones activas',  c:''},
     {i:'👔',v:gs.length,      l:'Gerentes',           c:'var(--purple)'},
-    {i:'⭐',v:jefes().length, l:'Jefes de Ventas',    c:'#10b981'},
     {i:'🧑‍💼',v:vs.length,     l:'Asesores',           c:'var(--gold)'},
     {i:'👥',v:cs.length,      l:'Clientes totales',   c:''},
     {i:'✅',v:activos,         l:'Activos',            c:'var(--green)'},
@@ -1450,8 +1560,7 @@ function renderPagos(){
 }
 
 function aprobarPagoSb(pagoId){
-  var _ceoId = _ceoUid || 'CEO';
-  sbClient.from('pagos').update({estado:'aprobado',aprobado_por:_ceoId,fecha_pago:new Date().toISOString()}).eq('id',pagoId).select().single()
+  sbClient.from('pagos').update({estado:'aprobado',aprobado_por:'CEO',fecha_pago:new Date().toISOString()}).eq('id',pagoId).select().single()
     .then(function(res){
       if(res.error) throw res.error;
       var idx = (_cachePagos||[]).findIndex(function(x){ return String(x.id)===String(pagoId); });
@@ -1466,30 +1575,13 @@ function aprobarTodos(){
   var pend = (_cachePagos||[]).filter(function(n){ return n.estado==='pendiente'; });
   if(!pend.length){ showToast('Sin pagos pendientes'); return; }
   var ids = pend.map(function(n){ return n.id; });
-  var _ceoId = _ceoUid || 'CEO';
-  sbClient.from('pagos').update({estado:'aprobado',aprobado_por:_ceoId,fecha_pago:new Date().toISOString()}).in('id',ids)
+  sbClient.from('pagos').update({estado:'aprobado',aprobado_por:'CEO',fecha_pago:new Date().toISOString()}).in('id',ids)
     .then(function(res){
       if(res.error) throw res.error;
-      (_cachePagos||[]).forEach(function(n){ if(ids.indexOf(n.id)>=0){ n.estado='aprobado'; n.aprobado_por=_ceoId; } });
-      // Actualizar cuotas_pagadas de cada cliente afectado
-      var updates = [];
-      pend.forEach(function(p){
-        var c = (_cacheClientes||[]).find(function(x){ return String(x.id)===String(p.cliente_id); });
-        if(c){
-          var cuotaNum = parseInt(p.numero_cuota);
-          var cuotasAct = parseInt(c.cuotas_pagadas)||0;
-          if(cuotaNum > cuotasAct){
-            var nuevoEstado = cuotaNum >= parseInt(c.cuotas_total||10) ? 'completo' : c.estado;
-            updates.push(
-              sbClient.from('clientes').update({cuotas_pagadas:cuotaNum, estado:nuevoEstado}).eq('id',String(p.cliente_id))
-                .then(function(){ c.cuotas_pagadas=cuotaNum; c.estado=nuevoEstado; })
-            );
-          }
-        }
-      });
-      return updates.length ? Promise.all(updates) : Promise.resolve();
+      (_cachePagos||[]).forEach(function(n){ if(ids.indexOf(n.id)>=0){ n.estado='aprobado'; n.aprobado_por='CEO'; } });
+      renderPagos();
+      showToast('✅ '+pend.length+' pagos aprobados por CEO');
     })
-    .then(function(){ renderPagos(); showToast('✅ '+pend.length+' pagos aprobados · clientes actualizados'); })
     .catch(function(e){ showToast('❌ Error: '+(e.message||'')); });
 }
 
@@ -1501,8 +1593,8 @@ function getPendingPayments(){
     if (p.estado !== 'pendiente') return false;
     // Siempre mostrar cuota 1 pendiente
     if (parseInt(p.numero_cuota) === 1) return true;
-    // Mostrar solo pagos del mes actual (por fecha_vencimiento)
-    var fecha = p.fecha_vencimiento ? new Date(p.fecha_vencimiento) : (p.created_at ? new Date(p.created_at) : null);
+    // Mostrar solo pagos del mes actual
+    var fecha = p.created_at ? new Date(p.created_at) : null;
     if (!fecha) return false;
     return fecha.getMonth() === mesActual && fecha.getFullYear() === anioActual;
   }).map(function(p){
@@ -1769,9 +1861,12 @@ function saveCeoUser(uid, idx){
   if(!nuevaPass){showToast('Ingresa una nueva contrasena');return;}
   if(nuevaPass.length < 8){showToast('Minimo 8 caracteres');return;}
   if(nuevaPass !== confirmaPass){showToast('Las contrasenas no coinciden');return;}
-  // Nota: cambiar contrasena de auth requiere Service Role Key (backend).
-  // Redirigimos al Dashboard de Supabase para completar el cambio.
-  showToast('ℹ️ Para cambiar la contrasena, usá el Dashboard de Supabase → Authentication → Users → Edit.');
+  var users=getCeoUsers().map(function(u){
+    if(String(u.id)===String(uid)){ u.password=nuevaPass.trim(); }
+    return u;
+  });
+  dbs(CEO_USERS_KEY,users);
+  showToast('Contrasena actualizada correctamente');
   var inp1=document.getElementById('ceou-pass-'+idx);
   var inp2=document.getElementById('ceou-pass2-'+idx);
   if(inp1) inp1.value='';
@@ -2096,7 +2191,6 @@ function saveNewGerente(){
   var pass   = (document.getElementById('gPass').value||'').trim();
   var regionIds = getSelectedRegionIds();
   if(!nombre||!email||!pass){ showToast('⚠️ Nombre, email y contraseña son obligatorios'); return; }
-  if(regionIds.length===0){ showToast('⚠️ Seleccioná al menos una región'); return; }
 
   var btn = document.querySelector('#modal .mbtn.purple');
   if(btn){btn.disabled=true; btn.textContent='⏳ Creando...';}
@@ -2114,7 +2208,7 @@ function saveNewGerente(){
       role_id:    ROLE_MANAGER,
       nombre:     nombres[0],
       apellido:   nombres.slice(1).join(' ')||'',
-      badge:      email, activo:     true,
+      badge:      email, activo: true,
       region_id:  regionIds.length > 0 ? regionIds[0] : null,
       ciudad:     (document.getElementById('gCiudad').value||'').trim()||null,
       telefono1:  (document.getElementById('gTel1').value||'').trim()||null,
@@ -2131,8 +2225,7 @@ function saveNewGerente(){
     var newGer = mapGerente(ins.data);
     newGer.region_ids = regionIds;
     if(regionIds.length > 0){
-      var gerUUID = ins.data.user_id || uid;
-      var rels = regionIds.map(function(rid){ return{gerente_id:gerUUID, region_id:rid}; });
+      var rels = regionIds.map(function(rid){ return{gerente_id:ins.data.id, region_id:rid}; });
       return sbClient.from('gerente_regiones').insert(rels).then(function(){ return newGer; });
     }
     return newGer;
@@ -2161,7 +2254,6 @@ function openGerDetail(gid){
   var g = ger().find(function(x){ return String(x.user_id)===String(gid); });
   if(!g){ showToast('⚠️ Gerente no encontrado'); return; }
   var r = rby(g.rid);
-  var gJefes = jefes().filter(function(j){ return j._raw && String(j._raw.manager_id)===String(g.id); });
   var comps = g.comprobantes || [];
   var compsHTML = comps.length
     ? comps.map(function(c, i){
@@ -2190,27 +2282,6 @@ function openGerDetail(gid){
     '<div style="grid-column:span 2;background:rgba(251,191,36,.07);border:1px solid rgba(251,191,36,.2);border-radius:10px;padding:10px 14px;">'+
     '<div style="font-size:.65rem;color:#fbbf24;font-weight:700;margin-bottom:4px;">💰 CBU / ALIAS BANCARIO</div>'+
     '<div style="font-family:monospace;font-size:.88rem;color:var(--text);">'+(g.cbu||'<span style="color:var(--muted);">No cargado</span>')+'</div></div>'+
-    '</div>'+
-    '<div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#10b981;margin-bottom:8px;">⭐ Jefes de Ventas ('+gJefes.length+')</div>'+
-    '<div style="max-height:200px;overflow-y:auto;margin-bottom:14px;">'+
-    (gJefes.length ? gJefes.map(function(j){
-      var jVends=vend().filter(function(v){return String(v._raw.manager_id)===String(j.id);});
-      var jIni=(j.nombre||'??').split(' ').map(function(w){return w[0];}).join('').slice(0,2).toUpperCase();
-      return '<div style="background:rgba(16,185,129,.06);border:1px solid rgba(16,185,129,.2);border-radius:10px;padding:12px;margin-bottom:8px;">'
-        +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">'
-        +'<div style="width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,#059669,#10b981);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:.72rem;color:#fff;">'+jIni+'</div>'
-        +'<div style="flex:1;min-width:0;">'
-        +'<div style="font-weight:700;font-size:.88rem;">'+j.nombre+'</div>'
-        +'<div style="font-size:.68rem;color:var(--muted);">'+(j.email||'Sin email')+'</div>'
-        +'</div>'
-        +'<span class="bpill '+(j.activo?'on':'off')+'">'+(j.activo?'Activo':'Inactivo')+'</span>'
-        +'</div>'
-        +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:.72rem;">'
-        +(j.telefono1?'<div style="color:var(--muted);">📞 '+(j.telefono1||'—')+'</div>':'')
-        +(j.ciudad?'<div style="color:var(--muted);">📍 '+(j.ciudad||'')+'</div>':'')
-        +'<div style="color:var(--muted);">👔 Vendedores a cargo: <strong style="color:var(--text);">'+jVends.length+'</strong></div>'
-        +'</div></div>';
-    }).join('') : '<div style="text-align:center;padding:14px;color:var(--muted);font-size:.82rem;">Este gerente no tiene jefes de ventas asignados</div>')+
     '</div>'+
     '<div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--gold);margin-bottom:8px;">📎 Comprobantes de Comisión</div>'+
     '<div id="gerCompsWrap" style="max-height:180px;overflow-y:auto;margin-bottom:12px;">'+compsHTML+'</div>'+
@@ -2322,10 +2393,10 @@ function saveEditGerente(gid){
     .then(function(res){
       if(res.error) throw res.error;
       var updatedData = res.data;
-      return sbClient.from('gerente_regiones').delete().eq('gerente_id', g.user_id)
+      return sbClient.from('gerente_regiones').delete().eq('gerente_id', g.id)
         .then(function(){
           if(newRegionIds.length > 0){
-            var rels = newRegionIds.map(function(rid){ return{gerente_id:g.user_id, region_id:rid}; });
+            var rels = newRegionIds.map(function(rid){ return{gerente_id:g.id, region_id:rid}; });
             return sbClient.from('gerente_regiones').insert(rels);
           }
         })
@@ -3120,7 +3191,7 @@ function aprobarPago(clientId, cuotaKey, dbKey){
 
   // PASO 1 — Aprobar el pago en tabla `pagos`
   sbClient.from('pagos')
-    .update({ estado: 'aprobado', aprobado_por: _ceoUidNow || 'CEO', fecha_pago: new Date().toISOString() })
+    .update({ estado: 'aprobado', aprobado_por: 'CEO', fecha_pago: new Date().toISOString() })
     .eq('id', _pagoId)
     .select().single()
     .then(function(res){
@@ -3146,17 +3217,15 @@ function aprobarPago(clientId, cuotaKey, dbKey){
       }
     })
     .then(function(){
-      // PASO 3 — Resolver mora directamente en tabla clientes
-      // Limpia mora_json y actualiza estado si el cliente estaba en mora
-      var c = (_cacheClientes||[]).find(function(x){ return String(x.id) === _clientId; });
-      if(c && c.mora_json){
-        return sbClient.from('clientes')
-          .update({ mora_json: null, estado: 'activo' })
-          .eq('id', _clientId)
-          .then(function(){
-            c.mora_json = null;
-            c.estado = 'activo';
-          });
+      // PASO 3 — RPC resolver_mora (Checkpoint v3.1 §5A)
+      // Limpia mora del cliente si corresponde. p_cliente_id es UUID string.
+      if(_ceoUidNow) {
+        return sbClient.rpc('resolver_mora', {
+          p_cliente_id:   _clientId,
+          p_aprobado_por: _ceoUidNow
+        }).then(function(rpcRes){
+          if(rpcRes.error) console.warn('[RPC] resolver_mora:', rpcRes.error.message);
+        });
       }
     })
     .then(function(){
@@ -3442,77 +3511,63 @@ function marcarRevisadoCEO(contratoId){
 }
 
 // ══════════════════════════════════════════════════════
-//  COMISIONES BLOQUEADAS
-//  Calcula desde cache: asesores con clientes en mora
-//  y el monto de comision congelado.
+//  COMISIONES BLOQUEADAS — Checkpoint v3.1 §5A + vista SQL
+//  Lee la vista comisiones_bloqueadas generada en el SQL.
+//  Muestra asesores con clientes en mora y el monto congelado.
 // ══════════════════════════════════════════════════════
 function renderComisionesBloqueadas(){
   var el = document.getElementById('comisionesBloqBody');
   if(!el) return;
+  el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted);">\u23F3 Cargando comisiones bloqueadas...</div>';
 
-  // Construir datos desde cache local (sin vista SQL)
-  var vs = vend() || [];
-  var cs = cli() || [];
-  var bloqMap = {};
+  sbClient.from('comisiones_bloqueadas')
+    .select('*')
+    .order('monto_comision_congelado_usd', { ascending: false })
+    .then(function(res){
+      if(res.error) throw res.error;
+      var rows = res.data || [];
+      if(!rows.length){
+        el.innerHTML = '<div style="text-align:center;padding:50px;background:rgba(5,18,55,.5);border:1px solid rgba(100,160,255,.15);border-radius:18px;">'
+          + '<div style="font-size:2.5rem;margin-bottom:14px;">\uD83D\uDCB0</div>'
+          + '<div style="font-size:1rem;font-weight:700;margin-bottom:6px;">Sin comisiones bloqueadas</div>'
+          + '<div style="font-size:.78rem;color:rgba(200,220,255,.6);">Todos los asesores tienen su comisión desbloqueada. \u00a1Buen trabajo!</div>'
+          + '</div>';
+        return;
+      }
 
-  vs.forEach(function(v){
-    var clientesMora = cs.filter(function(c){ return String(c.vid)===String(v.id) && c.mora_json && (Array.isArray(c.mora_json)?c.mora_json.length>0:true); });
-    if(!clientesMora.length) return;
-    var totalMonto = 0;
-    clientesMora.forEach(function(c){
-      var cuotasPend = (parseInt(c.cuotas_total)||0) - (parseInt(c.cuotas_pagadas)||0);
-      totalMonto += cuotasPend * (parseFloat(c.monto_cuota)||0);
+      var totalCongelado = rows.reduce(function(s, r){ return s + (parseFloat(r.monto_comision_congelado_usd) || 0); }, 0);
+
+      var html = '<div style="background:rgba(248,113,113,.06);border:1px solid rgba(248,113,113,.2);border-radius:14px;padding:16px 20px;margin-bottom:20px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">'
+        + '<div style="font-size:.72rem;color:var(--muted);">Total comisiones congeladas</div>'
+        + '<div style="font-size:1.4rem;font-weight:900;color:#f87171;">USD ' + totalCongelado.toLocaleString('es-AR', {maximumFractionDigits:0}) + '</div>'
+        + '</div>';
+
+      html += '<div style="display:flex;flex-direction:column;gap:12px;">';
+      rows.forEach(function(r){
+        var pct   = parseFloat(r.porcentaje_comision) || 0;
+        var monto = parseFloat(r.monto_comision_congelado_usd) || 0;
+        html += '<div style="background:rgba(5,18,55,.65);border:1px solid rgba(248,113,113,.2);border-radius:14px;padding:18px 20px;">'
+          + '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px;">'
+          +   '<div>'
+          +     '<div style="font-weight:800;font-size:.9rem;">' + (r.asesor_nombre || '\u2014') + '</div>'
+          +     '<div style="font-size:.72rem;color:rgba(200,220,255,.6);margin-top:2px;">' + (r.asesor_email || '') + ' \u00b7 Com: ' + pct + '%</div>'
+          +   '</div>'
+          +   '<div style="text-align:right;">'
+          +     '<div style="font-size:1.1rem;font-weight:900;color:#f87171;">USD ' + monto.toLocaleString('es-AR', {maximumFractionDigits:0}) + '</div>'
+          +     '<div style="font-size:.68rem;color:var(--muted);">' + (r.clientes_en_mora || 0) + ' cliente' + ((r.clientes_en_mora||0)===1?'':'s') + ' en mora</div>'
+          +   '</div>'
+          + '</div>'
+          + '<div style="font-size:.7rem;color:rgba(248,113,113,.6);padding:6px 10px;background:rgba(248,113,113,.06);border-radius:8px;">'
+          +   '\uD83D\uDD12 Comisi\u00f3n congelada hasta que el CEO apruebe los pagos en mora'
+          + '</div>'
+          + '</div>';
+      });
+      html += '</div>';
+      el.innerHTML = html;
+    })
+    .catch(function(e){
+      el.innerHTML = '<div style="padding:30px;color:#f87171;text-align:center;">\u274C Error al cargar vista: ' + (e.message||'') + '<br><small>Verificar que la vista comisiones_bloqueadas exista en Supabase.</small></div>';
     });
-    var pctCom = calcComision(v);
-    bloqMap[v.id] = {
-      asesor_nombre: v.nombre,
-      asesor_email: v.email,
-      porcentaje_comision: pctCom,
-      monto_comision_congelado_usd: totalMonto * pctCom / 100,
-      clientes_en_mora: clientesMora.length
-    };
-  });
-
-  var rows = Object.values(bloqMap).sort(function(a,b){ return (b.monto_comision_congelado_usd||0)-(a.monto_comision_congelado_usd||0); });
-
-  if(!rows.length){
-    el.innerHTML = '<div style="text-align:center;padding:50px;background:rgba(5,18,55,.5);border:1px solid rgba(100,160,255,.15);border-radius:18px;">'
-      + '<div style="font-size:2.5rem;margin-bottom:14px;">\uD83D\uDCB0</div>'
-      + '<div style="font-size:1rem;font-weight:700;margin-bottom:6px;">Sin comisiones bloqueadas</div>'
-      + '<div style="font-size:.78rem;color:rgba(200,220,255,.6);">Todos los asesores tienen su comisi\u00f3n desbloqueada. \u00a1Buen trabajo!</div>'
-      + '</div>';
-    return;
-  }
-
-  var totalCongelado = rows.reduce(function(s, r){ return s + (parseFloat(r.monto_comision_congelado_usd) || 0); }, 0);
-
-  var html = '<div style="background:rgba(248,113,113,.06);border:1px solid rgba(248,113,113,.2);border-radius:14px;padding:16px 20px;margin-bottom:20px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">'
-    + '<div style="font-size:.72rem;color:var(--muted);">Total comisiones congeladas</div>'
-    + '<div style="font-size:1.4rem;font-weight:900;color:#f87171;">USD ' + totalCongelado.toLocaleString('es-AR', {maximumFractionDigits:0}) + '</div>'
-    + '</div>';
-
-  html += '<div style="display:flex;flex-direction:column;gap:12px;">';
-  rows.forEach(function(r){
-    var pct   = parseFloat(r.porcentaje_comision) || 0;
-    var monto = parseFloat(r.monto_comision_congelado_usd) || 0;
-    html += '<div style="background:rgba(5,18,55,.65);border:1px solid rgba(248,113,113,.2);border-radius:14px;padding:18px 20px;">'
-      + '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px;">'
-      +   '<div>'
-      +     '<div style="font-weight:800;font-size:.9rem;">' + (r.asesor_nombre || '\u2014') + '</div>'
-      +     '<div style="font-size:.72rem;color:rgba(200,220,255,.6);margin-top:2px;">' + (r.asesor_email || '') + ' \u00b7 Com: ' + pct + '%</div>'
-      +   '</div>'
-      +   '<div style="text-align:right;">'
-      +     '<div style="font-size:1.1rem;font-weight:900;color:#f87171;">USD ' + monto.toLocaleString('es-AR', {maximumFractionDigits:0}) + '</div>'
-      +     '<div style="font-size:.68rem;color:var(--muted);">' + (r.clientes_en_mora || 0) + ' cliente' + ((r.clientes_en_mora||0)===1?'':'s') + ' en mora</div>'
-      +   '</div>'
-      + '</div>'
-      + '<div style="font-size:.7rem;color:rgba(248,113,113,.6);padding:6px 10px;background:rgba(248,113,113,.06);border-radius:8px;">'
-      +   '\uD83D\uDD12 Comisi\u00f3n congelada hasta que el CEO apruebe los pagos en mora'
-      + '</div>'
-      + '</div>';
-  });
-  html += '</div>';
-  el.innerHTML = html;
 }
 
 // ══════════════════════════════════════════════════════
@@ -3908,7 +3963,7 @@ function escCeo(s) {
 
 var _canalActivoCeo = null;
 var _staffCacheCeo = [];
-var _ROLE_NAMES = {1:'CEO', 2:'Gerente', 3:'Asesor', 4:'Cliente', 5:'Jefe de Ventas'};
+var _ROLE_NAMES = {1:'CEO', 2:'Gerente', 3:'Asesor', 4:'Jefe de Ventas', 5:'Admin'};
 
 async function cargarStaffCeo() {
   if (_staffCacheCeo.length) return _staffCacheCeo;
@@ -3977,6 +4032,7 @@ async function contarNoLeidosCeo() {
     var res = await sbClient.from('mensajes_equipo')
       .select('id, remitente_id, canal_id, created_at')
       .in('canal_id', misCanalesIds)
+      .is('respuesta_a', null)
       .order('created_at', { ascending: false })
       .limit(200);
     if (res.error) return 0;
@@ -4020,7 +4076,7 @@ async function marcarLeidosCeo(canalId) {
   try {
     var res = await sbClient.from('mensajes_equipo').select('id').eq('canal_id', canalId);
     if (res.error || !res.data) return;
-    var msgIds = res.data.map(function(m) { return m.mensaje_id || m.id; });
+    var msgIds = res.data.map(function(m) { return m.id; });
     if (!msgIds.length) return;
     // Insertar en mensajes_vistos (ignorar duplicados)
     var inserts = msgIds.map(function(mid) {
@@ -4451,6 +4507,72 @@ async function enviarRespuestaCeo(msgId, canalId) {
   await enviarMensajeCeo(canalId, msgId);
 }
 
+// ── Crear nuevo canal (CEO) ──
+function abrirCrearCanal() {
+  var ov = document.getElementById('crearCanalOverlay');
+  if (ov) { ov.style.display = 'flex'; return; }
+  ov = document.createElement('div');
+  ov.id = 'crearCanalOverlay';
+  ov.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.6);z-index:9999;display:flex;align-items:center;justify-content:center;';
+  ov.onclick = function(e) { if (e.target === ov) cerrarCrearCanal(); };
+  ov.innerHTML = '<div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:24px;width:420px;max-width:90vw;">' +
+    '<h3 style="font-family:Syne,sans-serif;font-size:.95rem;font-weight:800;margin-bottom:16px;">Nuevo Canal</h3>' +
+    '<label style="display:block;margin-bottom:12px;">' +
+      '<span style="font-size:.78rem;font-weight:600;color:var(--muted);">Nombre del canal</span>' +
+      '<input id="ncNombre" type="text" placeholder="Ej: general-moras" style="width:100%;margin-top:4px;padding:8px 12px;background:rgba(255,255,255,.04);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-family:inherit;font-size:.85rem;" />' +
+    '</label>' +
+    '<label style="display:block;margin-bottom:12px;">' +
+      '<span style="font-size:.78rem;font-weight:600;color:var(--muted);">Descripción</span>' +
+      '<input id="ncDesc" type="text" placeholder="Descripción breve..." style="width:100%;margin-top:4px;padding:8px 12px;background:rgba(255,255,255,.04);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-family:inherit;font-size:.85rem;" />' +
+    '</label>' +
+    '<div style="margin-bottom:16px;">' +
+      '<span style="font-size:.78rem;font-weight:600;color:var(--muted);display:block;margin-bottom:8px;">¿Quién puede ver este canal?</span>' +
+      '<label style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:.85rem;cursor:pointer;"><input type="checkbox" id="ncRolCeo" checked /> CEO</label>' +
+      '<label style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:.85rem;cursor:pointer;"><input type="checkbox" id="ncRolGerente" /> Gerente</label>' +
+      '<label style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:.85rem;cursor:pointer;"><input type="checkbox" id="ncRolJefe" /> Jefe de Ventas</label>' +
+      '<label style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:.85rem;cursor:pointer;"><input type="checkbox" id="ncRolAsesor" /> Asesor</label>' +
+    '</div>' +
+    '<div style="display:flex;gap:10px;justify-content:flex-end;">' +
+      '<button onclick="cerrarCrearCanal()" style="padding:8px 16px;background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:8px;color:var(--text);cursor:pointer;font-family:inherit;font-size:.82rem;">Cancelar</button>' +
+      '<button onclick="crearNuevoCanal()" style="padding:8px 20px;background:linear-gradient(135deg,#0891b2,#06b6d4);border:none;border-radius:8px;color:white;font-weight:700;cursor:pointer;font-family:inherit;font-size:.82rem;">Crear Canal</button>' +
+    '</div>' +
+  '</div>';
+  document.body.appendChild(ov);
+}
+
+function cerrarCrearCanal() {
+  var ov = document.getElementById('crearCanalOverlay');
+  if (ov) ov.remove();
+}
+
+async function crearNuevoCanal() {
+  var nombre = document.getElementById('ncNombre');
+  var desc = document.getElementById('ncDesc');
+  var roles = [];
+  if (document.getElementById('ncRolCeo').checked) roles.push('ceo');
+  if (document.getElementById('ncRolGerente').checked) roles.push('gerente');
+  if (document.getElementById('ncRolJefe').checked) roles.push('jefe_ventas');
+  if (document.getElementById('ncRolAsesor').checked) roles.push('asesor');
+  if (!nombre || !nombre.value.trim()) { showToast('Ingresá un nombre para el canal'); return; }
+  if (!roles.length) { showToast('Seleccioná al menos un rol'); return; }
+  try {
+    var ins = await sbClient.from('canales_equipo').insert({
+      nombre: nombre.value.trim(),
+      descripcion: desc ? desc.value.trim() : '',
+      tipo: 'publico',
+      miembros: { roles: roles },
+      creado_por: _ceoUid
+    }).select();
+    if (ins.error) throw ins.error;
+    showToast('Canal "' + nombre.value.trim() + '" creado');
+    cerrarCrearCanal();
+    renderComunicacionesCeo();
+  } catch(err) {
+    console.error('[crearNuevoCanal]', err);
+    showToast('Error: ' + (err.message || err));
+  }
+}
+
 /* ── Country phone prefix selector helper ── */
 var LZ_PHONE_PREFIXES = [
   {code:'+54',flag:'🇦🇷',label:'Argentina'},{code:'+55',flag:'🇧🇷',label:'Brasil'},
@@ -4688,133 +4810,136 @@ async function generarVoucherPDF(clienteId) {
     var fechaHoy = new Date();
     var fechaHoyFormatted = fechaHoy.getDate() + ' de ' + ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'][fechaHoy.getMonth()] + ' de ' + fechaHoy.getFullYear();
 
-    // Tours — generar como filas de tabla para el voucher
+    // Tours — generar como filas de tabla para html2canvas
     var toursRows = tours.map(function(t) {
-      return '<tr><td style="vertical-align:top;width:22px;font-size:14px;padding-top:5px;">&#9679;</td><td style="font-size:14px;color:#1e293b;line-height:1.5;padding:5px 0;border-bottom:1px solid #e2e8f0;">' + t + '</td></tr>';
+      return '<tr><td style="vertical-align:top;width:20px;font-size:11px;padding-top:3px;">⛳</td><td style="font-size:9px;color:#1e293b;line-height:1.4;padding:3px 0;border-bottom:1px solid #f0f0f0;">' + t + '</td></tr>';
     }).join('');
 
-    // Template HTML del Voucher PDF — TABLA COMPLETA
+    // Template HTML del Voucher PDF — compatible con html2canvas
     var W = 794, H = 1123;
 
-    // Tours como filas de tabla
+    // Generar canvas QR como dataURL inline (evita blank page por div QR overflow)
+    var qrDataUrl = '';
+    try {
+      var qrCanvas = document.createElement('canvas');
+      new QRCode(qrCanvas, { text: 'https://luazul.com/voucher/' + numVoucher, width: 70, height: 70, colorDark: '#0B3D91', colorLight: '#ffffff', correctLevel: QRCode.CorrectLevel.M });
+      qrDataUrl = qrCanvas.toDataURL('image/png');
+    } catch(qrErr) { console.warn('[QR]', qrErr); }
+
+    // Tours como bullet list
     var toursHTML = tours.map(function(t) {
-      return '<tr><td style="width:22px;vertical-align:top;font-size:14px;color:#0B3D91;padding:5px 8px 5px 0;">&#9679;</td><td style="font-size:14px;color:#1e293b;line-height:1.5;padding:5px 0;border-bottom:1px solid #e2e8f0;">' + t + '</td></tr>';
+      return '<div style="display:flex;align-items:flex-start;padding:2px 0;"><span style="color:#0B3D91;font-size:9px;margin-right:5px;margin-top:1px;">\u25CF</span><span style="font-size:9px;color:#1e293b;line-height:1.35;">' + t + '</span></div>';
     }).join('');
 
-    var templateHtml = '<table width="' + W + '" height="' + H + '" cellpadding="0" cellspacing="0" style="background:#ffffff;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#1e293b;">'
+    var templateHtml = '<div style="width:' + W + 'px;height:' + H + 'px;background:#ffffff;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#1e293b;overflow:hidden;position:relative;">'
 
-      // ═══ HEADER ═══
-      + '<tr><td style="background:#0B3D91;padding:22px 40px 20px;text-align:center;">'
-      + '<table width="100%" cellpadding="0" cellspacing="0"><tr>'
-      + '<td style="text-align:center;width:70px;vertical-align:middle;">'
-      + '<div style="width:56px;height:56px;border-radius:50%;border:3px solid rgba(255,255,255,0.8);margin:0 auto;overflow:hidden;background:#fff;"><img src="' + LOGO_LUAZUL + '" style="width:48px;height:48px;border-radius:50%;" /></div>'
-      + '</td>'
-      + '<td style="vertical-align:middle;">'
-      + '<div style="font-size:26px;font-weight:800;letter-spacing:4px;color:#fff;">LUAZUL</div>'
-      + '<div style="font-size:11px;color:rgba(255,255,255,0.65);letter-spacing:2px;">SMART TRAVEL</div>'
-      + '</td>'
-      + '<td style="text-align:center;vertical-align:middle;">'
-      + '<div style="font-size:22px;font-weight:800;letter-spacing:2px;color:#fff;">VOUCHER DE VIAJE</div>'
-      + '<div style="font-size:11px;color:rgba(255,255,255,0.65);letter-spacing:1.5px;">CONFIRMACI&Oacute;N DE PAGO TOTAL</div>'
-      + '</td>'
-      + '<td style="width:70px;"></td>'
-      + '</tr></table>'
-      + '</td></tr>'
+      // ═══ HEADER — barra azul oscura con logo centrado ═══
+      + '<div style="background:#0B3D91;padding:14px 20px 12px;text-align:center;">'
+      + '<div style="display:flex;align-items:center;justify-content:center;gap:10px;">'
+      + '<div style="width:40px;height:40px;border-radius:50%;border:2px solid rgba(255,255,255,0.8);overflow:hidden;display:inline-flex;align-items:center;justify-content:center;background:#ffffff;">'
+      + '<img src="' + LOGO_LUAZUL + '" style="width:34px;height:34px;border-radius:50%;" />'
+      + '</div>'
+      + '<div style="text-align:left;">'
+      + '<div style="font-size:18px;font-weight:800;letter-spacing:3px;color:#ffffff;">LUAZUL</div>'
+      + '<div style="font-size:8px;color:rgba(255,255,255,0.65);letter-spacing:2px;">SMART TRAVEL</div>'
+      + '</div></div>'
+      + '<div style="margin-top:8px;font-size:13px;font-weight:800;letter-spacing:1.5px;color:#ffffff;">VOUCHER DE VIAJE</div>'
+      + '<div style="font-size:8px;color:rgba(255,255,255,0.7);letter-spacing:1px;margin-top:1px;">CONFIRMACI&Oacute;N DE PAGO TOTAL</div>'
+      + '</div>'
 
-      // ═══ NUMERO VOUCHER ═══
-      + '<tr><td style="background:#e9f0ff;text-align:center;padding:10px 0;">'
-      + '<span style="font-size:16px;font-weight:700;color:#0B3D91;letter-spacing:1px;">Voucher N&deg; ' + numVoucher + '</span>'
-      + '</td></tr>'
+      // ═══ VOICHER NUMBER — franja azul clara ═══
+      + '<div style="background:#e9f0ff;text-align:center;padding:6px 0;">'
+      + '<span style="font-size:11px;font-weight:700;color:#0B3D91;letter-spacing:0.5px;">Voucher N\u00B0: ' + numVoucher + '</span>'
+      + '</div>'
 
-      // ═══ CUERPO ═══
-      + '<tr><td style="padding:24px 40px 0;">'
+      // ═══ CUERPO PRINCIPAL ═══
+      + '<div style="padding:6px 28px 0;">'
 
       // Cliente
-      + '<div style="text-align:center;padding:8px 0 16px;">'
-      + '<div style="font-size:20px;font-weight:700;color:#0B3D91;">A NOMBRE DE: ' + escCeo(cliente.nombre) + '</div>'
-      + '<div style="font-size:12px;color:#64748b;margin-top:3px;">contacto: reservas@luazul.com.br</div>'
+      + '<div style="text-align:center;padding:6px 0 8px;">'
+      + '<div style="font-size:13px;font-weight:700;color:#0B3D91;">A NOMBRE DE: ' + escCeo(cliente.nombre) + '</div>'
+      + '<div style="font-size:8px;color:#64748b;margin-top:1px;">contacto: reservas@luazul.com.br</div>'
       + '</div>'
 
-      // Felicidades
-      + '<div style="background:#f0fdf4;border:2px solid #bbf7d0;border-radius:8px;padding:16px 20px;text-align:center;margin-bottom:18px;">'
-      + '<div style="font-size:16px;font-weight:700;color:#166534;line-height:1.5;">\u00A1FELICITACIONES! SU PLAN DE AHORRO TUR&Iacute;STICO EST&Aacute; 100% PAGADO Y ACTIVADO.</div>'
-      + '</div>'
+      // Felicidades — fondo verde con sello
+      + '<div style="text-align:center;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:8px 12px;margin-bottom:10px;position:relative;">'
+      + '<div style="font-size:10px;font-weight:700;color:#166534;line-height:1.4;">\u00A1FELICITACIONES! SU PLAN DE AHORRO TUR&Iacute;STICO</div>'
+      + '<div style="font-size:10px;font-weight:700;color:#166534;line-height:1.4;">EST&Aacute; 100% PAGADO Y ACTIVADO.</div>'
+      + '<div style="position:absolute;right:12px;top:50%;transform:translateY(-50%) rotate(-15deg);border:2px solid #166534;border-radius:50%;width:62px;height:62px;display:flex;align-items:center;justify-content:center;opacity:0.5;">'
+      + '<div style="font-size:6px;font-weight:800;color:#166534;text-align:center;line-height:1.1;letter-spacing:0.5px;">PLAN<br>PAGADO<br>TOTALMENTE</div>'
+      + '</div></div>'
 
-      // Servicios
-      + '<table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:18px;">'
-      + '<tr><td style="width:22px;vertical-align:top;font-size:14px;color:#0B3D91;padding:5px 8px 5px 0;">&#9679;</td><td style="font-size:14px;color:#1e293b;line-height:1.5;padding:5px 0;border-bottom:1px solid #e2e8f0;"><b>' + noches + ' noches</b> de alojamiento en hotel 4 estrellas (' + hotel + ')</td></tr>'
-      + '<tr><td style="width:22px;vertical-align:top;font-size:14px;color:#0B3D91;padding:5px 8px 5px 0;">&#9679;</td><td style="font-size:14px;color:#1e293b;line-height:1.5;padding:5px 0;border-bottom:1px solid #e2e8f0;">' + trasladoTexto + '</td></tr>'
+      // ═══ LISTA DE INCLUIDOS — bullet points estilo referencia ═══
+      + '<div style="padding:4px 4px 8px;">'
+      + '<div style="display:flex;align-items:flex-start;padding:2px 0;"><span style="color:#0B3D91;font-size:9px;margin-right:6px;margin-top:1px;">\u25CF</span><span style="font-size:9px;color:#1e293b;line-height:1.35;"><strong>' + noches + ' noches</strong> de alojamiento en hotel 4 estrellas (' + hotel + ')</span></div>'
+      + '<div style="display:flex;align-items:flex-start;padding:2px 0;"><span style="color:#0B3D91;font-size:9px;margin-right:6px;margin-top:1px;">\u25CF</span><span style="font-size:9px;color:#1e293b;line-height:1.35;">' + trasladoTexto + '</span></div>'
       + toursHTML
-      + '<tr><td style="width:22px;vertical-align:top;font-size:14px;color:#0B3D91;padding:5px 8px 5px 0;">&#9679;</td><td style="font-size:14px;color:#1e293b;line-height:1.5;padding:5px 0;border-bottom:1px solid #e2e8f0;">Asistencia personalizada 24/7 en espa&ntilde;ol v&iacute;a WhatsApp</td></tr>'
-      + '</table>'
-
-      // Importante
-      + '<div style="background:#fef2f2;border-left:4px solid #dc2626;padding:12px 14px;border-radius:4px;margin-bottom:18px;">'
-      + '<div style="font-size:13px;color:#991b1b;line-height:1.6;"><b>IMPORTANTE:</b> Vuelos internacionales y nacionales NO INCLUIDOS. El paquete se activa al llegar a destino.</div>'
+      + '<div style="display:flex;align-items:flex-start;padding:2px 0;"><span style="color:#0B3D91;font-size:9px;margin-right:6px;margin-top:1px;">\u25CF</span><span style="font-size:9px;color:#1e293b;line-height:1.35;">Asistencia personalizada 24/7 en espa&ntilde;ol v&iacute;a WhatsApp</span></div>'
       + '</div>'
 
-      // Pasos
-      + '<div style="background:#f0f9ff;border:2px solid #d0e5ff;border-radius:8px;padding:16px 18px;margin-bottom:18px;">'
-      + '<div style="font-size:15px;font-weight:800;color:#0B3D91;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:8px;">Pasos para reservar sus fechas</div>'
-      + '<div style="font-size:13px;color:#334155;line-height:1.6;padding:2px 0;">1. P&oacute;ngase en contacto con nosotros para confirmar su fecha de viaje.</div>'
-      + '<div style="font-size:13px;color:#334155;line-height:1.6;padding:2px 0;">2. Tenemos un plazo de 30 d&iacute;as para confirmar.</div>'
-      + '<div style="font-size:13px;color:#334155;line-height:1.6;padding:2px 0;">3. Recibir&aacute; su voucher definitivo con los detalles de su viaje.</div>'
+      // ═══ IMPORTANTE — texto rojo ═══
+      + '<div style="background:#fef2f2;border-left:3px solid #dc2626;padding:7px 10px;border-radius:4px;margin-bottom:10px;">'
+      + '<div style="font-size:8.5px;color:#991b1b;line-height:1.4;"><strong>IMPORTANTE:</strong> Vuelos internacionales y nacionales NO INCLUIDOS.</div>'
+      + '<div style="font-size:8.5px;color:#991b1b;line-height:1.4;">El paquete se activa al llegar a Rio de Janeiro.</div>'
       + '</div>'
 
-      // Contacto
-      + '<div style="margin-bottom:10px;">'
-      + '<div style="font-size:13px;color:#334155;padding:2px 0;line-height:1.5;">\uD83D\uDCDE +55 (XX) XXXX-XXXX &nbsp;&nbsp; \uD83D\uDCE7 reservas@luazul.com.br &nbsp;&nbsp; \uD83D\uDCF1 WhatsApp: +55 (XX) XXXX-XXXX</div>'
+      // ═══ PASOS PARA RESERVAR ═══
+      + '<div style="background:#f0f9ff;border-radius:8px;padding:10px 12px;margin-bottom:10px;border:1px solid #d0e5ff;">'
+      + '<div style="font-size:10px;font-weight:800;color:#0B3D91;text-transform:uppercase;letter-spacing:1px;margin-bottom:5px;">Pasos para reservar sus fechas</div>'
+      + '<div style="font-size:8.5px;color:#334155;line-height:1.5;">1. P&oacute;ngase en contacto con nosotros para confirmar su fecha de viaje.</div>'
+      + '<div style="font-size:8.5px;color:#334155;line-height:1.5;">2. Tenemos un plazo de 30 d&iacute;as para confirmar.</div>'
+      + '<div style="font-size:8.5px;color:#334155;line-height:1.5;">3. Recibir&aacute; su voucher definitivo con los detalles de su viaje.</div>'
       + '</div>'
 
-      // Footer
-      + '<div style="border-top:2px solid #cbd5e1;padding-top:10px;">'
+      // ═══ DATOS DE CONTACTO ═══
+      + '<div style="padding:6px 0;">'
+      + '<div style="display:flex;align-items:center;gap:6px;padding:3px 0;"><span style="font-size:11px;">\uD83D\uDCDE</span><span style="font-size:9px;color:#334155;">+55 (XX) XXXX-XXXX</span></div>'
+      + '<div style="display:flex;align-items:center;gap:6px;padding:3px 0;"><span style="font-size:11px;">\uD83D\uDCE7</span><span style="font-size:9px;color:#334155;">reservas@luazul.com.br</span></div>'
+      + '<div style="display:flex;align-items:center;gap:6px;padding:3px 0;"><span style="font-size:11px;">\uD83D\uDCF1</span><span style="font-size:9px;color:#334155;">WhatsApp: +55 (XX) XXXX-XXXX</span></div>'
+      + '</div>'
+
+      // ═══ FOOTER ═══
+      + '<div style="border-top:1px solid #cbd5e1;padding-top:8px;margin-top:6px;">'
       + '<table width="100%" cellpadding="0" cellspacing="0"><tr>'
       + '<td style="vertical-align:top;">'
-      + '<div style="font-size:13px;color:#334155;">Luazul Turismo e Exchange LTDA,</div>'
-      + '<div style="font-size:11px;color:#64748b;margin-top:2px;">CADASTUR N&deg; 54.728.334/0001-05</div>'
+      + '<div style="font-size:8.5px;color:#334155;">Luazul Turismo e Exchange LTDA,</div>'
+      + '<div style="font-size:7.5px;color:#64748b;margin-top:2px;">CADASTUR N\u00B0 54.728.334/0001-05</div>'
+      + '<div style="font-size:6.5px;color:#94a3b8;margin-top:3px;font-style:italic;line-height:1.3;">Este documento es un comprobante v&aacute;lido de su plan de ahorro tur&iacute;stico.</div>'
       + '</td>'
       + '<td style="vertical-align:top;text-align:right;">'
-      + '<div style="font-size:11px;color:#64748b;">Firmado Digitalmente por <b style="color:#0B3D91;">Luazul Smart Travel</b></div>'
-      + '<div style="font-size:11px;color:#64748b;margin-top:2px;">Fecha: ' + fechaHoyFormatted + '</div>'
+      + '<div style="font-size:7.5px;color:#64748b;">Firmado Digitalmente por</div>'
+      + '<div style="font-size:8.5px;font-weight:700;color:#0B3D91;">Luazul Smart Travel</div>'
+      + '<div style="font-size:7.5px;color:#64748b;margin-top:2px;">Fecha: ' + fechaHoyFormatted + '</div>'
+      + '</td>'
+      + '<td style="vertical-align:top;text-align:right;width:75px;">'
+      + (qrDataUrl ? '<img src="' + qrDataUrl + '" style="width:65px;height:65px;border-radius:4px;" />' : '')
       + '</td>'
       + '</tr></table></div>'
 
-      + '</td></tr>'
+      + '</div></div>';
 
-      + '</table>';
+    // Generar PDF
+    var opt = {
+      margin: 0,
+      filename: 'Voucher_' + numVoucher + '.pdf',
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: { scale: 2, useCORS: true, width: W, height: H, backgroundColor: '#ffffff' },
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait', hotfixes: ['px_scaling'] }
+    };
 
-    // ═══ RENDERIZAR CON HTML2CANVAS → JSPDF DIRECTO (1 sola pagina garantizada) ═══
+    // Crear contenedor temporal VISIBLE para renderizar (html2canvas necesita que este en el viewport)
     var tempDiv = document.createElement('div');
+    tempDiv.id = 'tempVoucherPDF_' + Date.now();
     tempDiv.style.cssText = 'position:absolute;top:0;left:0;width:' + W + 'px;height:' + H + 'px;z-index:99999;opacity:1;background:#fff;overflow:hidden;';
     tempDiv.innerHTML = templateHtml;
     document.body.appendChild(tempDiv);
 
-    // html2canvas render
-    var canvas = await html2canvas(tempDiv, {
-      scale: 2,
-      useCORS: true,
-      width: W,
-      height: H,
-      backgroundColor: '#ffffff',
-      logging: false
-    });
+    // QR ya fue generado como dataURL antes del template — no necesita espera
 
-    // Limpiar DOM temporal
+    var pdfBlob = await html2pdf().set(opt).from(tempDiv).outputPdf('blob');
+
+    // Limpiar contenedor temporal
     document.body.removeChild(tempDiv);
-
-    // Crear PDF de exactamente 1 pagina con jsPDF
-    var imgData = canvas.toDataURL('image/jpeg', 0.95);
-    var pdf = new jspdf.jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
-    var pdfW = pdf.internal.pageSize.getWidth();
-    var pdfH = pdf.internal.pageSize.getHeight();
-    pdf.addImage(imgData, 'JPEG', 0, 0, pdfW, pdfH);
-    var pdfBlob = pdf.output('blob');
-
-    // Abrir voucher en nueva pestana
-    try {
-      var blobUrl = URL.createObjectURL(pdfBlob);
-      window.open(blobUrl, '_blank');
-    } catch(fsErr) { console.warn('[fullscreen]', fsErr); }
 
     // Subir a Supabase Storage
     function generarUUID() {
@@ -4846,6 +4971,857 @@ async function generarVoucherPDF(clienteId) {
   } finally {
     if (btn) btn.disabled = false;
   }
+}
+
+// ════════════════════════════════════════════════════════════════
+// 💱 DIVISAS — Exchange Rates Management
+// ════════════════════════════════════════════════════════════════
+
+function getNombreMoneda(code) {
+  var nombres = { 'ARS': 'Peso argentino', 'CLP': 'Peso chileno', 'UYU': 'Peso uruguayo', 'PYG': 'Guarani', 'BRL': 'Real brasileño', 'USD': 'Dolar estadounidense' };
+  return nombres[code] || code;
+}
+
+function getFlagMoneda(code) {
+  var flags = { 'ARS': '🇦🇷', 'CLP': '🇨🇱', 'UYU': '🇺🇾', 'PYG': '🇵🇾', 'BRL': '🇧🇷', 'USD': '🇺🇸' };
+  return flags[code] || '💱';
+}
+
+function renderDivisas() {
+  var body = document.getElementById('divisasBody');
+  if (!body) return;
+  body.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted);">⏳ Cargando cotizaciones...</div>';
+
+  sbClient.from('exchange_rates').select('*').order('moneda_destino', { ascending: true }).then(function(res) {
+    if (res.error) { body.innerHTML = '<div style="padding:20px;color:var(--red);">❌ Error: ' + res.error.message + '</div>'; return; }
+    var rates = res.data || [];
+
+    // Show last update info
+    var infoEl = document.getElementById('divisasLastUpdate');
+    if (infoEl && rates.length) {
+      var latest = rates.reduce(function(a, b) { return new Date(a.ultima_actualizacion) > new Date(b.ultima_actualizacion) ? a : b; });
+      infoEl.innerHTML = '📅 Última actualización global: ' + new Date(latest.ultima_actualizacion).toLocaleString('es-AR') + ' · Fuente: ' + latest.fuente;
+    }
+
+    if (!rates.length) { body.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted);">Sin cotizaciones disponibles</div>'; return; }
+
+    body.innerHTML = rates.map(function(r) {
+      var flag = getFlagMoneda(r.moneda_destino);
+      var nombre = getNombreMoneda(r.moneda_destino);
+      var fecha = r.ultima_actualizacion ? new Date(r.ultima_actualizacion).toLocaleString('es-AR') : '—';
+      var fuenteColor = r.fuente === 'api' ? 'var(--green)' : 'var(--orange)';
+      return '<div class="trow-ceo" style="grid-template-columns:1.2fr 1fr 1fr .8fr .8fr 1.4fr .8fr;">'
+        + '<div><span style="margin-right:6px;">' + flag + '</span><strong>' + r.moneda_destino + '</strong><div style="font-size:.62rem;color:var(--muted);">' + nombre + '</div></div>'
+        + '<div style="font-weight:700;color:var(--green);">' + r.cotizacion_compra.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '</div>'
+        + '<div style="font-weight:700;color:var(--red);">' + r.cotizacion_venta.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '</div>'
+        + '<div><span style="color:var(--gold);font-weight:700;">' + r.margen_porcentaje + '%</span></div>'
+        + '<div><span class="bdg" style="background:' + (r.fuente === 'api' ? 'var(--green-bg)' : 'var(--gold-bg)') + ';color:' + fuenteColor + ';border:1px solid ' + (r.fuente === 'api' ? 'var(--green-bd)' : 'var(--gold-bd)') + ';">' + r.fuente + '</span></div>'
+        + '<div style="font-size:.68rem;color:var(--muted);">' + fecha + '</div>'
+        + '<div>' + (r.moneda_destino !== 'USD' ? '<button onclick="modalEditarMargen(\'' + r.moneda_destino + '\',' + r.margen_porcentaje + ')" style="padding:4px 10px;background:var(--purple-bg);border:1px solid var(--purple-bd);color:var(--purple);border-radius:6px;font-size:.7rem;font-weight:700;cursor:pointer;">✏️ Margen</button>' : '<span style="color:var(--muted);font-size:.7rem;">—</span>') + '</div>'
+        + '</div>';
+    }).join('');
+  });
+}
+
+function modalEditarMargen(moneda, margenActual) {
+  var flag = getFlagMoneda(moneda);
+  var nombre = getNombreMoneda(moneda);
+  document.getElementById('mbox').innerHTML =
+    '<div class="mhead"><div><h2>' + flag + ' ' + moneda + ' — ' + nombre + '</h2>'
+    + '<p>Editar margen porcentual aplicado a la cotización</p></div>'
+    + '<button class="mclose" onclick="closeModal()">✕</button></div>'
+    + '<div class="mbody">'
+    + '<div class="mitem"><div class="ml">Moneda destino</div><input class="medit" value="' + moneda + '" disabled></div>'
+    + '<div class="mitem"><div class="ml">Margen actual (%)</div><input class="medit" value="' + margenActual + '" disabled></div>'
+    + '<div class="mitem"><div class="ml">Nuevo margen (%)</div><input type="number" id="editMargenVal" class="medit" value="' + margenActual + '" min="0" max="50" step="0.5"></div>'
+    + '<div class="mitem"><div class="ml">Ejemplo de cálculo</div><div id="margenEjemplo" style="background:rgba(255,255,255,.04);padding:8px;border-radius:8px;font-size:.82rem;color:var(--muted);">Cargando...</div></div>'
+    + '</div>'
+    + '<div class="mact">'
+    + '<button class="mbtn purple" onclick="guardarMargen(\'' + moneda + '\')">✅ Guardar margen</button>'
+    + '<button class="mbtn ghost" onclick="closeModal()">Cancelar</button>'
+    + '</div>';
+  document.getElementById('modal').classList.add('open');
+
+  // Load current compra rate and set up live calculation
+  sbClient.from('exchange_rates').select('cotizacion_compra').eq('moneda_destino', moneda).single()
+    .then(function(res) {
+      if (res.error) return;
+      window._margenCompraBase = res.data.cotizacion_compra;
+      actualizarEjemploMargen();
+      var input = document.getElementById('editMargenVal');
+      if (input) input.addEventListener('input', actualizarEjemploMargen);
+    });
+}
+
+function actualizarEjemploMargen() {
+  var margen = parseFloat((document.getElementById('editMargenVal') || {}).value || 0);
+  var compra = window._margenCompraBase;
+  var el = document.getElementById('margenEjemplo');
+  if (!el || !compra) return;
+  if (!isNaN(margen)) {
+    var venta = compra * (1 + margen / 100);
+    el.innerHTML = 'Compra: ' + compra.toFixed(4) + ' → <strong style="color:var(--green);">Venta: ' + venta.toFixed(4) + '</strong> (con ' + margen + '% margen)';
+  } else {
+    el.innerHTML = '—';
+  }
+}
+
+function guardarMargen(moneda) {
+  var nuevoMargen = parseFloat(document.getElementById('editMargenVal').value);
+  if (isNaN(nuevoMargen) || nuevoMargen < 0 || nuevoMargen > 50) { showToast('⚠️ El margen debe estar entre 0% y 50%'); return; }
+  nuevoMargen = Math.round(nuevoMargen * 100) / 100;
+  var btn = document.querySelector('#modal .mbtn.purple');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Guardando...'; }
+
+  // 1. Leer cotizacion_compra actual
+  sbClient.from('exchange_rates').select('cotizacion_compra').eq('moneda_destino', moneda).single()
+    .then(function(res) {
+      if (res.error) throw res.error;
+      var compra = res.data.cotizacion_compra;
+      var nuevaVenta = compra * (1 + nuevoMargen / 100);
+
+      // 2. Actualizar ambas tablas en paralelo
+      return Promise.all([
+        sbClient.from('exchange_rates').update({
+          margen_porcentaje: nuevoMargen,
+          cotizacion_venta: nuevaVenta
+        }).eq('moneda_destino', moneda),
+        sbClient.from('configuracion_divisas').upsert({
+          moneda_destino: moneda,
+          margen_porcentaje: nuevoMargen,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'moneda_destino' })
+      ]);
+    })
+    .then(function(results) {
+      var err = results[0].error || results[1].error;
+      if (err) throw err;
+      closeModal();
+      showToast('✅ Margen de ' + moneda + ' actualizado a ' + nuevoMargen + '% (venta recalculada)');
+      renderDivisas();
+    })
+    .catch(function(e) {
+      showToast('❌ Error al guardar: ' + (e.message || ''));
+      if (btn) { btn.disabled = false; btn.textContent = '✅ Guardar margen'; }
+    });
+}
+
+function actualizarCotizaciones() {
+  showToast('🔄 Actualizando cotizaciones via Edge Function...');
+  var EDGE_URL = 'https://yunvqgaljopirzvjrntc.supabase.co/functions/v1/actualizar-cotizaciones';
+  var SERVICE_KEY = 'sb_secret_Sici59Nlbeuuz_568jNz-g_YkA_5Ovc';
+
+  fetch(EDGE_URL, {
+    method: 'POST',
+    headers: {
+      'Authorization': 'Bearer ' + SERVICE_KEY,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({})
+  }).then(function(res) {
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    return res.json();
+  }).then(function(data) {
+    showToast('✅ Cotizaciones actualizadas exitosamente');
+    renderDivisas();
+  }).catch(function(e) {
+    console.error('[actualizarCotizaciones]', e);
+    showToast('❌ Error al actualizar: ' + e.message);
+  });
+}
+
+// ════════════════════════════════════════════════════════════════
+// 📊 SIMULADOR DE CUOTAS — Installment Simulator
+// ════════════════════════════════════════════════════════════════
+
+var _simCatalogo = [];
+
+function simLoadDestinos() {
+  var sel = document.getElementById('simDestino');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">Cargando destinos...</option>';
+  document.getElementById('simPaquete').innerHTML = '<option value="">Seleccione destino primero</option>';
+  document.getElementById('simResultado').innerHTML = '';
+
+  sbClient.from('catalogo_precios').select('id, nombre_destino, paquete, personas, noches, precio_usd').eq('activo', true).order('nombre_destino', { ascending: true }).order('orden', { ascending: true }).then(function(res) {
+    if (res.error) { sel.innerHTML = '<option value="">Error al cargar</option>'; return; }
+    _simCatalogo = res.data || [];
+    var destinos = [];
+    var seen = {};
+    _simCatalogo.forEach(function(p) {
+      if (!seen[p.nombre_destino]) { seen[p.nombre_destino] = true; destinos.push(p.nombre_destino); }
+    });
+    sel.innerHTML = '<option value="">— Seleccione destino —</option>' + destinos.map(function(d) {
+      return '<option value="' + d + '">' + d + '</option>';
+    }).join('');
+  });
+}
+
+function simOnDestinoChange() {
+  var dest = document.getElementById('simDestino').value;
+  var sel = document.getElementById('simPaquete');
+  if (!dest) {
+    sel.innerHTML = '<option value="">Seleccione destino primero</option>';
+    document.getElementById('simResultado').innerHTML = '';
+    return;
+  }
+  var paquetes = _simCatalogo.filter(function(p) { return p.nombre_destino === dest; });
+  sel.innerHTML = '<option value="">— Seleccione paquete —</option>' + paquetes.map(function(p) {
+    return '<option value="' + p.id + '">' + p.paquete + ' (' + p.personas + ' pers. · ' + p.noches + ' noches)</option>';
+  }).join('');
+  document.getElementById('simResultado').innerHTML = '';
+}
+
+function simCalcular() {
+  var pkgId = document.getElementById('simPaquete').value;
+  var cuotas = parseInt(document.getElementById('simCuotas').value) || 12;
+  var resEl = document.getElementById('simResultado');
+
+  if (!pkgId) { resEl.innerHTML = '<div style="text-align:center;padding:50px;color:var(--muted);"><div style="font-size:3rem;margin-bottom:12px;">📊</div><p>Seleccione un destino y un paquete para simular cuotas.</p></div>'; return; }
+
+  var pkg = _simCatalogo.find(function(p) { return String(p.id) === String(pkgId); });
+  if (!pkg) { resEl.innerHTML = ''; return; }
+
+  var total = pkg.precio_usd;
+  var cuotaMensual = total / cuotas;
+  var costoDia = pkg.noches > 0 ? total / pkg.noches : 0;
+
+  var cuotasArr = [6, 10, 12, 18];
+  var cuotasHtml = cuotasArr.map(function(c) {
+    var cm = total / c;
+    var isActive = c === cuotas;
+    return '<div onclick="document.getElementById(\'simCuotas\').value=' + c + ';simCalcular();" style="padding:14px;border-radius:12px;background:' + (isActive ? 'var(--purple-bg)' : 'var(--card)') + ';border:1px solid ' + (isActive ? 'var(--purple-bd)' : 'var(--border)') + ';cursor:pointer;text-align:center;transition:all .15s;' + (isActive ? 'box-shadow:0 0 20px rgba(167,139,250,.15);' : '') + '">'
+      + '<div style="font-size:.65rem;color:var(--muted);margin-bottom:4px;">' + c + ' cuotas</div>'
+      + '<div style="font-family:Syne,sans-serif;font-size:1.1rem;font-weight:800;color:' + (isActive ? 'var(--purple)' : 'var(--text)') + ';">USD ' + Math.round(cm).toLocaleString('es-AR') + '</div>'
+      + '<div style="font-size:.6rem;color:var(--muted);">/mes</div>'
+      + '</div>';
+  }).join('');
+
+  resEl.innerHTML =
+    '<div class="twrap" style="max-width:900px;">'
+    + '<div style="padding:24px;background:rgba(255,255,255,.02);border-bottom:1px solid var(--border);">'
+    + '<div style="font-family:Syne,sans-serif;font-size:1.2rem;font-weight:800;margin-bottom:4px;">' + pkg.nombre_destino + '</div>'
+    + '<div style="font-size:.78rem;color:var(--muted);">' + pkg.paquete + ' · ' + pkg.personas + ' personas · ' + pkg.noches + ' noches</div>'
+    + '</div>'
+    + '<div style="padding:24px;">'
+    + '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px;">'
+    + '<div class="kpi"><span>💰</span><div class="kpi-v" style="color:var(--gold);">' + Math.round(total).toLocaleString('es-AR') + '</div><div class="kpi-l">Total USD</div></div>'
+    + '<div class="kpi"><span>📅</span><div class="kpi-v" style="color:var(--purple);">' + cuotas + '</div><div class="kpi-l">Cuotas</div></div>'
+    + '<div class="kpi"><span>💳</span><div class="kpi-v" style="color:var(--blue);">' + Math.round(cuotaMensual).toLocaleString('es-AR') + '</div><div class="kpi-l">USD / mes</div></div>'
+    + '<div class="kpi"><span>🏨</span><div class="kpi-v" style="color:var(--green);">' + Math.round(costoDia).toLocaleString('es-AR') + '</div><div class="kpi-l">USD / día</div></div>'
+    + '</div>'
+    + '<div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:10px;">Comparativa de cuotas</div>'
+    + '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;">'
+    + cuotasHtml
+    + '</div>'
+    + '</div></div>';
+}
+
+// ════════════════════════════════════════════════════════════════
+// 🏷️ CATÁLOGO DE PRECIOS — CRUD
+// ════════════════════════════════════════════════════════════════
+
+async function renderCatalogo() {
+  var container = document.getElementById('catalogoGrid');
+  if (!container) return;
+  container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted);">Cargando catálogo...</div>';
+  try {
+    var res = await sbClient.from('catalogo_precios').select('*').order('orden');
+    if (res.error) throw res.error;
+    var data = res.data || [];
+    if (!data.length) {
+      container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted);"><div style="font-size:2.5rem;margin-bottom:12px;">🏷️</div><p>No hay paquetes cargados.</p></div>';
+      return;
+    }
+    var html = '<div class="twrap"><div class="trow-ceo" style="grid-template-columns:1.5fr 1.5fr .8fr .6fr .6fr .8fr 1.2fr;"><div>Destino</div><div>Paquete</div><div>Precio</div><div>Pers.</div><div>Noches</div><div>Estado</div><div>Acciones</div></div>';
+    for (var i = 0; i < data.length; i++) {
+      var item = data[i];
+      html += '<div class="trow-ceo" style="grid-template-columns:1.5fr 1.5fr .8fr .6fr .6fr .8fr 1.2fr;">'
+        + '<div><strong>' + escCeo(item.nombre_destino) + '</strong><div style="font-size:.65rem;color:var(--muted);">' + escCeo(item.slug || '') + '</div></div>'
+        + '<div>' + escCeo(item.paquete) + '</div>'
+        + '<div style="font-weight:700;color:var(--green);">USD ' + item.precio_usd + '</div>'
+        + '<div>' + item.personas + '</div>'
+        + '<div>' + (item.noches || 7) + '</div>'
+        + '<div>' + (item.activo ? '<span class="bdg" style="background:var(--green-bg);color:var(--green);border:1px solid var(--green-bd);">✅ Activo</span>' : '<span class="bdg" style="background:var(--red-bg);color:var(--red);border:1px solid var(--red-bd);">❌ Inactivo</span>') + '</div>'
+        + '<div style="display:flex;gap:6px;">'
+        + '<button onclick="openEditCatalogo(' + item.id + ')" style="padding:4px 8px;background:var(--purple-bg);border:1px solid var(--purple-bd);color:var(--purple);border-radius:6px;font-size:.68rem;font-weight:700;cursor:pointer;">✏️</button>'
+        + '<button onclick="deleteCatalogo(' + item.id + ')" style="padding:4px 8px;background:var(--red-bg);border:1px solid var(--red-bd);color:var(--red);border-radius:6px;font-size:.68rem;font-weight:700;cursor:pointer;">🗑</button>'
+        + '</div></div>';
+    }
+    html += '</div>';
+    container.innerHTML = html;
+  } catch (err) {
+    container.innerHTML = '<div style="padding:20px;color:var(--red);">Error: ' + escCeo(err.message) + '</div>';
+  }
+}
+
+function openAddCatalogo() {
+  document.getElementById('mbox').innerHTML =
+    '<div class="mhead"><div><h2>➕ Nuevo Paquete</h2><p>Agregar destino al catálogo</p></div><button class="mclose" onclick="closeModal()">✕</button></div>'
+    + '<div class="mbody"><div class="mgrid">'
+    + '<div class="mitem"><div class="ml">Destino *</div><input id="catDestino" class="medit" placeholder="Cabo Frío, Brasil"></div>'
+    + '<div class="mitem"><div class="ml">Slug *</div><input id="catSlug" class="medit" placeholder="cabofrio"></div>'
+    + '<div class="mitem"><div class="ml">Paquete *</div><input id="catPaquete" class="medit" placeholder="Escapada en Pareja"></div>'
+    + '<div class="mitem"><div class="ml">Personas *</div><input id="catPersonas" type="number" class="medit" placeholder="2"></div>'
+    + '<div class="mitem"><div class="ml">Noches</div><input id="catNoches" type="number" class="medit" value="7"></div>'
+    + '<div class="mitem"><div class="ml">Precio USD *</div><input id="catPrecio" type="number" class="medit" placeholder="1500"></div>'
+    + '<div class="mitem"><div class="ml">Orden</div><input id="catOrden" type="number" class="medit" placeholder="10"></div>'
+    + '<div class="mitem"><div class="ml">Activo</div><select id="catActivo" class="msel"><option value="true">Sí</option><option value="false">No</option></select></div>'
+    + '</div></div>'
+    + '<div class="mact"><button class="mbtn gold" onclick="saveAddCatalogo()">💾 Guardar</button><button class="mbtn ghost" onclick="closeModal()">Cancelar</button></div>';
+  document.getElementById('modal').classList.add('open');
+}
+
+async function saveAddCatalogo() {
+  var nombreDestino = (document.getElementById('catDestino') || {}).value.trim();
+  var slug = (document.getElementById('catSlug') || {}).value.trim().toLowerCase();
+  var paquete = (document.getElementById('catPaquete') || {}).value.trim();
+  var personas = parseInt((document.getElementById('catPersonas') || {}).value, 10);
+  var noches = parseInt((document.getElementById('catNoches') || {}).value, 10) || 7;
+  var precio = parseFloat((document.getElementById('catPrecio') || {}).value);
+  var orden = parseInt((document.getElementById('catOrden') || {}).value, 10) || 0;
+  var activo = (document.getElementById('catActivo') || {}).value === 'true';
+
+  if (!nombreDestino || !slug || !paquete || !personas || !precio) { showToast('⚠️ Completá los campos obligatorios (*)'); return; }
+
+  var btn = document.querySelector('#modal .mbtn.gold');
+  if (btn) btn.disabled = true;
+  try {
+    var res = await sbClient.from('catalogo_precios').insert([{
+      nombre_destino: nombreDestino, slug: slug, paquete: paquete,
+      personas: personas, noches: noches, precio_usd: precio,
+      orden: orden, activo: activo
+    }]);
+    if (res.error) throw res.error;
+    showToast('✅ Paquete agregado');
+    closeModal();
+    renderCatalogo();
+  } catch (err) {
+    showToast('❌ Error: ' + err.message);
+  } finally { if (btn) btn.disabled = false; }
+}
+
+async function openEditCatalogo(id) {
+  var res = await sbClient.from('catalogo_precios').select('*').eq('id', id).single();
+  if (res.error) { showToast('Error al cargar'); return; }
+  var d = res.data;
+  document.getElementById('mbox').innerHTML =
+    '<div class="mhead"><div><h2>✏️ Editar Paquete</h2><p>ID ' + d.id + '</p></div><button class="mclose" onclick="closeModal()">✕</button></div>'
+    + '<div class="mbody"><div class="mgrid">'
+    + '<div class="mitem"><div class="ml">Destino</div><input id="editDestino" class="medit" value="' + escCeo(d.nombre_destino) + '"></div>'
+    + '<div class="mitem"><div class="ml">Slug</div><input id="editSlug" class="medit" value="' + escCeo(d.slug || '') + '"></div>'
+    + '<div class="mitem"><div class="ml">Paquete</div><input id="editPaquete" class="medit" value="' + escCeo(d.paquete) + '"></div>'
+    + '<div class="mitem"><div class="ml">Personas</div><input id="editPersonas" type="number" class="medit" value="' + d.personas + '"></div>'
+    + '<div class="mitem"><div class="ml">Noches</div><input id="editNoches" type="number" class="medit" value="' + (d.noches || 7) + '"></div>'
+    + '<div class="mitem"><div class="ml">Precio USD</div><input id="editPrecio" type="number" class="medit" value="' + d.precio_usd + '"></div>'
+    + '<div class="mitem"><div class="ml">Orden</div><input id="editOrden" type="number" class="medit" value="' + (d.orden || 0) + '"></div>'
+    + '<div class="mitem"><div class="ml">Activo</div><select id="editActivo" class="msel"><option value="true"' + (d.activo ? ' selected' : '') + '>Sí</option><option value="false"' + (!d.activo ? ' selected' : '') + '>No</option></select></div>'
+    + '</div></div>'
+    + '<div class="mact"><button class="mbtn gold" onclick="saveEditCatalogo(' + d.id + ')">💾 Guardar</button><button class="mbtn ghost" onclick="closeModal()">Cancelar</button></div>';
+  document.getElementById('modal').classList.add('open');
+}
+
+async function saveEditCatalogo(id) {
+  var updates = {
+    nombre_destino: (document.getElementById('editDestino') || {}).value.trim(),
+    slug: (document.getElementById('editSlug') || {}).value.trim().toLowerCase(),
+    paquete: (document.getElementById('editPaquete') || {}).value.trim(),
+    personas: parseInt((document.getElementById('editPersonas') || {}).value, 10),
+    noches: parseInt((document.getElementById('editNoches') || {}).value, 10) || 7,
+    precio_usd: parseFloat((document.getElementById('editPrecio') || {}).value),
+    orden: parseInt((document.getElementById('editOrden') || {}).value, 10) || 0,
+    activo: (document.getElementById('editActivo') || {}).value === 'true'
+  };
+  if (!updates.nombre_destino || !updates.paquete || !updates.precio_usd) { showToast('⚠️ Completá los obligatorios'); return; }
+  var btn = document.querySelector('#modal .mbtn.gold');
+  if (btn) btn.disabled = true;
+  try {
+    var res = await sbClient.from('catalogo_precios').update(updates).eq('id', id);
+    if (res.error) throw res.error;
+    showToast('✅ Actualizado');
+    closeModal();
+    renderCatalogo();
+  } catch (err) {
+    showToast('❌ Error: ' + err.message);
+  } finally { if (btn) btn.disabled = false; }
+}
+
+async function deleteCatalogo(id) {
+  if (!confirm('¿Desactivar este paquete?')) return;
+  try {
+    var res = await sbClient.from('catalogo_precios').update({ activo: false }).eq('id', id);
+    if (res.error) throw res.error;
+    showToast('✅ Paquete desactivado');
+    renderCatalogo();
+  } catch (err) { showToast('❌ Error: ' + err.message); }
+}
+
+// ════════════════════════════════════════════════════════════════
+// 🎁 PREMIOS REFERIDOS
+// ════════════════════════════════════════════════════════════════
+
+function renderPremiosReferidos() {
+  var body = document.getElementById('premiosReferidosBody');
+  if (!body) return;
+  body.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted);">Cargando referidos...</div>';
+  sbClient.from('referidos').select('*, cliente:clientes!cliente_referidor_id(nombre, email, seller_id)').order('created_at', { ascending: false }).limit(200)
+    .then(function(res) {
+      if (res.error) throw res.error;
+      var refs = res.data || [];
+      if (!refs.length) {
+        body.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted);"><div style="font-size:2.5rem;margin-bottom:12px;">🎁</div><p>No hay referidos registrados.</p></div>';
+        return;
+      }
+      var html = '<div class="twrap"><div class="trow-ceo" style="grid-template-columns:1.5fr 2fr 1fr 1fr 1.2fr;"><div>Referido</div><div>Referido por / Asesor</div><div>Estado</div><div>Premio</div><div>Acciones</div></div>';
+      for (var i = 0; i < refs.length; i++) {
+        var r = refs[i];
+        var v = vby(r.vendedor_id);
+        var montoPremio = r.estado === 'confirmado' ? 15000 : 0;
+        var clienteNombre = (r.cliente && r.cliente.nombre) ? r.cliente.nombre : '—';
+        var estadoBadge = r.estado === 'confirmado'
+          ? '<span class="bdg" style="background:var(--green-bg);color:var(--green);border:1px solid var(--green-bd);">✅ Confirmado</span>'
+          : '<span class="bdg" style="background:var(--gold-bg);color:var(--gold);border:1px solid var(--gold-bd);">⏳ Pendiente</span>';
+        html += '<div class="trow-ceo" style="grid-template-columns:1.5fr 2fr 1fr 1fr 1.2fr;">'
+          + '<div><strong>' + escCeo(r.referido_nombre || '—') + '</strong><div style="font-size:.65rem;color:var(--muted);">' + escCeo(r.referido_email || '') + '</div></div>'
+          + '<div>' + escCeo(clienteNombre) + '<div style="font-size:.65rem;color:var(--muted);">Asesor: ' + escCeo(v.nombre || '—') + '</div></div>'
+          + '<div>' + estadoBadge + '</div>'
+          + '<div style="color:var(--gold);font-weight:700;">' + (montoPremio > 0 ? '$' + montoPremio.toLocaleString('es-AR') : '—') + '</div>'
+          + '<div>' + (r.estado !== 'confirmado' ? '<button onclick="confirmarReferido(\'' + r.id + '\')" style="padding:4px 10px;background:var(--gold-bg);border:1px solid var(--gold-bd);color:var(--gold);border-radius:6px;font-size:.7rem;font-weight:700;cursor:pointer;">💰 Confirmar</button>' : '—') + '</div>'
+          + '</div>';
+      }
+      html += '</div>';
+      body.innerHTML = html;
+    })
+    .catch(function(e) {
+      body.innerHTML = '<div style="padding:20px;color:var(--red);">Error: ' + escCeo(e.message) + '</div>';
+      showToast('Error al cargar referidos: ' + e.message);
+    });
+}
+
+function confirmarReferido(refId) {
+  if (!confirm('¿Confirmar este referido y registrar el premio?')) return;
+  sbClient.from('referidos').update({ estado: 'confirmado' }).eq('id', parseInt(refId, 10))
+    .then(function(res) {
+      if (res.error) throw res.error;
+      showToast('✅ Premio registrado');
+      renderPremiosReferidos();
+    })
+    .catch(function(e) { showToast('❌ Error: ' + e.message); });
+}
+
+// ════════════════════════════════════════════════════════════════
+// 👁️ AUDITORÍA — Registro de Actividad
+// ════════════════════════════════════════════════════════════════
+
+function renderAuditoria() {
+  var body = document.getElementById('auditoriaBody');
+  if (!body) return;
+  body.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted);">Cargando logs...</div>';
+  sbClient.from('notificaciones').select('*, cliente:clientes(nombre)').order('created_at', { ascending: false }).limit(100)
+    .then(function(res) {
+      if (res.error) throw res.error;
+      var logs = res.data || [];
+      if (!logs.length) {
+        body.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted);"><div style="font-size:2.5rem;margin-bottom:12px;">👁️</div><p>No hay registros de actividad.</p></div>';
+        return;
+      }
+      var html = '<div class="twrap"><div class="trow-ceo" style="grid-template-columns:1fr 3fr 1.5fr;"><div>Tipo</div><div>Mensaje</div><div>Fecha</div></div>';
+      for (var i = 0; i < logs.length; i++) {
+        var l = logs[i];
+        html += '<div class="trow-ceo" style="grid-template-columns:1fr 3fr 1.5fr;">'
+          + '<div><span class="bdg" style="background:rgba(255,255,255,.06);color:var(--cyan);border:1px solid rgba(6,182,212,.3);">' + escCeo(l.tipo || 'Actividad') + '</span></div>'
+          + '<div style="font-size:.82rem;">' + escCeo(l.mensaje || '') + (l.cliente ? ' <span style="color:var(--muted);font-size:.7rem;">(' + escCeo(l.cliente.nombre) + ')</span>' : '') + '</div>'
+          + '<div style="font-size:.7rem;color:var(--muted);">' + new Date(l.created_at).toLocaleString('es-AR') + '</div>'
+          + '</div>';
+      }
+      html += '</div>';
+      body.innerHTML = html;
+    })
+    .catch(function(e) {
+      body.innerHTML = '<div style="padding:20px;color:var(--red);">Error: ' + escCeo(e.message) + '</div>';
+    });
+}
+
+// ════════════════════════════════════════════════════════════════
+// 🎫 TICKETS — Sistema de Soporte Completo
+// ════════════════════════════════════════════════════════════════
+
+var _ticketsCache = [];
+
+function calcularDiasInactivos(fechaISO) {
+  if (!fechaISO) return 0;
+  return Math.floor((new Date() - new Date(fechaISO)) / (1000 * 60 * 60 * 24));
+}
+
+function formatDateRelativeT(iso) {
+  if (!iso) return '—';
+  var d = new Date(iso);
+  var diff = Math.floor((new Date() - d) / 1000);
+  if (diff < 60) return 'Hace ' + diff + ' seg';
+  if (diff < 3600) return 'Hace ' + Math.floor(diff / 60) + ' min';
+  if (diff < 86400) return 'Hace ' + Math.floor(diff / 3600) + ' h';
+  return d.toLocaleDateString('es-AR');
+}
+
+function getEstadoLabel(estado) {
+  var m = { abierto: 'Abierto', en_progreso: 'En progreso', resuelto: 'Resuelto', cerrado: 'Cerrado' };
+  return m[estado] || estado || '—';
+}
+
+function getPrioridadLabel(p) {
+  var m = { baja: 'Baja', media: 'Media', alta: 'Alta', urgente: 'Urgente' };
+  return m[p] || p || '—';
+}
+
+function getPrioridadColor(p) {
+  return p === 'urgente' ? '#ef4444' : p === 'alta' ? '#f97316' : p === 'media' ? '#eab308' : '#22c55e';
+}
+
+function renderTickets() {
+  if (!sbClient) return;
+  var body = document.getElementById('ticketsBody');
+  if (!body) return;
+  body.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted);">Cargando tickets...</div>';
+
+  var estadoFiltro = (document.getElementById('ticketEstadoFilt') || {}).value || 'todos';
+  var prioridadFiltro = (document.getElementById('ticketPrioridadFilt') || {}).value || 'todos';
+  var search = ((document.getElementById('ticketSearch') || {}).value || '').toLowerCase();
+
+  var query = sbClient.from('notificaciones')
+    .select('*, cliente:clientes(nombre, email)')
+    .in('tipo', ['incidencia', 'soporte', 'mejora', 'falla_tecnica'])
+    .order('created_at', { ascending: false });
+
+  if (estadoFiltro !== 'todos') query = query.eq('estado', estadoFiltro);
+  if (prioridadFiltro !== 'todos') query = query.eq('prioridad', prioridadFiltro);
+
+  query.then(function(res) {
+    if (res.error) throw res.error;
+    var tickets = res.data || [];
+    if (search) {
+      tickets = tickets.filter(function(t) {
+        var num = (t.numero_ticket || '').toLowerCase();
+        var asunto = (t.mensaje || '').toLowerCase();
+        var cliente = (t.cliente && t.cliente.nombre) ? t.cliente.nombre.toLowerCase() : '';
+        return num.indexOf(search) !== -1 || asunto.indexOf(search) !== -1 || cliente.indexOf(search) !== -1;
+      });
+    }
+    _ticketsCache = tickets;
+
+    if (!tickets.length) {
+      body.innerHTML = '<div style="text-align:center;padding:50px;color:var(--muted);"><div style="font-size:2.5rem;margin-bottom:12px;">🎫</div><p>No se encontraron tickets.</p></div>';
+      return;
+    }
+
+    var html = '';
+    for (var i = 0; i < tickets.length; i++) {
+      var t = tickets[i];
+      var estadoTexto = t.estado || 'abierto';
+      var prioridadTexto = t.prioridad || 'media';
+      var clienteNombre = t.cliente ? t.cliente.nombre : (t.cliente_id ? 'ID: ' + t.cliente_id : '—');
+      var vendedorNombre = t.vendedor_nombre || (t.vendedor_id ? 'ID: ' + t.vendedor_id : '—');
+      var diasInactivos = calcularDiasInactivos(t.updated_at || t.created_at);
+      var highlight = (diasInactivos > 7 && estadoTexto !== 'cerrado') ? '⚠️ ' : '';
+      var nivelActual = t.nivel_actual || 1;
+      var nivelColor = nivelActual >= 3 ? 'var(--red)' : nivelActual === 2 ? 'var(--orange)' : 'var(--muted)';
+      var numTicket = escCeo(t.numero_ticket || 'LK-????');
+      var estadoClase = estadoTexto === 'abierto' ? 'var(--red)' : estadoTexto === 'en_progreso' ? 'var(--orange)' : estadoTexto === 'resuelto' ? 'var(--green)' : 'var(--muted)';
+
+      html += '<div class="trow-ceo" style="grid-template-columns:100px 2fr 1fr 90px 80px 110px 50px 70px;cursor:pointer;" onclick="verTicketDetail(' + t.id + ')">'
+        + '<div style="display:flex;align-items:center;gap:4px;"><span style="font-family:monospace;font-weight:700;font-size:.78rem;">' + numTicket + '</span>'
+        + '<button onclick="event.stopPropagation();navigator.clipboard.writeText(\'' + numTicket + '\').then(function(){showToast(\'✅ Copiado: ' + numTicket + '\')})" style="background:none;border:none;cursor:pointer;padding:2px;font-size:.8rem;color:var(--muted);">📋</button></div>'
+        + '<div><div style="font-weight:600;">' + highlight + escCeo(t.tipo || 'Incidencia') + '</div><div style="font-size:.7rem;color:var(--muted);">' + escCeo((t.mensaje || '').substring(0, 60)) + ((t.mensaje || '').length > 60 ? '…' : '') + '</div></div>'
+        + '<div><div style="font-size:.78rem;">' + escCeo(clienteNombre) + '</div><div style="font-size:.65rem;color:var(--muted);">' + escCeo(vendedorNombre) + '</div></div>'
+        + '<div><span class="bdg" style="background:rgba(255,255,255,.06);color:' + estadoClase + ';border:1px solid ' + estadoClase + '30;">' + estadoTexto.toUpperCase() + '</span></div>'
+        + '<div><span style="font-size:.7rem;font-weight:700;color:' + getPrioridadColor(prioridadTexto) + ';">' + prioridadTexto.toUpperCase() + '</span></div>'
+        + '<div style="font-size:.7rem;color:var(--muted);">' + formatDateRelativeT(t.updated_at || t.created_at) + (diasInactivos > 7 ? ' <span style="color:var(--red);">⏰' + diasInactivos + 'd</span>' : '') + '</div>'
+        + '<div style="text-align:center;"><span style="font-size:.75rem;font-weight:800;color:' + nivelColor + ';">Nv.' + nivelActual + '</span></div>'
+        + '<div><button onclick="event.stopPropagation();verTicketDetail(' + t.id + ')" style="padding:4px 10px;background:var(--purple-bg);border:1px solid var(--purple-bd);color:var(--purple);border-radius:6px;font-size:.7rem;font-weight:700;cursor:pointer;">👁 Ver</button></div>'
+        + '</div>';
+    }
+    body.innerHTML = html;
+  }).catch(function(e) {
+    console.error('[renderTickets]', e);
+    body.innerHTML = '<div style="padding:20px;color:var(--red);">Error al cargar tickets: ' + escCeo(e.message) + '</div>';
+  });
+}
+
+function modalNuevoTicket() {
+  var clientesOpt = '<option value="">Sin cliente asociado</option>';
+  var clientes = _cacheClientes || [];
+  for (var i = 0; i < clientes.length; i++) {
+    var c = clientes[i];
+    clientesOpt += '<option value="' + c.id + '">' + escCeo(c.nombre) + ' (' + escCeo(c.email || '') + ')</option>';
+  }
+  var vendedoresOpt = '<option value="">Sin vendedor</option>';
+  var vendedores = _cacheVendedores || [];
+  for (var i = 0; i < vendedores.length; i++) {
+    var v = vendedores[i];
+    vendedoresOpt += '<option value="' + v.id + '">' + escCeo(v.nombre) + '</option>';
+  }
+  var regionesOpt = '<option value="">Sin región</option>';
+  var regiones = _cacheRegiones || [];
+  for (var i = 0; i < regiones.length; i++) {
+    var r = regiones[i];
+    regionesOpt += '<option value="' + r.id + '">' + (r.bandera || '') + ' ' + escCeo(r.nombre) + '</option>';
+  }
+
+  document.getElementById('mbox').innerHTML =
+    '<div class="mhead"><div><h2>🎫 Nuevo Ticket</h2><p>Reportar incidencia, falla o solicitud de soporte</p></div><button class="mclose" onclick="closeModal()">✕</button></div>'
+    + '<div class="mbody">'
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:14px;">'
+    + '<div>'
+    + '<div style="font-size:.7rem;font-weight:700;text-transform:uppercase;color:#a78bfa;margin-bottom:8px;">📋 Información</div>'
+    + '<div class="mitem"><div class="ml">Tipo / Categoría</div><select id="ticketCategoria" class="msel"><option value="falla_tecnica">⚙️ Falla técnica</option><option value="error_datos">📊 Error en datos</option><option value="soporte">🛠️ Soporte</option><option value="mejora">💡 Sugerencia</option><option value="otro">📌 Otro</option></select></div>'
+    + '<div class="mitem"><div class="ml">Prioridad</div><select id="ticketPrioridad" class="msel"><option value="baja">🟢 Baja</option><option value="media" selected>🟡 Media</option><option value="alta">🟠 Alta</option><option value="urgente">🔴 Urgente</option></select></div>'
+    + '<div class="mitem"><div class="ml">Asignar a</div><select id="ticketAsignado" class="msel"><option value="">⏳ Cargando...</option></select></div>'
+    + '</div>'
+    + '<div>'
+    + '<div style="font-size:.7rem;font-weight:700;text-transform:uppercase;color:#a78bfa;margin-bottom:8px;">🔗 Relación</div>'
+    + '<div class="mitem"><div class="ml">Cliente afectado</div><select id="ticketCliente" class="msel">' + clientesOpt + '</select></div>'
+    + '<div class="mitem"><div class="ml">Vendedor reportante</div><select id="ticketVendedor" class="msel">' + vendedoresOpt + '</select></div>'
+    + '<div class="mitem"><div class="ml">Región</div><select id="ticketRegion" class="msel">' + regionesOpt + '</select></div>'
+    + '</div></div>'
+    + '<div class="mitem"><div class="ml">Asunto / descripción *</div><textarea id="ticketDesc" rows="4" class="medit" style="width:100%;resize:vertical;" placeholder="Describí detalladamente la incidencia..."></textarea></div>'
+    + '<div class="mitem" style="margin-top:10px;"><div class="ml">📎 Adjuntar archivos</div>'
+    + '<input type="file" id="ticketAdjuntos" multiple accept="image/*,application/pdf" style="width:100%;padding:6px 0;font-size:.8rem;color:var(--text);">'
+    + '<div id="ticketAdjuntosPreview" style="margin-top:4px;font-size:.7rem;color:var(--muted);"></div></div>'
+    + '</div>'
+    + '<div class="mact">'
+    + '<button class="mbtn gold" onclick="crearNuevoTicket()">✅ Crear ticket</button>'
+    + '<button class="mbtn ghost" onclick="closeModal()">Cancelar</button>'
+    + '</div>';
+  document.getElementById('modal').classList.add('open');
+
+  document.getElementById('ticketAdjuntos').addEventListener('change', function() {
+    var preview = document.getElementById('ticketAdjuntosPreview');
+    if (!preview) return;
+    var names = [];
+    for (var i = 0; i < this.files.length; i++) names.push('📄 ' + this.files[i].name + ' (' + (this.files[i].size / 1024).toFixed(1) + ' KB)');
+    preview.innerHTML = names.length ? names.join('<br>') : '';
+  });
+
+  // Load staff for assignment
+  sbClient.from('staff_profiles').select('user_id, nombre, role_id').in('role_id', [1, 2]).then(function(res) {
+    if (res.error) return;
+    var sel = document.getElementById('ticketAsignado');
+    if (!sel) return;
+    var opts = '<option value="">Sin asignar</option>';
+    (res.data || []).forEach(function(u) {
+      opts += '<option value="' + u.user_id + '">' + escCeo(u.nombre) + ' (' + (u.role_id === 1 ? 'CEO' : 'Gerente') + ')</option>';
+    });
+    sel.innerHTML = opts;
+  });
+}
+
+async function crearNuevoTicket() {
+  var categoria = document.getElementById('ticketCategoria').value;
+  var prioridad = document.getElementById('ticketPrioridad').value;
+  var desc = (document.getElementById('ticketDesc') || {}).value.trim();
+  var clienteId = (document.getElementById('ticketCliente') || {}).value ? parseInt((document.getElementById('ticketCliente')).value) : null;
+  var vendedorId = (document.getElementById('ticketVendedor') || {}).value ? parseInt((document.getElementById('ticketVendedor')).value) : null;
+  var regionId = (document.getElementById('ticketRegion') || {}).value ? parseInt((document.getElementById('ticketRegion')).value) : null;
+  var asignadoA = (document.getElementById('ticketAsignado') || {}).value || null;
+  var filesInput = document.getElementById('ticketAdjuntos');
+  var files = filesInput ? filesInput.files : [];
+
+  if (!desc) { showToast('⚠️ La descripción es obligatoria'); return; }
+
+  var btn = document.querySelector('#modal .mbtn.gold');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Procesando...'; }
+
+  try {
+    // 1. Upload attachments
+    var adjuntosUrls = [];
+    for (var i = 0; i < files.length; i++) {
+      var file = files[i];
+      var ext = file.name.split('.').pop();
+      var fileName = 'ticket_adjuntos/' + _ceoUid + '/' + Date.now() + '_' + i + '.' + ext;
+      var uploadRes = await sbClient.storage.from('ticket_adjuntos').upload(fileName, file);
+      if (uploadRes.error) throw uploadRes.error;
+      var urlRes = sbClient.storage.from('ticket_adjuntos').getPublicUrl(fileName);
+      adjuntosUrls.push(urlRes.data.publicUrl);
+    }
+
+    // 2. Create ticket via INSERT (not RPC - RPC was broken)
+    var insertData = {
+      tipo: categoria,
+      mensaje: desc,
+      remitente_id: _ceoUid,
+      estado: 'abierto',
+      prioridad: prioridad,
+      leida: false,
+      cliente_id: clienteId,
+      vendedor_id: vendedorId,
+      region_id: regionId,
+      asignado_a: asignadoA
+    };
+    if (adjuntosUrls.length) insertData.adjuntos = adjuntosUrls;
+
+    var insRes = await sbClient.from('notificaciones').insert(insertData).select();
+    if (insRes.error) throw insRes.error;
+
+    showToast('✅ Ticket creado' + (adjuntosUrls.length ? ' con ' + adjuntosUrls.length + ' adjunto(s)' : ''));
+    closeModal();
+    renderTickets();
+  } catch (err) {
+    console.error('[crearNuevoTicket]', err);
+    showToast('❌ Error: ' + (err.message || err));
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '✅ Crear ticket'; }
+  }
+}
+
+function verTicketDetail(ticketId) {
+  var ticket = null;
+  for (var i = 0; i < _ticketsCache.length; i++) {
+    if (_ticketsCache[i].id === ticketId) { ticket = _ticketsCache[i]; break; }
+  }
+  if (!ticket) { showToast('Ticket no encontrado'); return; }
+
+  sbClient.from('notificaciones').select('*').eq('respuesta_a', ticketId).order('created_at', { ascending: true })
+    .then(function(res) {
+      _renderTicketDetailModal(ticket, res.data || []);
+    })
+    .catch(function(e) { console.warn(e); _renderTicketDetailModal(ticket, []); });
+}
+
+function _renderTicketDetailModal(ticket, comentarios) {
+  var estadoOpts = ['abierto','en_progreso','resuelto','cerrado'].map(function(e) {
+    return '<option value="' + e + '"' + (ticket.estado === e ? ' selected' : '') + '>' + getEstadoLabel(e) + '</option>';
+  }).join('');
+  var prioridadOpts = ['baja','media','alta','urgente'].map(function(p) {
+    return '<option value="' + p + '"' + (ticket.prioridad === p ? ' selected' : '') + '>' + getPrioridadLabel(p) + '</option>';
+  }).join('');
+  var clienteNombre = ticket.cliente ? ticket.cliente.nombre : (ticket.cliente_id ? 'ID: ' + ticket.cliente_id : '—');
+  var vendedorNombre = ticket.vendedor_nombre || (ticket.vendedor_id ? 'ID: ' + ticket.vendedor_id : '—');
+  var nivelColor = (ticket.nivel_actual || 1) >= 3 ? 'var(--red)' : (ticket.nivel_actual || 1) === 2 ? 'var(--orange)' : 'var(--muted)';
+
+  var adjuntosHtml = '';
+  if (ticket.adjuntos && ticket.adjuntos.length) {
+    adjuntosHtml = '<div class="mi" style="margin-bottom:10px;"><div class="ml">📎 Adjuntos</div><div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;">';
+    for (var a = 0; a < ticket.adjuntos.length; a++) {
+      var adjUrl = ticket.adjuntos[a];
+      var adjName = adjUrl.split('/').pop() || 'Archivo ' + (a + 1);
+      adjuntosHtml += '<a href="' + adjUrl + '" target="_blank" style="display:inline-flex;align-items:center;gap:4px;padding:4px 8px;background:rgba(255,255,255,.05);border:1px solid var(--border2);border-radius:6px;text-decoration:none;color:var(--text);font-size:.72rem;">📄 ' + escCeo(adjName.substring(0, 25)) + '</a>';
+    }
+    adjuntosHtml += '</div></div>';
+  }
+
+  var comentariosHtml = '';
+  for (var i = 0; i < comentarios.length; i++) {
+    var cm = comentarios[i];
+    comentariosHtml += '<div style="padding:10px;border-bottom:1px solid var(--border);"><div style="font-weight:700;font-size:.78rem;">' + escCeo(cm.remitente_nombre || 'Usuario') + '</div><div style="font-size:.82rem;margin-top:3px;">' + escCeo(cm.mensaje) + '</div><div style="font-size:.65rem;color:var(--muted);margin-top:3px;">' + formatDateRelativeT(cm.created_at) + '</div></div>';
+  }
+
+  document.getElementById('mbox').innerHTML =
+    '<div class="mhead"><div><h2>🎫 ' + escCeo(ticket.numero_ticket || 'Ticket #' + ticket.id) + '</h2><p>' + escCeo(ticket.tipo || 'Incidencia') + ' · ' + formatDateRelativeT(ticket.created_at) + '</p></div><button class="mclose" onclick="closeModal()">✕</button></div>'
+    + '<div class="mbody">'
+    + '<div class="mgrid" style="grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">'
+    + '<div class="mi"><div class="ml">Cliente</div><div class="mv">' + escCeo(clienteNombre) + '</div></div>'
+    + '<div class="mi"><div class="ml">Vendedor</div><div class="mv">' + escCeo(vendedorNombre) + '</div></div>'
+    + '<div class="mi"><div class="ml">Estado</div><div><select id="detEstado" class="msel" style="width:auto;">' + estadoOpts + '</select></div></div>'
+    + '<div class="mi"><div class="ml">Prioridad</div><div><select id="detPrioridad" class="msel" style="width:auto;">' + prioridadOpts + '</select></div></div>'
+    + '<div class="mi"><div class="ml">Nivel escalamiento</div><div class="mv" style="font-weight:800;color:' + nivelColor + ';">Nivel ' + (ticket.nivel_actual || 1) + '</div></div>'
+    + '</div>'
+    + '<div class="mi" style="margin-bottom:10px;"><div class="ml">Descripción</div><div class="mv" style="white-space:pre-wrap;">' + escCeo(ticket.mensaje || '') + '</div></div>'
+    + adjuntosHtml
+    + '<div class="mi" style="margin-bottom:12px;padding:10px;background:rgba(255,255,255,.02);border:1px solid var(--border);border-radius:8px;">'
+    + '<div class="ml" style="margin-bottom:6px;">📎 Agregar adjunto</div>'
+    + '<input type="file" id="nuevoAdjuntoTicket" accept="image/*,application/pdf" style="width:100%;font-size:.78rem;color:var(--text);margin-bottom:4px;">'
+    + '<button class="mbtn ghost" style="font-size:.72rem;padding:4px 10px;" onclick="subirAdjuntoATicket(' + ticket.id + ')">➕ Subir adjunto</button>'
+    + '</div>'
+    + '<div style="margin-top:4px;"><div class="ml" style="margin-bottom:6px;">Historial / Comentarios</div>'
+    + '<div style="max-height:180px;overflow-y:auto;background:rgba(255,255,255,.02);border:1px solid var(--border);border-radius:8px;">'
+    + (comentariosHtml || '<div style="color:var(--muted);padding:10px;font-size:.8rem;">Sin comentarios aún</div>')
+    + '</div></div>'
+    + '<div style="margin-top:8px;"><textarea id="nuevoComentario" class="medit" rows="2" style="width:100%;" placeholder="Agregar comentario..."></textarea></div>'
+    + '</div>'
+    + '<div class="mact">'
+    + '<button class="mbtn gold" onclick="agregarComentarioTicket(' + ticket.id + ')">💬 Comentar</button>'
+    + '<button class="mbtn purple" onclick="actualizarTicket(' + ticket.id + ')">💾 Guardar cambios</button>'
+    + (ticket.estado !== 'cerrado' ? '<button class="mbtn" style="background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.25);color:#f87171;" onclick="cerrarTicket(' + ticket.id + ')">🔒 Cerrar</button>' : '')
+    + '<button class="mbtn ghost" onclick="closeModal()">Cerrar</button>'
+    + '</div>';
+  document.getElementById('modal').classList.add('open');
+}
+
+function agregarComentarioTicket(ticketId) {
+  var comentario = ((document.getElementById('nuevoComentario') || {}).value || '').trim();
+  if (!comentario) { showToast('Escribí un comentario'); return; }
+  sbClient.from('notificaciones').insert({
+    tipo: 'comentario', mensaje: comentario, remitente_id: _ceoUid,
+    respuesta_a: ticketId, created_at: new Date().toISOString()
+  }).then(function(res) {
+    if (res.error) throw res.error;
+    return sbClient.from('notificaciones').update({ updated_at: new Date().toISOString() }).eq('id', ticketId);
+  }).then(function() {
+    showToast('✅ Comentario agregado');
+    verTicketDetail(ticketId);
+    renderTickets();
+  }).catch(function(e) { showToast('❌ Error: ' + e.message); });
+}
+
+function actualizarTicket(ticketId) {
+  var nuevoEstado = ((document.getElementById('detEstado') || {}).value);
+  var nuevaPrioridad = ((document.getElementById('detPrioridad') || {}).value);
+  sbClient.from('notificaciones').update({
+    estado: nuevoEstado, prioridad: nuevaPrioridad,
+    updated_at: new Date().toISOString(),
+    fecha_cierre: nuevoEstado === 'cerrado' ? new Date().toISOString() : null
+  }).eq('id', ticketId).then(function(res) {
+    if (res.error) throw res.error;
+    showToast('✅ Ticket actualizado');
+    verTicketDetail(ticketId);
+    renderTickets();
+  }).catch(function(e) { showToast('❌ Error: ' + e.message); });
+}
+
+function cerrarTicket(ticketId) {
+  if (!confirm('¿Cerrar este ticket? No se podrá reabrir desde aquí.')) return;
+  sbClient.from('notificaciones').update({
+    estado: 'cerrado', updated_at: new Date().toISOString(),
+    fecha_cierre: new Date().toISOString()
+  }).eq('id', ticketId).then(function(res) {
+    if (res.error) throw res.error;
+    showToast('🔒 Ticket cerrado');
+    closeModal();
+    renderTickets();
+  }).catch(function(e) { showToast('❌ Error: ' + e.message); });
+}
+
+async function subirAdjuntoATicket(ticketId) {
+  var fileInput = document.getElementById('nuevoAdjuntoTicket');
+  if (!fileInput || !fileInput.files.length) { showToast('Seleccioná un archivo'); return; }
+  var file = fileInput.files[0];
+  try {
+    var ext = file.name.split('.').pop();
+    var fileName = 'ticket_adjuntos/' + _ceoUid + '/' + Date.now() + '_' + file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+    var uploadRes = await sbClient.storage.from('ticket_adjuntos').upload(fileName, file);
+    if (uploadRes.error) throw uploadRes.error;
+    var urlRes = sbClient.storage.from('ticket_adjuntos').getPublicUrl(fileName);
+    var newUrl = urlRes.data.publicUrl;
+    // Append to existing adjuntos
+    var ticketRes = await sbClient.from('notificaciones').select('adjuntos').eq('id', ticketId).single();
+    if (ticketRes.error) throw ticketRes.error;
+    var adjuntos = ticketRes.data.adjuntos || [];
+    adjuntos.push(newUrl);
+    await sbClient.from('notificaciones').update({ adjuntos: adjuntos }).eq('id', ticketId);
+    showToast('✅ Adjunto subido');
+    verTicketDetail(ticketId);
+  } catch (err) {
+    showToast('❌ Error: ' + (err.message || err));
+  }
+}
+
+function cambiarEstadoTicket(ticketId, nuevoEstado) {
+  sbClient.from('notificaciones').update({
+    estado: nuevoEstado, updated_at: new Date().toISOString()
+  }).eq('id', ticketId).then(function(res) {
+    if (res.error) throw res.error;
+    showToast('✅ Estado cambiado a ' + getEstadoLabel(nuevoEstado));
+    renderTickets();
+  }).catch(function(e) { showToast('❌ Error: ' + e.message); });
 }
 
 </script>
