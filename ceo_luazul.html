@@ -5387,7 +5387,9 @@ async function guardarTicket() {
       p_categoria: categoria
     });
     if (rpcRes.error) throw rpcRes.error;
-    var ticketId = rpcRes.data;
+    // El RPC devuelve {ok:true, ticket_id:N, numero:"TK-..."}
+    var rpcData = rpcRes.data;
+    var ticketId = (typeof rpcData === 'object' && rpcData !== null) ? rpcData.ticket_id : rpcData;
     // Si hay adjuntos, vincularlos al registro del ticket
     if (adjuntosUrls.length && ticketId) {
       var updRes = await sbClient.from('notificaciones').update({ adjuntos: adjuntosUrls }).eq('id', ticketId);
