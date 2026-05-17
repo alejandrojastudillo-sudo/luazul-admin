@@ -658,7 +658,7 @@ var _regFiltMode = 'activo'; // 'activo' = solo con datos | 'todas' = las 26
 
 function dbg(k){try{var r=localStorage.getItem(k);return r?JSON.parse(r):null;}catch(e){return null;}}
 function dbs(k,v){try{localStorage.setItem(k,JSON.stringify(v));return true;}catch(e){return false;}}
-function _parseJSON(s,d){if(!s)return d;try{return JSON.parse(s);}catch(e){return d;}}
+function _parseJSON(s,d){if(s==null)return d;if(typeof s!=='string')return s;try{return JSON.parse(s);}catch(e){return d;}}
 
 function cargarDatosSupabase(){
   showToast('⏳ Cargando datos...');
@@ -718,7 +718,7 @@ function cargarDatosSupabase(){
           fechaAlta:r.fecha_alta?r.fecha_alta.slice(0,10):'',
           ciudad:r.ciudad||'',telefono1:r.telefono1||'',telefono2:r.telefono2||'',
           domicilio:r.domicilio||'',cbu:r.cbu||'',
-          comprobantes:JSON.parse(r.comprobantes_json||'[]'),_raw:r};
+          comprobantes:_parseJSON(r.comprobantes_json,[]),_raw:r};
       });
       return sbClient.from('clientes')
         .select('id,user_id,seller_id,nombre,email,telefono,documento,estado,destino,paquete,fecha_viaje,monto_cuota,cuotas_total,cuotas_pagadas,total_usd,fecha_alta,notas,region_id');
