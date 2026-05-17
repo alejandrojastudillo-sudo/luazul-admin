@@ -843,7 +843,7 @@ function mostrarModalPagoStaff(staffUid, montoMax, rolTipo) {
       '<div class="manager-input-group"><label>Monto a pagar (USD)</label><input id="montoComision" type="number" step="1" max="' + montoMax + '" value="' + montoMax + '" /></div>' +
       '<div class="manager-input-group"><label>Descripción</label><input id="descComision" placeholder="Ej: Comisión Marzo 2026" /></div>' +
       '<div class="manager-input-group"><label>Comprobante (archivo)</label><input id="fileComision" type="file" accept="image/*,application/pdf" /></div>' +
-      '</div><div class="mact"><button class="mbtn gold" onclick="procesarPagoComision('' + staffUid + '')">✅ Registrar Pago</button><button class="mbtn ghost" onclick="closeModal()">Cancelar</button></div>';
+      '</div><div class="mact"><button class="mbtn gold" onclick="procesarPagoComision(\'' + staffUid + '\')">✅ Registrar Pago</button><button class="mbtn ghost" onclick="closeModal()">Cancelar</button></div>';
     document.getElementById('mbox').innerHTML = html;
     document.getElementById('modal').classList.add('open');
   }
