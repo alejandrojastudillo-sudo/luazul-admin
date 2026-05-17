@@ -370,13 +370,33 @@ const LZ_LOAD = {
     var regiones = regRes.data || [];
     var rIds     = (grRes.data || []).map(function(r) { return r.region_id; });
 
-    // ── Staff: para gerente, obtener por región (roles 3 y 5) ──
+    // ── Fallback: si gerente_regiones vacío, usar region_id del propio perfil ──
+    if (!rIds.length && profile.region_id) {
+      rIds = [profile.region_id];
+      console.warn('⚠️ gerente_regiones vacío — usando region_id del perfil:', profile.region_id);
+    }
+
+    // ── Staff: para gerente, obtener por región (roles 3 y 5) + manager_id directo ──
     var staffRes;
     if (rIds.length) {
-      staffRes = await sbClient.from('staff_profiles')
+      // Consulta principal: staff por región
+      var qRegion = sbClient.from('staff_profiles')
         .select('*')
         .in('region_id', rIds)
         .in('role_id', [ROLE_SELLER, ROLE_SALES_LEADER]);
+      // Consulta paralela: staff que reporta directamente al gerente (sin importar región)
+      var qDirect = sbClient.from('staff_profiles')
+        .select('*')
+        .eq('manager_id', profile.id)
+        .in('role_id', [ROLE_SELLER, ROLE_SALES_LEADER]);
+      var [resRegion, resDirect] = await Promise.all([qRegion, qDirect]);
+      if (resRegion.error) throw resRegion.error;
+      if (resDirect.error) throw resDirect.error;
+      // Merge evitando duplicados por id
+      var seen = {};
+      var merged = (resRegion.data || []).concat(resDirect.data || []);
+      merged.forEach(function(s) { if (!seen[s.id]) seen[s.id] = s; });
+      staffRes = { data: Object.values(seen), error: null };
     } else {
       staffRes = await sbClient.from('staff_profiles').select('*').eq('id', -1);
     }
@@ -4208,7 +4228,7 @@ window.crearNuevoCanal = crearNuevoCanal;
           p_role_id:    ROLE_SALES_LEADER,
           p_nombre:     primerNombre,
           p_apellido:   apellidoStr,
-          p_region_ids: [],
+          p_region_ids: window._gerenteRegionIds && window._gerenteRegionIds.length ? window._gerenteRegionIds : (window._gerenteProfile.region_id ? [window._gerenteProfile.region_id] : []),
           p_telefono1:  telefono1 || null,
           p_telefono2:  telefono2 || null,
           p_ciudad:     ciudad,
