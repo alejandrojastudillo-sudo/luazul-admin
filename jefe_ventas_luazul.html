@@ -43,12 +43,6 @@
   --orange-bd:rgba(249,115,22,.3);
   --red-bg:rgba(239,68,68,.1);
   --red-bd:rgba(239,68,68,.3);
-  --purple:#a78bfa;
-  --purple-bg:rgba(167,139,250,.1);
-  --purple-bd:rgba(167,139,250,.3);
-  --yellow:#facc15;
-  --yellow-bg:rgba(250,204,21,.1);
-  --yellow-bd:rgba(250,204,21,.3);
 }
 *,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
 body{font-family:'Mulish',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;font-size:14px;}
@@ -186,12 +180,6 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;back
 .mbtn.ghost{background:var(--card);color:var(--muted);border:1px solid var(--border2);}
 .mbtn.ghost:hover{color:var(--text);border-color:var(--gold);}
 .mbtn.danger{background:var(--red-bg);color:#fca5a5;border:1px solid var(--red-bd);}
-.mbtn.purple{background:var(--purple-bg);color:#c4b5fd;border:1px solid var(--purple-bd);}
-.pri-chip{display:inline-block;padding:2px 8px;border-radius:6px;font-size:.68rem;font-weight:700;}
-.pri-chip.rojo{background:var(--red-bg);color:#f87171;border:1px solid var(--red-bd);}
-.pri-chip.naranja{background:var(--orange-bg);color:#fb923c;border:1px solid var(--orange-bd);}
-.pri-chip.amarillo{background:var(--yellow-bg);color:#facc15;border:1px solid var(--yellow-bd);}
-.pri-chip.verde{background:var(--green-bg);color:#4ade80;border:1px solid var(--green-bd);}
 .sbox{display:flex;align-items:center;gap:7px;background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:7px 12px;flex:0 1 220px;}
 .sbox input{background:none;border:none;color:var(--text);font-family:'Mulish',sans-serif;font-size:.86rem;outline:none;width:100%;}
 .sbox input::placeholder{color:var(--muted);}
@@ -261,7 +249,6 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;back
   var sbClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
   var _memCache = {};
   var VK = 'vendors', DB_KEY = 'clients', NK = 'notifications';
-  var _moraPage = { temprana: 1, avanzada: 1 }; // FIX MORA-M-06: pagination state
 
 // ==================== crm-core (inline) v1.0 ====================
 // Unificación de utilidades, mapeadores y carga centralizada
@@ -381,7 +368,6 @@ const LZ_LOAD = {
     var regRes = ronda1[0], staffRes = ronda1[1], grRes = ronda1[2];
     if (regRes.error)   throw regRes.error;
     if (staffRes.error) throw staffRes.error;
-    if (grRes.error) console.warn('[loadClients] gerente_regiones query failed:', grRes.error);
 
     var regiones = regRes.data || [];
     var staff    = (staffRes.data || []).map(_lzMapStaff);
@@ -406,7 +392,7 @@ const LZ_LOAD = {
       : Promise.resolve({ data: [], error: null });
 
     var notifPromise = sbClient.from('notificaciones').select('*')
-      .or('destinatario_id.eq.' + profile.id + ',destinatario_rol.eq.jefe_ventas')
+      .or('destinatario_id.eq.' + profile.id + ',destinatario_rol.eq.manager')
       .order('created_at', { ascending: false }).limit(200);
 
     var ronda3 = await Promise.all([pagosPromise, notifPromise]);
@@ -452,9 +438,7 @@ async function loadClients() {
     _memCache[DB_KEY] = clientes.map(LZ.enrich);
     _memCache[VK]     = staff.filter(function(s) { return s.role_id === LZ.ROLE_SELLER; });
     var rIds = result.rIds || [];
-    // M5: Separado notificaciones de pagos — no contaminar badge de alertas con pagos
-    _memCache[NK]     = notificaciones || [];
-    _memCache['pagos_local'] = pagos || [];
+    _memCache[NK]     = (notificaciones || []).concat(pagos || []);
     window._cacheRegiones    = regiones;
     window._gerenteRegionIds = rIds;
     console.log('📦 Datos cargados:', {
@@ -469,7 +453,7 @@ async function loadClients() {
   } catch (err) {
     console.error('❌ Error en loadClients:', err);
     showToast('❌ Error al cargar datos: ' + (err.message || err));
-    _memCache[VK] = []; _memCache[DB_KEY] = []; _memCache[NK] = []; _memCache['pagos_local'] = [];
+    _memCache[VK] = []; _memCache[DB_KEY] = []; _memCache[NK] = [];
   }
 }
 // Alias backward-compat para llamadas post-acción internas
@@ -571,7 +555,7 @@ function _sbLoad() { return loadClients(); }
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
           <div class="sbox"><span>🔍</span><input type="text" id="csrch" placeholder="Buscar..." oninput="renderClients()"/></div>
           <select class="msel" id="vFilt" style="width:auto;padding:7px 11px;" onchange="renderClients()"><option value="">Todos los vendedores</option></select>
-          <select class="msel" id="sFilt" style="width:auto;padding:7px 11px;" onchange="renderClients()"><option value="">Todos los estados</option><option value="activo">Activo</option><option value="atraso">En atraso</option><option value="atraso_gestion">Atraso (gestión)</option><option value="completo">Completo</option><option value="baja">Baja</option></select>
+          <select class="msel" id="sFilt" style="width:auto;padding:7px 11px;" onchange="renderClients()"><option value="">Todos los estados</option><option value="activo">Activo</option><option value="atraso">En atraso</option><option value="completo">Completo</option><option value="baja">Baja</option></select>
         </div>
       </div>
       <div class="twrap"><div class="thead"><div></div><div>Cliente</div><div>Vendedor</div><div>Progreso</div><div>Total</div><div>Cuotas</div><div>Viaje</div><div>Estado</div><div>Acciones</div></div><div id="clientsBody"></div></div>
@@ -595,8 +579,7 @@ function _sbLoad() { return loadClients(); }
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
           <select class="msel" id="pagoVFilt" onchange="renderPagos()" style="width:auto;padding:7px 11px;"><option value="">Todos los asesores</option></select>
           <select class="msel" id="pagoEstFilt" onchange="renderPagos()" style="width:auto;padding:7px 11px;"><option value="">Todos</option><option value="pendiente">Pendientes de aprobación</option><option value="aprobado">Aprobados</option></select>
-          <!-- FASE3-FIX2: Aprobación de pagos restringida solo al CEO -->
-          <button class="addbtn" onclick="showToast('⛔ Solo el CEO puede aprobar pagos')" style="background:linear-gradient(135deg,#374151,#4b5563);font-size:.78rem;padding:8px 14px;opacity:.6;cursor:not-allowed;">🔒 Solo CEO aprueba pagos</button>
+          <button class="addbtn" onclick="aprobarTodos()" style="background:linear-gradient(135deg,#059669,#10b981);font-size:.78rem;padding:8px 14px;">✅ Aprobar todos pendientes</button>
         </div>
       </div>
       <div id="pagosBody"></div>
@@ -606,7 +589,7 @@ function _sbLoad() { return loadClients(); }
     <div class="tabpg" id="tabpg-mora">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
         <div><div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;"><div style="width:10px;height:10px;border-radius:50%;background:#f59e0b;box-shadow:0 0 8px #f59e0b;"></div><h3 style="font-family:Syne,sans-serif;font-size:.95rem;font-weight:800;">⚡ Mora Temprana — Primeras 3 cuotas</h3></div><div style="background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.2);border-radius:14px;padding:14px;margin-bottom:14px;font-size:.78rem;color:rgba(200,220,255,.6);">Gestionada por el <strong style="color:#fbbf24;">asesor asignado</strong>. Al cargar aquí, se envía notificación automática al asesor.</div><div id="moraTempranaList"></div></div>
-        <div><div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;"><div style="width:10px;height:10px;border-radius:50%;background:#ef4444;box-shadow:0 0 8px #ef4444;"></div><h3 style="font-family:Syne,sans-serif;font-size:.95rem;font-weight:800;">🔴 Mora Avanzada — Más de 3 cuotas</h3></div><div style="background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.2);border-radius:14px;padding:14px;margin-bottom:14px;font-size:.78rem;color:rgba(200,220,255,.6);">Requiere seguimiento directo del <strong style="color:#fca5a5;">Jefe de Ventas</strong>. Se muestran todos los datos del cliente.</div><div id="moraAvanzadaList"></div></div>
+        <div><div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;"><div style="width:10px;height:10px;border-radius:50%;background:#ef4444;box-shadow:0 0 8px #ef4444;"></div><h3 style="font-family:Syne,sans-serif;font-size:.95rem;font-weight:800;">🔴 Mora Avanzada — Más de 3 cuotas</h3></div><div style="background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.2);border-radius:14px;padding:14px;margin-bottom:14px;font-size:.78rem;color:rgba(200,220,255,.6);">Requiere seguimiento directo de <strong style="color:#fca5a5;">gerencia</strong>. Se muestran todos los datos del cliente.</div><div id="moraAvanzadaList"></div></div>
       </div>
     </div>
 
@@ -651,7 +634,7 @@ function _sbLoad() { return loadClients(); }
           <option value="alta">Alta</option><option value="urgente">Urgente</option>
         </select>
         <div class="sbox" style="flex:1;">
-          <span>🔍</span><input type="text" id="ticketSearch" placeholder="Buscar..." oninput="debounceSearchTicketsJef()">
+          <span>🔍</span><input type="text" id="ticketSearch" placeholder="Buscar..." oninput="cargarTicketsGerente()">
         </div>
       </div>
       <div class="twrap" style="overflow-x:auto;">
@@ -714,48 +697,30 @@ async function _sbUpdateVendor(vid, data) {
   if (result.error) throw result.error;
 }
 
-// FASE3-FIX2: Aprobación de pagos deshabilitada — solo el CEO puede aprobar
 async function _sbApprovePayment(pagoId) {
-  showToast('⛔ Solo el CEO puede aprobar pagos');
-  return false;
-  /* var result = await sbClient.from('pagos').update({ estado: 'aprobado', aprobado_por: 'jefe_ventas' }).eq('id', pagoId).select().single();
+  var result = await sbClient.from('pagos').update({ estado: 'aprobado', aprobado_por: 'gerente' }).eq('id', pagoId);
   if (result.error) throw result.error;
-  var pago = result.data;
-  if (pago && pago.cliente_id && pago.numero_cuota) {
-    var cliRes = await sbClient.from('clientes').select('cuotas_pagadas,cuotas_total,estado').eq('id', pago.cliente_id).single();
-    if (cliRes.data) {
-      var cur = parseInt(cliRes.data.cuotas_pagadas) || 0;
-      var nuevaCuota = Math.max(cur, parseInt(pago.numero_cuota));
-      if (nuevaCuota > cur) {
-        var tot = parseInt(cliRes.data.cuotas_total) || 10;
-        var nuevoEstado = nuevaCuota >= tot ? 'completo' : cliRes.data.estado;
-        await sbClient.from('clientes').update({ cuotas_pagadas: nuevaCuota, estado: nuevoEstado }).eq('id', pago.cliente_id);
-      }
-    }
-  }
   return true;
 }
 
 //  COMMISSION ENGINE (Reglas de negocio)
 // ══════════════════════════════════════════════════════
 function getClientMonth(c) {
-  // R3: Estandarizado — sin fechaAlta = excluir de comisiones (no inflar mes actual)
   if (c.fechaAlta) {
     var d = new Date(c.fechaAlta + 'T00:00:00');
-    if (!isNaN(d)) return d.getFullYear() + '-' + (d.getMonth() + 1);
+    return d.getFullYear() + '-' + d.getMonth();
   }
-  console.warn('[R3] Cliente sin fechaAlta — excluido de cálculo de comisión:', c.id || c.nombre || '?');
-  return null;
+  var now = new Date();
+  return now.getFullYear() + '-' + now.getMonth();
 }
 
 function calcComision(v, allClients) {
   var vc = allClients.filter(function(c) { return String(c.vid) === String(v.id); });
   var now = new Date();
-  var curKey = now.getFullYear() + '-' + (now.getMonth() + 1);
+  var curKey = now.getFullYear() + '-' + now.getMonth();
   var byMonth = {};
   vc.forEach(function(c) {
     var key = getClientMonth(c);
-    if (!key) return;
     if (!byMonth[key]) byMonth[key] = [];
     byMonth[key].push(c);
   });
@@ -775,7 +740,7 @@ function calcComision(v, allClients) {
     var parts = key.split('-');
     meses.push({
       key: key,
-      label: mn[parseInt(parts[1]) - 1] + ' ' + parts[0],
+      label: mn[parseInt(parts[1])] + ' ' + parts[0],
       vendidos: vendidos.length,
       activos: activos.length,
       bajasP3: bajasP3.length,
@@ -793,13 +758,8 @@ function calcComision(v, allClients) {
   var bajasTotalesP3 = vc.filter(function(c) { return c.estado === 'baja' && (parseInt(c.cuotas_pagadas) || 0) <= 3; });
   var enSeguimiento = vc.filter(function(c) { return (parseInt(c.cuotas_pagadas) || 0) <= 3 && c.estado !== 'baja' && c.estado !== 'completo'; });
   var curClients = curMes ? (byMonth[curKey] || []) : [];
-  // F6-5: comisionMes ahora resta penalización (misma lógica que el bucle per-mes)
-  var curActivos = curClients.filter(function(c) { return c.estado !== 'baja'; });
-  var curBajasP3 = curClients.filter(function(c) { return c.estado === 'baja' && (parseInt(c.cuotas_pagadas) || 0) <= 3; });
-  var curBruta = curActivos.reduce(function(s, c) { return s + (parseFloat(c.monto_cuota) || 0) * (curTasa / 100); }, 0);
-  var curPen = curBajasP3.reduce(function(s, c) { return s + (parseFloat(c.monto_cuota) || 0) * (curTasa / 100); }, 0);
-  var comisionMes = Math.round((curBruta - curPen) * 100) / 100;
   var ingresoMes = curClients.reduce(function(s, c) { return s + (parseFloat(c.monto_cuota) || 0); }, 0);
+  var comisionMes = Math.round(ingresoMes * (curTasa / 100) * 100) / 100;
   var pkgBreakdown = {};
   curClients.forEach(function(c) {
     var pkg = c.paquete || 'Otro';
@@ -886,7 +846,7 @@ function gLogin() {
       return sbClient.from('staff_profiles').select('*').eq('user_id', res.data.user.id).single();
     })
     .then(function(p) {
-      if (p.error || !p.data) throw new Error('Perfil de Jefe de Ventas no encontrado. Contactá al administrador.');
+      if (p.error || !p.data) throw new Error('Perfil de gerente no encontrado. Contactá al administrador.');
       if (parseInt(p.data.role_id) !== ROLE_SALES_LEADER) throw new Error('Acceso exclusivo para Jefe de Ventas (Rol 5).');
       window._gerenteProfile = p.data;
       sessionStorage.setItem('jefe_ventas_id_interno', p.data.id);
@@ -928,15 +888,12 @@ function renderMisComisionesGerente() {
   var clientes = _memCache[DB_KEY] || [];
 
   function fmtM(v) { return 'USD ' + Number(v || 0).toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 0 }); }
-  // R3: Estandarizado — sin fechaAlta = excluir (misma lógica que getClientMonth global)
   function getMonth(c) {
-    if (c.fechaAlta) { var d = new Date(c.fechaAlta + 'T00:00:00'); return d.getFullYear() + '-' + (d.getMonth() + 1); }
-    console.warn('[R3] Cliente sin fechaAlta — excluido:', c.id || c.nombre || '?');
-    return null;
+    if (c.fechaAlta) { var d = new Date(c.fechaAlta + 'T00:00:00'); return d.getFullYear() + '-' + d.getMonth(); }
+    return '';
   }
-  // F6.1-4: Corregido — 15% sobre 1ª cuota + penalización por bajas tempranas
-  // (misma regla que vendedor: baja con ≤3 cuotas pagadas = pierde comisión)
-  var pctJefe = 0.15;
+  var pctBase = (yo.com_pct && yo.com_pct > 0) ? yo.com_pct / 100 : 0.15;
+  var pctBonus = 0;   // Sin bonus adicional
   var mn = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
   var byMonth = {};
   clientes.forEach(function(c) {
@@ -945,29 +902,30 @@ function renderMisComisionesGerente() {
     if (!byMonth[k]) byMonth[k] = [];
     byMonth[k].push(c);
   });
-  var totalBase = 0, totalPen = 0, meses = [];
+  var totalBase = 0, totalBonus = 0, meses = [];
   Object.keys(byMonth).sort().forEach(function(key) {
     var grupo = byMonth[key];
-    var vendidos = grupo.filter(function(c) { return !(c.estado === 'baja' && (parseInt(c.cuotas_pagadas) || 0) === 0); });
-    var activos = vendidos.filter(function(c) { return c.estado !== 'baja'; });
-    var bajasP3 = vendidos.filter(function(c) { return c.estado === 'baja' && (parseInt(c.cuotas_pagadas) || 0) <= 3; });
-    var base = activos.reduce(function(s, c) { return s + (parseFloat(c.monto_cuota) || 0) * pctJefe; }, 0);
-    var pen = bajasP3.reduce(function(s, c) { return s + (parseFloat(c.monto_cuota) || 0) * pctJefe; }, 0);
+    var activos = grupo.filter(function(c) { return c.estado !== 'baja'; });
+    var base = activos.reduce(function(s, c) { return s + (parseFloat(c.monto_cuota) || 0) * pctBase; }, 0);
+    var bonus = 0;
+    if (pctBonus > 0) {
+      bonus = activos.filter(function(c) { return (parseInt(c.cuotas_pagadas) || 0) >= 2; })
+        .reduce(function(s, c) { return s + (parseFloat(c.monto_cuota) || 0) * pctBonus; }, 0);
+    }
     totalBase += base;
-    totalPen += pen;
+    totalBonus += bonus;
     var parts = key.split('-');
     var now = new Date();
     meses.push({
-      label: mn[parseInt(parts[1]) - 1] + ' ' + parts[0],
+      label: mn[parseInt(parts[1])] + ' ' + parts[0],
       ventas: activos.length,
-      bajasP3: bajasP3.length,
       base: Math.round(base * 100) / 100,
-      pen: Math.round(pen * 100) / 100,
-      neta: Math.round(Math.max(0, base - pen) * 100) / 100,
-      esCur: key === (now.getFullYear() + '-' + (now.getMonth() + 1))
+      bonus: Math.round(bonus * 100) / 100,
+      neta: Math.round((base + bonus) * 100) / 100,
+      esCur: key === (now.getFullYear() + '-' + now.getMonth())
     });
   });
-  var totalNeta = Math.round(Math.max(0, totalBase - totalPen) * 100) / 100;
+  var totalNeta = Math.round((totalBase + totalBonus) * 100) / 100;
   var comps = [];
   if (yo && yo.comprobantes_json) { try { comps = JSON.parse(yo.comprobantes_json); } catch(e) {} }
   else if (yo && Array.isArray(yo.comprobantes)) { comps = yo.comprobantes; }
@@ -979,10 +937,10 @@ function renderMisComisionesGerente() {
       + '<div style="font-size:.6rem;color:var(--muted);margin-bottom:3px;">BASE 15%</div>'
       + '<div style="font-family:Syne,sans-serif;font-size:1.1rem;font-weight:800;color:#f59e0b;">' + fmtM(totalBase) + '</div></div>'
     + '<div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:12px;padding:12px;text-align:center;">'
-      + '<div style="font-size:.6rem;color:var(--muted);margin-bottom:3px;">PENALIZACIÓN</div>'
-      + '<div style="font-family:Syne,sans-serif;font-size:1.1rem;font-weight:800;color:' + (totalPen > 0 ? '#f87171' : 'rgba(255,255,255,.2)') + ';">' + (totalPen > 0 ? '-' + fmtM(totalPen) : '—') + '</div></div>'
+      + '<div style="font-size:.6rem;color:var(--muted);margin-bottom:3px;">BONUS ' + (yo && yo.com_pct > 0 ? yo.com_pct + '%' : '—') + '</div>'
+      + '<div style="font-family:Syne,sans-serif;font-size:1.1rem;font-weight:800;color:#06b6d4;">' + fmtM(totalBonus) + '</div></div>'
     + '<div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:12px;padding:12px;text-align:center;">'
-      + '<div style="font-size:.6rem;color:var(--muted);margin-bottom:3px;">TOTAL NETO</div>'
+      + '<div style="font-size:.6rem;color:var(--muted);margin-bottom:3px;">TOTAL GENERADO</div>'
       + '<div style="font-family:Syne,sans-serif;font-size:1.1rem;font-weight:800;color:#4ade80;">' + fmtM(totalNeta) + '</div></div>'
     + '<div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:12px;padding:12px;text-align:center;">'
       + '<div style="font-size:.6rem;color:var(--muted);margin-bottom:3px;">YA PAGADO</div>'
@@ -1001,13 +959,13 @@ function renderMisComisionesGerente() {
     ? '<table style="width:100%;border-collapse:collapse;font-size:.75rem;">'
       + '<thead><tr style="font-size:.6rem;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--border);">'
       + '<th style="padding:5px 8px;text-align:left;">Mes</th><th style="padding:5px 8px;text-align:center;">Ventas</th>'
-      + '<th style="padding:5px 8px;text-align:right;">15%</th><th style="padding:5px 8px;text-align:right;">Penal.</th><th style="padding:5px 8px;text-align:right;">Neto</th></td></thead><tbody>'
+      + '<th style="padding:5px 8px;text-align:right;">Base</th><th style="padding:5px 8px;text-align:right;">Bonus</th><th style="padding:5px 8px;text-align:right;">Total</th></td></thead><tbody>'
       + meses.map(function(m) {
           return '<tr style="border-bottom:1px solid var(--border);' + (m.esCur ? 'font-weight:800;' : '') + '">'
             + '<td style="padding:5px 8px;">' + (m.esCur ? '★ ' : '') + m.label + '</td>'
             + '<td style="padding:5px 8px;text-align:center;">' + m.ventas + '</td>'
             + '<td style="padding:5px 8px;text-align:right;color:#f59e0b;">' + fmtM(m.base) + '</td>'
-            + '<td style="padding:5px 8px;text-align:right;color:' + (m.pen > 0 ? '#f87171' : 'rgba(255,255,255,.2)') + ';">' + (m.pen > 0 ? '-' + fmtM(m.pen) : '—') + '</td>'
+            + '<td style="padding:5px 8px;text-align:right;color:#06b6d4;">' + fmtM(m.bonus) + '</td>'
             + '<td style="padding:5px 8px;text-align:right;font-weight:700;color:#4ade80;">' + fmtM(m.neta) + '</td>'
           + '</tr>';
         }).join('')
@@ -1058,9 +1016,7 @@ function verCompGerente(idx) {
 }
 
 function gLogout() {
-  // B1: Eliminado código muerto _rtChannel (nunca se creó en este panel)
-  // M2: Limpiar interval de notificaciones
-  if (window._notifIntervalJefe) { clearInterval(window._notifIntervalJefe); window._notifIntervalJefe = null; }
+  if (window._rtChannel) { window._rtChannel.unsubscribe(); window._rtChannel = null; }
   if (sbClient) { sbClient.auth.signOut().catch(function(e) { console.warn('signOut:', e); }); }
   window._gerenteProfile = null;
   window._gerenteRegionIds = [];
@@ -1093,7 +1049,7 @@ function initApp() {
             } else {
               window._gerenteProfile = null;
               sbClient.auth.signOut();
-              try { sessionStorage.removeItem('luazul_jefe_ventas'); } catch(ex) {}
+              try { sessionStorage.removeItem('luazul_gerente'); } catch(ex) {}
               LZ_AUTH._showLogin('loginWrap', 'app');
               return Promise.resolve();
             }
@@ -1121,7 +1077,7 @@ function initApp() {
 }
 
 function renderRegiones() {
-  var rs = window._cacheRegiones || [];
+  var rs = _memCache['luazul_regiones'] || [];
   var vs = (_memCache[VK] || []);
   var cs = (_memCache[DB_KEY] || []);
   var el = document.getElementById('rGrid');
@@ -1168,8 +1124,7 @@ function renderOverview() {
   });
   var ns = (_memCache[NK] || []) || [];
   var unread = ns.filter(function(n) { return !n.leida; }).length;
-  var paysAll = _memCache['pagos_local'] || [];
-  var pending = paysAll.filter(function(n) { return !n.aprobada; }).length;
+  var pending = ns.filter(function(n) { return n.tipo === 'payment' && !n.aprobada; }).length;
   var rec = cs.reduce(function(s, c) { return s + (parseInt(c.cuotas_pagadas) || 0) * (parseFloat(c.monto_cuota) || 0); }, 0);
   document.getElementById('oStats').innerHTML = [
     { i: '👔', v: vs.filter(function(v) { return v.activo; }).length, l: 'Vendedores activos', c: '' },
@@ -1211,7 +1166,7 @@ function renderOverview() {
       + (cm.faltanBonus > 0 ? '<span style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.2);border-radius:6px;padding:3px 9px;color:var(--gold);">🎯 faltan ' + cm.faltanBonus + ' para 80%</span>' : '')
       + '</div></div>';
   }).join('');
-  var pays = (paysAll || []).sort(function(a, b) { return b.ts - a.ts; }).slice(0, 5);
+  var pays = ns.filter(function(n) { return n.tipo === 'payment'; }).sort(function(a, b) { return b.ts - a.ts; }).slice(0, 5);
   document.getElementById('lastPays').innerHTML = pays.length ? pays.map(function(n) {
     return '<div style="display:flex;align-items:center;gap:9px;padding:8px 0;border-bottom:1px solid var(--border);">'
       + '<span style="font-size:1.1rem;">' + (n.aprobada ? '✅' : '⏳') + '</span>'
@@ -1311,7 +1266,7 @@ function renderVendors() {
               var p = cm.pkgBreakdown[pkg];
               return '<tr style="border-top:1px solid rgba(255,255,255,.05);">'
                 + '<td style="padding:5px 10px;font-size:.78rem;color:var(--text);">' + pkg + '</td>'
-                + '<td style="padding:5px 10px;text-align:center;font-weight:800;font-size:.88rem;">' + p.count + '</td>'
+                + '<td style="padding:5px 10px;text-align:center;font-weight:800;font-size:.88rem;">' + p.count + '<td>'
                 + '<td style="padding:5px 10px;text-align:right;font-size:.78rem;">USD ' + Math.round(p.ingreso) + '</td>'
                 + '<td style="padding:5px 10px;text-align:right;font-weight:800;font-size:.82rem;color:var(--green);">USD ' + Math.round(p.comision) + '</td>'
               + '</tr>';
@@ -1392,7 +1347,7 @@ function openVendorDetail(vid) {
     + '<div style="font-size:.67rem;color:var(--gold);font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:9px;">Cartera de clientes</div>'
     + '<div style="max-height:220px;overflow-y:auto;">' + rows + '</div>'
     + '<div class="mact">'
-    + '<button class="mbtn gold" onclick="closeModal();showTab(\'clients\');document.getElementById(\'vFilt\').value=\'' + v.id + '\';renderClients()">Ver todos</button>'
+    + '<button class="mbtn gold" onclick="closeModal();showTab(\'clients\');document.getElementById(\'vFilt\').value=\'' + v.user_id + '\';renderClients()">Ver todos</button>'
     + '<button class="mbtn" style="background:rgba(6,182,212,.12);border-color:rgba(6,182,212,.3);color:#06b6d4;" onclick="editVendor(\'' + v.user_id + '\')">✏️ Editar</button>'
     + '<button class="mbtn ghost" onclick="closeModal()">Cerrar</button></div>'
     + '</div>';
@@ -1400,7 +1355,7 @@ function openVendorDetail(vid) {
 }
 
 function openAddVendor() {
-  var rs = window._cacheRegiones || [];
+  var rs = _memCache['luazul_regiones'] || [];
   var myRegIds = window._gerenteRegionIds || [];
   // regOptions eliminado: región ya no se asigna al crear vendedor
   document.getElementById('mbox').innerHTML = '<div class="mhead"><div><h2>➕ Nuevo Vendedor</h2></div><button class="mclose" onclick="closeModal()">✕</button></div>'
@@ -1537,21 +1492,15 @@ function editVendor(vid) {
           + '</div>';
       }).join('')
     : '<div style="text-align:center;padding:16px;color:var(--muted);font-size:.8rem;">Sin comprobantes cargados</div>';
-  // FASE3-FIX3: Datos personales de solo lectura para Jefe (solo CEO/Gerente pueden editar)
-  var roStyle = 'background:rgba(255,255,255,.02);border:1px solid var(--border);color:var(--muted);cursor:not-allowed;';
-  document.getElementById('mbox').innerHTML = '<div class="mhead"><div><h2>📋 Datos del Vendedor</h2></div><button class="mclose" onclick="closeModal()">✕</button></div>'
-    + '<div class="mbody">'
-    + '<div style="margin-bottom:14px;padding:10px 14px;background:rgba(245,158,11,.07);border:1px solid rgba(245,158,11,.2);border-radius:10px;">'
-    + '<div style="font-size:.72rem;font-weight:700;color:#fbbf24;">🔒 Datos personales — Solo lectura</div>'
-    + '<div style="font-size:.78rem;color:var(--muted);margin-top:4px;">Los datos personales solo pueden ser modificados por el CEO o Gerente. Para solicitar cambios, contactá a gerencia.</div></div>'
-    + '<div class="mgrid">'
-    + '<div class="mi"><div class="ml">Nombre</div><input class="min" id="evN" value="' + esc(v.nombre) + '" readonly style="' + roStyle + '"/></div>'
-    + '<div class="mi"><div class="ml">Email</div><input class="min" id="evE" value="' + esc(v.email) + '" readonly style="' + roStyle + '"/></div>'
-    + '<div class="mi"><div class="ml">Teléfono principal</div><input class="min" id="evT1" value="' + (v.telefono1 || '') + '" readonly style="' + roStyle + '"/></div>'
-    + '<div class="mi"><div class="ml">Teléfono de referencia</div><input class="min" id="evT2" value="' + (v.telefono2 || '') + '" readonly style="' + roStyle + '"/></div>'
-    + '<div class="mi" style="grid-column:span 2;"><div class="ml">Domicilio</div><input class="min" id="evDom" value="' + esc(v.domicilio || '') + '" readonly style="' + roStyle + '"/></div>'
+  document.getElementById('mbox').innerHTML = '<div class="mhead"><div><h2>✏️ Editar Vendedor</h2></div><button class="mclose" onclick="closeModal()">✕</button></div>'
+    + '<div class="mbody"><div class="mgrid">'
+    + '<div class="mi"><div class="ml">Nombre</div><input class="min" id="evN" value="' + esc(v.nombre) + '"/></div>'
+    + '<div class="mi"><div class="ml">Email</div><input class="min" id="evE" value="' + esc(v.email) + '"/></div>'
+    + '<div class="mi"><div class="ml">Teléfono principal</div><input class="min" id="evT1" value="' + (v.telefono1 || '') + '"/></div>'
+    + '<div class="mi"><div class="ml">Teléfono de referencia</div><input class="min" id="evT2" value="' + (v.telefono2 || '') + '"/></div>'
+    + '<div class="mi" style="grid-column:span 2;"><div class="ml">Domicilio</div><input class="min" id="evDom" value="' + esc(v.domicilio || '') + '"/></div>'
     + '<div class="mi" style="grid-column:span 2;"><div class="ml">💰 CBU / Alias bancario</div>'
-    + '<input class="min" id="evCBU" value="' + esc(v.cbu || '') + '" style="font-family:monospace;" readonly/></div>'
+    + '<input class="min" id="evCBU" value="' + esc(v.cbu || '') + '" style="font-family:monospace;"/></div>'
     + '</div>'
     + '<div style="margin:14px 0 10px;padding:14px 16px;background:rgba(245,158,11,.07);border:1px solid rgba(245,158,11,.2);border-radius:12px;">'
     + '<div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--gold);margin-bottom:10px;">💰 Estructura de Comisión</div>'
@@ -1576,15 +1525,14 @@ function editVendor(vid) {
     + '<button class="mbtn gold" style="width:100%;" onclick="adjuntarCompVend(\'' + vid + '\')">📎 Adjuntar Comprobante</button>'
     + '</div></div>'
     + '<div class="mact">'
-    + '<button class="mbtn ghost" onclick="closeModal()">Cerrar</button>'
+    + '<button class="mbtn gold" onclick="saveEditVend(\'' + vid + '\')">💾 Guardar</button>'
+    + '<button class="mbtn danger" onclick="delVendor(\'' + vid + '\')">🗑️ Eliminar</button>'
+    + '<button class="mbtn ghost" onclick="closeModal()">Cancelar</button>'
     + '</div></div>';
   document.getElementById('modal').classList.add('open');
 }
 
-// FASE3-FIX3: Edición de datos personales deshabilitada — solo CEO/Gerente pueden modificar
 function saveEditVend(vid) {
-  showToast('⛔ Los datos personales solo pueden ser modificados por el CEO o Gerente');
-  return;
   var nombre = (document.getElementById('evN') || {}).value.trim().toUpperCase();
   var email = (document.getElementById('evE') || {}).value || '';
   if (!nombre || !email) { showToast('⚠️ Nombre y email son requeridos'); return; }
@@ -1766,21 +1714,16 @@ function confirmarReasignacion(clientId) {
   var fecha = now.getDate() + '/' + (now.getMonth() + 1) + '/' + now.getFullYear() + ' ' + now.getHours() + ':' + String(now.getMinutes()).padStart(2, '0');
   if (!c.mora) c.mora = [];
   c.mora.push({ fecha: fecha, motivo: '🔄 RE-ASIGNACIÓN DE COBRO', compromiso: 'Asesor anterior: ' + (oldSeller.nombre || 'Sin asignar') + '. Nuevo asesor: ' + v.nombre, contacto: 'Gerencia', resuelta: true, vendedorNombre: 'Sistema' });
-  // FIX H8: Error handling explícito + refresh cache
   _sbUpdateClient(clientId, { seller_id: newVid, mora_json: JSON.stringify(c.mora) }).then(function() {
     c.vid = newVid;
     if (sbClient && c && v && v.user_id) {
       sbClient.from('notificaciones').insert([{
-        tipo: 'comunicado', mensaje: '🚚 Gestión RE-ASIGNADA: Se te ha asignado el cobro del cliente ' + c.nombre + ' por parte del Jefe de Ventas.',
-        destinatario_id: v.id, destinatario_rol: 'seller', remitente_id: window._gerenteProfile ? window._gerenteProfile.id : null,
+        tipo: 'comunicado', mensaje: '🚚 Gestión RE-ASIGNADA: Se te ha asignado el cobro del cliente ' + c.nombre + ' por parte del Gerente.',
+        destinatario_id: v.user_id, destinatario_rol: 'seller', remitente_id: window._gerenteProfile ? window._gerenteProfile.user_id : null,
         cliente_id: parseInt(clientId), leida: false
-      }]).then(function(r){ if(r.error) console.warn('[reassign notif]', r.error); })
-        .catch(function(e){ console.warn('[reassign notif]', e); });
+      }]);
     }
     closeModal(); renderAll(); showToast('✅ Cobro re-asignado a ' + v.nombre);
-  }).catch(function(e){
-    console.error('[confirmarReasignacion] Error:', e);
-    showToast('❌ Error al re-asignar: ' + (e.message || ''));
   });
 }
 
@@ -1797,7 +1740,7 @@ function populateVFilt() {
 }
 
 function esClienteDelJefe(cliente) {
-  var jefeId = window._gerenteProfile ? window._gerenteProfile.id : null;
+  var jefeId = window._gerenteProfile ? (window._gerenteProfile.user_id || window._gerenteProfile.id) : null;
   if (!jefeId) return false;
   var vendedor = (_memCache[VK] || []).find(function(v) { return String(v.id) === String(cliente.vid); });
   if (!vendedor) return false;
@@ -1901,11 +1844,6 @@ function openClientDetail(id) {
       <!-- Línea de cuotas -->
       <div style="font-size:.67rem;color:var(--gold);font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">📊 Línea de cuotas</div>
       <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:20px;">${tl}</div>
-      <!-- Contrato -->
-      <div style="margin-top:12px;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--card-bg)">
-        <div style="font-weight:600;margin-bottom:6px">📋 Contrato</div>
-        <div id="gerContratoStatus">Cargando...</div>
-      </div>
       <!-- Sección de edición de datos (incluye estado y vendedor) -->
       <div style="margin-top:16px;padding:16px;background:rgba(6,182,212,.04);border:1px solid rgba(6,182,212,.15);border-radius:12px;">
         <div style="font-size:.72rem;font-weight:700;text-transform:uppercase;color:#06b6d4;margin-bottom:12px;">✏️ Editar datos del cliente</div>
@@ -1950,26 +1888,6 @@ function openClientDetail(id) {
   `;
   document.getElementById('mbox').innerHTML = modalHtml;
   document.getElementById('modal').classList.add('open');
-  sbClient.from('contratos').select('estado, firma_url, created_at, numero_contrato').eq('cliente_id', id).maybeSingle().then(function(res) {
-    var el = document.getElementById('gerContratoStatus');
-    if (!el) return;
-    if (res.error || !res.data) {
-      el.innerHTML = '<span style="color:var(--yellow)">Sin contrato generado</span>';
-    } else {
-      var c = res.data;
-      var estadoLabel = {
-        'pendiente': '⏳ Pendiente',
-        'borrador': '📝 Borrador',
-        'revisado': '🔍 En revisión',
-        'firmado': '✅ Firmado',
-        'autorizado_ceo': '✅ Autorizado por CEO',
-        'rechazado': '❌ Rechazado'
-      };
-      el.innerHTML = '<b>Estado:</b> ' + (estadoLabel[c.estado] || c.estado) +
-        '<br><b>Fecha:</b> ' + (c.created_at ? new Date(c.created_at).toLocaleDateString('es-AR') : '—') +
-        (c.firma_url ? '<br><span style="color:var(--green)">✓ Firma registrada</span>' : '<br><span style="color:var(--red)">✗ Sin firma</span>');
-    }
-  });
 }
 
 // Normalización de números de teléfono (igual que el asesor)
@@ -2084,7 +2002,6 @@ function updateClientFullGerente(clientId) {
 
   // Actualizar local
   Object.assign(c, campos);
-  c.vid = campos.seller_id ? String(campos.seller_id) : '';
   _memCache[DB_KEY] = cs; // actualizar referencia
 
   if (!sbClient) { closeModal(); renderAll(); showToast('✅ Datos actualizados localmente'); return; }
@@ -2170,7 +2087,7 @@ function renderNotifs() {
     if (n.comp) { comp = '<img src="' + n.comp + '" class="cthumb" onclick="viewComp(' + JSON.stringify(n.id) + ')" title="Ver comprobante"/>'; }
     var acts = '';
     if (isPay && !n.aprobada) {
-      acts = '<span style="font-size:.7rem;color:var(--gold);font-weight:600;">⏳ Pendiente CEO</span>'
+      acts = '<button class="nbtn ok" onclick="approvePayment(' + JSON.stringify(n.id) + ')">\u2705 Aprobar</button>'
         + '<button class="nbtn sm" onclick="viewComp(' + JSON.stringify(n.id) + ')">\uD83D\uDD0D Ver</button>'
         + '<button class="nbtn sm" onclick="mkRead(' + JSON.stringify(n.id) + ')">\uD83D\uDC41\uFE0F Le\xedda</button>';
     } else if (isG) {
@@ -2201,9 +2118,8 @@ function refreshBadge() {
 }
 
 function approvePayment(nid) {
-  // FIX F5: Toast de negocio en vez de error engañoso
   _sbApprovePayment(nid).then(function(ok) {
-    if (!ok) { /* ya mostró toast 'Solo CEO' desde _sbApprovePayment */ return; }
+    if (!ok) { showToast('❌ Error al aprobar el pago'); return; }
     return _sbLoad().then(function() { renderAll(); showToast('✅ Pago aprobado en Supabase'); });
   });
 }
@@ -2216,15 +2132,9 @@ function markAllRead() {
   var ns = (_memCache[NK] || []).map(function(n) { n.leida = true; return n; });
   _memCache[NK] = ns;
   if (sbClient) {
-    var ps = (_memCache['pagos_local'] || []).map(function(p) { p.leida = true; return p; });
-    _memCache['pagos_local'] = ps;
-    var payIds = ps.filter(function(p) { return p.id; }).map(function(p) { return p.id; });
-    if (payIds.length > 0) {
-      sbClient.from('pagos').update({ leida: true }).in('id', payIds).then(function() {}).catch(function(e) { console.warn('markAllRead Supabase:', e); });
-    }
-    var notifIds = ns.filter(function(n) { return n.id; }).map(function(n) { return n.id; });
-    if (notifIds.length > 0) {
-      sbClient.from('notificaciones').update({ leida: true }).in('id', notifIds).then(function() {}).catch(function(e) { console.warn('markAllRead notifs:', e); });
+    var ids = ns.filter(function(n) { return n.tipo === 'payment'; }).map(function(n) { return n.id; });
+    if (ids.length > 0) {
+      sbClient.from('pagos').update({ leida: true }).in('id', ids).then(function() {}).catch(function(e) { console.warn('markAllRead Supabase:', e); });
     }
   }
   renderAll(); showToast('✅ Todas leídas');
@@ -2272,17 +2182,17 @@ function gerenteMora(id) {
     + '<div style="font-size:.67rem;color:var(--gold);font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:9px;">Historial</div>'
     + '<div style="max-height:220px;overflow-y:auto;margin-bottom:16px;">' + histHtml + '</div>'
     + '<div style="background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:10px;padding:14px;">'
-    + '<div style="font-size:.67rem;color:#fb923c;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;">+ Agregar gestión (jefe de ventas)</div>'
+    + '<div style="font-size:.67rem;color:#fb923c;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;">+ Agregar gestión (gerente)</div>'
     + '<div style="display:flex;flex-direction:column;gap:9px;">'
     + '<div><label style="font-size:.74rem;color:var(--muted);display:block;margin-bottom:3px;">Motivo / observación</label>'
-    + '<textarea id="gmorMotivo" placeholder="Observación del jefe de ventas sobre la situación..." style="width:100%;padding:8px 11px;background:rgba(255,255,255,.06);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-family:Mulish,sans-serif;font-size:.84rem;resize:vertical;min-height:65px;"></textarea></div>'
+    + '<textarea id="gmorMotivo" placeholder="Observación del gerente sobre la situación..." style="width:100%;padding:8px 11px;background:rgba(255,255,255,.06);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-family:Mulish,sans-serif;font-size:.84rem;resize:vertical;min-height:65px;"></textarea></div>'
     + '<div><label style="font-size:.74rem;color:var(--muted);display:block;margin-bottom:3px;">Compromiso / acción</label>'
     + '<input id="gmorComp" placeholder="Ej: Se acuerda pago el 20/01/2027" class="min" /></div>'
     + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:9px;">'
     + '<div><label style="font-size:.74rem;color:var(--muted);display:block;margin-bottom:3px;">Contacto</label>'
     + '<select id="gmorContacto" class="msel"><option>WhatsApp</option><option>Llamada</option><option>Email</option><option>Presencial</option></select></div>'
     + '<div><label style="font-size:.74rem;color:var(--muted);display:block;margin-bottom:3px;">Actualizar estado</label>'
-    + '<select id="gmorEstado" class="msel"><option value="">Sin cambio</option><option value="atraso">En atraso</option><option value="atraso_gestion">Atraso con gestión</option><option value="activo">Activo</option><option value="baja">Dar de baja</option></select></div>'
+    + '<select id="gmorEstado" class="msel"><option value="">Sin cambio</option><option value="atraso">En atraso</option><option value="activo">Activo</option><option value="baja">Dar de baja</option></select></div>'
     + '<button class="mbtn orange" onclick="gerenteSaveMora(' + id + ')">📋 Guardar gestión</button>'
    + '<button class="mbtn ghost" onclick="closeModal()">Cerrar</button>'
   + '</div></div>';
@@ -2303,21 +2213,8 @@ async function gerenteSaveMora(id) {
   var cs = _memCache[DB_KEY] || [];
   var c = cs.find(function(c) { return c.id == id; });
   if (!c) return;
-  // FIX H7: Validar transición de estado
-  if (estado && estado === 'completo') {
-    var pagadas = parseInt(c.cuotas_pagadas) || 0;
-    var total = parseInt(c.cuotas_total) || 0;
-    if (pagadas < total) {
-      showToast('❌ No se puede marcar como completo: solo ' + pagadas + '/' + total + ' cuotas pagadas');
-      return;
-    }
-  }
-  if (estado && estado === 'activo' && c.estado === 'completo') {
-    showToast('❌ No se puede revertir un cliente completo a activo');
-    return;
-  }
   if (!c.mora) c.mora = [];
-  c.mora.push({ fecha: fecha, motivo: motivo, compromiso: compromiso, contacto: contacto, resuelta: false, vendedorNombre: 'Jefe de Ventas' });
+  c.mora.push({ fecha: fecha, motivo: motivo, compromiso: compromiso, contacto: contacto, resuelta: false, vendedorNombre: 'Gerencia' });
   if (estado) c.estado = estado;
   var updateFields = {};
   if (estado) updateFields.estado = estado;
@@ -2336,18 +2233,11 @@ function gerenteResolverMora(id, idx) {
   var c = cs.find(function(c) { return c.id == id; });
   if (c && c.mora && c.mora[idx]) {
     c.mora[idx].resuelta = true;
-    // FIX MORA-M-02: Si todas las moras están resueltas, cambiar estado a activo
-    var allResolved = c.mora.every(function(m) { return m.resuelta; });
-    var updateFields = { mora_json: JSON.stringify(c.mora) };
-    if (allResolved && (c.estado === 'atraso' || c.estado === 'atraso_gestion')) {
-      c.estado = 'activo';
-      updateFields.estado = 'activo';
-    }
-    _sbUpdateClient(id, updateFields).then(function() {
+    _sbUpdateClient(id, { mora_json: JSON.stringify(c.mora) }).then(function() {
       _memCache[DB_KEY] = cs;
       renderAll();
       if (document.getElementById('tabpg-mora').classList.contains('active')) renderMoraTab();
-      showToast(allResolved ? '✅ Mora resuelta — cliente pasado a activo' : '✅ Mora resuelta');
+      showToast('✅ Mora resuelta');
     });
   }
 }
@@ -2375,9 +2265,8 @@ function renderVendDash() {
   if (!vid) { el.innerHTML = '<div style="text-align:center;padding:60px;color:var(--muted);">Seleccioná un asesor para ver su dashboard completo</div>'; return; }
   var v = vby(vid);
   var allCs = ((_memCache[DB_KEY] || []) || []).map(enrich);
-  var vendorIntId = v ? String(v.id) : '';
-  var cs = allCs.filter(function(c) { return String(c.vid) === vendorIntId; });
-  var paysV = (_memCache['pagos_local'] || []).filter(function(p) { return String(p.vid) === vendorIntId; });
+  var cs = allCs.filter(function(c) { return String(c.vid) === String(vid); });
+  var ns = ((_memCache[NK] || []) || []).filter(function(n) { return n.vid === vid; });
   var cm = calcComision(v, allCs);
   var ini = v.nombre.split(' ').map(function(w) { return w[0]; }).join('').slice(0, 2).toUpperCase();
   var totalRec = cs.reduce(function(s, c) { return s + (parseInt(c.cuotas_pagadas) || 0) * (parseFloat(c.monto_cuota) || 0); }, 0);
@@ -2385,8 +2274,8 @@ function renderVendDash() {
   var atraso = cs.filter(function(c) { return c.estado === 'atraso' || c.estado === 'atraso_gestion'; }).length;
   var completos = cs.filter(function(c) { return c.estado === 'completo'; }).length;
   var bajas = cs.filter(function(c) { return c.estado === 'baja'; }).length;
-  var pendPagos = paysV.filter(function(n) { return !n.aprobada; }).length;
-  var totalPendiente = cs.filter(function(c) { return c.estado === 'activo' || c.estado === 'atraso'; }).reduce(function(s, c) { var tot = parseFloat(c.monto_total) || parseFloat(c.monto_cuota || 0) * (parseInt(c.cuotas_total) || 10); var pag = (parseInt(c.cuotas_pagadas) || 0) * (parseFloat(c.monto_cuota) || 0); return s + (tot - pag); }, 0);
+  var pendPagos = ns.filter(function(n) { return n.tipo === 'payment' && !n.aprobada; }).length;
+  var totalPendiente = cs.filter(function(c) { return c.estado === 'activo' || c.estado === 'atraso'; }).reduce(function(s, c) { var tot = parseFloat(c.monto_total) || parseFloat(c.monto_cuota || 0) * 10; var pag = (parseInt(c.cuotas_pagadas) || 0) * (parseFloat(c.monto_cuota) || 0); return s + (tot - pag); }, 0);
   var comisionProyectada = totalPendiente * (cm.tasaActual / 100);
   var scoreVend = 100; // simplified
   var scoreLbl = scoreVend >= 80 ? '🟢 Excelente' : scoreVend >= 60 ? '🟡 Bueno' : '🔴 Requiere atención';
@@ -2397,10 +2286,10 @@ function renderVendDash() {
   var maxVentas = 1; months.forEach(function(k) { if (byMonth[k].ventas > maxVentas) maxVentas = byMonth[k].ventas; });
   var chartBars = months.map(function(k) {
     var pct = Math.round(byMonth[k].ventas / maxVentas * 100);
-    var isNow = (k === (new Date().getFullYear() + '-' + (new Date().getMonth() + 1)));
+    var isNow = (k === (new Date().getFullYear() + '-' + new Date().getMonth()));
     return '<div class="chart-bar" data-val="' + byMonth[k].ventas + ' ventas · USD ' + byMonth[k].rec.toLocaleString('es-AR') + '" style="height:' + Math.max(4, pct) + '%;background:' + (isNow ? 'linear-gradient(180deg,#f59e0b,#d97706)' : 'rgba(245,158,11,.38)') + ';"></div>';
   }).join('');
-  var chartLabels = months.map(function(k) { var p = k.split('-'); return '<div style="flex:1;text-align:center;font-size:.55rem;color:var(--muted);margin-top:3px;">' + mn[parseInt(p[1]) - 1].slice(0, 3) + '</div>'; }).join('');
+  var chartLabels = months.map(function(k) { var p = k.split('-'); return '<div style="flex:1;text-align:center;font-size:.55rem;color:var(--muted);margin-top:3px;">' + mn[parseInt(p[1])].slice(0, 3) + '</div>'; }).join('');
   var mesRows = cm.meses.map(function(m) {
     var tasaC = m.tasa === 80 ? 'var(--green)' : 'var(--gold)';
     return '<tr style="border-bottom:1px solid var(--border);">'
@@ -2414,7 +2303,7 @@ function renderVendDash() {
   }).join('');
   var clientRows = cs.slice(0, 15).map(function(c) {
     var pagado = (parseInt(c.cuotas_pagadas || 0) * parseFloat(c.monto_cuota || 0));
-    var total_c = parseFloat(c.monto_total || 0) || (parseFloat(c.monto_cuota || 0) * (parseInt(c.cuotas_total) || 10));
+    var total_c = parseFloat(c.monto_total || 0) || (parseFloat(c.monto_cuota || 0) * 10);
     var pctBar = total_c > 0 ? Math.min(100, Math.round(pagado / total_c * 100)) : 0;
     return '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer;" onclick="openClientDetail(' + c.id + ')">'
       + '<div class="sem ' + c._s + '"></div>'
@@ -2487,7 +2376,7 @@ function renderVendDash() {
     + '<div style="display:flex;gap:8px;"><span style="font-size:.7rem;padding:2px 8px;border-radius:10px;background:var(--green-bg);color:var(--green);border:1px solid var(--green-bd);">' + activos + ' activos</span><span style="font-size:.7rem;padding:2px 8px;border-radius:10px;background:var(--red-bg);color:#fca5a5;border:1px solid var(--red-bd);">' + atraso + ' en atraso</span></div>'
     + '</div>'
     + '<div style="padding:4px 16px 12px;">' + (clientRows || '<div style="padding:20px;text-align:center;color:var(--muted);">Sin clientes aún</div>') + '</div>'
-    + (cs.length > 15 ? '<div style="padding:10px;text-align:center;"><button class="tbbtn" onclick="showTab(\'clients\');document.getElementById(\'vFilt\').value=\'' + v.id + '\';renderClients();">Ver todos los clientes (' + cs.length + ') →</button></div>' : '')
+    + (cs.length > 15 ? '<div style="padding:10px;text-align:center;"><button class="tbbtn" onclick="showTab(\'clients\');document.getElementById(\'vFilt\').value=\'' + vid + '\';renderClients();">Ver todos los clientes (' + cs.length + ') →</button></div>' : '')
     + '</div>';
 }
 
@@ -2509,9 +2398,10 @@ function populatePagoFiltros() {
 }
 
 function renderPagos() {
-  var pays = (_memCache['pagos_local'] || []).slice();
+  var ns = (_memCache[NK] || []) || [];
   var vf = document.getElementById('pagoVFilt') ? document.getElementById('pagoVFilt').value : '';
   var ef = document.getElementById('pagoEstFilt') ? document.getElementById('pagoEstFilt').value : '';
+  var pays = ns.filter(function(n) { return n.tipo === 'payment'; });
   if (vf) pays = pays.filter(function(n) { return n.vid && String(n.vid) === String(vf); });
   if (ef === 'pendiente') pays = pays.filter(function(n) { return !n.aprobada; });
   if (ef === 'aprobado') pays = pays.filter(function(n) { return !!n.aprobada; });
@@ -2519,9 +2409,8 @@ function renderPagos() {
   var el = document.getElementById('pagosBody');
   if (!el) return;
   if (!pays.length) { el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted);">Sin pagos para mostrar</div>'; return; }
-  var allPays = _memCache['pagos_local'] || [];
-  var totalPend = allPays.filter(function(n) { return !n.aprobada; }).length;
-  var totalAprob = allPays.filter(function(n) { return !!n.aprobada; }).length;
+  var totalPend = ns.filter(function(n) { return n.tipo === 'payment' && !n.aprobada; }).length;
+  var totalAprob = ns.filter(function(n) { return n.tipo === 'payment' && n.aprobada; }).length;
   var totalUSD = pays.filter(function(n) { return n.aprobada; }).reduce(function(s, n) { return s + (parseFloat(n.monto) || 0); }, 0);
   el.innerHTML = '<div class="kpi-grid" style="margin-bottom:18px;">'
     + '<div class="kpi"><span>⏳</span><div class="kpi-v" style="color:var(--gold);">' + totalPend + '</div><div class="kpi-l">Pendientes aprobación</div></div>'
@@ -2544,14 +2433,14 @@ function renderPagos() {
         + '<div><span style="font-size:.7rem;font-weight:700;padding:3px 8px;border-radius:8px;' + (aprobado ? 'background:var(--green-bg);color:var(--green);border:1px solid var(--green-bd);' : 'background:var(--gold-bg);color:var(--gold);border:1px solid var(--gold-bd);') + '">' + (aprobado ? 'Aprobado' : 'Pendiente') + '</span></div>'
         + '<div style="display:flex;gap:4px;">'
         + (n.comp ? '<button onclick="viewPagoComp(\'' + n.id + '\')" style="padding:4px 7px;background:var(--blue-bg);border:1px solid var(--blue-bd);color:#93c5fd;border-radius:6px;font-size:.68rem;cursor:pointer;" title="Ver comprobante">🔍</button>' : '')
-        + (!aprobado ? '<span style="font-size:.62rem;color:var(--muted);padding:4px;">⏳ Pendiente CEO</span>' : '<span style="font-size:.62rem;color:var(--muted);padding:4px;">' + (n.aprobadoPor ? 'Por: ' + n.aprobadoPor : 'Gerencia') + '</span>')
+        + (!aprobado ? '<button onclick="aprobarPago(\'' + n.id + '\')" style="padding:4px 8px;background:var(--green-bg);border:1px solid var(--green-bd);color:var(--green);border-radius:6px;font-size:.68rem;font-weight:700;cursor:pointer;">✅ OK</button>' : '<span style="font-size:.62rem;color:var(--muted);padding:4px;">' + (n.aprobadoPor ? 'Por: ' + n.aprobadoPor : 'Gerencia') + '</span>')
         + '</div></div>';
     }).join('')
     + '</div>';
 }
 
 function viewPagoComp(nid) {
-  var ns = (_memCache['pagos_local'] || []) || [];
+  var ns = (_memCache[NK] || []) || [];
   var n = ns.find(function(x) { return String(x.id) === String(nid); });
   if (!n || !n.comp) return;
   document.getElementById('mbox').innerHTML = '<div class="mhead"><div><h2>🔍 Comprobante</h2><p>' + n.cliente + ' · Cuota ' + n.cuota + ' · USD ' + n.monto + '</p></div>'
@@ -2561,14 +2450,13 @@ function viewPagoComp(nid) {
     + '<div style="margin-top:12px;font-size:.78rem;color:var(--muted);">Asesor: ' + n.vendedor + ' · ' + fmtTs(n.ts) + (n.aprobada ? ' · ✅ Aprobado' + (n.aprobadoPor ? ' por ' + n.aprobadoPor : '') : ' · ⏳ Pendiente') + '</div>'
     + '</div>'
     + '<div class="mact">'
-    + (!n.aprobada ? '<span style="font-size:.78rem;color:var(--muted);padding:8px;background:rgba(107,114,128,.1);border-radius:8px;">⏳ En espera de aprobación CEO</span>' : '')
+    + (!n.aprobada ? '<button class="mbtn gold" onclick="aprobarPago(\'' + n.id + '\');closeModal()">✅ Aprobar pago</button>' : '')
     + '<button class="mbtn ghost" onclick="closeModal()">Cerrar</button>'
     + '</div>';
   document.getElementById('modal').classList.add('open');
 }
 
 function aprobarPago(nid) {
-  showToast('⛔ Solo el CEO puede aprobar pagos'); return;
   _sbApprovePayment(nid).then(function(ok) {
     if (!ok) { showToast('❌ Error al aprobar el pago'); return; }
     return _sbLoad().then(function() { renderAll(); renderPagos(); refreshNotifBadge(); showToast('✅ Pago aprobado en Supabase'); });
@@ -2579,9 +2467,8 @@ function aprobarPago(nid) {
 //  APROBAR TODOS (versión optimizada con Promise.all)
 // ══════════════════════════════════════════════════════
 async function aprobarTodos() {
-  showToast('⛔ Solo el CEO puede aprobar pagos'); return;
-  var ns = _memCache['pagos_local'] || [];
-  var pendientes = ns.filter(function(n) { return !n.aprobada && n.id; });
+  var ns = _memCache[NK] || [];
+  var pendientes = ns.filter(function(n) { return n.tipo === 'payment' && !n.aprobada && n.id; });
   if (!pendientes.length) { showToast('✅ No hay pagos pendientes'); return; }
   showToast('⏳ Aprobando ' + pendientes.length + ' pagos...');
   var count = 0;
@@ -2601,21 +2488,7 @@ async function aprobarTodos() {
 // ══════════════════════════════════════════════════════
 //  GESTIÓN DE MORA — Tab 5
 // ══════════════════════════════════════════════════════
-function _moraPagBtns(key, totalItems) {
-  var perPage = 20;
-  var totalPages = Math.ceil(totalItems / perPage);
-  if (totalPages <= 1) return '';
-  var page = _moraPage[key] || 1;
-  var html = '<div style="display:flex;align-items:center;justify-content:center;gap:6px;margin-top:14px;padding:8px 0;">';
-  html += '<button onclick="_moraPage[\'' + key + '\']=Math.max(1,_moraPage[\'' + key + '\']-1);renderMoraTab();" style="padding:5px 12px;border-radius:6px;font-size:.75rem;font-weight:700;cursor:pointer;border:1px solid var(--border2);background:var(--card);color:var(--muted);' + (page <= 1 ? 'opacity:.4;pointer-events:none;' : '') + '">◀ Anterior</button>';
-  html += '<span style="font-size:.75rem;color:var(--muted);font-weight:600;">Página ' + page + ' de ' + totalPages + ' (' + totalItems + ' clientes)</span>';
-  html += '<button onclick="_moraPage[\'' + key + '\']=Math.min(' + totalPages + ',_moraPage[\'' + key + '\']+1);renderMoraTab();" style="padding:5px 12px;border-radius:6px;font-size:.75rem;font-weight:700;cursor:pointer;border:1px solid var(--border2);background:var(--card);color:var(--muted);' + (page >= totalPages ? 'opacity:.4;pointer-events:none;' : '') + '">Siguiente ▶</button>';
-  html += '</div>';
-  return html;
-}
-
 function renderMoraTab() {
-  var MORA_PER_PAGE = 20;
   var cs = ((_memCache[DB_KEY] || []) || []).map(enrich).filter(esClienteDelJefe);
   var atrasados = cs.filter(function(c) { return c.estado === 'atraso' || c.estado === 'atraso_gestion'; });
   var temprana = atrasados.filter(function(c) { return (parseInt(c.cuotas_pagadas) || 0) <= 3; });
@@ -2623,14 +2496,9 @@ function renderMoraTab() {
   var elT = document.getElementById('moraTempranaList');
   var elA = document.getElementById('moraAvanzadaList');
   if (!elT || !elA) return;
-  // Clamp page numbers
-  _moraPage.temprana = Math.min(_moraPage.temprana, Math.max(1, Math.ceil(temprana.length / MORA_PER_PAGE)));
-  _moraPage.avanzada = Math.min(_moraPage.avanzada, Math.max(1, Math.ceil(avanzada.length / MORA_PER_PAGE)));
   if (!temprana.length) { elT.innerHTML = '<div style="text-align:center;padding:30px;color:var(--muted);font-size:.82rem;">✅ Sin mora temprana</div>'; }
   else {
-    var tpStart = (_moraPage.temprana - 1) * MORA_PER_PAGE;
-    var tpSlice = temprana.slice(tpStart, tpStart + MORA_PER_PAGE);
-    elT.innerHTML = tpSlice.map(function(c) {
+    elT.innerHTML = temprana.map(function(c) {
       var v = vby(c.vid);
       var moraCount = (c.mora || []).filter(function(m) { return !m.resuelta; }).length;
       return '<div class="mora-card" style="border-color:rgba(245,158,11,.25);">'
@@ -2646,13 +2514,11 @@ function renderMoraTab() {
         + '<button onclick="openReasignarCobro(' + c.id + ')" style="padding:6px 12px;background:rgba(6,182,212,.12);border:1px solid rgba(6,182,212,.3);color:#06b6d4;border-radius:8px;font-size:.75rem;cursor:pointer;">🔄 Re-asignar Cobro</button>'
         + '<button onclick="gerenteMora(' + c.id + ')" style="padding:6px 12px;background:rgba(59,130,246,.1);border:1px solid var(--blue-bd);color:#93c5fd;border-radius:8px;font-size:.75rem;cursor:pointer;">📋 Ver/Gestionar</button>'
         + '</div></div>';
-    }).join('') + _moraPagBtns('temprana', temprana.length);
+    }).join('');
   }
   if (!avanzada.length) { elA.innerHTML = '<div style="text-align:center;padding:30px;color:var(--muted);font-size:.82rem;">✅ Sin mora avanzada</div>'; }
   else {
-    var avStart = (_moraPage.avanzada - 1) * MORA_PER_PAGE;
-    var avSlice = avanzada.slice(avStart, avStart + MORA_PER_PAGE);
-    elA.innerHTML = avSlice.map(function(c) {
+    elA.innerHTML = avanzada.map(function(c) {
       var v = vby(c.vid);
       var moraHist = (c.mora || []);
       var moraCount = moraHist.filter(function(m) { return !m.resuelta; }).length;
@@ -2678,7 +2544,7 @@ function renderMoraTab() {
         + '<button onclick="openReasignarCobro(' + c.id + ')" style="padding:6px 14px;background:rgba(6,182,212,.12);border:1px solid rgba(6,182,212,.3);color:#06b6d4;border-radius:8px;font-size:.75rem;font-weight:700;cursor:pointer;">🔄 Re-asignar Cobro</button>'
         + '<button onclick="openClientDetail(' + c.id + ')" style="padding:6px 10px;background:var(--card);border:1px solid var(--border2);color:var(--muted);border-radius:8px;font-size:.75rem;cursor:pointer;">👤 Ver cliente</button>'
         + '</div></div>';
-    }).join('') + _moraPagBtns('avanzada', avanzada.length);
+    }).join('');
   }
 }
 
@@ -2694,36 +2560,23 @@ function notificarAsesorMora(clientId) {
     for (var j = 0; j < cs.length; j++) { if (cs[j].id == clientId) { ci = cs[j]; break; } }
     if (ci) {
       var notasActuales = [];
-      // FIX MORA-M-07: Usar datos en memoria (ya parseados) en vez de mora_json stale
-      notasActuales = ci.mora ? ci.mora.slice() : [];
+      try { notasActuales = ci.mora_json ? JSON.parse(ci.mora_json) : (ci.mora || []); } catch(e) { notasActuales = []; }
       var now = new Date();
       var notaAlerta = {
         fecha: now.getDate() + '/' + (now.getMonth() + 1) + '/' + now.getFullYear(),
-        motivo: 'Jefe de Ventas notificó al asesor sobre mora',
+        motivo: 'Gerencia notificó al asesor sobre mora',
         compromiso: 'Asesor debe contactar al cliente',
         contacto: 'Sistema',
         resuelta: false,
-        vendedorNombre: 'Jefe de Ventas (Alerta automática)'
+        vendedorNombre: 'Gerencia (Alerta automática)'
       };
       notasActuales.push(notaAlerta);
       guardar = _sbUpdateClient(clientId, { mora_json: JSON.stringify(notasActuales) });
     }
   }
   guardar.then(function() {
-    // FASE4-FIX5: Insertar notificación real en la tabla notificaciones (antes solo cache local)
-    if (sbClient) {
-      sbClient.from('notificaciones').insert({
-        tipo: 'alerta_mora',
-        mensaje: 'Jefe de Ventas solicita gestión de mora para el cliente ' + c.nombre,
-        destinatario_rol: 'seller',
-        destinatario_id: c.vid || null,
-        cliente_id: clientId || null,
-        remitente_id: window._gerenteProfile ? window._gerenteProfile.user_id : null,
-        leida: false
-      }).catch(function(e) { console.warn('Error al insertar notificación de mora:', e); });
-    }
     var ns = _memCache[NK] || [];
-    ns.unshift({ id: 'gmora' + Date.now(), tipo: 'atraso', cid: clientId, cliente: c.nombre, vid: c.vid, vendedor: v.nombre, ts: Date.now(), leida: false, aprobada: false, comp: null, msg: 'Jefe de Ventas solicita gestión de mora' });
+    ns.unshift({ id: 'gmora' + Date.now(), tipo: 'atraso', cid: clientId, cliente: c.nombre, vid: c.vid, vendedor: v.nombre, ts: Date.now(), leida: false, aprobada: false, comp: null, msg: 'Gerencia solicita gestión de mora' });
     _memCache[NK] = ns;
     showToast('📨 Notificación enviada a ' + v.nombre);
   });
@@ -2753,7 +2606,7 @@ function renderEquipoDash() {
     var retV = vc.length > 0 ? Math.round((vc.length - bajasV) / vc.length * 100) : 100;
     var moraV = vc.length > 0 ? Math.round(atV / vc.length * 100) : 0;
     var scoreV = Math.min(100, Math.round((retV * 0.3) + (Math.max(0, 100 - moraV * 2) * 0.3) + (Math.min(100, cm.ventasMes / 3 * 100) * 0.25) + (Math.min(100, compV / Math.max(1, vc.length) * 100 * 0.15))));
-    return { v: v, n: vc.length, rec: rec, cm: cm, at: atV, comp: compV, ret: retV, mora: moraV, score: scoreV, tkProm: vc.length > 0 ? Math.round(vc.reduce(function(s, c) { return s + (parseFloat(c.monto_total) || parseFloat(c.monto_cuota || 0) * (parseInt(c.cuotas_total) || 10)); }, 0) / vc.length) : 0 };
+    return { v: v, n: vc.length, rec: rec, cm: cm, at: atV, comp: compV, ret: retV, mora: moraV, score: scoreV, tkProm: vc.length > 0 ? Math.round(vc.reduce(function(s, c) { return s + (parseFloat(c.monto_total) || parseFloat(c.monto_cuota || 0) * 10); }, 0) / vc.length) : 0 };
   }).sort(function(a, b) { return b.rec - a.rec; });
   var maxRec = vData[0] ? Math.max(1, vData[0].rec) : 1;
   var byMonth = {};
@@ -2761,7 +2614,7 @@ function renderEquipoDash() {
   var months = Object.keys(byMonth).sort().slice(-12);
   var maxVentas = 1; months.forEach(function(k) { if (byMonth[k].ventas > maxVentas) maxVentas = byMonth[k].ventas; });
   var chartBars = months.map(function(k) { var pct = Math.max(4, Math.round(byMonth[k].ventas / maxVentas * 100)); var isNow = (k === curM); return '<div class="chart-bar" data-val="' + byMonth[k].ventas + ' ventas | USD ' + byMonth[k].rec + '" style="height:' + pct + '%;background:' + (isNow ? 'linear-gradient(180deg,#06b6d4,#0d9488)' : 'rgba(6,182,212,.35)') + ';"></div>'; }).join('');
-  var chartLabels = months.map(function(k) { var p = k.split('-'); return '<div style="flex:1;text-align:center;font-size:.55rem;color:var(--muted);">' + mn[parseInt(p[1]) - 1].slice(0, 3) + '</div>'; }).join('');
+  var chartLabels = months.map(function(k) { var p = k.split('-'); return '<div style="flex:1;text-align:center;font-size:.55rem;color:var(--muted);">' + mn[parseInt(p[1])].slice(0, 3) + '</div>'; }).join('');
   var el = document.getElementById('equipoDash');
   if (!el) return;
   el.innerHTML = '<div class="kpi-grid" style="margin-bottom:18px;">'
@@ -3030,19 +2883,7 @@ function saveClientPass(cid) { showToast('⚠️ Para cambiar contraseña de cli
 // ── MODAL & TOAST ──────────────────────────────────────
 function closeModal() { document.getElementById('modal').classList.remove('open'); }
 function closeModalOut(e) { if (e.target === document.getElementById('modal')) closeModal(); }
-// M7: Unificado con cleanup de timeout (patrón CEO) — previene stacking
-var _toastT = null;
-function showToast(msg, dur, tipo) {
-  var t = document.getElementById('toast');
-  if (!t) return;
-  if (_toastT) clearTimeout(_toastT);
-  t.textContent = msg;
-  t.className = 'show';
-  if (tipo === 'error') t.style.borderColor = 'rgba(239,68,68,.5)';
-  else if (tipo === 'warn') t.style.borderColor = 'rgba(245,158,11,.5)';
-  else t.style.borderColor = '';
-  _toastT = setTimeout(function() { t.classList.remove('show'); t.style.borderColor = ''; _toastT = null; }, dur || 3500);
-}
+function showToast(msg, dur) { var t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show'); setTimeout(function() { t.classList.remove('show'); }, dur || 3500); }
 
 // ══════════════════════════════════════════════════════
 //  MÓDULO LZ_AUTH (IGUAL AL ORIGINAL)
@@ -3064,7 +2905,7 @@ function showToast(msg, dur, tipo) {
   var ADMIN_ROLES = ['owner', 'super_admin'];
   var LZ_AUTH = {
     KEYS: { auth: 'lz_auth', username: 'lz_username', nombre: 'lz_nombre', role: 'lz_role', badge: 'lz_badge', color: 'lz_color', access: 'lz_access' },
-    PANEL_KEYS: { ceo: 'luazul_ceo', gerente: 'luazul_gerente', jefe_ventas: 'luazul_jefe_ventas' },
+    PANEL_KEYS: { ceo: 'luazul_ceo', gerente: 'luazul_gerente' },
     guard: function (options) {
       var opts = options || {};
       var panelKey    = opts.panelKey    || null;
@@ -3077,7 +2918,7 @@ function showToast(msg, dur, tipo) {
         if (onSuccess) onSuccess();
         return true;
       }
-      if (window._gerenteProfile && String(window._gerenteProfile.role_id) === '5') {
+      if (window._gerenteProfile && String(window._gerenteProfile.role_id) === '2') {
         LZ_AUTH._showApp(loginWrapId, appId);
         if (onSuccess) onSuccess();
         return true;
@@ -3171,7 +3012,7 @@ function showToast(msg, dur, tipo) {
 document.addEventListener('DOMContentLoaded', function() {
   var guardPassed = LZ_AUTH.guard({
     panelKey    : LZ_AUTH.PANEL_KEYS.jefe_ventas,
-    portalRoles : ['jefe_ventas', 'gerente', 'owner', 'super_admin'],
+    portalRoles : ['gerente', 'owner', 'super_admin'],
     loginWrapId : 'loginWrap',
     appId       : 'app',
     onSuccess   : function() { initApp(); }
@@ -3180,9 +3021,6 @@ document.addEventListener('DOMContentLoaded', function() {
     // Sin sesión válida: solo mostrar el formulario de login
     document.documentElement.style.visibility = 'visible';
   }
-  // Enter key handler para login
-  var jefPassEl = document.getElementById('gPass');
-  if (jefPassEl) jefPassEl.addEventListener('keypress', function(e){ if(e.key==='Enter') gLogin(); });
 });
 
 // ── Ver Voucher desde panel Gerente ──────────────────────────────
@@ -3229,14 +3067,11 @@ function refreshNotifBadge() {
   sbClient.from('notificaciones')
     .select('id', { count: 'exact', head: true })
     .eq('leida', false)
-    .or('destinatario_id.eq.' + window._gerenteProfile.id + ',destinatario_rol.eq.jefe_ventas')
+    .eq('destinatario_id', window._gerenteProfile.id)
     .then(function(r) {
       var count = r.count || 0;
-      // M6: Usar IDs correctos que existen en el HTML
-      var b = document.getElementById('notifCount');
-      var tb = document.getElementById('tabNBadge');
-      if (b) { b.textContent = count; b.style.display = count > 0 ? 'flex' : 'none'; }
-      if (tb) { tb.textContent = count; tb.style.display = count > 0 ? 'inline' : 'none'; }
+      var dot = document.getElementById('notifDot') || document.getElementById('notifBadge');
+      if (dot) dot.style.display = count ? 'flex' : 'none';
     }).catch(function() {});
 }
 
@@ -3247,7 +3082,7 @@ function notificarAccion(tipo, mensaje, clienteId, destinatarioId) {
     tipo: tipo,
     mensaje: mensaje,
     cliente_id: clienteId || null,
-    remitente_id: window._gerenteProfile.id,
+    remitente_id: window._gerenteProfile.user_id,
     destinatario_id: destinatarioId || null,
     leida: false,
     created_at: new Date().toISOString()
@@ -3255,10 +3090,13 @@ function notificarAccion(tipo, mensaje, clienteId, destinatarioId) {
 }
 
 // ===================== ENVIAR COMPROBANTE (con Storage) =====================
-// FIX F5: Jefe NO registra pagos — solo el Vendedor o Cliente
 async function enviarComprobante(clientId) {
-  showToast('⛔ Solo el asesor (Vendedor) o el Cliente pueden registrar pagos. El Jefe de Ventas solo supervisa.');
-  return;
+  var cuotaNum  = parseInt((document.getElementById('pCuotaNum') || {}).value, 10);
+  var monto     = parseFloat((document.getElementById('pMonto')   || {}).value);
+  var fecha     = (document.getElementById('pFecha')  || {}).value || new Date().toISOString().slice(0, 10);
+  var fileInput = document.getElementById('pFile');
+  if (!cuotaNum || isNaN(monto) || monto <= 0) { showToast('⚠️ Completá cuota y monto'); return; }
+  var cs = (_memCache[DB_KEY] || []);
   var c = cs.find(function(x) { return String(x.id) === String(clientId); });
   if (!c || !sbClient) { showToast('❌ Sin conexión o cliente no encontrado'); return; }
 
@@ -3282,9 +3120,7 @@ async function enviarComprobante(clientId) {
       var urlRes = sbClient.storage.from('comprobantes').getPublicUrl(filePath);
       publicUrl = urlRes.data.publicUrl;
     }
-    var sellerId = c.vid ? parseInt(c.vid, 10) : null;
-    var vendObj = (_memCache[VK] || []).find(function(v){ return String(v.id) === String(c.vid); });
-    var asesor = vendObj ? vendObj.nombre : (c.nombre || 'Asesor');
+    var sellerId = window._gerenteProfile ? (parseInt(window._gerenteProfile.id, 10) || null) : null;
     var insRes = await sbClient.from('pagos').insert([{
       cliente_id:     parseInt(c.id, 10),
       cliente_nombre: c.nombre,
@@ -3316,11 +3152,6 @@ window.refreshNotifBadge = refreshNotifBadge;
 
 // ===================== TICKETS (GERENTE) =====================
 var _ticketsCacheGerente = [];
-var _searchDebounceJef = null;
-function debounceSearchTicketsJef() {
-    clearTimeout(_searchDebounceJef);
-    _searchDebounceJef = setTimeout(function() { cargarTicketsGerente(); }, 300);
-}
 
 function cargarTicketsGerente() {
   if (!sbClient || !window._gerenteProfile) return;
@@ -3331,7 +3162,7 @@ function cargarTicketsGerente() {
 
   var query = sbClient.from('notificaciones')
     .select('*, cliente:clientes(nombre, email, region_id)')
-    .in('tipo', ['incidencia', 'soporte', 'mejora', 'falla_tecnica', 'error_datos', 'otro'])
+    .in('tipo', ['incidencia', 'soporte', 'mejora', 'falla_tecnica'])
     .order('created_at', { ascending: false });
 
   if (regionIds.length) query = query.in('region_id', regionIds);
@@ -3426,7 +3257,7 @@ function abrirNuevoTicketGerente() {
     clientesOpt += '<option value="'+c.id+'">'+esc(c.nombre)+' ('+esc(c.email || '')+')</option>';
   }
   var vendedoresOpt = '<option value="">Sin vendedor asignado</option>';
-  var cacheVendedores = _memCache[VK] || [];
+  var cacheVendedores = _memCache['lz_vend'] || [];
   for (var j = 0; j < cacheVendedores.length; j++) {
     var v = cacheVendedores[j];
     vendedoresOpt += '<option value="'+v.id+'">'+esc(v.nombre)+'</option>';
@@ -3499,7 +3330,7 @@ async function guardarTicketGerente() {
     for (var i = 0; i < files.length; i++) {
       var file = files[i];
       var ext = file.name.split('.').pop();
-      var fileName = 'ticket_adjuntos/' + window._gerenteProfile.user_id + '/' + Date.now() + '_' + i + '_' + Math.random().toString(36).substr(2,6) + '.' + ext;
+      var fileName = 'ticket_adjuntos/' + window._gerenteProfile.user_id + '/' + Date.now() + '_' + i + '.' + ext;
       var upRes = await sbClient.storage.from('ticket_adjuntos').upload(fileName, file);
       if (upRes.error) throw upRes.error;
       var urlRes = sbClient.storage.from('ticket_adjuntos').getPublicUrl(fileName);
@@ -3514,8 +3345,7 @@ async function guardarTicketGerente() {
     if (rpcRes.error) throw rpcRes.error;
     // 3. Si hay adjuntos, guardarlos en el registro del ticket
     if (adjuntosUrls.length && rpcRes.data) {
-      var ticketId = rpcRes.data?.ticket_id || rpcRes.data;
-      await sbClient.from('notificaciones').update({ adjuntos: adjuntosUrls }).eq('id', ticketId);
+      await sbClient.from('notificaciones').update({ adjuntos: adjuntosUrls }).eq('id', rpcRes.data);
     }
     showToast('✅ Ticket creado' + (adjuntosUrls.length ? ' con ' + adjuntosUrls.length + ' adjunto(s)' : ''));
     closeModal();
@@ -3554,7 +3384,7 @@ function renderDetalleTicketGerente(ticket, comentarios) {
     for (var ai = 0; ai < ticket.adjuntos.length; ai++) {
       var adjUrl = ticket.adjuntos[ai];
       var esImagen = /\.(jpg|jpeg|png|gif|webp)$/i.test(adjUrl);
-      adjuntosHtml += '<a href="'+adjUrl.replace(/"/g,'&quot;')+'" target="_blank" style="display:inline-flex;align-items:center;gap:4px;padding:5px 10px;background:rgba(255,255,255,.06);border:1px solid var(--border2);border-radius:8px;text-decoration:none;color:var(--text);font-size:.78rem;">' +
+      adjuntosHtml += '<a href="'+adjUrl+'" target="_blank" style="display:inline-flex;align-items:center;gap:4px;padding:5px 10px;background:rgba(255,255,255,.06);border:1px solid var(--border2);border-radius:8px;text-decoration:none;color:var(--text);font-size:.78rem;">' +
         (esImagen ? '🖼️' : '📄') + ' Ver archivo '+(ai+1)+'</a>';
     }
     adjuntosHtml += '</div></div>';
@@ -3598,8 +3428,8 @@ function renderDetalleTicketGerente(ticket, comentarios) {
 function agregarComentarioGerente(id) {
   var texto = document.getElementById('nuevoComentarioGerente').value.trim();
   if (!texto) return;
-  sbClient.from('notificaciones').insert({ tipo:'comentario', mensaje:texto, remitente_id:window._gerenteProfile.id, respuesta_a:id, created_at:new Date().toISOString() })
-    .then(function() { return sbClient.from('notificaciones').update({ updated_at: new Date().toISOString() }).eq('id', id); })
+  sbClient.from('notificaciones').insert({ tipo:'comentario', mensaje:texto, remitente_id:window._gerenteProfile.user_id, respuesta_a:id, created_at:new Date() })
+    .then(function() { return sbClient.from('notificaciones').update({ updated_at: new Date() }).eq('id', id); })
     .then(function() {
       document.getElementById('nuevoComentarioGerente').value = '';
       verTicketGerente(id);
@@ -3613,7 +3443,7 @@ function actualizarTicketGerente(id) {
   var nuevoEstado = document.getElementById('detEstadoGerente').value;
   var nuevaPrioridad = document.getElementById('detPrioridadGerente').value;
   var fechaCierre = nuevoEstado === 'cerrado' ? new Date().toISOString() : null;
-  sbClient.from('notificaciones').update({ estado:nuevoEstado, prioridad:nuevaPrioridad, updated_at:new Date().toISOString(), fecha_cierre:fechaCierre }).eq('id', id)
+  sbClient.from('notificaciones').update({ estado:nuevoEstado, prioridad:nuevaPrioridad, updated_at:new Date(), fecha_cierre:fechaCierre }).eq('id', id)
     .then(function() {
       showToast('✅ Ticket actualizado');
       verTicketGerente(id);
@@ -3630,7 +3460,7 @@ async function subirAdjuntoATicketGerente(ticketId) {
   if (btn) btn.disabled = true;
   try {
     var ext = file.name.split('.').pop();
-    var fileName = 'ticket_adjuntos/' + window._gerenteProfile.user_id + '/' + Date.now() + '_' + Math.random().toString(36).substr(2,6) + '_' + file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+    var fileName = 'ticket_adjuntos/' + window._gerenteProfile.user_id + '/' + Date.now() + '_' + file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
     var upRes = await sbClient.storage.from('ticket_adjuntos').upload(fileName, file);
     if (upRes.error) throw upRes.error;
     var urlRes = sbClient.storage.from('ticket_adjuntos').getPublicUrl(fileName);
@@ -3669,7 +3499,7 @@ window.subirAdjuntoATicketGerente = subirAdjuntoATicketGerente;
 
 var _canalActivoJefe = null;
 var _staffCacheJefe = [];
-var _ROLE_NAMES = {1:'CEO', 2:'Gerente', 3:'Asesor', 4:'Cliente', 5:'Jefe de Ventas'};
+var _ROLE_NAMES = {1:'CEO', 2:'Gerente', 3:'Asesor', 4:'Jefe de Ventas', 5:'Admin'};
 
 async function cargarStaffJefe() {
   if (_staffCacheJefe.length) return _staffCacheJefe;
@@ -3691,7 +3521,7 @@ async function cargarStaffJefe() {
 
 // ── Badge de mensajes no leídos ──
 var _unreadCountJefe = 0;
-// FIX CHAT-M-05: eliminada variable muerta _lastMsgTimestampJefe
+var _lastMsgTimestampJefe = 0;
 var _notifIntervalJefe = null;
 
 async function contarNoLeidosJefe() {
@@ -3723,11 +3553,9 @@ async function contarNoLeidosJefe() {
       } catch(e) {}
     }
     if (!misCanalesIds.length) return 0;
-    // FIX CHAT-C-02: filtrar solo mensajes principales (no respuestas)
     var res = await sbClient.from('mensajes_equipo')
       .select('id, remitente_id, canal_id, created_at')
       .in('canal_id', misCanalesIds)
-      .is('respuesta_a', null)
       .order('created_at', { ascending: false })
       .limit(200);
     if (res.error) return 0;
@@ -3761,14 +3589,13 @@ async function marcarLeidosJefe(canalId) {
   if (!sbClient || !window._gerenteProfile) return;
   try {
     var userId = window._gerenteProfile.user_id;
-    // FIX CHAT-M-03: agregar límite para evitar upsert masivo
-    var res = await sbClient.from('mensajes_equipo').select('id').eq('canal_id', canalId).limit(500);
+    var res = await sbClient.from('mensajes_equipo').select('id').eq('canal_id', canalId);
     if (res.error || !res.data) return;
     var msgIds = res.data.map(function(m) { return m.id; });
     if (!msgIds.length) return;
     var inserts = msgIds.map(function(mid) { return { mensaje_id: mid, usuario_id: userId }; });
     await sbClient.from('mensajes_vistos').upsert(inserts, { onConflict: 'mensaje_id,usuario_id' });
-  } catch(e) { console.warn('[marcarLeidosJefe]', e); } // FIX CHAT-M-02: logging en vez de silencioso
+  } catch(e) {}
 }
 
 function iniciarNotificacionesJefe() {
@@ -3908,8 +3735,7 @@ async function cargarMensajesCanalJefe(canalId) {
       '<div id="msgsScrollAreaJefe" style="flex:1;overflow-y:auto;padding:16px;max-height:420px;">' + msgsHtml + '</div>' +
       '<div style="padding:12px 16px;border-top:1px solid var(--border);background:rgba(255,255,255,.02);">' +
         '<div style="display:flex;gap:8px;align-items:flex-end;">' +
-          // FIX CHAT-M-02: Enter envía, Shift+Enter nueva línea
-          '<textarea id="nuevoMensajeJefe" rows="2" placeholder="Escrib\u00ed tu mensaje..." style="flex:1;background:rgba(255,255,255,.04);border:1px solid var(--border2);border-radius:10px;color:var(--text);font-family:inherit;font-size:.85rem;padding:10px;resize:none;" onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();enviarMensajeJefe(\'' + canalId + '\')}"></textarea>' +
+          '<textarea id="nuevoMensajeJefe" rows="2" placeholder="Escrib\u00ed tu mensaje..." style="flex:1;background:rgba(255,255,255,.04);border:1px solid var(--border2);border-radius:10px;color:var(--text);font-family:inherit;font-size:.85rem;padding:10px;resize:none;"></textarea>' +
           '<button onclick="enviarMensajeJefe(\'' + canalId + '\')" style="padding:10px 18px;background:linear-gradient(135deg,#0891b2,#06b6d4);border:none;border-radius:10px;color:white;font-family:inherit;font-size:.82rem;font-weight:700;cursor:pointer;white-space:nowrap;">Enviar</button>' +
         '</div>' +
       '</div>';
@@ -4147,19 +3973,13 @@ async function renderMiLegajoJefe() {
   const totalVendedores = misVendedores.length;
   const clientesDelEquipo = getClientesDelRamal();
   const totalClientes = clientesDelEquipo.length;
-  const activos_count = clientesDelEquipo.filter(c => c.estado === 'activo').length;
+  const activos = clientesDelEquipo.filter(c => c.estado === 'activo').length;
   const enMora = clientesDelEquipo.filter(c => c.estado === 'atraso' || c.estado === 'atraso_gestion').length;
   const completados = clientesDelEquipo.filter(c => c.estado === 'completo').length;
   const bajas = clientesDelEquipo.filter(c => c.estado === 'baja').length;
-  // F6.1-5: Corregido — 15% sobre 1ª cuota (no sobre todo el recaudado) + penalización bajas tempranas
-  // Todas las comisiones son únicamente sobre la 1ª cuota, misma penalización que el vendedor
-  const activosComision = clientesDelEquipo.filter(c => c.estado !== 'baja');
-  const vendidosComision = clientesDelEquipo.filter(c => !(c.estado === 'baja' && (parseInt(c.cuotas_pagadas) || 0) === 0));
-  const bajasP3 = vendidosComision.filter(c => c.estado === 'baja' && (parseInt(c.cuotas_pagadas) || 0) <= 3);
-  const comisionBase = activosComision.reduce((s, c) => s + (parseFloat(c.monto_cuota) || 0) * 0.15, 0);
-  const comisionPen = bajasP3.reduce((s, c) => s + (parseFloat(c.monto_cuota) || 0) * 0.15, 0);
-  const comisionEstimada = Math.max(0, comisionBase - comisionPen);
-  const totalPenalizacion = comisionPen;
+  const totalRecaudado = clientesDelEquipo.reduce((s, c) => s + ((parseInt(c.cuotas_pagadas) || 0) * (parseFloat(c.monto_cuota) || 0)), 0);
+  const comisionPct = (yo.com_pct && yo.com_pct > 0) ? yo.com_pct / 100 : 0.15;
+  const comisionEstimada = totalRecaudado * comisionPct;
 
   // Comprobantes
   let comps = [];
@@ -4223,15 +4043,11 @@ async function renderMiLegajoJefe() {
       <div class="section-title" style="margin-bottom:14px;">💰 Comisiones</div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;">
         <div style="background:rgba(74,222,128,.08);border:1px solid rgba(74,222,128,.2);border-radius:12px;padding:14px;">
-          <div style="font-size:.65rem;color:rgba(74,222,128,.7);">💵 Comisión bruta (15% 1ª cuota)</div>
-          <div class="sval" style="color:#4ade80;">${fmtM(comisionBase)}</div>
+          <div style="font-size:.65rem;color:rgba(74,222,128,.7);">💵 Recaudado total del equipo</div>
+          <div class="sval" style="color:#4ade80;">${fmtM(totalRecaudado)}</div>
         </div>
         <div style="background:rgba(74,222,128,.08);border:1px solid rgba(74,222,128,.2);border-radius:12px;padding:14px;">
-          <div style="font-size:.65rem;color:rgba(74,222,128,.7);">⚠️ Penalización bajas tempranas</div>
-          <div class="sval" style="color:${totalPenalizacion > 0 ? '#f87171' : 'rgba(255,255,255,.3)'};">${totalPenalizacion > 0 ? '-' + fmtM(totalPenalizacion) : 'Sin penalización'}</div>
-        </div>
-        <div style="background:rgba(74,222,128,.08);border:1px solid rgba(74,222,128,.2);border-radius:12px;padding:14px;">
-          <div style="font-size:.65rem;color:rgba(74,222,128,.7);">💰 Comisión neta estimada (15%)</div>
+          <div style="font-size:.65rem;color:rgba(74,222,128,.7);">💰 Comisión estimada (${Math.round(comisionPct * 100)}%)</div>
           <div class="sval" style="color:#4ade80;">${fmtM(comisionEstimada)}</div>
         </div>
         <div style="background:rgba(74,222,128,.08);border:1px solid rgba(74,222,128,.2);border-radius:12px;padding:14px;">
