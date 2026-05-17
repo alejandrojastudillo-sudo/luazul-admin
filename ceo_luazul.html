@@ -112,6 +112,25 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
 .obj-slider{-webkit-appearance:none;appearance:none;width:100%;height:6px;border-radius:3px;background:rgba(255,255,255,.1);outline:none;}
 .obj-slider::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;border-radius:50%;background:var(--purple);cursor:pointer;}
 
+/* VENDOR / TEAM CARDS */
+.vgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px;margin-bottom:24px;}
+.vcard{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:20px;transition:all .2s;cursor:pointer;}
+.vcard:hover{border-color:var(--gold-bd);transform:translateY(-2px);}
+.vavatar{width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,#d97706,#f59e0b);display:flex;align-items:center;justify-content:center;font-family:'Syne',sans-serif;font-size:1rem;font-weight:800;color:white;flex-shrink:0;}
+.vstats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin:14px 0;}
+.vstat{background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:8px;padding:8px;text-align:center;}
+.vstat-v{font-family:'Syne',sans-serif;font-size:1.1rem;font-weight:800;}
+.vstat-l{font-size:.6rem;color:var(--muted);margin-top:2px;}
+.vactions{display:flex;gap:6px;}
+.vcbtn{flex:1;padding:7px;border-radius:8px;font-size:.76rem;font-weight:700;font-family:'Mulish',sans-serif;cursor:pointer;transition:all .15s;border:1px solid var(--border2);background:var(--card);color:var(--muted);}
+.vcbtn:hover{color:var(--text);border-color:var(--gold);}
+.vcbtn.p{background:var(--blue-bg);color:#93c5fd;border-color:var(--blue-bd);}
+.bpill{font-size:.67rem;font-weight:700;padding:2px 9px;border-radius:20px;}
+.bpill.on{background:var(--green-bg);color:var(--green);border:1px solid var(--green-bd);}
+.bpill.off{background:var(--red-bg);color:#fca5a5;border:1px solid var(--red-bd);}
+.empty{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 20px;color:var(--muted);}
+.ei{font-size:2.5rem;margin-bottom:12px;opacity:.5;}
+
 /* MODAL */
 #modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:200;align-items:center;justify-content:center;padding:20px;}
 #modal.open{display:flex;}
@@ -229,9 +248,10 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
       <div class="tab"        onclick="showTab('regiones')"  id="tab-regiones">🌎 Gerentes Regionales</div>
       <div class="tab"        onclick="showTab('venddash')"  id="tab-venddash">📈 Dashboard Asesor</div>
       <div class="tab"        onclick="showTab('pagos')"     id="tab-pagos">💳 Pagos</div>
-      <div class="tab"        onclick="showTab('mora')"      id="tab-mora">🚨 Mora Global</div>
-      <div class="tab"        onclick="showTab('equipo')"    id="tab-equipo">🏆 Equipo &amp; Objetivos</div>
-      <div class="tab"        onclick="showTab('clientes')"  id="tab-clientes">👥 Clientes</div>
+      <div class="tab"        onclick="showTab('mora')"          id="tab-mora">🚨 Mora Global</div>
+      <div class="tab"        onclick="showTab('salesleaders')"  id="tab-salesleaders" style="color:var(--gold);">⭐ Equipos de Ventas</div>
+      <div class="tab"        onclick="showTab('equipo')"        id="tab-equipo">🏆 Equipo &amp; Objetivos</div>
+      <div class="tab"        onclick="showTab('clientes')"      id="tab-clientes">👥 Clientes</div>
       <div class="tab"        onclick="showTab('mensual')"   id="tab-mensual"   style="color:var(--cyan,#06b6d4);">📆 Recaudación Mensual</div>
       <div class="tab"        onclick="showTab('passwords')" id="tab-passwords" style="color:var(--purple);">🔑 Contraseñas</div>
       <div class="tab" onclick="showTab('pagos_aprobacion')" id="tab-pagos_aprobacion" style="color:#fb923c;">💳 Aprobar Pagos</div>
@@ -344,6 +364,18 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
           <div id="moraAvanz"></div>
         </div>
       </div>
+    </div>
+
+    <!-- ══ EQUIPOS DE VENTAS (Jefes) ══ -->
+    <div class="tabpg" id="tabpg-salesleaders">
+      <div class="sec-head">
+        <h2>⭐ Equipos de Ventas — Jefes de Ventas</h2>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+          <div class="sbox"><span>🔍</span><input type="text" id="slSearch" placeholder="Buscar jefe..." oninput="renderSalesLeadersCEO()" /></div>
+        </div>
+      </div>
+      <div id="slKpiRow" class="kpi-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:18px;"></div>
+      <div class="vgrid" id="salesLeadersGrid"></div>
     </div>
 
     <!-- ══ EQUIPO & OBJETIVOS ══ -->
@@ -819,6 +851,190 @@ function calcComisionJefe(jefe, allClients, allVendedores) {
     };
   }
 
+// ── EQUIPOS DE VENTAS — Renderizado de Jefes de Ventas (CEO) ──
+function renderSalesLeadersCEO(){
+  var jfs = _cacheSalesLeaders || [];
+  var vs = vend();
+  var cs = cli();
+  var search = (document.getElementById('slSearch')||{}).value || '';
+  search = search.toLowerCase().trim();
+  if(search){
+    jfs = jfs.filter(function(j){ return (j.nombre||'').toLowerCase().indexOf(search)!==-1 || (j.email||'').toLowerCase().indexOf(search)!==-1; });
+  }
+
+  // KPIs globales
+  var totalJefes = jfs.length;
+  var totalVendEquipo = 0, totalCliEquipo = 0, totalRecEquipo = 0, totalComNeta = 0;
+  jfs.forEach(function(jf){
+    var cm = calcComisionJefe(jf, cs, vs);
+    totalVendEquipo += cm.equipoSize;
+    totalCliEquipo += cm.totalClientesEquipo;
+    totalRecEquipo += cs.filter(function(c){
+      var vids = vs.filter(function(v){ return String(v.manager_id)===String(jf.id); }).map(function(v){ return String(v.user_id||v.id); });
+      return vids.indexOf(String(c.vid))!==-1;
+    }).reduce(function(s,c){ return s+(parseInt(c.cuotas_pagadas)||0)*(parseFloat(c.monto_cuota)||0); },0);
+    totalComNeta += cm.neta;
+  });
+
+  var kpiEl = document.getElementById('slKpiRow');
+  if(kpiEl){
+    kpiEl.innerHTML=[
+      {i:'⭐',v:totalJefes,l:'Jefes de Ventas',c:'var(--gold)'},
+      {i:'👔',v:totalVendEquipo,l:'Vendedores en equipos',c:'var(--purple)'},
+      {i:'👥',v:totalCliEquipo,l:'Clientes de equipos',c:''},
+      {i:'💰',v:fmtUSD(totalComNeta),l:'Comisiones totales (15%)',c:'var(--green)'}
+    ].map(function(s){
+      return '<div class="kpi"><span>'+s.i+'</span><div class="kpi-v"'+(s.c?' style="color:'+s.c+';font-size:1.1rem;"':'')+'>'+s.v+'</div><div class="kpi-l">'+s.l+'</div></div>';
+    }).join('');
+  }
+
+  // Cards de Jefes
+  var grid = document.getElementById('salesLeadersGrid');
+  if(!grid) return;
+  grid.innerHTML = jfs.map(function(jf){
+    var cm = calcComisionJefe(jf, cs, vs);
+    var ini = (jf.nombre||'').split(' ').map(function(w){return w[0];}).join('').slice(0,2).toUpperCase();
+    var rJ = rby(jf.rid);
+    var gerAsignado = ger().find(function(g){ return String(g.id)===String(jf.manager_id); });
+    var misV = vs.filter(function(v){ return String(v.manager_id)===String(jf.id); });
+    var misVids = misV.map(function(v){ return String(v.user_id||v.id); });
+    var misC = cs.filter(function(c){ return misVids.indexOf(String(c.vid))!==-1; });
+    var recEquipo = misC.reduce(function(s,c){ return s+(parseInt(c.cuotas_pagadas)||0)*(parseFloat(c.monto_cuota)||0); },0);
+    var actC = misC.filter(function(c){ return c.estado==='activo'; }).length;
+    var atrasoC = misC.filter(function(c){ return c.estado==='atraso'||c.estado==='atraso_gestion'; }).length;
+
+    return '<div class="vcard" onclick="openJefeDetailCEO(\''+jf.user_id+'\')">'
+      +'<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">'
+      +'<div class="vavatar" style="background:linear-gradient(135deg,#059669,#10b981);">'+ini+'</div>'
+      +'<div style="flex:1;min-width:0;">'
+      +'<div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;">'
+      +'<span style="font-weight:700;font-size:.92rem;">'+esc(jf.nombre||'—')+'</span>'
+      +'<span style="font-size:.6rem;padding:2px 7px;border-radius:10px;background:#10b98120;color:#10b981;">⭐ Jefe de Ventas</span>'
+      +'<span class="bpill '+(jf.activo!==false?'on':'off')+'">'+(jf.activo!==false?'Activo':'Inactivo')+'</span>'
+      +'</div>'
+      +'<div style="font-size:.7rem;color:var(--muted);">'+(jf.email||'')+'</div>'
+      +'</div></div>'
+      +'<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px;">'
+      +'<div class="vstat"><div class="vstat-v">'+cm.equipoSize+'</div><div class="vstat-l">Vendedores</div></div>'
+      +'<div class="vstat"><div class="vstat-v">'+cm.totalClientesEquipo+'</div><div class="vstat-l">Clientes</div></div>'
+      +'<div class="vstat"><div class="vstat-v" style="color:var(--gold);">'+fmtUSD(recEquipo)+'</div><div class="vstat-l">Recaudado</div></div>'
+      +'</div>'
+      +'<div style="background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2);border-radius:12px;padding:12px;margin-bottom:12px;">'
+      +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">'
+      +'<div style="text-align:center;"><div style="font-size:.6rem;color:var(--muted);">Activos</div><div style="font-size:1.1rem;font-weight:800;color:var(--green);">'+actC+'</div></div>'
+      +'<div style="text-align:center;"><div style="font-size:.6rem;color:var(--muted);">En atraso</div><div style="font-size:1.1rem;font-weight:800;color:var(--red);">'+atrasoC+'</div></div>'
+      +'</div>'
+      +'<div style="margin-top:8px;font-size:.8rem;"><span style="color:var(--gold);">💰 Comisión (15%):</span> <strong style="color:var(--green);">'+fmtUSD(cm.neta)+'</strong></div>'
+      +'</div>'
+      +(rJ?'<div style="font-size:.68rem;color:var(--muted);margin-bottom:8px;">'+rJ.bandera+' '+(rJ.nombre||'')+'</div>':'')
+      +'<div class="vactions" onclick="event.stopPropagation()">'
+      +'<button class="vcbtn p" onclick="openJefeDetailCEO(\''+jf.user_id+'\')">👥 Ver equipo</button>'
+      +'<button class="vcbtn" onclick="closeModal();goVendDashAll()">📈 Dashboard</button>'
+      +'</div></div>';
+  }).join('') || '<div class="empty"><div class="ei">⭐</div><p>No hay jefes de ventas creados.</p><p style="font-size:.75rem;margin-top:6px;">Los jefes se crean desde el panel de Gerente.</p></div>';
+}
+
+// ── DETALLE DE JEFE DE VENTAS (CEO Modal) ──
+function openJefeDetailCEO(juid){
+  var jf = (_cacheSalesLeaders||[]).find(function(x){ return String(x.user_id)===String(juid); });
+  if(!jf){ showToast('⚠️ Jefe no encontrado'); return; }
+  var vs = vend();
+  var cs = cli();
+  var r = rby(jf.rid);
+  var gerAsignado = ger().find(function(g){ return String(g.id)===String(jf.manager_id); });
+
+  // Vendedores de este Jefe
+  var miEquipo = vs.filter(function(v){ return String(v.manager_id)===String(jf.id); });
+  var equipoIds = miEquipo.map(function(v){ return String(v.user_id||v.id); });
+  var clientesEquipo = cs.filter(function(c){ return equipoIds.indexOf(String(c.vid))!==-1; });
+
+  var cm = calcComisionJefe(jf, cs, vs);
+  var totalRec = clientesEquipo.reduce(function(s,c){ return s+(parseInt(c.cuotas_pagadas)||0)*(parseFloat(c.monto_cuota)||0); },0);
+  var actC = clientesEquipo.filter(function(c){return c.estado==='activo';}).length;
+  var atrasoC = clientesEquipo.filter(function(c){return c.estado==='atraso'||c.estado==='atraso_gestion';}).length;
+  var complC = clientesEquipo.filter(function(c){return c.estado==='completo';}).length;
+  var bajaC = clientesEquipo.filter(function(c){return c.estado==='baja';}).length;
+
+  // Vendedores con su detalle
+  var vendRows = miEquipo.map(function(v){
+    var vc = cs.filter(function(c){ return String(c.vid)===String(v.user_id)||String(c.vid)===String(v.id); });
+    var vrec = vc.reduce(function(s,c){ return s+(parseInt(c.cuotas_pagadas)||0)*(parseFloat(c.monto_cuota)||0); },0);
+    var vAct = vc.filter(function(c){return c.estado==='activo';}).length;
+    var vAtr = vc.filter(function(c){return c.estado==='atraso'||c.estado==='atraso_gestion';}).length;
+    var iniV = (v.nombre||'').split(' ').map(function(w){return w[0];}).join('').slice(0,2).toUpperCase();
+    return '<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);">'
+      +'<div class="vavatar" style="width:34px;height:34px;font-size:.75rem;background:linear-gradient(135deg,#7c3aed,#a78bfa);">'+iniV+'</div>'
+      +'<div style="flex:1;min-width:0;">'
+      +'<div style="font-size:.85rem;font-weight:700;">'+esc(v.nombre||'—')+'</div>'
+      +'<div style="font-size:.68rem;color:var(--muted);">'+vc.length+' clientes · '+vAct+' activos'+(vAtr?' · <span style="color:var(--red);">'+vAtr+' atraso</span>':'')+'</div>'
+      +'</div>'
+      +'<div style="text-align:right;">'
+      +'<div style="font-size:.82rem;font-weight:700;color:var(--gold);">'+fmtUSD(vrec)+'</div>'
+      +'<div style="font-size:.65rem;color:var(--muted);">Recaudado</div></div>'
+      +'<button onclick="closeModal();goVendDash(\''+v.user_id+'\')" style="padding:4px 10px;background:var(--purple-bg);border:1px solid var(--purple-bd);color:var(--purple);border-radius:6px;font-size:.7rem;cursor:pointer;flex-shrink:0;">Ver</button>'
+      +'</div>';
+  }).join('');
+
+  // Clientes agrupados por vendedor
+  var cliHTML = '';
+  if(miEquipo.length && clientesEquipo.length){
+    cliHTML = '<div style="margin-top:16px;">'
+      +'<div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:10px;">📋 Cartera de clientes ('+clientesEquipo.length+')</div>';
+    miEquipo.forEach(function(v){
+      var vClientes = cs.filter(function(c){ return String(c.vid)===String(v.user_id)||String(c.vid)===String(v.id); });
+      if(!vClientes.length) return;
+      cliHTML += '<div style="margin-bottom:10px;">'
+        +'<div style="font-size:.75rem;font-weight:700;color:var(--purple);margin-bottom:4px;">👔 '+esc(v.nombre||'')+' ('+vClientes.length+')</div>';
+      vClientes.forEach(function(c){
+        var estColor = c.estado==='activo'?'var(--green)':c.estado==='atraso'||c.estado==='atraso_gestion'?'var(--red)':c.estado==='completo'?'var(--blue)':'var(--muted)';
+        var progreso = (parseInt(c.cuotas_pagadas)||0)/(parseInt(c.cuotas_total)||10)*100;
+        cliHTML += '<div style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:.75rem;">'
+          +'<span style="width:6px;height:6px;border-radius:50%;background:'+estColor+';flex-shrink:0;"></span>'
+          +'<span style="flex:1;">'+esc(c.nombre||'—')+'</span>'
+          +'<span style="color:var(--muted);font-size:.65rem;">'+(parseInt(c.cuotas_pagadas)||0)+'/'+(parseInt(c.cuotas_total)||10)+' cuotas</span>'
+          +'<div style="width:50px;height:4px;background:rgba(255,255,255,.06);border-radius:2px;overflow:hidden;">'
+          +'<div style="height:100%;width:'+progreso+'%;background:'+estColor+';border-radius:2px;"></div></div>'
+          +'</div>';
+      });
+      cliHTML += '</div>';
+    });
+    cliHTML += '</div>';
+  }
+
+  var ini = (jf.nombre||'').split(' ').map(function(w){return w[0];}).join('').slice(0,2).toUpperCase();
+
+  document.getElementById('mbox').innerHTML=
+    '<div class="mhead"><div><h2>⭐ '+esc(jf.nombre||'—')+' <span style="font-size:.7rem;padding:2px 8px;border-radius:10px;background:#10b98120;color:#10b981;font-weight:700;">Jefe de Ventas</span></h2>'
+    +'<p>'+(r?r.bandera+' '+r.nombre+' · ':'')+'Gerente: '+(gerAsignado?esc(gerAsignado.nombre):'—')+'</p></div>'
+    +'<button class="mclose" onclick="closeModal()">✕</button></div>'
+    +'<div class="mbody">'
+    +'<div class="kpi-grid" style="grid-template-columns:repeat(5,1fr);margin-bottom:16px;">'
+    +'<div class="kpi"><span>👔</span><div class="kpi-v">'+miEquipo.length+'</div><div class="kpi-l">Vendedores</div></div>'
+    +'<div class="kpi"><span>👥</span><div class="kpi-v">'+clientesEquipo.length+'</div><div class="kpi-l">Clientes</div></div>'
+    +'<div class="kpi"><span>💵</span><div class="kpi-v" style="color:var(--gold);font-size:1.1rem;">'+Math.round(totalRec/1000)+'k</div><div class="kpi-l">USD Rec.</div></div>'
+    +'<div class="kpi"><span>✅</span><div class="kpi-v" style="color:var(--green);">'+actC+'</div><div class="kpi-l">Activos</div></div>'
+    +'<div class="kpi"><span>⚠️</span><div class="kpi-v" style="color:var(--red);">'+atrasoC+'</div><div class="kpi-l">Atraso</div></div>'
+    +'</div>'
+    // Comisión del Jefe
+    +'<div style="background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2);border-radius:12px;padding:14px;margin-bottom:16px;">'
+    +'<div style="font-size:.75rem;font-weight:700;color:var(--gold);margin-bottom:8px;">💰 Comisión Jefe de Ventas (15%)</div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;text-align:center;">'
+    +'<div><div style="font-size:.6rem;color:var(--muted);">Bruta</div><div style="font-weight:800;">'+fmtUSD(cm.bruta)+'</div></div>'
+    +'<div><div style="font-size:.6rem;color:var(--muted);">Penalización</div><div style="font-weight:800;color:var(--red);">'+fmtUSD(cm.penalizacion)+'</div></div>'
+    +'<div><div style="font-size:.6rem;color:var(--muted);">Neta</div><div style="font-weight:800;color:var(--green);">'+fmtUSD(cm.neta)+'</div></div>'
+    +'</div></div>'
+    // Vendedores
+    +'<div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:10px;">Equipo de ventas ('+miEquipo.length+' vendedor'+(miEquipo.length!==1?'es':'')+')</div>'
+    +'<div style="max-height:250px;overflow-y:auto;">'+vendRows+'</div>'
+    +(!vendRows?'<div style="text-align:center;padding:20px;color:var(--muted);font-size:.82rem;">Sin vendedores asignados</div>':'')
+    // Clientes
+    +cliHTML
+    +'</div>'
+    +'<div class="mact"><button class="mbtn purple" onclick="closeModal();showTab(\'salesleaders\')">⭐ Volver a Equipos</button>'
+    +'<button class="mbtn ghost" onclick="closeModal()">Cerrar</button></div>';
+  document.getElementById('modal').classList.add('open');
+}
+
 // ── Buscar staff por user_id en cualquiera de los 3 caches ──
 function findStaffByUid(uid) {
     var caches = [_cacheGerentes, _cacheSalesLeaders, _cacheVendedores];
@@ -1292,6 +1508,8 @@ function showTab(id){
   if(id==='pagos')             renderPagos();
   if(id==='clientes')          renderClientes();
   if(id==='mensual')           renderMensual();
+  if(id==='salesleaders')      renderSalesLeadersCEO();
+  if(id==='equipo')            renderEquipoDash();
   if(id==='passwords')         renderPasswords();
   if(id==='backup')            initBackupTab();
   if(id==='pagocomisiones')    renderPagoComisiones();
@@ -1386,6 +1604,7 @@ function renderOverview(){
   document.getElementById('oStats').innerHTML=[
     {i:'🌎',v:rs.length,      l:'Regiones activas',  c:''},
     {i:'👔',v:gs.length,      l:'Gerentes',           c:'var(--purple)'},
+    {i:'⭐',v:(_cacheSalesLeaders||[]).length, l:'Jefes de Ventas', c:'var(--gold)'},
     {i:'🧑‍💼',v:vs.length,     l:'Asesores',           c:'var(--gold)'},
     {i:'👥',v:cs.length,      l:'Clientes totales',   c:''},
     {i:'✅',v:activos,         l:'Activos',            c:'var(--green)'},
