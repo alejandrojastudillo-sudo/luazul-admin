@@ -299,7 +299,7 @@ function _lzFmtDateLocal(iso) {
 // ── 3. MAPEADORES ────────────────────────────────────────────────
 function _lzMapStaff(v) {
   var comps = [];
-  if (v.comprobantes_json) { try { comps = JSON.parse(v.comprobantes_json); } catch(e) {} }
+  if (v.comprobantes_json) { try { comps = typeof v.comprobantes_json === 'string' ? JSON.parse(v.comprobantes_json) : v.comprobantes_json; } catch(e) { comps = []; } }
   return {
     id: v.id, user_id: v.user_id,
     nombre: (v.nombre || '') + (v.apellido ? ' ' + v.apellido : ''),
@@ -351,7 +351,7 @@ function _lzEnrich(c) {
   // Compat backward → _s y _p
   c._s = c._semaforo === 'rojo' ? 'r' : c._semaforo === 'naranja' ? 'n' : c._semaforo === 'amarillo' ? 'a' : c._semaforo === 'verde' ? 'v' : 'b';
   c._p = c._prioridad;
-  if (!c.mora) { try { c.mora = c.mora_json ? JSON.parse(c.mora_json) : []; } catch(e) { c.mora = []; } }
+  if (!c.mora) { try { c.mora = c.mora_json ? (typeof c.mora_json === 'string' ? JSON.parse(c.mora_json) : c.mora_json) : []; } catch(e) { c.mora = []; } }
   if (c.fecha_viaje) {
     var parts = String(c.fecha_viaje).split('-');
     var fv = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
@@ -933,7 +933,7 @@ function renderMisComisionesGerente() {
   });
   var totalNeta = Math.round((totalBase + totalBonus) * 100) / 100;
   var comps = [];
-  if (yo && yo.comprobantes_json) { try { comps = JSON.parse(yo.comprobantes_json); } catch(e) {} }
+  if (yo && yo.comprobantes_json) { try { comps = typeof yo.comprobantes_json === 'string' ? JSON.parse(yo.comprobantes_json) : yo.comprobantes_json; } catch(e) { comps = []; } }
   else if (yo && Array.isArray(yo.comprobantes)) { comps = yo.comprobantes; }
   var totalPagado = comps.reduce(function(s, x) { return s + (parseFloat(x.monto) || 0); }, 0);
   var pendiente = Math.max(0, totalNeta - totalPagado);
@@ -1000,7 +1000,7 @@ function verCompGerente(idx) {
   var yo = window._gerenteProfile;
   if (!yo) return;
   var comps = [];
-  if (yo.comprobantes_json) { try { comps = JSON.parse(yo.comprobantes_json); } catch(e) {} }
+  if (yo.comprobantes_json) { try { comps = typeof yo.comprobantes_json === 'string' ? JSON.parse(yo.comprobantes_json) : yo.comprobantes_json; } catch(e) { comps = []; } }
   var comp = comps[idx];
   if (!comp || !comp.data) return;
   var w = window.open('', '_blank');
@@ -1023,6 +1023,7 @@ function verCompGerente(idx) {
 
 function gLogout() {
   if (window._rtChannel) { window._rtChannel.unsubscribe(); window._rtChannel = null; }
+  if (_notifIntervalJefe) { clearInterval(_notifIntervalJefe); _notifIntervalJefe = null; }
   if (sbClient) { sbClient.auth.signOut().catch(function(e) { console.warn('signOut:', e); }); }
   window._gerenteProfile = null;
   window._gerenteRegionIds = [];
@@ -1746,7 +1747,8 @@ function populateVFilt() {
 }
 
 function esClienteDelJefe(cliente) {
-  var jefeId = window._gerenteProfile ? (window._gerenteProfile.user_id || window._gerenteProfile.id) : null;
+  // manager_id es integer → comparar con .id (integer), NO con .user_id (UUID)
+  var jefeId = window._gerenteProfile ? window._gerenteProfile.id : null;
   if (!jefeId) return false;
   var vendedor = (_memCache[VK] || []).find(function(v) { return String(v.id) === String(cliente.vid); });
   if (!vendedor) return false;
@@ -2566,7 +2568,7 @@ function notificarAsesorMora(clientId) {
     for (var j = 0; j < cs.length; j++) { if (cs[j].id == clientId) { ci = cs[j]; break; } }
     if (ci) {
       var notasActuales = [];
-      try { notasActuales = ci.mora_json ? JSON.parse(ci.mora_json) : (ci.mora || []); } catch(e) { notasActuales = []; }
+      try { notasActuales = ci.mora_json ? (typeof ci.mora_json === 'string' ? JSON.parse(ci.mora_json) : ci.mora_json) : (ci.mora || []); } catch(e) { notasActuales = []; }
       var now = new Date();
       var notaAlerta = {
         fecha: now.getDate() + '/' + (now.getMonth() + 1) + '/' + now.getFullYear(),
@@ -3124,7 +3126,18 @@ async function enviarComprobante(clientId) {
       var upRes = await sbClient.storage.from('comprobantes').upload(filePath, file);
       if (upRes.error) throw upRes.error;
       var urlRes = sbClient.storage.from('comprobantes').getPublicUrl(filePath);
-      publicUrl = urlRes.data.publicUrl;
+      publicUrl = (urlRes.data && urlRes.data.publicUrl) || '';
+    }
+    // FIX-F23b: fecha_vencimiento — cuota 1 = mañana (24h), cuotas 2+ = fin de mes
+    var _fvNow = new Date();
+    var _fechaVenc;
+    if (cuotaNum === 1) {
+      var _maniana = new Date(_fvNow);
+      _maniana.setDate(_maniana.getDate() + 1);
+      _maniana.setHours(23, 59, 59, 999);
+      _fechaVenc = _maniana.toISOString();
+    } else {
+      _fechaVenc = new Date(Date.UTC(_fvNow.getFullYear(), _fvNow.getMonth() + 1, 0, 23, 59, 59, 999)).toISOString();
     }
     var sellerId = window._gerenteProfile ? (parseInt(window._gerenteProfile.id, 10) || null) : null;
     var insRes = await sbClient.from('pagos').insert([{
@@ -3135,6 +3148,7 @@ async function enviarComprobante(clientId) {
       monto_usd:      monto,
       estado:         'pendiente',
       fecha_pago:     fecha,
+      fecha_vencimiento: _fechaVenc,
       comprobante_url: publicUrl || null,
       seller_id:      sellerId
     }]);
@@ -3505,7 +3519,7 @@ window.subirAdjuntoATicketGerente = subirAdjuntoATicketGerente;
 
 var _canalActivoJefe = null;
 var _staffCacheJefe = [];
-var _ROLE_NAMES = {1:'CEO', 2:'Gerente', 3:'Asesor', 4:'Jefe de Ventas', 5:'Admin'};
+var _ROLE_NAMES = {1:'CEO', 2:'Gerente', 3:'Asesor', 4:'Cliente', 5:'Jefe de Ventas'};
 
 async function cargarStaffJefe() {
   if (_staffCacheJefe.length) return _staffCacheJefe;
@@ -3734,8 +3748,46 @@ async function cargarMensajesCanalJefe(canalId) {
     var res = await sbClient.from('mensajes_equipo').select('*').eq('canal_id', canalId).is('respuesta_a', null).order('created_at', { ascending: true });
     if (res.error) throw res.error;
     var mensajes = res.data || [];
+
+    // F21d: Batch query — obtener TODOS los hijos del canal en 1 sola consulta
+    var childrenMap = {};
+    try {
+      var childRes = await sbClient.from('mensajes_equipo').select('*').eq('canal_id', canalId).not('respuesta_a', 'is', null).order('created_at', { ascending: true });
+      if (!childRes.error && childRes.data && childRes.data.length) {
+        for (var ci = 0; ci < childRes.data.length; ci++) {
+          var child = childRes.data[ci];
+          if (!childrenMap[child.respuesta_a]) childrenMap[child.respuesta_a] = [];
+          childrenMap[child.respuesta_a].push(child);
+        }
+      }
+    } catch(childErr) { console.warn('F21d: Error cargando hijos batch:', childErr); }
+
+    // F21d: Batch resolver nombres de usuarios
+    var nameMap = {};
+    var uid = window._gerenteProfile ? window._gerenteProfile.user_id : '';
+    if (uid) nameMap[String(uid)] = window._gerenteProfile.nombre || 'Jefe de Ventas';
+    var vs = _staffCacheJefe.length ? _staffCacheJefe : _memCache[VK] || [];
+    for (var vi = 0; vi < vs.length; vi++) { nameMap[String(vs[vi].user_id)] = vs[vi].nombre; }
+    var allMsgs = mensajes.slice();
+    var childKeys = Object.keys(childrenMap);
+    for (var ck = 0; ck < childKeys.length; ck++) {
+      var arr = childrenMap[childKeys[ck]];
+      for (var ai = 0; ai < arr.length; ai++) allMsgs.push(arr[ai]);
+    }
+    var unknownIds = [];
+    for (var mi = 0; mi < allMsgs.length; mi++) {
+      var rid = allMsgs[mi].remitente_id;
+      if (rid && !nameMap[String(rid)] && unknownIds.indexOf(String(rid)) === -1) unknownIds.push(String(rid));
+    }
+    if (unknownIds.length) {
+      try {
+        var { data: unknownStaff } = await sbClient.from('staff_profiles').select('user_id, nombre').in('user_id', unknownIds);
+        if (unknownStaff) { for (var ui = 0; ui < unknownStaff.length; ui++) { nameMap[String(unknownStaff[ui].user_id)] = unknownStaff[ui].nombre; } }
+      } catch(nameErr) { console.warn('F21d: Error resolviendo nombres batch:', nameErr); }
+    }
+
     var msgsHtml = '';
-    for (var i = 0; i < mensajes.length; i++) { msgsHtml += await renderMensajeJefe(mensajes[i]); }
+    for (var i = 0; i < mensajes.length; i++) { msgsHtml += renderMensajeJefe(mensajes[i], childrenMap, nameMap); }
     if (!msgsHtml) msgsHtml = '<div style="text-align:center;padding:40px;color:var(--muted);">Sin mensajes. S\u00e9 el primero en escribir.</div>';
     panel.innerHTML =
       '<div id="msgsScrollAreaJefe" style="flex:1;overflow-y:auto;padding:16px;max-height:420px;">' + msgsHtml + '</div>' +
@@ -3754,16 +3806,15 @@ async function cargarMensajesCanalJefe(canalId) {
 }
 var cargarMensajesCanalGerente = cargarMensajesCanalJefe;
 
-async function renderMensajeJefe(m) {
-  var remitente = await getUserNameJefe(m.remitente_id);
+function renderMensajeJefe(m, childrenMap, nameMap) {
+  var remitente = (nameMap && nameMap[String(m.remitente_id)]) || m.remitente_nombre || 'Usuario';
   var fecha = m.created_at ? new Date(m.created_at).toLocaleString('es-AR', { day:'2-digit', month:'2-digit', year:'2-digit', hour:'2-digit', minute:'2-digit' }) : '';
   var uid = window._gerenteProfile ? window._gerenteProfile.user_id : '';
   var esMio = uid && String(m.remitente_id) === String(uid);
   var respuestasHtml = '';
-  try {
-    var hijosRes = await sbClient.from('mensajes_equipo').select('*').eq('respuesta_a', m.id).order('created_at', { ascending: true });
-    if (!hijosRes.error && hijosRes.data) { for (var i = 0; i < hijosRes.data.length; i++) { respuestasHtml += await renderMensajeJefe(hijosRes.data[i]); } }
-  } catch(e) {}
+  // F21d: Usar childrenMap precargado en vez de query individual
+  var hijos = (childrenMap && childrenMap[m.id]) || [];
+  if (hijos.length) { for (var i = 0; i < hijos.length; i++) { respuestasHtml += renderMensajeJefe(hijos[i], childrenMap, nameMap); } }
   return '<div style="margin-bottom:16px;padding-left:' + (m.respuesta_a ? '24px' : '0') + ';border-left:' + (m.respuesta_a ? '3px solid var(--border2)' : 'none') + ';">' +
     '<div style="background:' + (esMio ? 'rgba(103,232,249,.07)' : 'rgba(255,255,255,.03)') + ';border:1px solid ' + (esMio ? 'rgba(103,232,249,.2)' : 'var(--border)') + ';border-radius:12px;padding:12px 14px;">' +
       '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">' +
@@ -3989,8 +4040,8 @@ async function renderMiLegajoJefe() {
 
   // Comprobantes
   let comps = [];
-  if (yo.comprobantes_json) {
-    try { comps = JSON.parse(yo.comprobantes_json); } catch(e) {}
+  if (yo && yo.comprobantes_json) {
+    try { comps = typeof yo.comprobantes_json === 'string' ? JSON.parse(yo.comprobantes_json) : yo.comprobantes_json; } catch(e) { comps = []; }
   }
   const compsHtml = comps.length
     ? comps.map((c, idx) => `
@@ -4195,8 +4246,9 @@ function verDetalleProspectoJefe(id) {
 
 window.verCompJefe = function(idx) {
   var yo = window._gerenteProfile;
+  if (!yo) return;
   var comps = [];
-  if (yo.comprobantes_json) { try { comps = JSON.parse(yo.comprobantes_json); } catch(e) {} }
+  if (yo.comprobantes_json) { try { comps = typeof yo.comprobantes_json === 'string' ? JSON.parse(yo.comprobantes_json) : yo.comprobantes_json; } catch(e) { comps = []; } }
   var comp = comps[idx];
   if (!comp || !comp.data) return;
   var w = window.open('', '_blank');

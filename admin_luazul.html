@@ -60,7 +60,7 @@ function formatDateLocal(iso) {
 // ── 3. MAPEADORES ────────────────────────────────────────────
 function mapStaffFromSB(v) {
   var comps = [];
-  if (v.comprobantes_json) { try { comps = JSON.parse(v.comprobantes_json); } catch(e) {} }
+  if (v.comprobantes_json) { try { comps = typeof v.comprobantes_json === 'string' ? JSON.parse(v.comprobantes_json) : v.comprobantes_json; } catch(e) { comps = []; } }
   return {
     id: v.id, user_id: v.user_id,
     nombre: (v.nombre || '') + (v.apellido ? ' ' + v.apellido : ''),
@@ -111,7 +111,7 @@ function enrich(c) {
   else if (pct >= 60)                                         { c._semaforo = 'naranja';  c._prioridad = 3; }
   else if (pct >= 40)                                         { c._semaforo = 'amarillo'; c._prioridad = 4; }
   else                                                        { c._semaforo = 'verde';    c._prioridad = 5; }
-  if (!c.mora) { try { c.mora = c.mora_json ? JSON.parse(c.mora_json) : []; } catch(e) { c.mora = []; } }
+  if (!c.mora) { try { c.mora = c.mora_json ? (typeof c.mora_json === 'string' ? JSON.parse(c.mora_json) : c.mora_json) : []; } catch(e) { c.mora = []; } }
   if (c.fecha_viaje) {
     var parts = String(c.fecha_viaje).split('-');
     var fv = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
@@ -1161,6 +1161,7 @@ function startLoginBlock() {
 
 function adminLogout() {
   if (sbClient) sbClient.auth.signOut().catch(function(){});
+  if (_adminNotifInterval) { clearInterval(_adminNotifInterval); _adminNotifInterval = null; }
   _currentProfile = null;
   allClients = [];
   try { sessionStorage.removeItem('luazul_admin'); sessionStorage.removeItem('luazul_asesor_user'); } catch(e){}
@@ -1203,8 +1204,14 @@ async function loadClients() {
 }
 
 async function syncData() {
-  await loadClients();
-  refreshAdminNotifBadge();
+  try {
+    await loadClients();
+    refreshAdminNotifBadge();
+    showToast('✅ Datos sincronizados correctamente');
+  } catch (e) {
+    console.error('syncData:', e);
+    showToast('❌ Error al sincronizar: ' + (e.message || ''), 'warn');
+  }
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -1670,10 +1677,10 @@ function openMoraModal(clientId) {
     for (var i=0;i<mora.length;i++) {
       var m = mora[i];
       histHTML += '<div class="mora-entry">'+
-        '<div class="me-date">'+m.fecha+(m.resuelta?' <span class="me-resolved">✅ Resuelta</span>':'')+'</div>'+
-        '<div class="me-motivo">📌 '+m.motivo+'</div>'+
-        '<div class="me-compromiso">📅 Compromiso: '+m.compromiso+'</div>'+
-        (m.contacto?'<div style="font-size:.72rem;color:var(--muted);margin-top:3px;">Contacto: '+m.contacto+'</div>':'')+
+        '<div class="me-date">'+esc(m.fecha)+(m.resuelta?' <span class="me-resolved">✅ Resuelta</span>':'')+'</div>'+
+        '<div class="me-motivo">📌 '+esc(m.motivo)+'</div>'+
+        '<div class="me-compromiso">📅 Compromiso: '+esc(m.compromiso)+'</div>'+
+        (m.contacto?'<div style="font-size:.72rem;color:var(--muted);margin-top:3px;">Contacto: '+esc(m.contacto)+'</div>':'')+
         (!m.resuelta?'<button onclick="resolverMora(\''+c.id+'\','+i+')" style="margin-top:6px;padding:4px 10px;background:var(--green-bg);color:var(--green);border:1px solid var(--green-bd);border-radius:6px;font-size:.72rem;font-weight:700;cursor:pointer;font-family:inherit;">✅ Marcar como resuelta</button>':'')+
         '</div>';
     }
@@ -2064,6 +2071,17 @@ async function enviarComprobante(clientId) {
     }
 
     // ── Insertar registro de pago con URL pública ─────────────
+    // FIX-F23d: fecha_vencimiento — cuota 1 = mañana (24h), cuotas 2+ = fin de mes
+    var _fvNow = new Date();
+    var _fechaVenc;
+    if (cuotaNum === 1) {
+      var _maniana = new Date(_fvNow);
+      _maniana.setDate(_maniana.getDate() + 1);
+      _maniana.setHours(23, 59, 59, 999);
+      _fechaVenc = _maniana.toISOString();
+    } else {
+      _fechaVenc = new Date(Date.UTC(_fvNow.getFullYear(), _fvNow.getMonth() + 1, 0, 23, 59, 59, 999)).toISOString();
+    }
     var insRes = await sbClient.from('pagos').insert([{
       cliente_id:      parseInt(c.id, 10),
       cliente_nombre:  c.nombre,
@@ -2072,6 +2090,7 @@ async function enviarComprobante(clientId) {
       monto_usd:       monto,
       estado:          'pendiente',
       fecha_pago:      fecha || new Date().toISOString().slice(0, 10),
+      fecha_vencimiento: _fechaVenc,
       comprobante_url: publicUrl || null,
       seller_id:       _currentProfile ? (parseInt(_currentProfile.id, 10) || null) : null
     }]);
@@ -2194,7 +2213,7 @@ function renderMisComisionesAdmin() {
 
   var comps = [];
   if (yo.comprobantes_json) {
-    try { comps = JSON.parse(yo.comprobantes_json); } catch(e) {}
+    try { comps = typeof yo.comprobantes_json === 'string' ? JSON.parse(yo.comprobantes_json) : yo.comprobantes_json; } catch(e) { comps = []; }
   }
   var compsHTML = comps.length
     ? '<div style="display:flex;flex-direction:column;gap:8px;">' +
@@ -2245,7 +2264,8 @@ function renderMisComisionesAdmin() {
 
 function verCompAdmin(idx) {
   if (!_currentProfile) return;
-  var comps=[]; try { comps=JSON.parse(_currentProfile.comprobantes_json||'[]'); } catch(e){}
+  var cj = _currentProfile.comprobantes_json;
+  var comps=[]; try { comps = cj ? (typeof cj === 'string' ? JSON.parse(cj) : cj) : []; } catch(e){ comps = []; }
   var comp=comps[idx]; if (!comp||!comp.data) return;
   var w=window.open('','_blank'); w.document.open(); w.document.close();
   if (comp.tipo&&comp.tipo.indexOf('image')===0) { var img=w.document.createElement('img'); img.src=comp.data; img.style.cssText='max-width:100%;margin:auto;display:block;'; w.document.body.appendChild(img); }
@@ -2769,7 +2789,7 @@ async function addClient() {
 // ──────────────────────────────────────────────────────────────────────────
 // 32. INICIALIZACIÓN
 // ──────────────────────────────────────────────────────────────────────────
-setInterval(refreshAdminNotifBadge, 30000);
+var _adminNotifInterval = setInterval(refreshAdminNotifBadge, 30000);
 
 // ===================== TICKETS (ASESOR) =====================
 var _ticketsCacheAsesor = [];
@@ -3112,13 +3132,32 @@ async function cargarMensajesCanal(canalId) {
       .is('respuesta_a', null)
       .order('created_at', { ascending: true });
     if (error) throw error;
+
+    // F21b: Batch query — obtener TODOS los hijos del canal en 1 sola consulta
+    var childrenMap = {};
+    try {
+      var { data: allChildren } = await sbClient
+        .from('mensajes_equipo')
+        .select('*')
+        .eq('canal_id', canalId)
+        .not('respuesta_a', 'is', null)
+        .order('created_at', { ascending: true });
+      if (allChildren && allChildren.length) {
+        for (var ci = 0; ci < allChildren.length; ci++) {
+          var child = allChildren[ci];
+          if (!childrenMap[child.respuesta_a]) childrenMap[child.respuesta_a] = [];
+          childrenMap[child.respuesta_a].push(child);
+        }
+      }
+    } catch(childErr) { console.warn('F21b: Error cargando hijos batch:', childErr); }
+
     var html = '<div style="display:flex;flex-direction:column;height:100%;">';
     html += '<div style="flex:1;overflow-y:auto;padding:20px;max-height:420px;">';
     if (!mensajes || !mensajes.length) {
       html += '<div style="text-align:center;color:var(--muted);padding:40px;font-size:.88rem;">Sin mensajes en este canal todavía.</div>';
     } else {
       for (var i = 0; i < mensajes.length; i++) {
-        html += await renderMensaje(mensajes[i]);
+        html += renderMensaje(mensajes[i], childrenMap);
       }
     }
     html += '</div>';
@@ -3135,18 +3174,16 @@ async function cargarMensajesCanal(canalId) {
   }
 }
 
-async function renderMensaje(m) {
+function renderMensaje(m, childrenMap) {
   var remitente = m.remitente_nombre || m.remitente_id || 'Usuario';
-  // Cargar respuestas anidadas
+  // F21b: Usar childrenMap precargado en vez de query individual
   var respuestasHtml = '';
-  try {
-    var { data: hijos } = await sbClient.from('mensajes_equipo').select('*').eq('respuesta_a', m.id).order('created_at');
-    if (hijos && hijos.length) {
-      for (var i = 0; i < hijos.length; i++) {
-        respuestasHtml += await renderMensaje(hijos[i]);
-      }
+  var hijos = (childrenMap && childrenMap[m.id]) || [];
+  if (hijos.length) {
+    for (var i = 0; i < hijos.length; i++) {
+      respuestasHtml += renderMensaje(hijos[i], childrenMap);
     }
-  } catch(e) {}
+  }
   var tipoColor = m.tipo_mensaje === 'urgente' ? 'var(--red)' : m.tipo_mensaje === 'aviso' ? 'var(--accent2)' : 'var(--muted)';
   return '<div style="border-left:3px solid var(--border2);padding-left:14px;margin-bottom:16px;">' +
     '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">' +
@@ -3341,16 +3378,28 @@ async function cargarPresupuestos() {
             return;
         }
 
+        // F21a: Batch query — obtener todos los presupuestos de los prospectos filtrados en 1 sola consulta
+        var prospectIds = filtered.map(function(p) { return p.id; });
+        var presupMap = {};
+        try {
+            var { data: allPresup } = await sbClient
+                .from('presupuestos')
+                .select('prospecto_id, pdf_url, created_at')
+                .in('prospecto_id', prospectIds)
+                .order('created_at', { ascending: false });
+            if (allPresup && allPresup.length) {
+                for (var pi = 0; pi < allPresup.length; pi++) {
+                    var pr = allPresup[pi];
+                    if (!presupMap[pr.prospecto_id]) presupMap[pr.prospecto_id] = pr;
+                }
+            }
+        } catch(presupErr) { console.warn('F21a: Error cargando presupuestos batch:', presupErr); }
+
         let html = '';
         for (const p of filtered) {
-            const { data: presup } = await sbClient
-                .from('presupuestos')
-                .select('pdf_url, created_at')
-                .eq('prospecto_id', p.id)
-                .order('created_at', { ascending: false })
-                .limit(1);
-            const pdfUrl = presup && presup.length ? presup[0].pdf_url : null;
-            const fechaPresu = presup && presup.length ? new Date(presup[0].created_at).toLocaleDateString('es-AR') : '—';
+            var latestPresup = presupMap[p.id] || null;
+            const pdfUrl = latestPresup ? latestPresup.pdf_url : null;
+            const fechaPresu = latestPresup ? new Date(latestPresup.created_at).toLocaleDateString('es-AR') : '—';
             const estadoColor = p.estado === 'nuevo' ? '#22c55e' : (p.estado === 'contactado' ? '#f59e0b' : (p.estado === 'cerrado' ? '#6ee7b7' : '#f87171'));
 
             html += `

@@ -299,7 +299,7 @@ function _lzFmtDateLocal(iso) {
 // ── 3. MAPEADORES ────────────────────────────────────────────────
 function _lzMapStaff(v) {
   var comps = [];
-  if (v.comprobantes_json) { try { comps = JSON.parse(v.comprobantes_json); } catch(e) {} }
+  if (v.comprobantes_json) { try { comps = typeof v.comprobantes_json === 'string' ? JSON.parse(v.comprobantes_json) : v.comprobantes_json; } catch(e) { comps = []; } }
   return {
     id: v.id, user_id: v.user_id,
     nombre: (v.nombre || '') + (v.apellido ? ' ' + v.apellido : ''),
@@ -351,7 +351,7 @@ function _lzEnrich(c) {
   // Compat backward → _s y _p
   c._s = c._semaforo === 'rojo' ? 'r' : c._semaforo === 'naranja' ? 'n' : c._semaforo === 'amarillo' ? 'a' : c._semaforo === 'verde' ? 'v' : 'b';
   c._p = c._prioridad;
-  if (!c.mora) { try { c.mora = c.mora_json ? JSON.parse(c.mora_json) : []; } catch(e) { c.mora = []; } }
+  if (!c.mora) { try { c.mora = c.mora_json ? (typeof c.mora_json === 'string' ? JSON.parse(c.mora_json) : c.mora_json) : []; } catch(e) { c.mora = []; } }
   if (c.fecha_viaje) {
     var parts = String(c.fecha_viaje).split('-');
     var fv = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
@@ -662,7 +662,7 @@ function _sbLoad() { return loadClients(); }
     <div class="tabpg" id="tabpg-passwords">
       <div class="sec-head"><h2>🔑 Gestión de Contraseñas</h2></div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;">
-        <div style="background:var(--surface);border:1px solid rgba(167,139,250,.25);border-radius:14px;padding:20px;"><div style="font-size:.7rem;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#a78bfa;margin-bottom:14px;">🏛 Cuenta Gerencia</div><div class="mitem"><div class="ml">Usuario</div><input class="medit" id="pw-guser" value="gerente" /></div><div class="mitem" style="margin-top:8px;"><div class="ml">Contraseña</div><input class="medit" id="pw-gpass" type="text" value="Gerente#2026!" /></div><button class="addbtn" onclick="saveGerPass()" style="margin-top:12px;width:100%;justify-content:center;font-size:.8rem;background:linear-gradient(135deg,#7c3aed,#a78bfa);">💾 Guardar</button></div>
+        <div style="background:var(--surface);border:1px solid rgba(167,139,250,.25);border-radius:14px;padding:20px;"><div style="font-size:.7rem;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#a78bfa;margin-bottom:14px;">🏛 Cuenta Gerencia</div><div class="mitem"><div class="ml">Usuario</div><input class="medit" id="pw-guser" value="gerente" /></div><div class="mitem" style="margin-top:8px;"><div class="ml">Contraseña</div><input class="medit" id="pw-gpass" type="password" value="" placeholder="••••••••••" /></div><button class="addbtn" onclick="saveGerPass()" style="margin-top:12px;width:100%;justify-content:center;font-size:.8rem;background:linear-gradient(135deg,#7c3aed,#a78bfa);">💾 Guardar</button></div>
         <div style="background:var(--surface);border:1px solid var(--gold-bd);border-radius:14px;padding:20px;"><div style="font-size:.7rem;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--gold);margin-bottom:14px;">👔 Asesores de Ventas</div><div id="pwVendors"></div></div>
         <div style="background:var(--surface);border:1px solid var(--blue-bd);border-radius:14px;padding:20px;"><div style="font-size:.7rem;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#93c5fd;margin-bottom:14px;">👥 Clientes</div><div class="sbox" style="margin-bottom:10px;"><span>🔍</span><input type="text" id="pwClientSearch" placeholder="Buscar cliente..." oninput="renderPwClients()" /></div><div id="pwClients" style="max-height:400px;overflow-y:auto;"></div></div>
       </div>
@@ -1012,7 +1012,7 @@ function renderMisComisionesGerente() {
   });
   var totalNeta = Math.round((totalBase + totalBonus) * 100) / 100;
   var comps = [];
-  if (yo && yo.comprobantes_json) { try { comps = JSON.parse(yo.comprobantes_json); } catch(e) {} }
+  if (yo && yo.comprobantes_json) { try { comps = typeof yo.comprobantes_json === 'string' ? JSON.parse(yo.comprobantes_json) : yo.comprobantes_json; } catch(e) { comps = []; } }
   else if (yo && Array.isArray(yo.comprobantes)) { comps = yo.comprobantes; }
   var totalPagado = comps.reduce(function(s, x) { return s + (parseFloat(x.monto) || 0); }, 0);
   var pendiente = Math.max(0, totalNeta - totalPagado);
@@ -1079,7 +1079,7 @@ function verCompGerente(idx) {
   var yo = window._gerenteProfile;
   if (!yo) return;
   var comps = [];
-  if (yo.comprobantes_json) { try { comps = JSON.parse(yo.comprobantes_json); } catch(e) {} }
+  if (yo.comprobantes_json) { try { comps = typeof yo.comprobantes_json === 'string' ? JSON.parse(yo.comprobantes_json) : yo.comprobantes_json; } catch(e) { comps = []; } }
   var comp = comps[idx];
   if (!comp || !comp.data) return;
   var w = window.open('', '_blank');
@@ -1102,6 +1102,7 @@ function verCompGerente(idx) {
 
 function gLogout() {
   if (window._rtChannel) { window._rtChannel.unsubscribe(); window._rtChannel = null; }
+  if (_notifIntervalGerente) { clearInterval(_notifIntervalGerente); _notifIntervalGerente = null; }
   if (sbClient) { sbClient.auth.signOut().catch(function(e) { console.warn('signOut:', e); }); }
   window._gerenteProfile = null;
   window._gerenteRegionIds = [];
@@ -2715,7 +2716,7 @@ function notificarAsesorMora(clientId) {
     for (var j = 0; j < cs.length; j++) { if (cs[j].id == clientId) { ci = cs[j]; break; } }
     if (ci) {
       var notasActuales = [];
-      try { notasActuales = ci.mora_json ? JSON.parse(ci.mora_json) : (ci.mora || []); } catch(e) { notasActuales = []; }
+      try { notasActuales = ci.mora_json ? (typeof ci.mora_json === 'string' ? JSON.parse(ci.mora_json) : ci.mora_json) : (ci.mora || []); } catch(e) { notasActuales = []; }
       var now = new Date();
       var notaAlerta = {
         fecha: now.getDate() + '/' + (now.getMonth() + 1) + '/' + now.getFullYear(),
@@ -3273,7 +3274,18 @@ async function enviarComprobante(clientId) {
       var upRes = await sbClient.storage.from('comprobantes').upload(filePath, file);
       if (upRes.error) throw upRes.error;
       var urlRes = sbClient.storage.from('comprobantes').getPublicUrl(filePath);
-      publicUrl = urlRes.data.publicUrl;
+      publicUrl = (urlRes.data && urlRes.data.publicUrl) || '';
+    }
+    // FIX-F23c: fecha_vencimiento — cuota 1 = mañana (24h), cuotas 2+ = fin de mes
+    var _fvNow = new Date();
+    var _fechaVenc;
+    if (cuotaNum === 1) {
+      var _maniana = new Date(_fvNow);
+      _maniana.setDate(_maniana.getDate() + 1);
+      _maniana.setHours(23, 59, 59, 999);
+      _fechaVenc = _maniana.toISOString();
+    } else {
+      _fechaVenc = new Date(Date.UTC(_fvNow.getFullYear(), _fvNow.getMonth() + 1, 0, 23, 59, 59, 999)).toISOString();
     }
     var sellerId = window._gerenteProfile ? (parseInt(window._gerenteProfile.id, 10) || null) : null;
     var insRes = await sbClient.from('pagos').insert([{
@@ -3284,6 +3296,7 @@ async function enviarComprobante(clientId) {
       monto_usd:      monto,
       estado:         'pendiente',
       fecha_pago:     fecha,
+      fecha_vencimiento: _fechaVenc,
       comprobante_url: publicUrl || null,
       seller_id:      sellerId
     }]);
@@ -3650,7 +3663,7 @@ window.subirAdjuntoATicketGerente = subirAdjuntoATicketGerente;
 
 var _canalActivoGerente = null;
 var _staffCacheGerente = [];
-var _ROLE_NAMES = {1:'CEO', 2:'Gerente', 3:'Asesor', 4:'Jefe de Ventas', 5:'Admin'};
+var _ROLE_NAMES = {1:'CEO', 2:'Gerente', 3:'Asesor', 4:'Cliente', 5:'Jefe de Ventas'};
 
 async function cargarStaffGerente() {
   if (_staffCacheGerente.length) return _staffCacheGerente;
@@ -3887,9 +3900,51 @@ async function cargarMensajesCanalGerente(canalId) {
     if (res.error) throw res.error;
     var mensajes = res.data || [];
 
+    // F21c: Batch query — obtener TODOS los hijos del canal en 1 sola consulta
+    var childrenMap = {};
+    try {
+      var childRes = await sbClient.from('mensajes_equipo')
+        .select('*')
+        .eq('canal_id', canalId)
+        .not('respuesta_a', 'is', null)
+        .order('created_at', { ascending: true });
+      if (!childRes.error && childRes.data && childRes.data.length) {
+        for (var ci = 0; ci < childRes.data.length; ci++) {
+          var child = childRes.data[ci];
+          if (!childrenMap[child.respuesta_a]) childrenMap[child.respuesta_a] = [];
+          childrenMap[child.respuesta_a].push(child);
+        }
+      }
+    } catch(childErr) { console.warn('F21c: Error cargando hijos batch:', childErr); }
+
+    // F21c: Batch resolver nombres de usuarios — recolectar IDs únicos
+    var nameMap = {};
+    var myUserId = window._gerenteProfile ? window._gerenteProfile.user_id : null;
+    if (myUserId) nameMap[String(myUserId)] = window._gerenteProfile.nombre || 'Gerente';
+    var vs = _staffCacheGerente.length ? _staffCacheGerente : _memCache[VK] || [];
+    for (var vi = 0; vi < vs.length; vi++) { nameMap[String(vs[vi].user_id)] = vs[vi].nombre; }
+    // Recolectar IDs de mensajes (raíz + hijos) que no están en cache
+    var allMsgs = mensajes.slice();
+    var childKeys = Object.keys(childrenMap);
+    for (var ck = 0; ck < childKeys.length; ck++) {
+      var arr = childrenMap[childKeys[ck]];
+      for (var ai = 0; ai < arr.length; ai++) allMsgs.push(arr[ai]);
+    }
+    var unknownIds = [];
+    for (var mi = 0; mi < allMsgs.length; mi++) {
+      var rid = allMsgs[mi].remitente_id;
+      if (rid && !nameMap[String(rid)] && unknownIds.indexOf(String(rid)) === -1) unknownIds.push(String(rid));
+    }
+    if (unknownIds.length) {
+      try {
+        var { data: unknownStaff } = await sbClient.from('staff_profiles').select('user_id, nombre').in('user_id', unknownIds);
+        if (unknownStaff) { for (var ui = 0; ui < unknownStaff.length; ui++) { nameMap[String(unknownStaff[ui].user_id)] = unknownStaff[ui].nombre; } }
+      } catch(nameErr) { console.warn('F21c: Error resolviendo nombres batch:', nameErr); }
+    }
+
     var msgsHtml = '';
     for (var i = 0; i < mensajes.length; i++) {
-      msgsHtml += await renderMensajeGerente(mensajes[i]);
+      msgsHtml += renderMensajeGerente(mensajes[i], childrenMap, nameMap);
     }
     if (!msgsHtml) {
       msgsHtml = '<div style="text-align:center;padding:40px;color:var(--muted);">Sin mensajes en este canal. ¡Sé el primero en escribir!</div>';
@@ -3914,23 +3969,21 @@ async function cargarMensajesCanalGerente(canalId) {
   }
 }
 
-async function renderMensajeGerente(m) {
-  var remitente = await getUserNameGerente(m.remitente_id);
+function renderMensajeGerente(m, childrenMap, nameMap) {
+  var remitente = (nameMap && nameMap[String(m.remitente_id)]) || m.remitente_nombre || 'Usuario';
   var fecha = m.created_at ? new Date(m.created_at).toLocaleString('es-AR', { day:'2-digit', month:'2-digit', year:'2-digit', hour:'2-digit', minute:'2-digit' }) : '—';
   var tipoColor = m.tipo_mensaje === 'urgente' ? 'var(--red)' : m.tipo_mensaje === 'aviso' ? 'var(--gold)' : 'var(--blue)';
   var myUserId = window._gerenteProfile ? window._gerenteProfile.user_id : null;
   var esMio = myUserId && String(m.remitente_id) === String(myUserId);
 
-  // Respuestas anidadas
+  // F21c: Usar childrenMap precargado en vez de query individual
   var respuestasHtml = '';
-  try {
-    var hijosRes = await sbClient.from('mensajes_equipo').select('*').eq('respuesta_a', m.id).order('created_at', { ascending: true });
-    if (!hijosRes.error && hijosRes.data) {
-      for (var i = 0; i < hijosRes.data.length; i++) {
-        respuestasHtml += await renderMensajeGerente(hijosRes.data[i]);
-      }
+  var hijos = (childrenMap && childrenMap[m.id]) || [];
+  if (hijos.length) {
+    for (var i = 0; i < hijos.length; i++) {
+      respuestasHtml += renderMensajeGerente(hijos[i], childrenMap, nameMap);
     }
-  } catch(e) { /* sin respuestas */ }
+  }
 
   var idMsg = m.id;
   var idCanal = m.canal_id;
