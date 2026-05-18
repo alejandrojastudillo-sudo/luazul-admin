@@ -268,6 +268,7 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
       <div class="tab" onclick="showTab('simulador')" id="tab-simulador" style="color:#a78bfa;">📊 Simulador</div>
       <div class="tab" onclick="showTab('tickets')" id="tab-tickets" style="color:#fb923c;">🎫 Tickets</div>
       <div class="tab" onclick="showTab('catalogo')" id="tab-catalogo" style="color:#fbbf24;">🏷️ Catálogo</div>
+      <div class="tab" onclick="showTab('nudgequeue')" id="tab-nudgequeue" style="color:#c084fc;">🔔 Nudge Queue</div>
     </div>
 
     <!-- ══ OVERVIEW ══ -->
@@ -399,6 +400,7 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
             <option value="completo">Completo</option>
             <option value="baja">Baja</option>
           </select>
+          <select id="cScoreFilt" onchange="renderClientes()" style="padding:6px 10px;background:rgba(100,160,255,.08);border:1px solid rgba(100,160,255,.2);border-radius:8px;font-size:.75rem;color:#7eb8ff;"><option value="">Score: Todos</option><option value="rojo">Rojo (&lt;40)</option><option value="amarillo">Amarillo (40-69)</option><option value="verde">Verde (70+)</option></select>
         </div>
       </div>
       <div class="twrap">
@@ -667,6 +669,20 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
       </div>
       <div id="auditoriaBody"></div>
     </div>
+
+    <!-- FIX-F24: NUDGE QUEUE TAB -->
+    <div class="tabpg" id="tabpg-nudgequeue">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;">
+        <div>
+          <div style="font-size:1.1rem;font-weight:900;">🔔 Cola de Nudges Proactivos</div>
+          <div style="font-size:.75rem;color:rgba(150,190,255,.6);">Mensajes automáticos programados para clientes y vendedores</div>
+        </div>
+        <div style="display:flex;gap:10px;">
+          <button onclick="ejecutarNudges()" style="padding:8px 16px;background:linear-gradient(135deg,#7c3aed,#6d28d9);border:1px solid rgba(139,92,246,.4);border-radius:10px;font-size:.75rem;font-weight:700;color:white;cursor:pointer;">⚡ Ejecutar Pendientes</button>
+        </div>
+      </div>
+      <div id="nudgeQueueList"></div>
+    </div>
   </main>
 </div>
 
@@ -682,7 +698,7 @@ var ROLE_MANAGER = 2;  // Gerente
 var ROLE_SELLER  = 3;  // Asesor/Vendedor
 var ROLE_SALES_LEADER = 5; // Jefe de Ventas
 var RK = 'luazul_ceo_regiones';
-var _cacheGerentes=null, _cacheVendedores=null, _cacheClientes=null, _cachePagos=null, _cacheRegiones=null, _cacheSalesLeaders=null;
+var _cacheGerentes=null, _cacheVendedores=null, _cacheClientes=null, _cachePagos=null, _cacheNudges=null, _cacheRegiones=null, _cacheSalesLeaders=null;
 // UUID del CEO autenticado — se setea en cLogin / DOMContentLoaded
 // Necesario para RPC resolver_mora(p_aprobado_por)
 var _ceoUid = null;
@@ -754,7 +770,7 @@ function cargarDatosSupabase(){
           comprobantes:_parseJSON(r.comprobantes_json,[]),_raw:r};
       });
       return sbClient.from('clientes')
-        .select('id,user_id,seller_id,nombre,email,telefono,documento,estado,destino,paquete,fecha_viaje,monto_cuota,cuotas_total,cuotas_pagadas,total_usd,fecha_alta,notas,region_id');
+        .select('id,user_id,seller_id,nombre,email,telefono,documento,estado,destino,paquete,fecha_viaje,monto_cuota,cuotas_total,cuotas_pagadas,total_usd,fecha_alta,notas,region_id,health_score');
     })
     .then(function(cRes){
       if(cRes.error) throw cRes.error;
@@ -766,7 +782,16 @@ function cargarDatosSupabase(){
     .then(function(pRes){
       if(pRes.error) throw pRes.error;
       _cachePagos=pRes.data||[];
+      // FIX-F24: Cargar nudge schedule para tab Nudge Queue
+      return sbClient.from('nudge_schedule')
+        .select('*')
+        .eq('enviado', false)
+        .order('programado_para', {ascending:true})
+        .limit(200);
+    }).then(function(nRes){
+      if(!nRes.error) _cacheNudges=nRes.data||[];
       showToast('✅ Datos cargados desde Supabase');
+      if(typeof renderNudgeQueue === 'function') renderNudgeQueue();
     })
     .catch(onError);
 }
@@ -792,7 +817,7 @@ function mapVendedor(r){
 function mapCliente(r){
   return{id:r.id,user_id:r.user_id,vid:r.seller_id||'',rid:r.region_id||'',
     nombre:r.nombre||'',email:r.email||'',telefono:r.telefono||'',
-    documento:r.documento||'',estado:r.estado||'activo',
+    documento:r.documento||'',estado:r.estado||'activo',score:r.health_score||50,
     destino:r.destino||'',paquete:r.paquete||'',fecha_viaje:r.fecha_viaje||'',
     monto_cuota:parseFloat(r.monto_cuota)||0,cuotas_total:parseInt(r.cuotas_total)||10,
     cuotas_pagadas:parseInt(r.cuotas_pagadas)||0,total_usd:parseFloat(r.total_usd)||0,
@@ -1527,6 +1552,8 @@ function showTab(id){
   if(id==='catalogo')          renderCatalogo();
   if(id==='premios_referidos') renderPremiosReferidos();
   if(id==='auditoria')         renderAuditoria();
+  // FIX-F24: Nudge Queue tab
+  if(id==='nudgequeue')        renderNudgeQueue();
 }
 
 // ── POPULATE FILTERS ─────────────────────────────────
@@ -2298,9 +2325,12 @@ function renderClientes(){
   var srch=(document.getElementById('cliSearch')||{}).value||'';
   var rf=(document.getElementById('cliRegFilt')||{}).value||'';
   var ef=(document.getElementById('cliEstFilt')||{}).value||'';
+  var scoreFilt=(document.getElementById('cScoreFilt')||{}).value||'';
   if(srch)allCs=allCs.filter(function(c){return (c.nombre||'').toLowerCase().indexOf(srch.toLowerCase())!==-1||(c.email||'').toLowerCase().indexOf(srch.toLowerCase())!==-1;});
   if(rf) allCs=allCs.filter(function(c){return String(c.rid)===String(rf);});
   if(ef) allCs=allCs.filter(function(c){return c.estado===ef;});
+  // FIX-F24: Score filter
+  if(scoreFilt) allCs=allCs.filter(function(c){ return (scoreFilt==='rojo' && (c.score||50)<40) || (scoreFilt==='amarillo' && (c.score||50)>=40 && (c.score||50)<70) || (scoreFilt==='verde' && (c.score||50)>=70); });
   // FIX H5: Paginación (100 por página en vez de hard-cap 150)
   var _CLI_PPG = 100;
   if(!window._cliPage) window._cliPage = 1;
@@ -2315,6 +2345,7 @@ function renderClientes(){
     return '<div class="trow-ceo" style="grid-template-columns:10px 2fr 1.4fr 1fr 90px 100px 80px 80px;">'
       +'<div class="sem '+c._s+'"></div>'
       +'<div><div style="font-size:.84rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+c.nombre+'</div>'
+      +'<div style="display:flex;align-items:center;gap:6px;margin-top:3px;"><div style="width:8px;height:8px;border-radius:50%;background:' + ((c.score||50)>=70?'#34d399':(c.score||50)>=40?'#fbbf24':'#f87171') + ';"></div><span style="font-size:.65rem;font-weight:700;color:' + ((c.score||50)>=70?'#34d399':(c.score||50)>=40?'#fbbf24':'#f87171') + ';">Score ' + (c.score||50) + '/100</span></div>'
       +'<div style="font-size:.66rem;color:var(--muted);">'+c.email+'</div></div>'
       +'<div style="font-size:.77rem;"><div>'+v.nombre+'</div><div style="font-size:.65rem;color:var(--muted);">'+r.bandera+' '+r.nombre+'</div></div>'
       +'<div style="font-size:.78rem;">'+c.paquete+'</div>'
@@ -3401,16 +3432,20 @@ function renderPagoComisiones(){
       + '</div>';
   }
 
-  // ── Resumen global al tope
+  // ── Resumen global al tope (FIX: incluir Jefes de Ventas 15%) ──
   var totalPendGer  = gs.reduce(function(s,g){ var cm=calcComisionGerente(g,vs,cs); return s+cm.pendiente; },0);
   var totalPendVend = vs.reduce(function(s,v){ var cm=calcComision(v,cs); var pagado=(v.comprobantes||[]).reduce(function(a,x){return a+(parseFloat(x.monto)||0);},0); return s+Math.max(0,cm.neta-pagado); },0);
-  var totalPend = totalPendGer + totalPendVend;
+  // FIX: Agregar comisiones pendientes de Jefes de Ventas (15%)
+  var totalPendJefe = jfs.reduce(function(s,j){ var cmJ=calcComisionJefe(j,cs,vs); var pagadoJ=(j.comprobantes||[]).reduce(function(a,x){return a+(parseFloat(x.monto)||0);},0); return s+Math.max(0,cmJ.neta-pagadoJ); },0);
+  var totalPend = totalPendGer + totalPendVend + totalPendJefe;
 
   var resumen = '<div style="background:rgba(74,222,128,.06);border:1px solid rgba(74,222,128,.2);border-radius:14px;padding:14px 20px;margin-bottom:22px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">'
     + '<div><div style="font-size:.62rem;color:rgba(180,200,240,.5);margin-bottom:2px;">TOTAL PENDIENTE DE PAGO</div>'
     + '<div style="font-family:\'Syne\',sans-serif;font-size:1.6rem;font-weight:900;color:'+(totalPend>0?'#fbbf24':'#4ade80')+';">'+fmtM(totalPend)+'</div></div>'
     + '<div style="display:flex;gap:16px;">'
-    + '<div style="text-align:center;"><div style="font-size:.6rem;color:rgba(180,200,240,.4);">Gerentes</div><div style="font-size:1rem;font-weight:800;color:#f59e0b;">'+fmtM(totalPendGer)+'</div></div>'
+    + '<div style="text-align:center;"><div style="font-size:.6rem;color:rgba(180,200,240,.4);">Gerentes (5%)</div><div style="font-size:1rem;font-weight:800;color:#f59e0b;">'+fmtM(totalPendGer)+'</div></div>'
+    + '<div style="width:1px;background:rgba(255,255,255,.08);"></div>'
+    + '<div style="text-align:center;"><div style="font-size:.6rem;color:rgba(180,200,240,.4);">Jefes (15%)</div><div style="font-size:1rem;font-weight:800;color:var(--gold);">'+fmtM(totalPendJefe)+'</div></div>'
     + '<div style="width:1px;background:rgba(255,255,255,.08);"></div>'
     + '<div style="text-align:center;"><div style="font-size:.6rem;color:rgba(180,200,240,.4);">Asesores</div><div style="font-size:1rem;font-weight:800;color:#a78bfa;">'+fmtM(totalPendVend)+'</div></div>'
     + '</div></div>';
@@ -3449,12 +3484,41 @@ function renderPagoComisiones(){
               + '</div>';
           }).join('')
         : '<div style="font-size:.72rem;color:rgba(180,200,240,.35);padding:6px 0;">Sin comprobantes</div>';
-      html+='<div style="background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:20px;margin-bottom:14px;">'
-        +'<div style="display:flex;justify-content:space-between;"><div><strong>🎯 '+esc(jefe.nombre)+'</strong><br><span style="font-size:.7rem;">'+esc(jefe.email||'')+' · '+(rJ?rJ.bandera+' '+rJ.nombre:'—')+' · Equipo: '+cmJ.equipoSize+' vendedores</span></div>'
-        +'<div style="text-align:right;"><span style="color:var(--gold);">Comisión neta: '+fmtM(netaJ)+'</span><br>'
-        +'<span style="font-size:.68rem;color:var(--muted);">Tasa 15% · '+cmJ.totalClientesEquipo+' clientes · Bruta: '+fmtM(cmJ.bruta||0)+'</span>'+(cmJ.penalizacion>0?'<br><span style="font-size:.68rem;color:#f87171;">Penalización: -'+fmtM(cmJ.penalizacion)+'</span>':'')+'<br>'
-        +'<span style="color:var(--green);">Pagado: '+fmtM(pagadoJ)+'</span></div></div>'
-        +'<div style="margin:12px 0;height:6px;background:rgba(255,255,255,.07);border-radius:3px;overflow:hidden;">'
+      html+='<div style="background:rgba(10,15,30,.7);border:1px solid rgba(245,158,11,.2);border-radius:18px;padding:20px;margin-bottom:14px;">'
+        // Header con avatar
+        +'<div style="display:flex;align-items:flex-start;gap:14px;margin-bottom:16px;flex-wrap:wrap;">'
+        +'<div style="width:44px;height:44px;border-radius:11px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.25);display:flex;align-items:center;justify-content:center;font-size:1.2rem;flex-shrink:0;">🎯</div>'
+        +'<div style="flex:1;min-width:120px;">'
+        +'<div style="font-weight:800;font-size:.98rem;">'+esc(jefe.nombre)+'</div>'
+        +'<div style="font-size:.7rem;color:rgba(180,200,240,.5);margin-top:2px;">'+esc(jefe.email||'')+' · '+(rJ?rJ.bandera+' '+rJ.nombre:'—')+' · Equipo: '+cmJ.equipoSize+' vendedores</div>'
+        +'</div>'
+        +estadoBadge(pendJ)
+        +'</div>'
+        // KPIs (mismo nivel que Gerente/Vendedor)
+        +'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px;margin-bottom:16px;">'
+        +'<div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:10px;padding:10px;text-align:center;">'
+        +'<div style="font-size:.6rem;color:rgba(180,200,240,.45);margin-bottom:3px;">BRUTA 15% (1ª cuota)</div>'
+        +'<div style="font-family:\'Syne\',sans-serif;font-size:1.1rem;font-weight:800;color:var(--gold);">'+fmtM(cmJ.bruta||0)+'</div></div>'
+        +'<div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:10px;padding:10px;text-align:center;">'
+        +'<div style="font-size:.6rem;color:rgba(180,200,240,.45);margin-bottom:3px;">CLIENTES EQUIPO</div>'
+        +'<div style="font-family:\'Syne\',sans-serif;font-size:1.1rem;font-weight:800;">'+cmJ.totalClientesEquipo+'</div></div>'
+        +'<div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:10px;padding:10px;text-align:center;">'
+        +'<div style="font-size:.6rem;color:rgba(180,200,240,.45);margin-bottom:3px;">TOTAL NETO</div>'
+        +'<div style="font-family:\'Syne\',sans-serif;font-size:1.1rem;font-weight:800;color:#4ade80;">'+fmtM(netaJ)+'</div></div>'
+        +'<div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:10px;padding:10px;text-align:center;">'
+        +'<div style="font-size:.6rem;color:rgba(180,200,240,.45);margin-bottom:3px;">YA PAGADO</div>'
+        +'<div style="font-family:\'Syne\',sans-serif;font-size:1.1rem;font-weight:800;color:#34d399;">'+fmtM(pagadoJ)+'</div></div>'
+        +(cmJ.penalizacion>0
+          ? '<div style="background:rgba(248,113,113,.06);border:1px solid rgba(248,113,113,.15);border-radius:10px;padding:10px;text-align:center;">'
+            +'<div style="font-size:.6rem;color:rgba(180,200,240,.45);margin-bottom:3px;">PENALIZACIÓN</div>'
+            +'<div style="font-family:\'Syne\',sans-serif;font-size:1.1rem;font-weight:800;color:#f87171;">-'+fmtM(cmJ.penalizacion)+'</div></div>'
+          : '')
+        +'<div style="background:'+(pendJ>0?'rgba(251,191,36,.08)':'rgba(52,211,153,.06)')+';border:1px solid '+(pendJ>0?'rgba(251,191,36,.25)':'rgba(52,211,153,.2)')+';border-radius:10px;padding:10px;text-align:center;">'
+        +'<div style="font-size:.6rem;color:rgba(180,200,240,.45);margin-bottom:3px;">PENDIENTE PAGAR</div>'
+        +'<div style="font-family:\'Syne\',sans-serif;font-size:1.1rem;font-weight:800;color:'+(pendJ>0?'#fbbf24':'#34d399')+';">'+fmtM(pendJ)+'</div></div>'
+        +'</div>'
+        // Progress bar
+        +'<div style="margin-bottom:16px;height:6px;background:rgba(255,255,255,.07);border-radius:3px;overflow:hidden;">'
         +'<div style="height:100%;width:'+pctJ+'%;background:var(--green);border-radius:3px;"></div></div>'
         +'<div style="font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:rgba(180,200,240,.4);margin-bottom:6px;">📎 Comprobantes pagados</div>'
         +'<div style="max-height:120px;overflow-y:auto;margin-bottom:10px;">'+compsRowsJ+'</div>'
@@ -3704,6 +3768,63 @@ async function renderPagosAprobacion() {
   });
   html += '</div>';
   container.innerHTML = html;
+}
+
+// ══════════════════════════════════════════════════════
+//  FIX-F24: NUDGE QUEUE
+// ══════════════════════════════════════════════════════
+function renderNudgeQueue() {
+  var list = document.getElementById('nudgeQueueList');
+  if (!list) return;
+  var nudges = _cacheNudges || [];
+  
+  if (nudges.length === 0) {
+    list.innerHTML = '<div style="text-align:center;padding:50px;background:rgba(5,18,55,.5);border:1px solid rgba(100,160,255,.15);border-radius:18px;"><div style="font-size:2.5rem;margin-bottom:14px;">✅</div><div style="font-size:1rem;font-weight:700;margin-bottom:6px;">Sin nudges pendientes</div><div style="font-size:.78rem;color:rgba(200,220,255,.6);">Todos los recordatorios fueron procesados.</div></div>';
+    return;
+  }
+  
+  var tipoLabels = {
+    'recordatorio_cliente_12h': {icon:'📱',label:'Recordatorio Cliente 12h',color:'#60a5fa'},
+    'alerta_vendedor_6h': {icon:'👨‍💼',label:'Alerta Vendedor 6h',color:'#fbbf24'},
+    'alerta_vendedor_1h': {icon:'🚨',label:'Alerta Vendedor 1h',color:'#f87171'},
+    'alerta_ceo_1h': {icon:'👔',label:'Alerta CEO 1h',color:'#f87171'},
+    'mora_auto': {icon:'⛔',label:'Mora Automática',color:'#ef4444'},
+    'pago_confirmado': {icon:'✅',label:'Pago Confirmado',color:'#34d399'}
+  };
+  
+  var html = '<div style="display:flex;flex-direction:column;gap:10px;">';
+  nudges.forEach(function(n) {
+    var t = tipoLabels[n.tipo_nudge] || {icon:'🔔',label:n.tipo_nudge,color:'#7eb8ff'};
+    var prog = n.programado_para ? new Date(n.programado_para) : null;
+    var progStr = prog ? prog.toLocaleString('es-AR',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) : '—';
+    var esUrgente = prog && (prog - new Date()) < 3600000;
+    
+    html += '<div style="background:rgba(5,18,55,.65);border:1px solid ' + (esUrgente?'rgba(248,113,113,.35)':'rgba(100,160,255,.15)') + ';border-radius:14px;padding:16px;display:flex;align-items:center;gap:14px;">'
+      + '<div style="font-size:1.5rem;">' + t.icon + '</div>'
+      + '<div style="flex:1;">'
+      + '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">'
+      + '<span style="font-size:.78rem;font-weight:700;color:' + t.color + ';">' + t.label + '</span>'
+      + (esUrgente?'<span style="background:rgba(248,113,113,.15);border:1px solid rgba(248,113,113,.3);border-radius:6px;padding:1px 8px;font-size:.6rem;font-weight:700;color:#f87171;">URGENTE</span>':'')
+      + '</div>'
+      + '<div style="font-size:.72rem;color:rgba(200,220,255,.7);">' + (n.mensaje||'—').substring(0,120) + '</div>'
+      + '</div>'
+      + '<div style="text-align:right;min-width:100px;">'
+      + '<div style="font-size:.72rem;color:rgba(200,220,255,.5);">Programado</div>'
+      + '<div style="font-size:.78rem;font-weight:700;color:' + (esUrgente?'#f87171':'#7eb8ff') + ';">' + progStr + '</div>'
+      + '</div>'
+      + '</div>';
+  });
+  html += '</div>';
+  list.innerHTML = html;
+}
+
+function ejecutarNudges() {
+  sbClient.rpc('ejecutar_nudges_pendientes').then(function(res) {
+    if (res.error) { showToast('❌ Error: ' + res.error.message); return; }
+    showToast('✅ ' + (res.data ? res.data.procesados : 0) + ' nudges procesados');
+    _cacheNudges = (_cacheNudges||[]).filter(function(n){ return n.enviado; });
+    renderNudgeQueue();
+  }).catch(function(e){ showToast('❌ Error: ' + (e.message||'')); });
 }
 
 function aprobarPago(clientId, cuotaKey, dbKey){
