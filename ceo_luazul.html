@@ -268,7 +268,6 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
       <div class="tab" onclick="showTab('simulador')" id="tab-simulador" style="color:#a78bfa;">📊 Simulador</div>
       <div class="tab" onclick="showTab('tickets')" id="tab-tickets" style="color:#fb923c;">🎫 Tickets</div>
       <div class="tab" onclick="showTab('catalogo')" id="tab-catalogo" style="color:#fbbf24;">🏷️ Catálogo</div>
-      <div class="tab" onclick="showTab('nudgequeue')" id="tab-nudgequeue" style="color:#c084fc;">🔔 Nudge Queue</div>
     </div>
 
     <!-- ══ OVERVIEW ══ -->
@@ -670,19 +669,7 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
       <div id="auditoriaBody"></div>
     </div>
 
-    <!-- FIX-F24: NUDGE QUEUE TAB -->
-    <div class="tabpg" id="tabpg-nudgequeue">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;">
-        <div>
-          <div style="font-size:1.1rem;font-weight:900;">🔔 Cola de Nudges Proactivos</div>
-          <div style="font-size:.75rem;color:rgba(150,190,255,.6);">Mensajes automáticos programados para clientes y vendedores</div>
-        </div>
-        <div style="display:flex;gap:10px;">
-          <button onclick="ejecutarNudges()" style="padding:8px 16px;background:linear-gradient(135deg,#7c3aed,#6d28d9);border:1px solid rgba(139,92,246,.4);border-radius:10px;font-size:.75rem;font-weight:700;color:white;cursor:pointer;">⚡ Ejecutar Pendientes</button>
-        </div>
-      </div>
-      <div id="nudgeQueueList"></div>
-    </div>
+
   </main>
 </div>
 
@@ -698,7 +685,7 @@ var ROLE_MANAGER = 2;  // Gerente
 var ROLE_SELLER  = 3;  // Asesor/Vendedor
 var ROLE_SALES_LEADER = 5; // Jefe de Ventas
 var RK = 'luazul_ceo_regiones';
-var _cacheGerentes=null, _cacheVendedores=null, _cacheClientes=null, _cachePagos=null, _cacheNudges=null, _cacheRegiones=null, _cacheSalesLeaders=null;
+var _cacheGerentes=null, _cacheVendedores=null, _cacheClientes=null, _cachePagos=null, _cacheRegiones=null, _cacheSalesLeaders=null;
 // UUID del CEO autenticado — se setea en cLogin / DOMContentLoaded
 // Necesario para RPC resolver_mora(p_aprobado_por)
 var _ceoUid = null;
@@ -770,7 +757,7 @@ function cargarDatosSupabase(){
           comprobantes:_parseJSON(r.comprobantes_json,[]),_raw:r};
       });
       return sbClient.from('clientes')
-        .select('id,user_id,seller_id,nombre,email,telefono,documento,estado,destino,paquete,fecha_viaje,monto_cuota,cuotas_total,cuotas_pagadas,total_usd,fecha_alta,notas,region_id,health_score');
+        .select('id,user_id,seller_id,nombre,email,telefono,documento,estado,destino,paquete,fecha_viaje,monto_cuota,cuotas_total,cuotas_pagadas,total_usd,fecha_alta,notas,region_id');
     })
     .then(function(cRes){
       if(cRes.error) throw cRes.error;
@@ -782,16 +769,8 @@ function cargarDatosSupabase(){
     .then(function(pRes){
       if(pRes.error) throw pRes.error;
       _cachePagos=pRes.data||[];
-      // FIX-F24: Cargar nudge schedule para tab Nudge Queue
-      return sbClient.from('nudge_schedule')
-        .select('*')
-        .eq('enviado', false)
-        .order('programado_para', {ascending:true})
-        .limit(200);
-    }).then(function(nRes){
-      if(!nRes.error) _cacheNudges=nRes.data||[];
+      _cacheNudges=[];
       showToast('✅ Datos cargados desde Supabase');
-      if(typeof renderNudgeQueue === 'function') renderNudgeQueue();
     })
     .catch(onError);
 }
@@ -817,7 +796,7 @@ function mapVendedor(r){
 function mapCliente(r){
   return{id:r.id,user_id:r.user_id,vid:r.seller_id||'',rid:r.region_id||'',
     nombre:r.nombre||'',email:r.email||'',telefono:r.telefono||'',
-    documento:r.documento||'',estado:r.estado||'activo',score:r.health_score||50,
+    documento:r.documento||'',estado:r.estado||'activo',score:0,
     destino:r.destino||'',paquete:r.paquete||'',fecha_viaje:r.fecha_viaje||'',
     monto_cuota:parseFloat(r.monto_cuota)||0,cuotas_total:parseInt(r.cuotas_total)||10,
     cuotas_pagadas:parseInt(r.cuotas_pagadas)||0,total_usd:parseFloat(r.total_usd)||0,
@@ -1552,8 +1531,6 @@ function showTab(id){
   if(id==='catalogo')          renderCatalogo();
   if(id==='premios_referidos') renderPremiosReferidos();
   if(id==='auditoria')         renderAuditoria();
-  // FIX-F24: Nudge Queue tab
-  if(id==='nudgequeue')        renderNudgeQueue();
 }
 
 // ── POPULATE FILTERS ─────────────────────────────────
@@ -3770,62 +3747,7 @@ async function renderPagosAprobacion() {
   container.innerHTML = html;
 }
 
-// ══════════════════════════════════════════════════════
-//  FIX-F24: NUDGE QUEUE
-// ══════════════════════════════════════════════════════
-function renderNudgeQueue() {
-  var list = document.getElementById('nudgeQueueList');
-  if (!list) return;
-  var nudges = _cacheNudges || [];
-  
-  if (nudges.length === 0) {
-    list.innerHTML = '<div style="text-align:center;padding:50px;background:rgba(5,18,55,.5);border:1px solid rgba(100,160,255,.15);border-radius:18px;"><div style="font-size:2.5rem;margin-bottom:14px;">✅</div><div style="font-size:1rem;font-weight:700;margin-bottom:6px;">Sin nudges pendientes</div><div style="font-size:.78rem;color:rgba(200,220,255,.6);">Todos los recordatorios fueron procesados.</div></div>';
-    return;
-  }
-  
-  var tipoLabels = {
-    'recordatorio_cliente_12h': {icon:'📱',label:'Recordatorio Cliente 12h',color:'#60a5fa'},
-    'alerta_vendedor_6h': {icon:'👨‍💼',label:'Alerta Vendedor 6h',color:'#fbbf24'},
-    'alerta_vendedor_1h': {icon:'🚨',label:'Alerta Vendedor 1h',color:'#f87171'},
-    'alerta_ceo_1h': {icon:'👔',label:'Alerta CEO 1h',color:'#f87171'},
-    'mora_auto': {icon:'⛔',label:'Mora Automática',color:'#ef4444'},
-    'pago_confirmado': {icon:'✅',label:'Pago Confirmado',color:'#34d399'}
-  };
-  
-  var html = '<div style="display:flex;flex-direction:column;gap:10px;">';
-  nudges.forEach(function(n) {
-    var t = tipoLabels[n.tipo_nudge] || {icon:'🔔',label:n.tipo_nudge,color:'#7eb8ff'};
-    var prog = n.programado_para ? new Date(n.programado_para) : null;
-    var progStr = prog ? prog.toLocaleString('es-AR',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) : '—';
-    var esUrgente = prog && (prog - new Date()) < 3600000;
-    
-    html += '<div style="background:rgba(5,18,55,.65);border:1px solid ' + (esUrgente?'rgba(248,113,113,.35)':'rgba(100,160,255,.15)') + ';border-radius:14px;padding:16px;display:flex;align-items:center;gap:14px;">'
-      + '<div style="font-size:1.5rem;">' + t.icon + '</div>'
-      + '<div style="flex:1;">'
-      + '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">'
-      + '<span style="font-size:.78rem;font-weight:700;color:' + t.color + ';">' + t.label + '</span>'
-      + (esUrgente?'<span style="background:rgba(248,113,113,.15);border:1px solid rgba(248,113,113,.3);border-radius:6px;padding:1px 8px;font-size:.6rem;font-weight:700;color:#f87171;">URGENTE</span>':'')
-      + '</div>'
-      + '<div style="font-size:.72rem;color:rgba(200,220,255,.7);">' + (n.mensaje||'—').substring(0,120) + '</div>'
-      + '</div>'
-      + '<div style="text-align:right;min-width:100px;">'
-      + '<div style="font-size:.72rem;color:rgba(200,220,255,.5);">Programado</div>'
-      + '<div style="font-size:.78rem;font-weight:700;color:' + (esUrgente?'#f87171':'#7eb8ff') + ';">' + progStr + '</div>'
-      + '</div>'
-      + '</div>';
-  });
-  html += '</div>';
-  list.innerHTML = html;
-}
 
-function ejecutarNudges() {
-  sbClient.rpc('ejecutar_nudges_pendientes').then(function(res) {
-    if (res.error) { showToast('❌ Error: ' + res.error.message); return; }
-    showToast('✅ ' + (res.data ? res.data.procesados : 0) + ' nudges procesados');
-    _cacheNudges = (_cacheNudges||[]).filter(function(n){ return n.enviado; });
-    renderNudgeQueue();
-  }).catch(function(e){ showToast('❌ Error: ' + (e.message||'')); });
-}
 
 function aprobarPago(clientId, cuotaKey, dbKey){
   // ── Checkpoint v3.1 v3.3: IDs son UUID (strings) — sin parseInt() ────

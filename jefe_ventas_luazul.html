@@ -316,7 +316,8 @@ function _lzMapClient(c) {
   return {
     id: c.id, vid: String(c.seller_id || ''), nombre: c.nombre || '', email: c.email || '',
     telefono: c.telefono || '', documento: c.documento || '', domicilio: c.domicilio || '',
-    estado: c.estado || 'activo', destino: c.destino || '', paquete: c.paquete || '',
+    estado: c.estado || 'activo',
+    score: 50, destino: c.destino || '', paquete: c.paquete || '',
     fecha_viaje: c.fecha_viaje || '', noches: c.noches || null, personas: c.personas || null,
     monto_cuota: parseFloat(c.monto_cuota) || 0, cuotas_total: parseInt(c.cuotas_total) || 10,
     cuotas_pagadas: parseInt(c.cuotas_pagadas) || 0, total_usd: parseFloat(c.total_usd) || 0,
@@ -562,6 +563,8 @@ function _sbLoad() { return loadClients(); }
           <div class="sbox"><span>🔍</span><input type="text" id="csrch" placeholder="Buscar..." oninput="renderClients()"/></div>
           <select class="msel" id="vFilt" style="width:auto;padding:7px 11px;" onchange="renderClients()"><option value="">Todos los vendedores</option></select>
           <select class="msel" id="sFilt" style="width:auto;padding:7px 11px;" onchange="renderClients()"><option value="">Todos los estados</option><option value="activo">Activo</option><option value="atraso">En atraso</option><option value="completo">Completo</option><option value="baja">Baja</option></select>
+          <!-- FIX-F24: score filter -->
+          <select id="sScoreFilt" style="padding:7px 11px;background:rgba(100,160,255,.08);border:1px solid rgba(100,160,255,.2);border-radius:8px;font-size:.72rem;color:#7eb8ff;" onchange="renderClients()"><option value="">Score: Todos</option><option value="rojo">&lt;40 Riesgo</option><option value="amarillo">40-69 Medio</option><option value="verde">70+ Sano</option></select>
         </div>
       </div>
       <div class="twrap"><div class="thead"><div></div><div>Cliente</div><div>Vendedor</div><div>Progreso</div><div>Total</div><div>Cuotas</div><div>Viaje</div><div>Estado</div><div>Acciones</div></div><div id="clientsBody"></div></div>
@@ -1759,11 +1762,15 @@ function renderClients() {
   var srch = (document.getElementById('csrch').value || '').toLowerCase();
   var vf = document.getElementById('vFilt').value;
   var sf = document.getElementById('sFilt').value;
+  // FIX-F24: score filter variable
+  var scoreFilt=(document.getElementById('sScoreFilt')||{}).value||'';
   var cs = ((_memCache[DB_KEY] || []) || []).map(enrich).filter(function(c) {
     if (!esClienteDelJefe(c)) return false;
     if (vf && String(c.vid) !== String(vf)) return false;
     if (sf && c.estado !== sf) return false;
     if (srch && (c.nombre + c.email + c.destino).toLowerCase().indexOf(srch) === -1) return false;
+    // FIX-F24: score filter chain
+    && (!scoreFilt || (scoreFilt==='rojo' && (c.score||50)<40) || (scoreFilt==='amarillo' && (c.score||50)>=40 && (c.score||50)<70) || (scoreFilt==='verde' && (c.score||50)>=70))
     return true;
   }).sort(function(a, b) { return a._p - b._p; });
   if (!cs.length) { document.getElementById('clientsBody').innerHTML = '<div class="empty"><div class="ei">🔍</div><p>Sin resultados</p></div>'; return; }
@@ -1772,7 +1779,10 @@ function renderClients() {
     var fc = sc(c._s);
     return '<div class="trow s' + c._s + '" onclick="openClientDetail(' + c.id + ')">'
       + '<div class="tc" style="display:flex;align-items:center;"><div class="sem ' + c._s + '"></div></div>'
-      + '<div class="tc"><div class="cname">' + esc(c.nombre) + (c.mora && c.mora.filter(function(m) { return !m.resuelta; }).length ? '<span style="display:inline-block;width:8px;height:8px;background:#f97316;border-radius:50%;margin-left:6px;vertical-align:middle;" title="Mora activa"></span>' : '') + '</div><div class="cemail">' + esc(c.email) + '</div></div>'
+      + '<div class="tc"><div class="cname">' + esc(c.nombre)
+      // FIX-F24: score badge after name
+      + ' <span style="display:inline-flex;align-items:center;gap:3px;font-size:.6rem;font-weight:700;color:' + ((c.score||50)>=70?'#34d399':(c.score||50)>=40?'#fbbf24':'#f87171') + ';"><span style="width:6px;height:6px;border-radius:50%;background:currentColor;"></span>' + (c.score||50) + '</span>'
+      + (c.mora && c.mora.filter(function(m) { return !m.resuelta; }).length ? '<span style="display:inline-block;width:8px;height:8px;background:#f97316;border-radius:50%;margin-left:6px;vertical-align:middle;" title="Mora activa"></span>' : '') + '</div><div class="cemail">' + esc(c.email) + '</div></div>'
       + '<div class="tc"><div class="vtag">👔 ' + esc(v.nombre) + '</div></div>'
       + '<div class="tc"><div style="font-size:.76rem;font-weight:700;color:' + fc + ';">' + c._pct + '%</div><div class="pbar"><div class="pfill" style="width:' + c._pct + '%;background:' + fc + ';"></div></div></div>'
       + '<div class="tc" style="font-weight:700;">USD ' + c.total_usd + '</div>'
@@ -3153,6 +3163,10 @@ async function enviarComprobante(clientId) {
       seller_id:      sellerId
     }]);
     if (insRes.error) throw insRes.error;
+    // Nudges: pendiente migración SQL
+    if (cuotaNum === 1 && c) {
+      // await sbClient.rpc('programar_nudges_cuota1', { p_cliente_id: c.id });
+    }
     await notificarAccion('pago_pendiente', 'Comprobante enviado: Cuota ' + cuotaNum, c.id, null);
     closeModal();
     await _sbLoad();
