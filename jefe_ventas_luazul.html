@@ -1408,12 +1408,21 @@ async function saveVendor() {
   var cbu = (document.getElementById('vCBU').value || '').trim();
   var managerId = window._gerenteProfile ? parseInt(window._gerenteProfile.id) : null;
 
+  // ── HERENCIA DE REGIÓN: el vendedor hereda la región del jefe (que a su vez heredó del gerente) ──
+  // La región viene "en el ADN" del gerente → jefe → vendedor → cliente. Sin dropdown.
+  var jefeRegionId = window._gerenteProfile && window._gerenteProfile.region_id
+    ? parseInt(window._gerenteProfile.region_id, 10) : null;
+
   if (!nombre || !email || !pass) {
     showToast('⚠️ Nombre, email y contraseña son obligatorios');
     return;
   }
   if (!email.includes('@') || !email.includes('.')) {
     showToast('⚠️ Ingresá un email válido');
+    return;
+  }
+  if (!jefeRegionId) {
+    showToast('❌ El jefe no tiene región asignada. Contactá al gerente para que la asigne.');
     return;
   }
 
@@ -1460,7 +1469,8 @@ async function saveVendor() {
         p_role_id: 3,
         p_nombre: primerNombre,
         p_apellido: apellidoStr,
-        p_region_ids: window._gerenteProfile && window._gerenteProfile.region_id ? [parseInt(window._gerenteProfile.region_id, 10)] : [],
+        // REGIÓN HEREDADA del gerente (via jefe) — sin opción de elegir
+        p_region_ids: [jefeRegionId],
         p_telefono1: telefono1 || null,
         p_telefono2: telefono2 || null,
         p_ciudad: null,

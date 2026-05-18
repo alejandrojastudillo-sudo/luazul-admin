@@ -2678,7 +2678,10 @@ async function addClient() {
   var telefono1 = document.getElementById('nTel1').value.trim() || null;
   var telefono2 = (document.getElementById('nTel2') || {}).value.trim() || null;
   var domicilio = (document.getElementById('nDomicilio') || {}).value.trim() || null;
-  // FIX: heredar region_id del vendedor/gerente que crea el cliente
+
+  // ── HERENCIA DE REGIÓN: vendedor → jefe → gerente → gerente_regiones ──
+  // El cliente SIEMPRE hereda la región del gerente, sin opción de elegirla.
+  // Cadena: gerente crea jefe → jefe crea vendedor → vendedor crea cliente.
   var sellerRegion = parseInt(_currentProfile.region_id, 10) || null;
 
   // Obtener token de sesión
@@ -2691,6 +2694,38 @@ async function addClient() {
   }
 
   try {
+    // SAFEGUARD: si el vendedor no tiene región, buscarla subiendo la cadena
+    if (!sellerRegion) {
+      // 1. Buscar el jefe del vendedor
+      var jefeData = await sbClient.from('staff_profiles')
+        .select('id, region_id, manager_id').eq('id', _currentProfile.manager_id).single();
+      if (!jefeData.error && jefeData.data) {
+        sellerRegion = parseInt(jefeData.data.region_id, 10) || null;
+      }
+      // 2. Si el jefe tampoco tiene, buscar el gerente
+      if (!sellerRegion && jefeData.data && jefeData.data.manager_id) {
+        var gerenteData = await sbClient.from('staff_profiles')
+          .select('id, region_id, user_id').eq('id', jefeData.data.manager_id).single();
+        if (!gerenteData.error && gerenteData.data) {
+          sellerRegion = parseInt(gerenteData.data.region_id, 10) || null;
+        }
+        // 3. Último recurso: tabla gerente_regiones
+        if (!sellerRegion && gerenteData.data && gerenteData.data.user_id) {
+          var grRes = await sbClient.from('gerente_regiones')
+            .select('region_id').eq('gerente_id', gerenteData.data.user_id).limit(1);
+          if (!grRes.error && grRes.data && grRes.data.length > 0) {
+            sellerRegion = parseInt(grRes.data[0].region_id, 10) || null;
+          }
+        }
+      }
+    }
+    // Si aún no hay región, no se puede crear (la región es obligatoria)
+    if (!sellerRegion) {
+      showToast('❌ No se pudo determinar la región. Verificá que el gerente tenga región asignada.');
+      if (btn) { btn.disabled = false; btn.textContent = originalText; }
+      return;
+    }
+
     const response = await fetch('https://yunvqgaljopirzvjrntc.supabase.co/functions/v1/crear_usuario_staff_v2', {
       method: 'POST',
       headers: {
@@ -2704,7 +2739,7 @@ async function addClient() {
         p_role_id: 4,
         p_nombre: nombre,
         p_apellido: '',
-        p_region_ids: sellerRegion ? [sellerRegion] : [],
+        p_region_ids: [sellerRegion],
         p_telefono1: telefono1,
         p_telefono2: telefono2,
         p_ciudad: null,
@@ -2732,12 +2767,19 @@ async function addClient() {
       notas: (document.getElementById('nNotas') || {}).value && document.getElementById('nNotas').value.trim() || null,
       personas: parseInt((document.getElementById('nPersDisplay') || {}).innerText, 10) || null,
       noches: parseInt((document.getElementById('nNoches') || {}).value, 10) || null,
-      // FIX: asegurar que el cliente herede la región del vendedor que lo creó
-      region_id: sellerRegion || _currentProfile.region_id || null
+      // REGIÓN HEREDADA del gerente (nunca null — safeguard verificó arriba)
+      region_id: sellerRegion
     };
 
     var updRes = await sbClient.from('clientes').update(camposExtra).eq('id', nuevoClienteId);
     if (updRes.error) throw updRes.error;
+
+    // VERIFICACIÓN: confirmar que region_id quedó guardado
+    var verifRes = await sbClient.from('clientes').select('id, region_id, nombre').eq('id', nuevoClienteId).single();
+    if (!verifRes.error && verifRes.data && !verifRes.data.region_id) {
+      console.warn('⚠️ Safeguard: region_id quedó null después del update, forzando region_id=' + sellerRegion);
+      await sbClient.from('clientes').update({ region_id: sellerRegion }).eq('id', nuevoClienteId);
+    }
 
     // Recargar la lista completa de clientes para mantener consistencia
     await loadClients();

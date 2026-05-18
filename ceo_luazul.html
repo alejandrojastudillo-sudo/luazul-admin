@@ -389,7 +389,7 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
       <div class="sec-head">
         <h2>👥 Base de Clientes Global</h2>
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-          <button class="addbtn" onclick="openAddClienteCeo()">➕ Nuevo Cliente</button>
+          <!-- Botón Nuevo Cliente eliminado por jerarquía: solo los Asesores (vendedores) crean clientes -->
           <div class="sbox"><span>🔍</span><input type="text" id="cliSearch" placeholder="Buscar cliente..." oninput="renderClientes()" /></div>
           <select class="msel" id="cliRegFilt" onchange="renderClientes()"><option value="">Todas las regiones</option></select>
           <select class="msel" id="cliEstFilt" onchange="renderClientes()">
@@ -2288,15 +2288,12 @@ function saveObjCEO(){
 }
 
 // ── CREAR CLIENTE DESDE CEO ───────────────────────────
+// BLOQUEADO POR JERARQUÍA: Solo los Asesores (vendedores) pueden crear clientes.
 function openAddClienteCeo(){
-    showToast('⛔ Los clientes deben ser creados por un asesor asignado.');
-  }
-
-// FASE3-FIX4: Función eliminada — CEO no puede crear clientes directamente.
-// La creación de clientes es exclusiva del panel Vendedor (admin_luazul.html).
+  showToast('⛔ Solo los Asesores pueden crear clientes. Usá el panel del Vendedor.');
+}
 function saveNewClienteCeo(){
-  showToast('⛔ Los clientes deben ser creados por un asesor asignado.');
-  return;
+  showToast('⛔ Solo los Asesores pueden crear clientes. Usá el panel del Vendedor.');
 }
 
 // ── CLIENTES ─────────────────────────────────────────
@@ -2424,14 +2421,13 @@ function renderPwVendors(){
 
 
 // ── GESTIÓN DE ASESORES (CEO) ────────────────────────
-
+// BLOQUEADO POR JERARQUÍA: Solo los Jefes de Ventas pueden crear Asesores.
 function openAddVendorCeo(){
-    showToast('⛔ Los asesores deben ser creados por un Jefe de Ventas. Usá el panel de Gerente/Jefe.');
-  }
-
+  showToast('⛔ Solo los Jefes de Ventas crean Asesores. Usá el panel de Gerente/Jefe.');
+}
 function saveNewVendorCeo(){
-    showToast('⛔ No se pueden crear asesores directamente desde CEO. Un Jefe de Ventas debe hacerlo.');
-  }
+  showToast('⛔ Solo los Jefes de Ventas crean Asesores. Usá el panel de Gerente/Jefe.');
+}
 
 function openVendPerfilCeo(){
   var vid = document.getElementById('vendDashSel').value;

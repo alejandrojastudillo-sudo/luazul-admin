@@ -592,6 +592,7 @@ function _sbLoad() { return loadClients(); }
     <div class="tabpg" id="tabpg-vendors">
       <div class="sec-head">
         <h2>👔 Vendedores</h2>
+        <!-- Sin botón de creación: por jerarquía, solo el Jefe de Ventas crea Vendedores -->
         <div style="display:flex;gap:10px;"></div>
       </div>
       <div class="vgrid" id="vGrid"></div>
@@ -1533,115 +1534,14 @@ function openVendorDetail(vid) {
   document.getElementById('modal').classList.add('open');
 }
 
+// ── CREAR VENDEDOR DESDE GERENTE ────────────────────────
+// BLOQUEADO POR JERARQUÍA: Solo el Jefe de Ventas puede crear Vendedores.
+// La creación de vendedores es exclusiva del panel de Jefe de Ventas (jefe_ventas_luazul_v2.html).
 function openAddVendor() {
-  var rs = _memCache['luazul_regiones'] || [];
-  var myRegIds = window._gerenteRegionIds || [];
-  // regOptions eliminado: región ya no se asigna al crear vendedor
-  document.getElementById('mbox').innerHTML = '<div class="mhead"><div><h2>➕ Nuevo Vendedor</h2></div><button class="mclose" onclick="closeModal()">✕</button></div>'
-    + '<div class="mbody">'
-    + '<div class="mgrid">'
-    + '<div class="mi"><div class="ml">Nombre completo</div><input class="min" id="vN" placeholder="Ej: Laura Mendoza"/></div>'
-    + '<div class="mi"><div class="ml">Email</div><input class="min" id="vE" placeholder="laura@luazul.com"/></div>'
-    + '<input type="hidden" id="vReg" value="">'
-    + '<div class="mi"><div class="ml">Contraseña (panel admin)</div><input class="min" id="vP" placeholder="Contraseña segura"/></div>'
-    + '<div class="mi"><div class="ml">Teléfono principal</div><div class="lz-phone-wrap">' + lzBuildPhoneSelect('prefix_vT','+54') + '<input class="min" id="vT" placeholder="9 11 1234-5678"/></div></div>'
-    + '<div class="mi"><div class="ml">Teléfono de referencia</div><div class="lz-phone-wrap">' + lzBuildPhoneSelect('prefix_vT2','+54') + '<input class="min" id="vT2" placeholder="9 351 9876-5432"/></div></div>'
-    + '<div class="mi" style="grid-column:span 2;"><div class="ml">Domicilio</div><input class="min" id="vDom" placeholder="Ej: Av. Corrientes 1234, Buenos Aires"/></div>'
-    + '<div class="mi" style="grid-column:span 2;">'
-    + '<div class="ml">💰 CBU / Alias bancario <span style="font-weight:400;color:var(--muted);font-size:.75rem;">(para cobro de comisiones)</span></div>'
-    + '<input class="min" id="vCBU" placeholder="CBU: 0000000000000000000000 · o Alias: nombre.apellido.banco" style="font-family:monospace;"/>'
-    + '</div></div>'
-    + '<div style="margin:14px 0 10px;padding:14px 16px;background:rgba(245,158,11,.07);border:1px solid rgba(245,158,11,.2);border-radius:12px;">'
-    + '<div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--gold);margin-bottom:10px;">💰 Estructura de Comisión</div>'
-    + '<div style="font-size:.82rem;color:var(--muted);margin-bottom:12px;line-height:1.6;">'
-    + 'La comisión se calcula sobre la <strong style="color:var(--text);">primera cuota</strong> de cada cliente vendido en el mes:<br>'
-    + '<span style="color:var(--green);">● 3 o más ventas/mes → <strong>80%</strong> de la primera cuota</span><br>'
-    + '<span style="color:var(--gold);">● Menos de 3 ventas/mes → <strong>50%</strong> de la primera cuota</span>'
-    + '</div>'
-    + '<div style="padding:10px 12px;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);border-radius:10px;">'
-    + '<div style="font-size:.67rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#fca5a5;margin-bottom:6px;">⚠️ Penalización — baja en primeras 3 cuotas</div>'
-    + '<div style="font-size:.8rem;color:rgba(180,200,240,.6);">Si el cliente se da de baja antes de la cuota 4, se pierde la comisión de ese cliente.</div>'
-    + '</div></div>'
-    + '<div class="mact"><button class="mbtn gold" onclick="saveVendor()">✅ Crear Vendedor</button><button class="mbtn ghost" onclick="closeModal()">Cancelar</button></div>'
-    + '</div>';
-  document.getElementById('modal').classList.add('open');
+  showToast('⛔ Solo los Jefes de Ventas crean Vendedores. Usá el panel de Jefe de Ventas.');
 }
-
-async function saveVendor() {
-  var nombre = (document.getElementById('vN').value || '').trim().toUpperCase();
-  var email = (document.getElementById('vE').value || '').trim().toLowerCase();
-  var pass = (document.getElementById('vP').value || '').trim();
-  var telefono1 = (document.getElementById('vT').value || '').trim();
-  var telefono2 = (document.getElementById('vT2').value || '').trim();
-  var domicilio = (document.getElementById('vDom').value || '').trim();
-  var cbu = (document.getElementById('vCBU').value || '').trim();
-  // regionId eliminado – los vendedores no necesitan región
-  var managerId = window._gerenteProfile ? parseInt(window._gerenteProfile.id) : null;
-
-  if (!nombre || !email || !pass) {
-    showToast('⚠️ Nombre, email y contraseña son obligatorios');
-    return;
-  }
-  if (!email.includes('@') || !email.includes('.')) {
-    showToast('⚠️ Ingresá un email válido');
-    return;
-  }
-
-  var btn = document.querySelector('#modal .mbtn.gold');
-  var originalText = btn ? btn.textContent : '✅ Crear Vendedor';
-  if (btn) { btn.disabled = true; btn.textContent = '⏳ Creando...'; }
-
-  var nombresArr = nombre.split(' ');
-  var primerNombre = nombresArr[0];
-  var apellidoStr = nombresArr.slice(1).join(' ') || '';
-
-  try {
-    // Verificación remota de email duplicado (evita conflictos entre paneles)
-    var checkRes = await sbClient.from('staff_profiles').select('id').eq('email', email).limit(1);
-    if (checkRes.data && checkRes.data.length > 0) {
-      showToast('❌ Ya existe un asesor con ese email');
-      if (btn) { btn.disabled = false; btn.textContent = originalText; }
-      return;
-    }
-    const { data: { session: vSession } } = await sbClient.auth.getSession();
-    const vToken = vSession?.access_token;
-    if (!vToken) throw new Error('No se pudo obtener el token de sesión');
-    const response = await fetch('https://yunvqgaljopirzvjrntc.supabase.co/functions/v1/crear_usuario_staff_v2', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${vToken}`
-      },
-      body: JSON.stringify({
-        p_email: email,
-        p_password: pass,
-        p_role_id: 3,
-        p_nombre: primerNombre,
-        p_apellido: apellidoStr,
-        p_region_ids: window._gerenteProfile && window._gerenteProfile.region_id ? [parseInt(window._gerenteProfile.region_id, 10)] : [],
-        p_telefono1: telefono1 || null,
-        p_telefono2: telefono2 || null,
-        p_ciudad: null,
-        p_domicilio: domicilio || null,
-        p_cbu: cbu || null,
-        p_manager_id: managerId
-      })
-    });
-    const data = await response.json();
-    if (data.error) throw new Error(data.error);
-    showToast('✅ Asesor ' + nombre + ' creado exitosamente');
-    closeModal();
-    await _sbLoad();
-    renderAll();
-    if (typeof populateVFilt === 'function') populateVFilt();
-    if (typeof populateVendDashSel === 'function') populateVendDashSel();
-    if (typeof renderPasswords === 'function') renderPasswords();
-  } catch (err) {
-    console.error(err);
-    showToast('❌ Error: ' + err.message);
-  } finally {
-    if (btn) { btn.disabled = false; btn.textContent = originalText; }
-  }
+function saveVendor() {
+  showToast('⛔ Solo los Jefes de Ventas crean Vendedores. Usá el panel de Jefe de Ventas.');
 }
 
 function editVendor(vid) {
@@ -4273,6 +4173,18 @@ window.crearNuevoCanal = crearNuevoCanal;
     var primerNombre = nombresArr[0];
     var apellidoStr  = nombresArr.slice(1).join(' ') || '';
 
+    // ── HERENCIA DE REGIÓN: el jefe hereda TODAS las regiones del gerente (sin dropdown) ──
+    var slRegionIds = window._gerenteRegionIds && window._gerenteRegionIds.length > 0
+      ? window._gerenteRegionIds
+      : (window._gerenteProfile && window._gerenteProfile.region_id
+        ? [parseInt(window._gerenteProfile.region_id, 10)] : []);
+
+    if (slRegionIds.length === 0) {
+      showToast('❌ El gerente no tiene región asignada. Asigná una región antes de crear jefes.');
+      if (btn) { btn.disabled = false; btn.textContent = originalText; }
+      return;
+    }
+
     // Obtener el token de sesión actual
     const { data: { session } } = await sbClient.auth.getSession();
     const token = session?.access_token;
@@ -4299,7 +4211,8 @@ window.crearNuevoCanal = crearNuevoCanal;
           p_role_id:    ROLE_SALES_LEADER,
           p_nombre:     primerNombre,
           p_apellido:   apellidoStr,
-          p_region_ids: window._gerenteRegionIds && window._gerenteRegionIds.length ? window._gerenteRegionIds : (window._gerenteProfile.region_id ? [window._gerenteProfile.region_id] : []),
+          // REGIÓN HEREDADA del gerente — sin opción de elegir
+          p_region_ids: slRegionIds,
           p_telefono1:  telefono1 || null,
           p_telefono2:  telefono2 || null,
           p_ciudad:     ciudad,
