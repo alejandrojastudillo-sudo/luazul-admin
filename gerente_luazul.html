@@ -369,6 +369,7 @@ const LZ_LOAD = {
 
     var regiones = regRes.data || [];
     var rIds     = (grRes.data || []).map(function(r) { return r.region_id; });
+    console.log('[loadData] gerente_regiones → rIds:', rIds, '| profile.id:', profile.id, '| profile.region_id:', profile.region_id);
 
     // ── Fallback: si gerente_regiones vacío, usar region_id del propio perfil ──
     if (!rIds.length && profile.region_id) {
@@ -390,6 +391,8 @@ const LZ_LOAD = {
         .eq('manager_id', profile.id)
         .in('role_id', [ROLE_SELLER, ROLE_SALES_LEADER]);
       var [resRegion, resDirect] = await Promise.all([qRegion, qDirect]);
+      console.log('[loadData] qRegion:', resRegion.data ? resRegion.data.length : 0, 'filas | error:', resRegion.error || 'ninguno');
+      console.log('[loadData] qDirect:', resDirect.data ? resDirect.data.length : 0, 'filas | error:', resDirect.error || 'ninguno');
       if (resRegion.error) throw resRegion.error;
       if (resDirect.error) throw resDirect.error;
       // Merge evitando duplicados por id
@@ -397,7 +400,9 @@ const LZ_LOAD = {
       var merged = (resRegion.data || []).concat(resDirect.data || []);
       merged.forEach(function(s) { if (!seen[s.id]) seen[s.id] = s; });
       staffRes = { data: Object.values(seen), error: null };
+      console.log('[loadData] staff mergeado (sin duplicados):', Object.values(seen).length, 'filas →', Object.values(seen).map(function(s){ return s.nombre + ' (rol:' + s.role_id + ')'; }));
     } else {
+      console.warn('[loadData] rIds VACÍO — no se consulta staff');
       staffRes = await sbClient.from('staff_profiles').select('*').eq('id', -1);
     }
     if (staffRes.error) throw staffRes.error;
@@ -469,6 +474,12 @@ async function loadClients() {
     _memCache[DB_KEY] = clientes.map(LZ.enrich);
     _memCache[VK]     = staff.filter(function(s) { return s.role_id === LZ.ROLE_SELLER; });
     window._cacheSalesLeaders = staff.filter(function(s) { return s.role_id === LZ.ROLE_SALES_LEADER; });
+    console.log('[loadClients] staff total:', staff.length, '| vendedores:', _memCache[VK].length, '| jefes:', window._cacheSalesLeaders.length);
+    if (window._cacheSalesLeaders.length) {
+      console.log('[loadClients] jefes encontrados:', window._cacheSalesLeaders.map(function(j){ return j.nombre + ' (id:' + j.id + ', manager_id:' + j.manager_id + ')'; }));
+    } else {
+      console.warn('[loadClients] ⚠️ NO se encontraron jefes de ventas');
+    }
     _memCache[NK]     = (notificaciones || []).concat(pagos || []);
     var rIds = result.rIds || [];
     window._cacheRegiones    = regiones;
@@ -1394,6 +1405,7 @@ function renderVendors() {
 
 function renderSalesLeaders() {
   var vs = window._cacheSalesLeaders || [];
+  console.log('[renderSalesLeaders] cache:', vs.length, 'jefes');
   var cs = ((_memCache[DB_KEY] || []) || []).map(enrich);
   var ns = (_memCache[NK] || []) || [];
   document.getElementById('salesLeadersGrid').innerHTML = vs.map(function(v) {
