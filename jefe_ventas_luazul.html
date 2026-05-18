@@ -1779,8 +1779,12 @@ function renderClients() {
     if (vf && String(c.vid) !== String(vf)) return false;
     if (sf && c.estado !== sf) return false;
     if (srch && (c.nombre + c.email + c.destino).toLowerCase().indexOf(srch) === -1) return false;
-    // FIX-F24: score filter chain
-    && (!scoreFilt || (scoreFilt==='rojo' && (c.score||50)<40) || (scoreFilt==='amarillo' && (c.score||50)>=40 && (c.score||50)<70) || (scoreFilt==='verde' && (c.score||50)>=70))
+    // FIX-F24: score filter — mismo patrón que los demás filtros
+    if (scoreFilt && (
+      (scoreFilt === 'rojo' && (c.score||50) >= 40) ||
+      (scoreFilt === 'amarillo' && ((c.score||50) < 40 || (c.score||50) >= 70)) ||
+      (scoreFilt === 'verde' && (c.score||50) < 70)
+    )) return false;
     return true;
   }).sort(function(a, b) { return a._p - b._p; });
   if (!cs.length) { document.getElementById('clientsBody').innerHTML = '<div class="empty"><div class="ei">🔍</div><p>Sin resultados</p></div>'; return; }
