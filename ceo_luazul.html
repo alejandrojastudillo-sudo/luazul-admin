@@ -1607,7 +1607,12 @@ function renderOverview(){
   var activos=cs.filter(function(c){return c.estado==='activo';}).length;
   var atraso=cs.filter(function(c){return c.estado==='atraso'||c.estado==='atraso_gestion';}).length;
   var completos=cs.filter(function(c){return c.estado==='completo';}).length;
-  var pending=ns.filter(function(n){return n.estado==='pendiente';}).length;
+  var pending=ns.filter(function(n){
+    if(n.estado!=='pendiente') return false;
+    var c=cs.find(function(x){ return String(x.id)===String(n.cliente_id); });
+    if(!c) return false;
+    return parseInt(n.numero_cuota) === (parseInt(c.cuotas_pagadas)||0) + 1;
+  }).length;
 
   document.getElementById('oStats').innerHTML=[
     {i:'🌎',v:rs.length,      l:'Regiones activas',  c:''},
@@ -1648,7 +1653,17 @@ function renderOverview(){
       +'</div>';
   }).join('');
 
-  var pays=(_cachePagos||[]).slice(0,6);
+  // FIX: "Últimos pagos" — solo siguiente cuota debida por cliente + aprobados recientes
+  var clientes = _cacheClientes||[];
+  var pays = (_cachePagos||[]).filter(function(n){
+    if(n.estado==='aprobado') return true;
+    if(n.estado==='pendiente'){
+      var c = clientes.find(function(x){ return String(x.id)===String(n.cliente_id); });
+      if(!c) return false;
+      return parseInt(n.numero_cuota) === (parseInt(c.cuotas_pagadas)||0) + 1;
+    }
+    return false;
+  }).sort(function(a,b){ return (b.created_at||'').localeCompare(a.created_at||''); }).slice(0,6);
   document.getElementById('ovLastPays').innerHTML=pays.length
     ?pays.map(function(n){
       var aprobado=n.estado==='aprobado';
