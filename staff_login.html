@@ -835,16 +835,7 @@
 
   </script>
 
-  <!-- ── SERVICE WORKER (PWA) ── -->
-  <script>
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', function () {
-        navigator.serviceWorker.register('sw.js')
-          .then(function (reg) { console.log('[LUAZUL PWA] SW registrado', reg.scope); })
-          .catch(function (err) { console.log('[LUAZUL PWA] SW no disponible', err); });
-      });
-    }
-  </script>
+  <!-- ── SERVICE WORKER deshabilitado — causaba errores de caché cruzada entre paneles ── -->
 
 </body>
 </html>

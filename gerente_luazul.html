@@ -8,6 +8,12 @@
 <title>Luazul Smart Travel · Gerencia Regional</title>
 <!-- Mirror-Clean v1.0 — Auditoría 2026-04 · Correcciones integradas (versión completa) -->
   <script>
+  // ── Limpiar Service Worker caché cruzada (staff_login.html lo registraba) ──
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.getRegistrations().then(function(regs) {
+      regs.forEach(function(r) { r.unregister(); });
+    });
+  }
   (function() {
     var panelKey    = 'luazul_gerente';
     var portalKey   = 'lz_auth';
