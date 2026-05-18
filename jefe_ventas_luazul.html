@@ -1460,7 +1460,7 @@ async function saveVendor() {
         p_role_id: 3,
         p_nombre: primerNombre,
         p_apellido: apellidoStr,
-        p_region_ids: [],
+        p_region_ids: window._gerenteProfile && window._gerenteProfile.region_id ? [parseInt(window._gerenteProfile.region_id, 10)] : [],
         p_telefono1: telefono1 || null,
         p_telefono2: telefono2 || null,
         p_ciudad: null,

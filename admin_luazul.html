@@ -2678,6 +2678,8 @@ async function addClient() {
   var telefono1 = document.getElementById('nTel1').value.trim() || null;
   var telefono2 = (document.getElementById('nTel2') || {}).value.trim() || null;
   var domicilio = (document.getElementById('nDomicilio') || {}).value.trim() || null;
+  // FIX: heredar region_id del vendedor/gerente que crea el cliente
+  var sellerRegion = parseInt(_currentProfile.region_id, 10) || null;
 
   // Obtener token de sesión
   const { data: { session } } = await sbClient.auth.getSession();
@@ -2702,7 +2704,7 @@ async function addClient() {
         p_role_id: 4,
         p_nombre: nombre,
         p_apellido: '',
-        p_region_ids: [],
+        p_region_ids: sellerRegion ? [sellerRegion] : [],
         p_telefono1: telefono1,
         p_telefono2: telefono2,
         p_ciudad: null,
@@ -2729,7 +2731,9 @@ async function addClient() {
       domicilio: domicilio,
       notas: (document.getElementById('nNotas') || {}).value && document.getElementById('nNotas').value.trim() || null,
       personas: parseInt((document.getElementById('nPersDisplay') || {}).innerText, 10) || null,
-      noches: parseInt((document.getElementById('nNoches') || {}).value, 10) || null
+      noches: parseInt((document.getElementById('nNoches') || {}).value, 10) || null,
+      // FIX: asegurar que el cliente herede la región del vendedor que lo creó
+      region_id: sellerRegion || _currentProfile.region_id || null
     };
 
     var updRes = await sbClient.from('clientes').update(camposExtra).eq('id', nuevoClienteId);
