@@ -1790,9 +1790,9 @@ function renderRegiones(){
         for(var jj=0;jj<jefesR.length;jj++){
           var jf=jefesR[jj];
           var jfId=String(jf.user_id||jf.id);
-          var susV=rv.filter(function(vv){ return String(vv.manager_id)===String(jf.id)||String(vv.manager_id)===String(jf.user_id); });
+          var susV=rv.filter(function(vv){ return String(vv.manager_id)===jfId; });
           var susC=rc.filter(function(cc){
-            return susV.some(function(vv){ return String(vv.user_id||vv.id)===String(cc.vid)||String(vv.id)===String(cc.vid); });
+            return susV.some(function(vv){ return String(vv.user_id||vv.id)===String(cc.vid); });
           });
           var susRec=susC.reduce(function(s,c){ return s+(parseInt(c.cuotas_pagadas)||0)*(parseFloat(c.monto_cuota)||0); },0);
           var comJ=susRec*0.15;
@@ -1972,19 +1972,17 @@ function renderVendDash(){
 
 // ── PAGOS ─────────────────────────────────────────────
 function renderPagos(){
-  // ── Filtro de mes actual para pagos pendientes ──
-  var now = new Date();
-  var mesActual = now.getMonth();
-  var anioActual = now.getFullYear();
+  // ── Filtro: solo la siguiente cuota debida por cliente ──
+  var clientes = _cacheClientes||[];
   var pays = (_cachePagos||[]).filter(function(n){
-    // Aprobados: siempre mostrar (historial)
+    // Aprobados: siempre mostrar (historial completo)
     if(n.estado==='aprobado') return true;
-    // Pendientes: cuota 1 siempre, cuotas 2+ solo mes actual
+    // Pendientes: solo la siguiente cuota debida (cuotas_pagadas + 1)
     if(n.estado==='pendiente'){
-      if(parseInt(n.numero_cuota)===1) return true;
-      var f = n.created_at ? new Date(n.created_at) : null;
-      if(!f) return false;
-      return f.getMonth()===mesActual && f.getFullYear()===anioActual;
+      var c = clientes.find(function(x){ return String(x.id)===String(n.cliente_id); });
+      if(!c) return false;
+      var siguienteCuota = (parseInt(c.cuotas_pagadas)||0) + 1;
+      return parseInt(n.numero_cuota) === siguienteCuota;
     }
     return false;
   });
@@ -1992,12 +1990,13 @@ function renderPagos(){
   if(ef==='pendiente') pays=pays.filter(function(n){ return n.estado==='pendiente'; });
   if(ef==='aprobado')  pays=pays.filter(function(n){ return n.estado==='aprobado'; });
 
-  // ── KPIs del mes actual ──
+  // ── KPI: pendientes = siguiente cuota debida ──
   var pendMes=(_cachePagos||[]).filter(function(n){
     if(n.estado!=='pendiente') return false;
-    if(parseInt(n.numero_cuota)===1) return true;
-    var f=n.created_at?new Date(n.created_at):null;
-    return f && f.getMonth()===mesActual && f.getFullYear()===anioActual;
+    var c = clientes.find(function(x){ return String(x.id)===String(n.cliente_id); });
+    if(!c) return false;
+    var siguienteCuota = (parseInt(c.cuotas_pagadas)||0) + 1;
+    return parseInt(n.numero_cuota) === siguienteCuota;
   }).length;
   var aprob=(_cachePagos||[]).filter(function(n){ return n.estado==='aprobado'; }).length;
   var totalUSD=(_cachePagos||[]).filter(function(n){ return n.estado==='aprobado'; }).reduce(function(s,n){ return s+(parseFloat(n.monto_usd)||0); },0);
@@ -2048,7 +2047,15 @@ function aprobarPagoSb(pagoId){
 }
 
 function aprobarTodos(){
-  var pend = (_cachePagos||[]).filter(function(n){ return n.estado==='pendiente'; });
+  // FIX: Solo aprobar la siguiente cuota debida por cliente
+  var clientes = _cacheClientes||[];
+  var pend = (_cachePagos||[]).filter(function(n){
+    if(n.estado!=='pendiente') return false;
+    var c = clientes.find(function(x){ return String(x.id)===String(n.cliente_id); });
+    if(!c) return false;
+    var siguienteCuota = (parseInt(c.cuotas_pagadas)||0) + 1;
+    return parseInt(n.numero_cuota) === siguienteCuota;
+  });
   if(!pend.length){ showToast('Sin pagos pendientes'); return; }
   showToast('⏳ Aprobando ' + pend.length + ' pagos con cascada...');
   var count = 0;
@@ -2137,17 +2144,16 @@ function _approveSinglePago(pago){
 }
 
 function getPendingPayments(){
-  var now = new Date();
-  var mesActual = now.getMonth();
-  var anioActual = now.getFullYear();
+  // FIX: Solo mostrar la SIGUIENTE cuota debida por cliente (cuotas_pagadas + 1)
+  // Esto evita mostrar todas las cuotas pendientes de meses anteriores
+  var clientes = _cacheClientes||[];
   return (_cachePagos||[]).filter(function(p){
     if (p.estado !== 'pendiente') return false;
-    // Siempre mostrar cuota 1 pendiente
-    if (parseInt(p.numero_cuota) === 1) return true;
-    // Mostrar solo pagos del mes actual
-    var fecha = p.created_at ? new Date(p.created_at) : null;
-    if (!fecha) return false;
-    return fecha.getMonth() === mesActual && fecha.getFullYear() === anioActual;
+    // Buscar el cliente para saber cuál es la siguiente cuota
+    var c = clientes.find(function(x){ return String(x.id)===String(p.cliente_id); });
+    if (!c) return false;
+    var siguienteCuota = (parseInt(c.cuotas_pagadas)||0) + 1;
+    return parseInt(p.numero_cuota) === siguienteCuota;
   }).map(function(p){
     var c = (_cacheClientes||[]).find(function(x){ return String(x.id)===String(p.cliente_id); })||{nombre:p.cliente_nombre||'—',destino:'—',paquete:'—',cuotas_pagadas:0,cuotas_total:10};
     return{client:c,pago:{id:p.id,cuota:p.numero_cuota,monto:p.monto_usd,url:p.comprobante_url,fecha:p.fecha_pago,obs:''},dbKey:'supabase'};
@@ -2289,6 +2295,7 @@ function saveObjCEO(){
 
 // ── CREAR CLIENTE DESDE CEO ───────────────────────────
 // BLOQUEADO POR JERARQUÍA: Solo los Asesores (vendedores) pueden crear clientes.
+// La creación de clientes es exclusiva del panel Asesor (admin_luazul.html).
 function openAddClienteCeo(){
   showToast('⛔ Solo los Asesores pueden crear clientes. Usá el panel del Vendedor.');
 }
