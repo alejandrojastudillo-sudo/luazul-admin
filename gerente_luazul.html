@@ -871,7 +871,7 @@ function enrich(c) { return LZ.enrich(c); }
 function sc(s) { var o = { r: '#ef4444', n: '#f97316', a: '#eab308', v: '#22c55e', b: '#6b7280' }; return o[s] || '#6b7280'; }
 
 function vby(uid) {
-  var vendList = (_memCache[VK] || []) || [];
+  var vendList = (_memCache[VK] || []).concat(window._cacheSalesLeaders || []);
   var found = null;
   for (var i = 0; i < vendList.length; i++) {
     if (String(vendList[i].id) === String(uid) || String(vendList[i].user_id) === String(uid)) {
