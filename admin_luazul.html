@@ -83,7 +83,7 @@ function mapClientFromSB(c) {
     monto_cuota: parseFloat(c.monto_cuota) || 0, cuotas_total: parseInt(c.cuotas_total) || 10,
     cuotas_pagadas: parseInt(c.cuotas_pagadas) || 0, total_usd: parseFloat(c.total_usd) || 0,
     fechaAlta: c.fecha_alta ? c.fecha_alta.slice(0, 10) : '', notas: c.notas || '',
-    mora_json: c.mora_json || '[]', codigo_referido: c.codigo_referido || null
+    mora_json: c.mora_json || '[]'
   };
 }
 
@@ -155,7 +155,7 @@ const LZ_LOAD = {
     const clientIds = clientes.map(c => c.id);
 
     let notifQuery = sbClient.from('notificaciones').select('*');
-    if (userRole === ROLE_SELLER)       notifQuery = notifQuery.or(`destinatario_id.eq.${profile.id},destinatario_rol.eq.seller`);
+    if (userRole === ROLE_SELLER)       notifQuery = notifQuery.eq('destinatario_id', profile.id);
     else if (userRole === ROLE_MANAGER) notifQuery = notifQuery.or(`destinatario_id.eq.${profile.id},destinatario_rol.eq.manager`);
     else                                notifQuery = notifQuery.or(`destinatario_id.eq.${profile.id},destinatario_rol.eq.ceo`);
 
@@ -605,7 +605,6 @@ body::after {
   padding:12px 26px; color:white; font-size:.88rem; font-weight:700;
   z-index:999; transition:transform .35s cubic-bezier(0.34,1.56,0.64,1);
   white-space:nowrap; box-shadow:0 8px 32px rgba(0,0,0,0.4);
-  max-width:420px; width:90vw;
 }
 #toast.show { transform:translateX(-50%) translateY(0); }
 
@@ -887,7 +886,7 @@ body::after {
         </select>
         <div class="search-box" style="flex:1;min-width:160px;">
           <span>🔍</span>
-          <input type="text" id="ticketSearch" placeholder="Buscar ticket..." oninput="debounceSearchTicketsAdm()">
+          <input type="text" id="ticketSearch" placeholder="Buscar ticket..." oninput="cargarTicketsAsesor()">
         </div>
       </div>
       <div class="table-wrap">
@@ -1001,18 +1000,12 @@ var countdownTimer = null;
 // ──────────────────────────────────────────────────────────────────────────
 // ── LZ.esc() y LZ.fmtUSD() → LZ.esc() / LZ.fmtUSD() desde crm-core.js ──────
 
-// M7: Unificado con cleanup de timeout (patrón CEO) — previene stacking
-var _toastT = null;
-function showToast(msg, duration, tipo) {
+function showToast(msg, duration) {
   var t = document.getElementById('toast');
   if (!t) return;
-  if (_toastT) clearTimeout(_toastT);
   t.textContent = msg;
-  t.className = 'show';
-  if (tipo === 'error') t.style.borderColor = 'rgba(239,68,68,.5)';
-  else if (tipo === 'warn') t.style.borderColor = 'rgba(245,158,11,.5)';
-  else t.style.borderColor = '';
-  _toastT = setTimeout(function(){ t.classList.remove('show'); t.style.borderColor = ''; _toastT = null; }, duration||3500);
+  t.classList.add('show');
+  setTimeout(function(){ t.classList.remove('show'); }, duration||3500);
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -1126,7 +1119,6 @@ function adminLogin() {
       LZ_AUTH._showApp('loginWrap','app');
       loadClients();
       setTimeout(refreshAdminNotifBadge, 100);
-      startAdminNotifPolling(); // M3: Iniciar polling después del login
       showToast('✅ Bienvenido, ' + profile.nombre);
     })
     .catch(function(err) {
@@ -1169,7 +1161,6 @@ function startLoginBlock() {
 
 function adminLogout() {
   if (sbClient) sbClient.auth.signOut().catch(function(){});
-  stopAdminNotifPolling(); // M3: Limpiar interval al hacer logout
   _currentProfile = null;
   allClients = [];
   try { sessionStorage.removeItem('luazul_admin'); sessionStorage.removeItem('luazul_asesor_user'); } catch(e){}
@@ -1220,14 +1211,13 @@ async function syncData() {
 // 9. COMISIONES
 // ──────────────────────────────────────────────────────────────────────────
 function getClientMonth(c) {
-  // R3: Estandarizado — sin fechaAlta = excluir de comisiones (no inflar mes actual)
+  // fechaAlta = campo normalizado por mapClientFromSB; fallback a fecha_alta raw o mes actual
   var fecha = c.fechaAlta || c.fecha_alta || null;
   if (fecha) {
     var d = new Date(fecha + 'T00:00:00');
     if (!isNaN(d)) return d.getFullYear() + '-' + d.getMonth();
   }
-  console.warn('[R3] Cliente sin fechaAlta — excluido de cálculo de comisión:', c.id || c.nombre || '?');
-  return null;
+  var n = new Date(); return n.getFullYear() + '-' + n.getMonth();
 }
 
 function calcComisionVendedor(clients) {
@@ -1238,7 +1228,6 @@ function calcComisionVendedor(clients) {
   clients.forEach(function(c) {
     if (c.estado === 'baja' && (parseInt(c.cuotas_pagadas)||0) === 0) return;
     var key = getClientMonth(c);
-    if (!key) return;
     if (!byMonth[key]) byMonth[key] = [];
     byMonth[key].push(c);
   });
@@ -1607,7 +1596,6 @@ function openModal(clientId) {
     '<button class="m-btn ghost" onclick="closeModal()">Cerrar</button>'+
     '</div>'+
     '<div class="modal-actions" style="margin-top:8px;border-top:1px solid rgba(100,160,255,.1);padding-top:12px;">'+
-    '<button class="m-btn primary" style="background:linear-gradient(135deg,#1a5bb5,#0B3D91);" onclick="abrirRegistroPago(\''+c.id+'\')">📤 Registrar pago</button>'+
     '<button class="m-btn" style="background:rgba(251,146,60,.1);color:#fb923c;" onclick="verComprobantes(\''+c.id+'\')">📎 Ver pagos</button>'+
     '</div>'+
     '</div>';
@@ -1649,14 +1637,25 @@ function solicitarCambioCliente(clientId, clienteNombre) {
 }
 
 // ──────────────────────────────────────────────────────────────────────────
-// 17. ACTUALIZAR CLIENTE — FIX H9: Código muerto, sin caller ni DOM
-//     Los campos editCuotas/editEstado no existen en el modal actual.
-//     Se neutraiza para evitar uso desde consola del navegador.
+// 17. ACTUALIZAR CLIENTE
 // ──────────────────────────────────────────────────────────────────────────
 function updateClient(clientId) {
-  console.warn('[updateClient] Función deshabilitada — los datos del cliente se gestionan desde el panel de gerencia.');
-  showToast('⚠️ Esta acción no está disponible. Contactá a Gerencia para modificar datos del cliente.');
-  return;
+  var c = allClients.find(function(x){ return String(x.id)===String(clientId); });
+  if (!c) return;
+  var nuevasCuotas = parseInt(document.getElementById('editCuotas').value,10)||0;
+  var nuevoEstado  = document.getElementById('editEstado').value;
+  c.cuotas_pagadas = nuevasCuotas;
+  c.estado = nuevoEstado;
+  allClients[allClients.indexOf(c)] = LZ.enrich(c);
+
+  if (!sbClient) { closeModal(); renderAll(); showToast('✅ Guardado localmente'); return; }
+
+  sbClient.from('clientes').update({ cuotas_pagadas:nuevasCuotas, estado:nuevoEstado }).eq('id',parseInt(clientId,10))
+    .then(function(r){
+      if (r.error) throw r.error;
+      closeModal(); renderAll(); showToast('✅ Cambios guardados');
+    })
+    .catch(function(e){ showToast('❌ Error: '+e.message); });
 }
 
 
@@ -1750,19 +1749,7 @@ function resolverMora(clientId, idx) {
   allClients[allClients.indexOf(c)] = LZ.enrich(c);
   if (!sbClient) { closeModal(); renderAll(); openMoraModal(clientId); showToast('✅ Mora resuelta'); return; }
   sbClient.from('clientes').update({ mora_json:JSON.stringify(c.mora) }).eq('id',parseInt(clientId,10))
-    .then(function(){
-      // MORA-M-02: if ALL mora entries are now resolved, reactivate client
-      var allResolved = c.mora.every(function(e){ return e.resuelta === true; });
-      if (allResolved) {
-        sbClient.from('clientes').update({ estado: 'activo' }).eq('id', parseInt(clientId,10))
-          .then(function(){
-            var cl = allClients.find(function(x){ return x.id == clientId; });
-            if (cl) cl.estado = 'activo';
-            allClients[allClients.indexOf(cl)] = LZ.enrich(cl);
-          });
-      }
-      closeModal(); renderAll(); openMoraModal(clientId); showToast('✅ Mora resuelta' + (allResolved ? ' — Estado actualizado a activo' : ''));
-    })
+    .then(function(){ closeModal(); renderAll(); openMoraModal(clientId); showToast('✅ Mora resuelta'); })
     .catch(function(e){ showToast('❌ Error: '+e.message); });
 }
 
@@ -1812,43 +1799,21 @@ function notificarAccion(tipo, mensaje, clienteId, datosExtra) {
   });
 }
 
-// FIX CHAT-H-01: reescrito para usar mensajes_vistos (alineado con CEO/Gerente/Jefe)
-// La tabla mensajes_equipo_menciones nunca recibe escrituras desde ningún panel.
-async function refreshAdminNotifBadge() {
+function refreshAdminNotifBadge() {
   if (!sbClient||!_currentProfile) return;
-  try {
-    var countNotif = 0;
-    var countMsg = 0;
-    // 1. Notificaciones estándar
-    var notifRes = await sbClient.from('notificaciones')
-      .select('id', { count: 'exact', head: true })
-      .eq('leida', false)
-      .eq('destinatario_id', _currentProfile.id);
-    countNotif = notifRes.count || 0;
-    // 2. Mensajes internos no leídos via mensajes_vistos (mismo patrón que CEO/Gerente/Jefe)
-    var userId = _currentProfile.user_id;
-    var vistosRes = await sbClient.from('mensajes_vistos').select('mensaje_id').eq('usuario_id', userId);
-    var vistosIds = [];
-    if (!vistosRes.error && vistosRes.data) {
-      vistosIds = vistosRes.data.map(function(v) { return v.mensaje_id; });
-    }
-    var canalesRes = await sbClient.from('canales_equipo').select('id').filter('miembros->>roles', 'cs', '{"asesor"}');
-    if (!canalesRes.error && canalesRes.data && canalesRes.data.length) {
-      var canalIds = canalesRes.data.map(function(c) { return c.id; });
-      var msgRes = await sbClient.from('mensajes_equipo')
-        .select('id, remitente_id')
-        .in('canal_id', canalIds)
-        .is('respuesta_a', null)
-        .order('created_at', { ascending: false })
-        .limit(200);
-      if (!msgRes.error && msgRes.data) {
-        for (var i = 0; i < msgRes.data.length; i++) {
-          var msg = msgRes.data[i];
-          if (String(msg.remitente_id) === String(userId)) continue;
-          if (vistosIds.indexOf(msg.id) === -1) countMsg++;
-        }
-      }
-    }
+  // Notificaciones estándar
+  var notifPromise = sbClient.from('notificaciones')
+    .select('id', { count: 'exact', head: true })
+    .eq('leida', false)
+    .eq('destinatario_id', _currentProfile.id);
+  // Menciones / mensajes internos no leídos
+  var mensajesPromise = sbClient.from('mensajes_equipo_menciones')
+    .select('id', { count: 'exact', head: true })
+    .eq('usuario_id', _currentProfile.user_id)
+    .eq('leido', false);
+  Promise.all([notifPromise, mensajesPromise]).then(function(results) {
+    var countNotif = results[0].count || 0;
+    var countMsg   = results[1].count || 0;
     var total = countNotif + countMsg;
     var dot = document.getElementById('adminNotifDot');
     var lbl = document.getElementById('adminNotifLabel');
@@ -1861,21 +1826,7 @@ async function refreshAdminNotifBadge() {
       dot.style.display = 'none';
       lbl.textContent = 'Alertas';
     }
-  } catch(e) { console.warn('[refreshAdminNotifBadge]', e.message); }
-}
-
-// FIX CHAT-H-02: marcarLeidosAdmin — alineado con CEO/Gerente/Jefe
-async function marcarLeidosAdmin(canalId) {
-  if (!sbClient || !_currentProfile) return;
-  try {
-    var userId = _currentProfile.user_id;
-    var res = await sbClient.from('mensajes_equipo').select('id').eq('canal_id', canalId).limit(500);
-    if (res.error || !res.data) return;
-    var msgIds = res.data.map(function(m) { return m.id; });
-    if (!msgIds.length) return;
-    var inserts = msgIds.map(function(mid) { return { mensaje_id: mid, usuario_id: userId }; });
-    await sbClient.from('mensajes_vistos').upsert(inserts, { onConflict: 'mensaje_id,usuario_id' });
-  } catch(e) { console.warn('[marcarLeidosAdmin]', e.message); }
+  }).catch(function(e) { console.warn('[refreshAdminNotifBadge]', e.message); });
 }
 
 function openAdminNotifs() {
@@ -2113,8 +2064,7 @@ async function enviarComprobante(clientId) {
     }
 
     // ── Insertar registro de pago con URL pública ─────────────
-    // FIX F5: upsert en vez de insert para evitar pagos duplicados
-    var insRes = await sbClient.from('pagos').upsert({
+    var insRes = await sbClient.from('pagos').insert([{
       cliente_id:      parseInt(c.id, 10),
       cliente_nombre:  c.nombre,
       vendedor_nombre: asesor,
@@ -2123,9 +2073,8 @@ async function enviarComprobante(clientId) {
       estado:          'pendiente',
       fecha_pago:      fecha || new Date().toISOString().slice(0, 10),
       comprobante_url: publicUrl || null,
-      seller_id:       _currentProfile ? (parseInt(_currentProfile.id, 10) || null) : null,
-      fecha_vencimiento: new Date(Date.UTC(new Date().getFullYear(), new Date().getMonth() + 1, 0, 23, 59, 59, 999)).toISOString()
-    }, { onConflict: 'cliente_id,numero_cuota' });
+      seller_id:       _currentProfile ? (parseInt(_currentProfile.id, 10) || null) : null
+    }]);
     if (insRes.error) throw insRes.error;
 
     await notificarAccion(
@@ -2307,13 +2256,11 @@ function verCompAdmin(idx) {
 // 26. MI LEGAJO
 // ──────────────────────────────────────────────────────────────────────────
 
-// Obtiene el nombre del Jefe de Ventas a partir del manager_id (con caché simple + TTL)
+// Obtiene el nombre del Jefe de Ventas a partir del manager_id (con caché simple)
 var _jefeCache = null;
-var _jefeCacheTs = 0; // timestamp de última carga
 async function obtenerNombreJefe(managerId) {
   if (!managerId) return 'Sin jefe asignado';
-  // TTL de 5 minutos para invalidar caché automáticamente
-  if (_jefeCache && _jefeCache.managerId === managerId && (Date.now() - _jefeCacheTs) < 300000) return _jefeCache.nombre;
+  if (_jefeCache && _jefeCache.managerId === managerId) return _jefeCache.nombre;
   try {
     var { data, error } = await sbClient
       .from('staff_profiles')
@@ -2323,7 +2270,6 @@ async function obtenerNombreJefe(managerId) {
       .single();
     if (error || !data) return 'Sin jefe asignado';
     _jefeCache = { managerId: managerId, nombre: data.nombre };
-    _jefeCacheTs = Date.now();
     return data.nombre;
   } catch(e) {
     console.warn('Error al obtener jefe:', e);
@@ -2341,13 +2287,9 @@ async function renderMiLegajo() {
   var enMora=allClients.filter(function(c){ return c.estado==='atraso'||c.estado==='atraso_gestion'; }).length;
   var completados=allClients.filter(function(c){ return c.estado==='completo'; }).length;
   var enBaja=allClients.filter(function(c){ return c.estado==='baja'; }).length;
-  // F6-3: Usar el motor de comisiones real en vez de fórmula ad-hoc
-  var cmVendedor = calcComisionVendedor(allClients);
-  var compsPagadas = [];
-  if (yo.comprobantes_json) { try { compsPagadas = JSON.parse(yo.comprobantes_json); } catch(e) {} }
-  else if (Array.isArray(yo.comprobantes)) { compsPagadas = yo.comprobantes; }
-  var totalPagado = compsPagadas.reduce(function(s, x) { return s + (parseFloat(x.monto) || 0); }, 0);
-  var comEst = Math.max(0, cmVendedor.neta - totalPagado);
+  var comPct=parseFloat(yo.com_pct)||0;
+  var totalPend=allClients.filter(function(c){ return c.estado==='activo'; }).reduce(function(acc,c){ var r=(parseFloat(c.total_usd)||0)-((parseFloat(c.cuotas_pagadas)||0)*(parseFloat(c.monto_cuota)||0)); return acc+(r>0?r:0); },0);
+  var comEst=parseFloat((totalPend*comPct/100).toFixed(2));
   function mc(icon,label,value,color){ return '<div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.09);border-radius:14px;padding:18px 20px;min-width:130px;"><div style="font-size:1.5rem;">'+icon+'</div><div style="font-size:1.5rem;font-weight:800;color:'+color+';">'+value+'</div><div style="font-size:.7rem;color:var(--muted);text-transform:uppercase;">'+label+'</div></div>'; }
   function ir(label,value){ return '<div style="display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.06);"><span style="color:var(--muted);">'+label+'</span><span style="font-weight:700;">'+value+'</span></div>'; }
   el.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;"><h2 style="font-size:1rem;font-weight:900;">🪪 Mi Legajo</h2><button class="tb-btn" onclick="volverAClientes()">← Volver a mis clientes</button></div><div style="max-width:780px;">'+
@@ -2359,10 +2301,10 @@ async function renderMiLegajo() {
     '<div style="text-align:right;margin-left:auto;"><div style="font-size:.62rem;color:var(--muted);">Asesor · ID</div><div style="font-family:monospace;font-size:.82rem;">'+String(yo.id||'—')+'</div></div></div>'+
     '<div style="margin-bottom:16px;"><div style="font-size:.65rem;font-weight:700;text-transform:uppercase;color:rgba(167,139,250,.7);margin-bottom:12px;">📊 Cartera</div>'+
     '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:12px;">'+mc('👥','Total',total,'#e2e8f0')+mc('✅','Activos',activos,'#4ade80')+mc('🔴','En mora',enMora,'#f87171')+mc('🏁','Completados',completados,'#a78bfa')+mc('⛔','Bajas',enBaja,'#6b7280')+'</div></div>'+
-    '<div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:20px;margin-bottom:20px;">'+ir('UUID',String(yo.user_id||'—'))+ir('ID numérico',String(yo.id||'—'))+ir('Teléfono principal',yo.telefono1||'—')+ir('Teléfono secundario',yo.telefono2||'—')+(yo.cbu?ir('CBU / Alias','<span style="font-family:monospace;">'+yo.cbu+'</span>'):'')+ir('Región asignada',yo.region_id?'ID '+yo.region_id:'—')+ir('Comisión configurada', cmVendedor.tasaActual + '% (tasa ' + (cmVendedor.tasaActual >= 80 ? 'premium' : 'estándar') + ')')+'</div>'+
+    '<div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:20px;margin-bottom:20px;">'+ir('UUID',String(yo.user_id||'—'))+ir('ID numérico',String(yo.id||'—'))+ir('Teléfono principal',yo.telefono1||'—')+ir('Teléfono secundario',yo.telefono2||'—')+(yo.cbu?ir('CBU / Alias','<span style="font-family:monospace;">'+yo.cbu+'</span>'):'')+ir('Región asignada',yo.region_id?'ID '+yo.region_id:'—')+ir('Comisión configurada',comPct>0?comPct+'%':'<span style="color:#f87171;">No configurada</span>')+'</div>'+
     '<div style="background:rgba(74,222,128,.04);border:1px solid rgba(74,222,128,.15);border-radius:16px;padding:20px;">'+
     (yo.cbu?'<div style="background:rgba(74,222,128,.08);border:1px solid rgba(74,222,128,.2);border-radius:12px;padding:14px;margin-bottom:14px;"><div style="font-size:.65rem;color:rgba(74,222,128,.7);">CBU / Alias</div><div style="font-family:monospace;font-size:.95rem;font-weight:700;color:#4ade80;">'+yo.cbu+'</div></div>':'<div style="background:rgba(248,113,113,.06);border:1px dashed rgba(248,113,113,.25);border-radius:12px;padding:14px;margin-bottom:14px;"><div style="color:#f87171;">⚠️ Sin cuenta de cobro</div></div>')+
-    ir('Comisión neta pendiente','<span style="color:#4ade80;">USD '+Math.round(comEst).toLocaleString('es-AR')+'</span>')+'</div>'+
+    ir('Comisión estimada pendiente',comPct>0?'<span style="color:#4ade80;">USD '+comEst.toLocaleString('es-AR')+'</span>':'—')+'</div>'+
     '<div style="display:flex;gap:10px;margin-top:20px;">'+
     '<button onclick="activarSeccion(\'cuentas\')" style="padding:10px 20px;background:rgba(52,211,153,.1);border:1px solid rgba(52,211,153,.25);color:#34d399;border-radius:10px;font-size:.8rem;font-weight:700;cursor:pointer;font-family:inherit;">🏦 Editar cuenta</button>'+
     '<button onclick="activarSeccion(\'miscomisiones\')" style="padding:10px 20px;background:rgba(74,222,128,.1);border:1px solid rgba(74,222,128,.25);color:#4ade80;border-radius:10px;font-size:.8rem;font-weight:700;cursor:pointer;font-family:inherit;">💰 Ver comisiones</button>'+
@@ -2469,20 +2411,14 @@ function initFirmaCanvas() {
 
 function limpiarFirma() {
   if (!_firmaCtx||!_firmaCanvas) return;
-  // FIX CONT-M-03: Usar clearRect (transparente) en vez de fillRect blanco — consistente con panel cliente
-  _firmaCtx.clearRect(0,0,_firmaCanvas.width,_firmaCanvas.height);
+  _firmaCtx.fillStyle = '#ffffff';
+  _firmaCtx.fillRect(0,0,_firmaCanvas.width,_firmaCanvas.height);
   _firmaCtx.setTransform(1,0,0,1,0,0);
 }
 
 async function guardarFirma() {
   if (!_firmaCanvas) return;
   if (!_firmaClienteId) { showToast('⚠️ No hay cliente seleccionado'); return; }
-
-  // FIX CONT-H-03: Validar que el canvas no esté vacío antes de subir
-  var px = _firmaCtx.getImageData(0, 0, _firmaCanvas.width, _firmaCanvas.height).data;
-  var hasContent = false;
-  for (var ci = 3; ci < px.length; ci += 4) { if (px[ci] > 10) { hasContent = true; break; } }
-  if (!hasContent) { showToast('⚠️ Dibujá la firma antes de guardar'); return; }
 
   var canvas = _firmaCanvas;
   // Convertir canvas a Blob
@@ -2662,27 +2598,14 @@ async function buscarReferidor(codigo) {
   var info = document.getElementById('nRefInfo');
   if (!info || !codigo || codigo.length < 4) { if (info) info.innerHTML = ''; return; }
   var term = codigo.trim().toUpperCase();
-  // FIX REF-M-01: sanitizar input para evitar inyección en filtro PostgREST
-  term = term.replace(/[^A-Z0-9@._%-]/g, '');
-  if (!term || term.length < 4) { if (info) info.innerHTML = ''; return; }
-  if (!sbClient) return;  // FIX REF-A5: null guard
-  // Usar filtros individuales en vez de .or() para evitar inyección
-  const { data: byCode, error: err1 } = await sbClient
+  // Primero buscar en BD (más actual)
+  const { data, error } = await sbClient
     .from('clientes')
     .select('nombre, email, codigo_referido')
-    .ilike('codigo_referido', '%' + term + '%')
+    .or(`codigo_referido.ilike.${term},email.ilike.${term}`)
     .limit(1);
-  if (!err1 && byCode && byCode.length > 0) {
-    info.innerHTML = '✅ Referidor encontrado: <strong>' + LZ.esc(byCode[0].nombre) + '</strong> (' + LZ.esc(byCode[0].email) + ')';
-    return;
-  }
-  const { data: byEmail, error: err2 } = await sbClient
-    .from('clientes')
-    .select('nombre, email, codigo_referido')
-    .ilike('email', '%' + term + '%')
-    .limit(1);
-  if (!err2 && byEmail && byEmail.length > 0) {
-    var match = byEmail[0];
+  if (!error && data && data.length > 0) {
+    var match = data[0];
     info.innerHTML = '✅ Referidor encontrado: <strong>' + LZ.esc(match.nombre) + '</strong> (' + LZ.esc(match.email) + ')';
     return;
   }
@@ -2843,19 +2766,10 @@ async function addClient() {
 }
 
 // ──────────────────────────────────────────────────────────────────────────
+// ──────────────────────────────────────────────────────────────────────────
 // 32. INICIALIZACIÓN
 // ──────────────────────────────────────────────────────────────────────────
-// M3: Interval movido dentro del flujo de login (no global) — evita queries sin sesión
-// var _adminNotifInterval = null; se inicializa en restoreSession / handleLogin
-var _adminNotifInterval = null;
-function startAdminNotifPolling() {
-  if (_adminNotifInterval) return;
-  refreshAdminNotifBadge();
-  _adminNotifInterval = setInterval(refreshAdminNotifBadge, 30000);
-}
-function stopAdminNotifPolling() {
-  if (_adminNotifInterval) { clearInterval(_adminNotifInterval); _adminNotifInterval = null; }
-}
+setInterval(refreshAdminNotifBadge, 30000);
 
 // ===================== TICKETS (ASESOR) =====================
 var _ticketsCacheAsesor = [];
@@ -2866,12 +2780,6 @@ function _fdrA(iso) {
   if (diff < 3600)  return 'Hace '+Math.floor(diff/60)+' min';
   if (diff < 86400) return 'Hace '+Math.floor(diff/3600)+' h';
   return d.toLocaleDateString('es-AR');
-}
-
-var _searchDebounceAdm = null;
-function debounceSearchTicketsAdm() {
-    clearTimeout(_searchDebounceAdm);
-    _searchDebounceAdm = setTimeout(function() { cargarTicketsAsesor(); }, 300);
 }
 
 function cargarTicketsAsesor() {
@@ -2998,7 +2906,7 @@ function guardarTicketAsesor() {
     p_mensaje:      desc,
     p_remitente_id: _currentProfile.user_id,
     p_cliente_id:   clienteId,
-    p_vendedor_id:  parseInt(_currentProfile.id) || _currentProfile.id,
+    p_vendedor_id:  _currentProfile.id,
     p_region_id:    _currentProfile.region_id || null,
     p_asignado_a:   null,
     p_prioridad:    prioridad,
@@ -3142,13 +3050,18 @@ async function subirAdjuntoATicketAsesor(ticketId) {
 // ──────────────────────────────────────────────────────────────────────────
 
 async function cargarCanales() {
-  // Panel Asesor: solo canales donde el rol 'asesor' está en miembros
-  // FIX CHAT-M-04: Agregar orden alfabético consistente con otros paneles
-  var query = sbClient.from('canales_equipo').select('*').order('nombre');
-  query = query.filter('miembros->>roles', 'cs', '{"asesor"}');
-  var { data, error } = await query;
+  // Panel Asesor: cargar todos los canales y filtrar por rol 'asesor' en miembros (JSONB)
+  var { data, error } = await sbClient.from('canales_equipo').select('*');
   if (error) { console.warn('[cargarCanales]', error.message); return []; }
-  return data || [];
+  var canales = (data || []).filter(function(c) {
+    if (!c.miembros) return false;
+    try {
+      var m = typeof c.miembros === 'string' ? JSON.parse(c.miembros) : (c.miembros || {});
+      var roles = m.roles || [];
+      return roles.indexOf('asesor') !== -1;
+    } catch(e) { return false; }
+  });
+  return canales;
 }
 
 async function renderComunicaciones() {
@@ -3179,10 +3092,7 @@ async function renderComunicaciones() {
         document.querySelectorAll('.canal-item').forEach(function(x){ x.style.background=''; x.style.color=''; });
         el.style.background = 'rgba(59,130,246,.12)';
         el.style.color = 'var(--accent2)';
-        var canalId = el.getAttribute('data-canal');
-        cargarMensajesCanal(canalId);
-        marcarLeidosAdmin(canalId);   // FIX CHAT-H-02: marcar como leído al abrir
-        refreshAdminNotifBadge();     // FIX CHAT-H-02: actualizar badge inmediatamente
+        cargarMensajesCanal(el.getAttribute('data-canal'));
       });
     });
   } catch(e) {
@@ -3214,8 +3124,7 @@ async function cargarMensajesCanal(canalId) {
     html += '</div>';
     // Área de nuevo mensaje
     html += '<div style="padding:16px;border-top:1px solid var(--border);">';
-    // FIX CHAT-M-02: Enter envía, Shift+Enter nueva línea
-    html += '<textarea id="nuevoMensaje" rows="3" class="edit-input" placeholder="Escribí tu mensaje..." style="width:100%;resize:vertical;margin-bottom:10px;" onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();enviarMensaje(\'' + canalId + '\')}"></textarea>';
+    html += '<textarea id="nuevoMensaje" rows="3" class="edit-input" placeholder="Escribí tu mensaje..." style="width:100%;resize:vertical;margin-bottom:10px;"></textarea>';
     html += '<div style="display:flex;gap:10px;">';
     html += '<input id="nuevoAsunto" class="edit-input" placeholder="Asunto..." style="flex:1;" />';
     html += '<button class="m-btn primary" onclick="enviarMensaje(\'' + canalId + '\')">📨 Enviar</button>';
@@ -3281,23 +3190,12 @@ async function enviarMensaje(canalId, respuestaA) {
       remitente_nombre: _currentProfile.nombre || 'Asesor',
       asunto: asunto || 'Sin asunto',
       cuerpo: cuerpo,
-      // FIX CHAT-H-01: canal_id como string, consistente con CEO/Gerente/Jefe (no parseInt)
-      canal_id: canalId,
+      canal_id: parseInt(canalId),
       respuesta_a: respuestaA || null,
       tipo_mensaje: 'aviso'
     });
     if (error) throw error;
     showToast('✅ Mensaje enviado');
-    // FIX CHAT-M-03: Limpiar textarea y asunto después de enviar
-    if (respuestaA) {
-      var respEl = document.getElementById('respuestaTexto-' + respuestaA);
-      if (respEl) respEl.value = '';
-    } else {
-      var cuerpoEl2 = document.getElementById('nuevoMensaje');
-      var asuntoEl2 = document.getElementById('nuevoAsunto');
-      if (cuerpoEl2) cuerpoEl2.value = '';
-      if (asuntoEl2) asuntoEl2.value = '';
-    }
     cargarMensajesCanal(canalId);
   } catch(e) {
     showToast('❌ Error al enviar: ' + (e.message || e));
@@ -3443,25 +3341,16 @@ async function cargarPresupuestos() {
             return;
         }
 
-        // FIX: Cargar todos los presupuestos en una sola consulta (evitar N+1)
-        const prospectoIds = filtered.map(p => p.id);
-        const { data: allPresup, error: presErr } = await sbClient
-            .from('presupuestos')
-            .select('prospecto_id, pdf_url, created_at')
-            .in('prospecto_id', prospectoIds)
-            .order('created_at', { ascending: false });
-        const presupMap = {};
-        if (!presErr && allPresup) {
-            allPresup.forEach(pr => {
-                if (!presupMap[pr.prospecto_id]) presupMap[pr.prospecto_id] = pr;
-            });
-        }
-
         let html = '';
         for (const p of filtered) {
-            const presup = presupMap[p.id];
-            const pdfUrl = presup ? presup.pdf_url : null;
-            const fechaPresu = presup ? new Date(presup.created_at).toLocaleDateString('es-AR') : '—';
+            const { data: presup } = await sbClient
+                .from('presupuestos')
+                .select('pdf_url, created_at')
+                .eq('prospecto_id', p.id)
+                .order('created_at', { ascending: false })
+                .limit(1);
+            const pdfUrl = presup && presup.length ? presup[0].pdf_url : null;
+            const fechaPresu = presup && presup.length ? new Date(presup[0].created_at).toLocaleDateString('es-AR') : '—';
             const estadoColor = p.estado === 'nuevo' ? '#22c55e' : (p.estado === 'contactado' ? '#f59e0b' : (p.estado === 'cerrado' ? '#6ee7b7' : '#f87171'));
 
             html += `
@@ -3568,7 +3457,7 @@ async function guardarPresupuesto(id) {
         moneda: document.getElementById('proMoneda').value,
         notas: document.getElementById('proNotas').value.trim(),
         estado: document.getElementById('proEstado').value,
-        updated_at: new Date().toISOString()
+        updated_at: new Date()
     };
     if (!data.nombre || !data.telefono) { showToast('⚠️ Nombre y teléfono son obligatorios'); return; }
     const btn = document.querySelector('#modal .m-btn.primary');
@@ -3577,7 +3466,7 @@ async function guardarPresupuesto(id) {
     if (id) {
         result = await sbClient.from('prospectos').update(data).eq('id', id);
     } else {
-        data.created_at = new Date().toISOString();
+        data.created_at = new Date();
         result = await sbClient.from('prospectos').insert(data);
     }
     if (result.error) { showToast('❌ Error: ' + result.error.message); if (btn) btn.disabled = false; return; }
@@ -3592,24 +3481,6 @@ async function guardarPresupuesto(id) {
 // ──────────────────────────────────────────────────────────────────────────
 async function eliminarPresupuesto(id) {
     if (!confirm('¿Eliminar este presupuesto? También se borrarán sus PDFs asociados.')) return;
-    // FIX PRESUP-H-01: Eliminar también los registros en tabla presupuestos
-    const { data: pdfs, error: pdfsErr } = await sbClient.from('presupuestos').select('pdf_url').eq('prospecto_id', id);
-    if (!pdfsErr && pdfs && pdfs.length) {
-        // Intentar borrar archivos del storage (no falla si no existen)
-        for (var i = 0; i < pdfs.length; i++) {
-            try {
-                var url = pdfs[i].pdf_url;
-                if (url) {
-                    // Extraer nombre de archivo de la URL: .../presupuestos/presupuesto_UUID.pdf
-                    var match = url.match(/presupuestos\/(.+)/);
-                    if (match) {
-                        await sbClient.storage.from('presupuestos').remove([match[1]]);
-                    }
-                }
-            } catch(storageErr) { console.warn('[eliminarPresupuesto] storage remove:', storageErr); }
-        }
-        await sbClient.from('presupuestos').delete().eq('prospecto_id', id);
-    }
     const { error } = await sbClient.from('prospectos').delete().eq('id', id);
     if (error) { showToast('❌ Error al eliminar: ' + error.message); }
     else { showToast('🗑️ Presupuesto eliminado'); cargarPresupuestos(); }
@@ -3618,8 +3489,8 @@ async function eliminarPresupuesto(id) {
 // ──────────────────────────────────────────────────────────────────────────
 // 5. Generar PDF del presupuesto (con texto positivo sobre vuelos)
 // ──────────────────────────────────────────────────────────────────────────
-async function generarPresupuestoPDF(prospectoId, btnEl) {
-    const btnGenerar = btnEl || event?.target;
+async function generarPresupuestoPDF(prospectoId) {
+    const btnGenerar = event.target;
     if (btnGenerar) btnGenerar.disabled = true;
     try {
         const { data: p, error: pErr } = await sbClient.from('prospectos').select('*').eq('id', prospectoId).single();
@@ -3759,7 +3630,6 @@ body{background:#f0f4fa;font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif
 // 6. Enviar presupuesto por WhatsApp
 // ──────────────────────────────────────────────────────────────────────────
 async function enviarWhatsAppPresupuesto(prospectoId) {
-    try {
     const { data: p } = await sbClient.from('prospectos').select('*').eq('id', prospectoId).single();
     if (!p) { showToast('Presupuesto no encontrado'); return; }
     const { data: presup } = await sbClient
@@ -3770,17 +3640,15 @@ async function enviarWhatsAppPresupuesto(prospectoId) {
         .limit(1)
         .single();
     if (!presup || !presup.pdf_url) { showToast('Primero generá el PDF del presupuesto'); return; }
-    const telefono = p.telefono ? LZ.normalizarTelefono(p.telefono) : '';
+    const telefono = p.telefono?.replace(/\D/g, '');
     if (!telefono || telefono.length < 8) {
       showToast('⚠️ Número de teléfono inválido');
       return;
     }
     const mensaje = `¡Hola ${p.nombre}! 🌊 *Tu presupuesto para Luazul Smart Travel está listo.* 📄 Descargalo aquí: ${presup.pdf_url} - Válido por 48 horas. ¡Comenzá hoy tu plan en cuotas!`;
     window.open(`https://wa.me/${telefono}?text=${encodeURIComponent(mensaje)}`, '_blank');
-    // FIX PRESUP-M-03: marcar enviado_whatsapp solo después de abrir WhatsApp
     await sbClient.from('presupuestos').update({ enviado_whatsapp: true }).eq('pdf_url', presup.pdf_url);
     showToast('📱 Se abrirá WhatsApp con el mensaje listo para enviar.');
-    } catch(e) { showToast('❌ Error: ' + (e.message || e)); }   // FIX PRESUP-M-02: try-catch
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -3842,8 +3710,6 @@ async function marcarContactado(id) {
 // 9. Alertas de recordatorios próximos (dentro de 2 días)
 // ──────────────────────────────────────────────────────────────────────────
 async function mostrarAlertasRecordatorios() {
-    // FIX REF-M-02: agregar guard de null
-    if (!sbClient || !_currentProfile) return;
     const hoy = new Date();
     const dentroDe2Dias = new Date();
     dentroDe2Dias.setDate(hoy.getDate() + 2);
@@ -3858,10 +3724,7 @@ async function mostrarAlertasRecordatorios() {
     if (error || !data.length) return;
 
     const lista = data.map(p => p.nombre + ' (' + p.proximo_recordatorio + ')').join(', ');
-    // B4: Truncar toast si la lista es muy larga (evitar overflow de pantalla)
-    var toastMsg = '📅 Tienes ' + data.length + ' recordatorio(s) próximo(s): ' + lista;
-    if (toastMsg.length > 120) toastMsg = '📅 Tienes ' + data.length + ' recordatorio(s) próximo(s). Ver sección Presupuestos para detalles.';
-    showToast(toastMsg);   // FIX PRESUP-M-01: eliminado 8000 (no es tipo válido)
+    showToast('📅 Tienes ' + data.length + ' recordatorio(s) próximo(s): ' + lista, 8000);
 }
 
 window.cargarPresupuestos = cargarPresupuestos;
@@ -3888,7 +3751,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 loadClients();
                 // FIX: Cargar badge al restaurar sesión también
                 setTimeout(refreshAdminNotifBadge, 100);
-                startAdminNotifPolling(); // M3: Iniciar polling al restaurar sesión
               });
             });
         }
