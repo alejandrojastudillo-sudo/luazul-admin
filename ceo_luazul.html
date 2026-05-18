@@ -1510,6 +1510,9 @@ function showTab(id){
   var tb=document.getElementById('tab-'+id);
   if(pg) pg.classList.add('active');
   if(tb) tb.classList.add('active');
+  if(id==='overview')           renderOverview();
+  if(id==='regiones')          renderRegiones();
+  if(id==='venddash')          renderVendDash();
   if(id==='pagos')             renderPagos();
   if(id==='clientes')          renderClientes();
   if(id==='mensual')           renderMensual();
@@ -1787,9 +1790,9 @@ function renderRegiones(){
         for(var jj=0;jj<jefesR.length;jj++){
           var jf=jefesR[jj];
           var jfId=String(jf.user_id||jf.id);
-          var susV=rv.filter(function(vv){ return String(vv.manager_id)===jfId; });
+          var susV=rv.filter(function(vv){ return String(vv.manager_id)===String(jf.id)||String(vv.manager_id)===String(jf.user_id); });
           var susC=rc.filter(function(cc){
-            return susV.some(function(vv){ return String(vv.user_id||vv.id)===String(cc.vid); });
+            return susV.some(function(vv){ return String(vv.user_id||vv.id)===String(cc.vid)||String(vv.id)===String(cc.vid); });
           });
           var susRec=susC.reduce(function(s,c){ return s+(parseInt(c.cuotas_pagadas)||0)*(parseFloat(c.monto_cuota)||0); },0);
           var comJ=susRec*0.15;
@@ -3409,10 +3412,10 @@ function renderPagoComisiones(){
       + '</div>';
   }
 
-  // ── Resumen global al tope (FIX: incluir Jefes de Ventas 15%) ──
+  // ── Resumen global al tope (incluye Jefes de Ventas 15%) ──
+  var jfs = _cacheSalesLeaders || [];
   var totalPendGer  = gs.reduce(function(s,g){ var cm=calcComisionGerente(g,vs,cs); return s+cm.pendiente; },0);
   var totalPendVend = vs.reduce(function(s,v){ var cm=calcComision(v,cs); var pagado=(v.comprobantes||[]).reduce(function(a,x){return a+(parseFloat(x.monto)||0);},0); return s+Math.max(0,cm.neta-pagado); },0);
-  // FIX: Agregar comisiones pendientes de Jefes de Ventas (15%)
   var totalPendJefe = jfs.reduce(function(s,j){ var cmJ=calcComisionJefe(j,cs,vs); var pagadoJ=(j.comprobantes||[]).reduce(function(a,x){return a+(parseFloat(x.monto)||0);},0); return s+Math.max(0,cmJ.neta-pagadoJ); },0);
   var totalPend = totalPendGer + totalPendVend + totalPendJefe;
 
@@ -3434,7 +3437,6 @@ function renderPagoComisiones(){
     gs.forEach(function(g){ html += buildCardGerente(g); });
   }
   // ── Jefes de Ventas ──
-  var jfs = _cacheSalesLeaders || [];
   if(jfs.length){
     html += '<div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--gold);margin:20px 0 12px;">🎯 Jefes de Ventas</div>';
     for(var ji=0;ji<jfs.length;ji++){
