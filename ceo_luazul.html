@@ -1263,6 +1263,7 @@ function cLogout(){
 })();
 
 document.addEventListener('DOMContentLoaded', function(){
+  console.log('%c[CEO LuAzul] v3.0 — FIX 406 + FIX-A (nombre cliente en pagos) + FIX-B (estado post-aprobación)', 'background:#059669;color:white;font-weight:bold;padding:4px 8px;border-radius:4px;');
   document.getElementById('cPass').addEventListener('keypress', function(e){ if(e.key==='Enter') cLogin(); });
 
   // [SUPABASE PHASE 2] — Verificar sesión activa en Supabase al cargar
@@ -1653,8 +1654,10 @@ function renderOverview(){
       +'</div>';
   }).join('');
 
-  // FIX: "Últimos pagos" — solo siguiente cuota debida por cliente + aprobados recientes
+  // FIX-A: "Últimos pagos" — solo siguiente cuota debida por cliente + aprobados recientes
+  // FIX-A: Resolver cliente_nombre y vendedor_nombre desde cache si el campo pagos está vacío
   var clientes = _cacheClientes||[];
+  var vendedores = _cacheVendedores||[];
   var pays = (_cachePagos||[]).filter(function(n){
     if(n.estado==='aprobado') return true;
     if(n.estado==='pendiente'){
@@ -1663,6 +1666,18 @@ function renderOverview(){
       return parseInt(n.numero_cuota) === (parseInt(c.cuotas_pagadas)||0) + 1;
     }
     return false;
+  }).map(function(n){
+    // FIX-A: Si cliente_nombre está vacío en la tabla pagos, resolverlo desde _cacheClientes
+    if(!n.cliente_nombre){
+      var cMatch = clientes.find(function(x){ return String(x.id)===String(n.cliente_id); });
+      if(cMatch) n.cliente_nombre = cMatch.nombre;
+    }
+    // FIX-A: Si vendedor_nombre está vacío, resolverlo desde _cacheVendedores usando seller_id
+    if(!n.vendedor_nombre && n.seller_id){
+      var vMatch = vendedores.find(function(v){ return String(v.user_id)===String(n.seller_id) || String(v.id)===String(n.seller_id); });
+      if(vMatch) n.vendedor_nombre = vMatch.nombre;
+    }
+    return n;
   }).sort(function(a,b){ return (b.created_at||'').localeCompare(a.created_at||''); }).slice(0,6);
   document.getElementById('ovLastPays').innerHTML=pays.length
     ?pays.map(function(n){
@@ -1805,9 +1820,9 @@ function renderRegiones(){
         for(var jj=0;jj<jefesR.length;jj++){
           var jf=jefesR[jj];
           var jfId=String(jf.user_id||jf.id);
-          var susV=rv.filter(function(vv){ return String(vv.manager_id)===jfId; });
+          var susV=rv.filter(function(vv){ return String(vv.manager_id)===String(jf.id)||String(vv.manager_id)===String(jf.user_id); });
           var susC=rc.filter(function(cc){
-            return susV.some(function(vv){ return String(vv.user_id||vv.id)===String(cc.vid); });
+            return susV.some(function(vv){ return String(vv.user_id||vv.id)===String(cc.vid)||String(vv.id)===String(cc.vid); });
           });
           var susRec=susC.reduce(function(s,c){ return s+(parseInt(c.cuotas_pagadas)||0)*(parseFloat(c.monto_cuota)||0); },0);
           var comJ=susRec*0.15;
@@ -2086,6 +2101,7 @@ function aprobarTodos(){
     });
   });
   chain.then(function() {
+    renderOverview();
     renderPagosAprobacion();
     renderClientes();
     renderMora();
@@ -2311,7 +2327,6 @@ function saveObjCEO(){
 
 // ── CREAR CLIENTE DESDE CEO ───────────────────────────
 // BLOQUEADO POR JERARQUÍA: Solo los Asesores (vendedores) pueden crear clientes.
-// La creación de clientes es exclusiva del panel Asesor (admin_luazul.html).
 function openAddClienteCeo(){
   showToast('⛔ Solo los Asesores pueden crear clientes. Usá el panel del Vendedor.');
 }
@@ -3789,6 +3804,7 @@ function aprobarPago(clientId, cuotaKey, dbKey){
   var _esCuota1    = Number(cuotaKey) === 1;
 
   // PASO 1 — Aprobar el pago en tabla `pagos`
+  // FIX 406: Sin .select().single() — evita error de coercion si RLS bloquea o no retorna fila
   sbClient.from('pagos')
     .update({ estado: 'aprobado' })
     .eq('id', _pagoId)
@@ -3866,6 +3882,7 @@ function aprobarPago(clientId, cuotaKey, dbKey){
       var comTab = document.getElementById('tabpg-pagocomisiones');
       if(comTab && comTab.style.display !== 'none') renderPagoComisiones();
       // FIX H4: Refrescar todas las vistas afectadas por la aprobación
+      renderOverview();
       renderPagosAprobacion();
       renderClientes();
       renderMora();
