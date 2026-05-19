@@ -2108,12 +2108,13 @@ function _approveSinglePago(pago){
   // FIX MORA-L-04: Pre-lookup client estado before the chain
   var _clientEstado = ((_cacheClientes||[]).find(function(x){ return String(x.id)===_clientId; }) || {}).estado || '';
   var _esCuota1 = Number(cuotaKey) === 1;
+  // FIX 406: Sin .select().single() — evita error de coercion si RLS bloquea o no retorna fila
   return sbClient.from('pagos').update({
-    estado: 'aprobado', fecha_pago: new Date().toISOString()
-  }).eq('id', _pagoId).select().single().then(function(res) {
+    estado: 'aprobado'
+  }).eq('id', _pagoId).then(function(res) {
     if (res.error) throw res.error;
     var idx = (_cachePagos||[]).findIndex(function(x){ return String(x.id) === _pagoId; });
-    if (idx >= 0) _cachePagos[idx] = Object.assign(_cachePagos[idx], res.data);
+    if (idx >= 0) _cachePagos[idx].estado = 'aprobado';
     var c = (_cacheClientes||[]).find(function(x){ return String(x.id) === _clientId; });
     var cuotaNum = Number(cuotaKey);
     var cuotasAct = Number(c ? (c.cuotas_pagadas || 0) : 0);
@@ -3789,14 +3790,13 @@ function aprobarPago(clientId, cuotaKey, dbKey){
 
   // PASO 1 — Aprobar el pago en tabla `pagos`
   sbClient.from('pagos')
-    .update({ estado: 'aprobado', fecha_pago: new Date().toISOString() })
+    .update({ estado: 'aprobado' })
     .eq('id', _pagoId)
-    .select().single()
     .then(function(res){
       if(res.error) throw res.error;
-      // Actualizar caché local
+      // Actualizar caché local manualmente (sin depender del response)
       var idx = (_cachePagos||[]).findIndex(function(x){ return String(x.id) === _pagoId; });
-      if(idx >= 0) _cachePagos[idx] = Object.assign(_cachePagos[idx], res.data);
+      if(idx >= 0) _cachePagos[idx].estado = 'aprobado';
 
       // PASO 2 — Actualizar cuotas_pagadas y estado del cliente (IDs como string)
       var c = (_cacheClientes||[]).find(function(x){ return String(x.id) === _clientId; });
@@ -3989,17 +3989,12 @@ function confirmarRechazo(){
   var btnConfirm = document.querySelector('#rechazoModal button[onclick="confirmarRechazo()"]');
   if(btnConfirm){ btnConfirm.disabled = true; btnConfirm.textContent = '⏳ Procesando...'; }
 
-  // PASO 1 — Rechazar el pago usando id (UUID) — misma lógica que aprobarPago()
+  // PASO 1 — Rechazar el pago usando id (UUID) — FIX 406: sin .select().single()
   sbClient.from('pagos')
     .update({ estado: 'rechazado' })
     .eq('id', _pagoId)
-    .select().single()
     .then(function(res){
-      console.log('[rechazarPago] Supabase response:', JSON.stringify(res));
       if(res.error) throw res.error;
-      if(!res.data){
-        throw new Error('No se encontró el pago con id=' + _pagoId);
-      }
       // Actualizar cache local
       var cacheIdx = (_cachePagos||[]).findIndex(function(x){ return String(x.id) === _pagoId; });
       if(cacheIdx >= 0){
