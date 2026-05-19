@@ -5,7 +5,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- CEO v4.2 — FIX-DEFINITIVO: TypeError .then corregido, notificaciones 400 corregido, nombre en contratos con fetch BD, cuotas aprobadas visibles, comprobantes accesibles, rechazados visibles · 2026-05-20 -->
+<!-- CEO v4.3 — FIX-DEFINITIVO + SIMULADOR PRO: dropdowns dark, edicion inline paquetes desde simulador, layout profesional, fix boton roto simModalNuevoPaquete · 2026-05-20 -->
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="manifest" href="manifest_ceo.json">
   <meta name="theme-color" content="#0B3D91">
@@ -93,6 +93,8 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
 
 /* MISC */
 .msel{padding:8px 12px;background:rgba(255,255,255,.05);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-family:'Mulish',sans-serif;font-size:.82rem;}
+option{background:#0d1b2a;color:#e8eeff;padding:6px 8px;}
+optgroup{background:#0a1128;color:#a78bfa;font-weight:700;}
 .sbox{display:flex;align-items:center;gap:8px;padding:8px 13px;background:rgba(255,255,255,.04);border:1px solid var(--border2);border-radius:10px;color:var(--muted);}
 .sbox input{background:none;border:none;color:var(--text);font-family:'Mulish',sans-serif;font-size:.85rem;min-width:140px;}
 .sbox input:focus{outline:none;}
@@ -187,8 +189,42 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
 .cat-kpi{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;}
 .cat-kpi .cat-kpi-v{font-family:'Syne',sans-serif;font-size:1.3rem;font-weight:800;}
 .cat-kpi .cat-kpi-l{font-size:.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-top:2px;}
-@media(max-width:900px){.cat-table-head,.cat-table-row{grid-template-columns:1fr;gap:4px;}.cat-table-head{display:none;}.cat-table-row{padding:14px;}.cat-ppm{margin-top:2px;}}
+@media(max-width:900px){.cat-table-head,.cat-table-row{grid-template-columns:1fr;gap:4px;}.cat-table-head{display:none;}.cat-table-row{padding:14px;}.cat-ppm{margin-top:2px;}.sim-dest-grid{grid-template-columns:1fr !important;}.sim-quick-edit-grid{grid-template-columns:1fr 1fr !important;}}
 .ref-badge{padding:3px 10px;border-radius:20px;font-size:.7rem;font-weight:700;}
+
+/* ── SIMULADOR PRO ── */
+.sim-dest-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin-bottom:24px;}
+.sim-dest-card{background:var(--surface);border:2px solid var(--border);border-radius:16px;padding:18px;cursor:pointer;transition:all .2s;position:relative;overflow:hidden;}
+.sim-dest-card::before{content:'';position:absolute;top:0;left:0;right:0;height:4px;background:linear-gradient(90deg,var(--gold),var(--purple));opacity:0;transition:opacity .2s;}
+.sim-dest-card:hover{border-color:var(--gold-bd);transform:translateY(-3px);box-shadow:0 12px 30px rgba(0,0,0,.3);}
+.sim-dest-card:hover::before{opacity:1;}
+.sim-dest-card.selected{border-color:var(--gold);background:rgba(245,158,11,.06);}
+.sim-dest-card.selected::before{opacity:1;}
+.sim-dest-card .dest-emoji{font-size:1.6rem;margin-bottom:8px;}
+.sim-dest-card .dest-name{font-family:'Syne',sans-serif;font-weight:800;font-size:.92rem;margin-bottom:4px;}
+.sim-dest-card .dest-count{font-size:.68rem;color:var(--muted);}
+.sim-dest-card .dest-price-from{font-size:.72rem;color:var(--gold);font-weight:700;margin-top:6px;}
+.sim-pkg-row{display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1.2fr auto;gap:8px;padding:12px 16px;border-bottom:1px solid var(--border);align-items:center;font-size:.82rem;transition:background .15s;}
+.sim-pkg-row:hover{background:rgba(255,255,255,.03);}
+.sim-pkg-row.inactive{opacity:.4;}
+.sim-pkg-head{display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1.2fr auto;gap:8px;padding:10px 16px;background:rgba(255,255,255,.03);border-bottom:1px solid var(--border);font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);}
+.sim-quick-edit{display:none;background:var(--surface);border:1px solid var(--gold-bd);border-radius:12px;padding:16px;margin:8px 16px;animation:fi .2s ease;}
+.sim-quick-edit.open{display:block;}
+.sim-quick-edit-grid{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px;}
+.sim-cuota-compare{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin:16px 0;}
+.sim-cuota-chip{padding:12px 8px;border-radius:12px;background:var(--card);border:1px solid var(--border);text-align:center;cursor:pointer;transition:all .15s;}
+.sim-cuota-chip:hover{border-color:var(--purple-bd);}
+.sim-cuota-chip.active{background:var(--purple-bg);border-color:var(--purple-bd);box-shadow:0 0 20px rgba(167,139,250,.15);}
+.sim-cuota-chip .chip-label{font-size:.6rem;color:var(--muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px;}
+.sim-cuota-chip .chip-value{font-family:'Syne',sans-serif;font-size:1rem;font-weight:800;}
+.sim-cuota-chip .chip-sub{font-size:.58rem;color:var(--muted);margin-top:2px;}
+.sim-resumen-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin:20px 0;}
+.sim-resumen-item{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px;text-align:center;}
+.sim-resumen-item .ri-emoji{font-size:1.4rem;margin-bottom:6px;}
+.sim-resumen-item .ri-value{font-family:'Syne',sans-serif;font-size:1.5rem;font-weight:900;}
+.sim-resumen-item .ri-label{font-size:.62rem;color:var(--muted);margin-top:4px;text-transform:uppercase;letter-spacing:.5px;}
+.sim-inline-input{width:100%;padding:6px 10px;background:rgba(255,255,255,.05);border:1px solid var(--border2);border-radius:6px;color:var(--text);font-family:'Mulish',sans-serif;font-size:.82rem;}
+.sim-inline-input:focus{outline:none;border-color:var(--gold);}
 .ref-badge.confirmado{background:var(--green-bg);color:var(--green);border:1px solid var(--green-bd);}
 .ref-badge.pendiente{background:var(--gold-bg);color:var(--gold);border:1px solid var(--gold-bd);}
 
@@ -555,36 +591,45 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
       </div>
     </div>
 
-    <!-- ═══ SIMULADOR DE CUOTAS ═══ -->
+    <!-- ═══ SIMULADOR DE CUOTAS PRO ═══ -->
     <div class="tabpg" id="tabpg-simulador">
       <div class="sec-head">
         <h2>📊 Simulador de Cuotas</h2>
-        <button class="addbtn" onclick="showTab('catalogo')" style="background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.25);color:#fbbf24;">🏷️ Gestionar precios</button>
-      </div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px;margin-bottom:24px;">
-        <div>
-          <div class="ml">Destino</div>
-          <select id="simDestino" class="msel" style="width:100%;" onchange="simOnDestinoChange()">
-            <option value="">Cargando destinos...</option>
-          </select>
-        </div>
-        <div>
-          <div class="ml">Paquete</div>
-          <select id="simPaquete" class="msel" style="width:100%;" onchange="simCalcular()">
-            <option value="">Seleccione destino primero</option>
-          </select>
-        </div>
-        <div>
-          <div class="ml">Cuotas</div>
-          <select id="simCuotas" class="msel" style="width:100%;" onchange="simCalcular()">
-            <option value="6">6 cuotas</option>
-            <option value="10">10 cuotas</option>
-            <option value="12" selected>12 cuotas</option>
-            <option value="18">18 cuotas</option>
-          </select>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="addbtn" onclick="openAddPaquete()" style="background:linear-gradient(135deg,#059669,#10b981);">➕ Nuevo paquete</button>
+          <button class="addbtn" onclick="openAddDestino()" style="background:linear-gradient(135deg,#d97706,#f59e0b);">🌍 Nuevo destino</button>
+          <button onclick="simLoadDestinos()" style="padding:8px 14px;border-radius:9px;background:rgba(59,130,246,.1);border:1px solid var(--blue-bd);color:#93c5fd;font-family:inherit;font-size:.78rem;font-weight:700;cursor:pointer;">🔄</button>
         </div>
       </div>
-      <div id="simResultado" style="min-height:200px;"></div>
+      <!-- Grid de destinos como tarjetas -->
+      <div id="simDestinosGrid" class="sim-dest-grid">
+        <div style="text-align:center;padding:50px;color:var(--muted);grid-column:1/-1;"><div style="font-size:2.5rem;margin-bottom:12px;opacity:.5;">🌍</div><p>Cargando destinos...</p></div>
+      </div>
+      <!-- Paquetes del destino seleccionado -->
+      <div id="simPaquetesSection" style="display:none;">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px;">
+          <div>
+            <h3 id="simSelectedDestName" style="font-family:'Syne',sans-serif;font-weight:800;font-size:1rem;color:var(--gold);"></h3>
+            <p id="simSelectedDestCount" style="font-size:.72rem;color:var(--muted);margin-top:2px;"></p>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <div class="ml" style="margin:0;">Cuotas</div>
+            <select id="simCuotas" class="msel" style="width:auto;" onchange="simCalcular()">
+              <option value="6">6 cuotas</option>
+              <option value="10">10 cuotas</option>
+              <option value="12" selected>12 cuotas</option>
+              <option value="18">18 cuotas</option>
+              <option value="24">24 cuotas</option>
+            </select>
+          </div>
+        </div>
+        <div id="simResultado" style="min-height:100px;"></div>
+        <!-- Tabla de paquetes con edición inline -->
+        <div class="twrap" style="margin-top:20px;">
+          <div class="sim-pkg-head"><div>Paquete</div><div>Personas</div><div>Noches</div><div>Total USD</div><div>USD/pers/mes</div><div>Acciones</div></div>
+          <div id="simPaquetesBody"></div>
+        </div>
+      </div>
     </div>
 
     <!-- ═══ TICKETS ═══ -->
@@ -6060,87 +6105,273 @@ function actualizarCotizaciones() {
 // ════════════════════════════════════════════════════════════════
 
 var _simCatalogo = [];
+var _simSelectedDestino = '';
+var _simSelectedPkgId = null;
+
+// Emojis por destino para las tarjetas
+var _destEmojis = {
+  'buzios':'🏖️','arrail':'🏝️','rio':'�Copacabana','salvador':'🎸','florianopolis':'🌊','iguazu':'🌊',
+  'natal':'🌴','recife':'🌞','fortaleza':'🐚','belo horizonte':'🏙️','manaus':'🌴','foz do iguazu':'🌊'
+};
+function _destEmoji(name) {
+  var n = (name||'').toLowerCase();
+  for (var k in _destEmojis) { if (n.indexOf(k) !== -1) return _destEmojis[k]; }
+  return '✈️';
+}
 
 function simLoadDestinos() {
-  var sel = document.getElementById('simDestino');
-  if (!sel) return;
-  sel.innerHTML = '<option value="">Cargando destinos...</option>';
-  document.getElementById('simPaquete').innerHTML = '<option value="">Seleccione destino primero</option>';
-  document.getElementById('simResultado').innerHTML = '';
+  var grid = document.getElementById('simDestinosGrid');
+  if (!grid) return;
+  grid.innerHTML = '<div style="text-align:center;padding:50px;color:var(--muted);grid-column:1/-1;"><div style="font-size:2.5rem;margin-bottom:12px;opacity:.5;">🌍</div><p>Cargando destinos...</p></div>';
 
-  sbClient.from('catalogo_precios').select('id, nombre_destino, paquete, personas, noches, precio_usd').eq('activo', true).order('nombre_destino', { ascending: true }).order('orden', { ascending: true }).then(function(res) {
-    if (res.error) { sel.innerHTML = '<option value="">Error al cargar</option>'; return; }
+  sbClient.from('catalogo_precios').select('id, nombre_destino, paquete, personas, noches, precio_usd, activo').order('nombre_destino', { ascending: true }).order('orden', { ascending: true }).then(function(res) {
+    if (res.error) { grid.innerHTML = '<div style="text-align:center;padding:50px;color:#f87171;grid-column:1/-1;">❌ Error al cargar destinos</div>'; return; }
     _simCatalogo = res.data || [];
-    var destinos = [];
-    var seen = {};
+
+    // Agrupar por destino
+    var destMap = {};
     _simCatalogo.forEach(function(p) {
-      if (!seen[p.nombre_destino]) { seen[p.nombre_destino] = true; destinos.push(p.nombre_destino); }
+      if (!destMap[p.nombre_destino]) destMap[p.nombre_destino] = [];
+      destMap[p.nombre_destino].push(p);
     });
-    sel.innerHTML = '<option value="">— Seleccione destino —</option>' + destinos.map(function(d) {
-      return '<option value="' + d + '">' + d + '</option>';
-    }).join('');
+
+    var destNames = Object.keys(destMap);
+    if (!destNames.length) { grid.innerHTML = '<div style="text-align:center;padding:50px;color:var(--muted);grid-column:1/-1;"><div style="font-size:2.5rem;margin-bottom:12px;opacity:.5;">📦</div><p>No hay destinos disponibles. Creá uno con el botón "Nuevo destino".</p></div>'; return; }
+
+    var html = '';
+    for (var i = 0; i < destNames.length; i++) {
+      var dn = destNames[i];
+      var pkgs = destMap[dn];
+      var activos = pkgs.filter(function(p) { return p.activo; });
+      var minPrice = activos.length ? Math.min.apply(null, activos.map(function(p) { return p.precio_usd; })) : 0;
+      var emoji = _destEmoji(dn);
+      var sel = dn === _simSelectedDestino ? ' selected' : '';
+      html += '<div class="sim-dest-card' + sel + '" onclick="simSelectDestino(\'' + esc(dn).replace(/'/g, "\\'") + '\')">'
+        + '<div class="dest-emoji">' + emoji + '</div>'
+        + '<div class="dest-name">' + esc(dn) + '</div>'
+        + '<div class="dest-count">' + activos.length + ' paquete' + (activos.length !== 1 ? 's' : '') + (activos.length < pkgs.length ? ' (' + (pkgs.length - activos.length) + ' inactivo)' : '') + '</div>'
+        + '<div class="dest-price-from">Desde USD ' + Math.round(minPrice).toLocaleString('es-AR') + '</div>'
+        + '</div>';
+    }
+    grid.innerHTML = html;
+
+    // Si ya había uno seleccionado, restaurar vista
+    if (_simSelectedDestino) simRenderPaquetes();
   });
 }
 
-function simOnDestinoChange() {
-  var dest = document.getElementById('simDestino').value;
-  var sel = document.getElementById('simPaquete');
-  if (!dest) {
-    sel.innerHTML = '<option value="">Seleccione destino primero</option>';
-    document.getElementById('simResultado').innerHTML = '';
-    return;
+function simSelectDestino(destName) {
+  _simSelectedDestino = destName;
+  _simSelectedPkgId = null;
+
+  // Marcar tarjeta seleccionada
+  var cards = document.querySelectorAll('.sim-dest-card');
+  for (var i = 0; i < cards.length; i++) {
+    cards[i].classList.remove('selected');
+    var nameEl = cards[i].querySelector('.dest-name');
+    if (nameEl && nameEl.textContent === destName) cards[i].classList.add('selected');
   }
-  var paquetes = _simCatalogo.filter(function(p) { return p.nombre_destino === dest; });
-  sel.innerHTML = '<option value="">— Seleccione paquete —</option>' + paquetes.map(function(p) {
-    return '<option value="' + p.id + '">' + p.paquete + ' (' + p.personas + ' pers. · ' + p.noches + ' noches)</option>';
-  }).join('');
-  document.getElementById('simResultado').innerHTML = '';
+
+  // Mostrar sección de paquetes
+  var sec = document.getElementById('simPaquetesSection');
+  if (sec) sec.style.display = 'block';
+
+  simRenderPaquetes();
+}
+
+function simRenderPaquetes() {
+  var paquetes = _simCatalogo.filter(function(p) { return p.nombre_destino === _simSelectedDestino; });
+  paquetes.sort(function(a, b) { return (a.orden || 0) - (b.orden || 0); });
+
+  var nameEl = document.getElementById('simSelectedDestName');
+  var countEl = document.getElementById('simSelectedDestCount');
+  if (nameEl) nameEl.textContent = _simSelectedDestino;
+  if (countEl) countEl.textContent = paquetes.length + ' paquete' + (paquetes.length !== 1 ? 's' : '') + ' disponible' + (paquetes.length !== 1 ? 's' : '');
+
+  // Seleccionar el primer activo automáticamente
+  var firstActive = null;
+  for (var i = 0; i < paquetes.length; i++) { if (paquetes[i].activo && !firstActive) firstActive = paquetes[i]; }
+  if (firstActive && !_simSelectedPkgId) _simSelectedPkgId = firstActive.id;
+
+  simCalcular();
+  simRenderPaquetesTable(paquetes);
 }
 
 function simCalcular() {
-  var pkgId = document.getElementById('simPaquete').value;
   var cuotas = parseInt(document.getElementById('simCuotas').value) || 12;
   var resEl = document.getElementById('simResultado');
+  if (!resEl) return;
 
-  if (!pkgId) { resEl.innerHTML = '<div style="text-align:center;padding:50px;color:var(--muted);"><div style="font-size:3rem;margin-bottom:12px;">📊</div><p>Seleccione un destino y un paquete para simular cuotas.</p></div>'; return; }
-
-  var pkg = _simCatalogo.find(function(p) { return String(p.id) === String(pkgId); });
-  if (!pkg) { resEl.innerHTML = ''; return; }
+  var pkg = null;
+  if (_simSelectedPkgId) {
+    pkg = _simCatalogo.find(function(p) { return String(p.id) === String(_simSelectedPkgId); });
+  }
+  if (!pkg) {
+    // Buscar primer activo del destino
+    var pkgs = _simCatalogo.filter(function(p) { return p.nombre_destino === _simSelectedDestino && p.activo; });
+    pkg = pkgs.length ? pkgs[0] : null;
+    if (pkg) _simSelectedPkgId = pkg.id;
+  }
+  if (!pkg) { resEl.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted);font-size:.85rem;">No hay paquetes activos para este destino</div>'; return; }
 
   var total = pkg.precio_usd;
   var cuotaMensual = total / cuotas;
   var costoDia = pkg.noches > 0 ? total / pkg.noches : 0;
+  var costoPersonaMes = pkg.personas > 0 ? cuotaMensual / pkg.personas : 0;
+  var costoPersonaDia = (pkg.personas > 0 && pkg.noches > 0) ? total / pkg.personas / pkg.noches : 0;
 
-  var cuotasArr = [6, 10, 12, 18];
+  var cuotasArr = [6, 10, 12, 18, 24];
   var cuotasHtml = cuotasArr.map(function(c) {
     var cm = total / c;
     var isActive = c === cuotas;
-    return '<div onclick="document.getElementById(\'simCuotas\').value=' + c + ';simCalcular();" style="padding:14px;border-radius:12px;background:' + (isActive ? 'var(--purple-bg)' : 'var(--card)') + ';border:1px solid ' + (isActive ? 'var(--purple-bd)' : 'var(--border)') + ';cursor:pointer;text-align:center;transition:all .15s;' + (isActive ? 'box-shadow:0 0 20px rgba(167,139,250,.15);' : '') + '">'
-      + '<div style="font-size:.65rem;color:var(--muted);margin-bottom:4px;">' + c + ' cuotas</div>'
-      + '<div style="font-family:Syne,sans-serif;font-size:1.1rem;font-weight:800;color:' + (isActive ? 'var(--purple)' : 'var(--text)') + ';">USD ' + Math.round(cm).toLocaleString('es-AR') + '</div>'
-      + '<div style="font-size:.6rem;color:var(--muted);">/mes</div>'
+    var cpm = pkg.personas > 0 ? cm / pkg.personas : 0;
+    return '<div class="sim-cuota-chip' + (isActive ? ' active' : '') + '" onclick="document.getElementById(\'simCuotas\').value=' + c + ';simCalcular();">'
+      + '<div class="chip-label">' + c + ' cuotas</div>'
+      + '<div class="chip-value" style="color:' + (isActive ? 'var(--purple)' : 'var(--text)') + ';">USD ' + Math.round(cm).toLocaleString('es-AR') + '</div>'
+      + '<div class="chip-sub">USD ' + Math.round(cpm) + '/pers</div>'
       + '</div>';
   }).join('');
 
+  var persLabel = pkg.personas === 1 ? 'Individual' : pkg.personas === 2 ? 'En par' : pkg.personas + ' personas';
+
   resEl.innerHTML =
     '<div class="twrap" style="max-width:900px;">'
-    + '<div style="padding:24px;background:rgba(255,255,255,.02);border-bottom:1px solid var(--border);">'
-    + '<div style="font-family:Syne,sans-serif;font-size:1.2rem;font-weight:800;margin-bottom:4px;">' + pkg.nombre_destino + '</div>'
-    + '<div style="font-size:.78rem;color:var(--muted);">' + pkg.paquete + ' · ' + pkg.personas + ' personas · ' + pkg.noches + ' noches</div>'
+    + '<div style="padding:20px 24px;background:rgba(255,255,255,.02);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">'
+    + '<div>'
+    + '<div style="font-family:\'Syne\',sans-serif;font-size:1.15rem;font-weight:800;">' + esc(pkg.nombre_destino) + '</div>'
+    + '<div style="font-size:.78rem;color:var(--muted);margin-top:2px;">' + esc(pkg.paquete) + ' · ' + persLabel + ' · ' + pkg.noches + ' noches</div>'
     + '</div>'
-    + '<div style="padding:24px;">'
-    + '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px;">'
-    + '<div class="kpi"><span>💰</span><div class="kpi-v" style="color:var(--gold);">' + Math.round(total).toLocaleString('es-AR') + '</div><div class="kpi-l">Total USD</div></div>'
-    + '<div class="kpi"><span>📅</span><div class="kpi-v" style="color:var(--purple);">' + cuotas + '</div><div class="kpi-l">Cuotas</div></div>'
-    + '<div class="kpi"><span>💳</span><div class="kpi-v" style="color:var(--blue);">' + Math.round(cuotaMensual).toLocaleString('es-AR') + '</div><div class="kpi-l">USD / mes</div></div>'
-    + '<div class="kpi"><span>🏨</span><div class="kpi-v" style="color:var(--green);">' + Math.round(costoDia).toLocaleString('es-AR') + '</div><div class="kpi-l">USD / día</div></div>'
+    + '<div style="text-align:right;">'
+    + '<div style="font-size:.6rem;text-transform:uppercase;letter-spacing:1px;color:var(--muted);">Precio total</div>'
+    + '<div style="font-family:\'Syne\',sans-serif;font-size:1.6rem;font-weight:900;color:var(--gold);">USD ' + Math.round(total).toLocaleString('es-AR') + '</div>'
+    + '</div></div>'
+    + '<div style="padding:20px 24px;">'
+    + '<div class="sim-resumen-grid">'
+    + '<div class="sim-resumen-item"><div class="ri-emoji">💳</div><div class="ri-value" style="color:var(--purple);">USD ' + Math.round(cuotaMensual).toLocaleString('es-AR') + '</div><div class="ri-label">Cuota mensual (' + cuotas + ')</div></div>'
+    + '<div class="sim-resumen-item"><div class="ri-emoji">👤</div><div class="ri-value" style="color:var(--blue);">USD ' + Math.round(costoPersonaMes).toLocaleString('es-AR') + '</div><div class="ri-label">Por persona / mes</div></div>'
+    + '<div class="sim-resumen-item"><div class="ri-emoji">🏨</div><div class="ri-value" style="color:var(--green);">USD ' + Math.round(costoPersonaDia).toLocaleString('es-AR') + '</div><div class="ri-label">Por persona / día</div></div>'
+    + '<div class="sim-resumen-item"><div class="ri-emoji">📅</div><div class="ri-value" style="color:var(--gold);">' + pkg.noches + '</div><div class="ri-label">Noches</div></div>'
     + '</div>'
-    + '<div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:10px;">Comparativa de cuotas</div>'
-    + '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;">'
-    + cuotasHtml
-    + '</div>'
+    + '<div style="font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:10px;">Comparativa rápida de cuotas</div>'
+    + '<div class="sim-cuota-compare">' + cuotasHtml + '</div>'
     + '</div></div>';
 }
+
+function simRenderPaquetesTable(paquetes) {
+  var body = document.getElementById('simPaquetesBody');
+  if (!body) return;
+
+  if (!paquetes || !paquetes.length) { body.innerHTML = '<div style="text-align:center;padding:30px;color:var(--muted);">Sin paquetes</div>'; return; }
+
+  var cuotas = parseInt(document.getElementById('simCuotas').value) || 12;
+  var html = '';
+
+  for (var i = 0; i < paquetes.length; i++) {
+    var p = paquetes[i];
+    var ppm = (p.personas > 0 && cuotas > 0) ? Math.round((p.precio_usd / cuotas) / p.personas) : 0;
+    var persLabel = p.personas === 1 ? 'Individual' : p.personas === 2 ? 'En par' : p.personas + ' pers.';
+    var isSelected = String(p.id) === String(_simSelectedPkgId);
+    var rowClass = 'sim-pkg-row' + (p.activo ? '' : ' inactive');
+    var selectedBorder = isSelected ? 'border-left:3px solid var(--gold);' : '';
+
+    html += '<div class="' + rowClass + '" style="' + selectedBorder + '">'
+      + '<div style="font-weight:700;cursor:pointer;' + (p.activo ? '' : 'text-decoration:line-through;') + '" onclick="' + (p.activo ? 'simSelectPkg(' + p.id + ')' : '') + '">' + esc(p.paquete) + (isSelected ? ' <span style="font-size:.65rem;color:var(--gold);">← simulando</span>' : '') + '</div>'
+      + '<div>' + persLabel + '</div>'
+      + '<div>' + p.noches + ' noches</div>'
+      + '<div style="font-weight:800;color:var(--gold);">USD ' + p.precio_usd.toLocaleString('es-AR') + '</div>'
+      + '<div style="color:var(--cyan);font-weight:600;font-size:.75rem;">USD ' + ppm + '/pers/mes</div>'
+      + '<div style="display:flex;gap:4px;">'
+      + '<button class="cat-act-btn edit" onclick="simQuickEditOpen(' + p.id + ')" title="Editar rápido">✏️</button>'
+      + '<button class="cat-act-btn dup" onclick="simDuplicatePkg(' + p.id + ')" title="Duplicar">📋</button>'
+      + '<button class="cat-act-btn del" onclick="toggleCatalogoActivo(' + p.id + ')" title="' + (p.activo ? 'Desactivar' : 'Activar') + '">' + (p.activo ? '●' : '○') + '</button>'
+      + '</div></div>';
+
+    // Quick edit row (collapsed by default)
+    html += '<div id="simQEdit' + p.id + '" class="sim-quick-edit">'
+      + '<div style="font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--gold);margin-bottom:10px;">✏️ Edición rápida: ' + esc(p.paquete) + '</div>'
+      + '<div class="sim-quick-edit-grid">'
+      + '<div><div class="ml">Paquete</div><input class="sim-inline-input" id="simQEpkg' + p.id + '" value="' + esc(p.paquete) + '"></div>'
+      + '<div><div class="ml">Personas</div><input class="sim-inline-input" type="number" id="simQEper' + p.id + '" value="' + p.personas + '" min="1"></div>'
+      + '<div><div class="ml">Noches</div><input class="sim-inline-input" type="number" id="simQEnoc' + p.id + '" value="' + p.noches + '" min="1"></div>'
+      + '<div><div class="ml">Precio USD</div><input class="sim-inline-input" type="number" id="simQEpre' + p.id + '" value="' + p.precio_usd + '" min="1"></div>'
+      + '</div>'
+      + '<div style="display:flex;gap:8px;margin-top:12px;">'
+      + '<button class="mbtn gold" onclick="simQuickEditSave(' + p.id + ')" style="padding:7px 16px;font-size:.78rem;">💾 Guardar</button>'
+      + '<button class="mbtn ghost" onclick="simQuickEditClose(' + p.id + ')" style="padding:7px 16px;font-size:.78rem;">Cancelar</button>'
+      + '</div></div>';
+  }
+
+  body.innerHTML = html;
+}
+
+function simSelectPkg(id) {
+  _simSelectedPkgId = id;
+  simCalcular();
+  simRenderPaquetes();
+}
+
+function simQuickEditOpen(id) {
+  // Cerrar otros editores abiertos
+  var allEdits = document.querySelectorAll('.sim-quick-edit.open');
+  for (var i = 0; i < allEdits.length; i++) allEdits[i].classList.remove('open');
+  var el = document.getElementById('simQEdit' + id);
+  if (el) el.classList.add('open');
+}
+
+function simQuickEditClose(id) {
+  var el = document.getElementById('simQEdit' + id);
+  if (el) el.classList.remove('open');
+}
+
+async function simQuickEditSave(id) {
+  var paq = document.getElementById('simQEpkg' + id);
+  var per = document.getElementById('simQEper' + id);
+  var noc = document.getElementById('simQEnoc' + id);
+  var pre = document.getElementById('simQEpre' + id);
+  if (!paq || !per || !noc || !pre) return;
+
+  var paqueteVal = paq.value.trim();
+  var personasVal = parseInt(per.value, 10);
+  var nochesVal = parseInt(noc.value, 10) || 7;
+  var precioVal = parseFloat(pre.value);
+
+  if (!paqueteVal || !personasVal || !precioVal) { showToast('⚠️ Completá todos los campos'); return; }
+
+  var u = { paquete: paqueteVal, personas: personasVal, noches: nochesVal, precio_usd: precioVal };
+  try {
+    var r = await sbClient.from('catalogo_precios').update(u).eq('id', id);
+    if (r.error) throw r.error;
+    showToast('✅ Paquete "' + paqueteVal + '" actualizado');
+    // Actualizar cache local
+    var cached = _simCatalogo.find(function(p) { return p.id === id; });
+    if (cached) { cached.paquete = paqueteVal; cached.personas = personasVal; cached.noches = nochesVal; cached.precio_usd = precioVal; }
+    simCalcular();
+    simRenderPaquetes();
+    // También refrescar catálogo si está cargado
+    if (_catCache && _catCache.length) {
+      var catItem = _catCache.find(function(p) { return p.id === id; });
+      if (catItem) { catItem.paquete = paqueteVal; catItem.personas = personasVal; catItem.noches = nochesVal; catItem.precio_usd = precioVal; }
+    }
+  } catch (e) { showToast('❌ ' + e.message); }
+}
+
+async function simDuplicatePkg(id) {
+  var item = _simCatalogo.find(function(p) { return p.id === id; });
+  if (!item) return;
+  var h = '<div class="mhead"><div><h2>📋 Duplicar Paquete</h2><p style="font-size:.72rem;color:var(--muted);">Clonar: ' + esc(item.paquete) + ' (' + item.personas + ' pers.)</p></div><button class="mclose" onclick="closeModal()">✕</button></div>'
+    + '<div class="mbody" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
+    + '<div class="mitem"><div class="ml">Nombre del nuevo paquete *</div><input id="dupNombre" class="medit" value="' + esc(item.paquete) + ' (copia)"></div>'
+    + '<div class="mitem"><div class="ml">Personas *</div><input id="dupPersonas" type="number" class="medit" value="' + item.personas + '" min="1"></div>'
+    + '<div class="mitem"><div class="ml">Precio USD *</div><input id="dupPrecio" type="number" class="medit" value="' + item.precio_usd + '"></div>'
+    + '<div class="mitem"><div class="ml">Noches</div><input id="dupNoches" type="number" class="medit" value="' + item.noches + '"></div>'
+    + '</div>'
+    + '<div class="mact"><button class="mbtn gold" onclick="saveDuplicate(' + id + ')">💾 Crear copia</button><button class="mbtn ghost" onclick="closeModal()">Cancelar</button></div>';
+  document.getElementById('mbox').innerHTML = h;
+  document.getElementById('modal').classList.add('open');
+}
+
+// Legacy wrapper para compatibilidad — ya no se usa el select simDestino/simPaquete
+function simOnDestinoChange() { /* Obsoleto: usar simSelectDestino() */ }
 
 // ════════════════════════════════════════════════════════════════
 // ════════════════════════════════════════════════════════════════
