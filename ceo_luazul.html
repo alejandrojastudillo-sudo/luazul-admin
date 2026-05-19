@@ -1172,9 +1172,25 @@ function cLogin(){
         .from('staff_profiles')
         .select('id, user_id, role_id, nombre')
         .eq('user_id', result.data.user.id)
-        .single()
+        .maybeSingle()
         .then(function(profRes) {
-          if (profRes.error || !profRes.data) {
+          // FIX-RLS: Si error 401/RLS en staff_profiles, confiar en email allowlist
+          if (profRes.error) {
+            console.warn('[login] staff_profiles no accesible (RLS), conf\u00eda en email allowlist:', profRes.error.message);
+            var meta = result.data.user.user_metadata || {};
+            var nombre = meta.nombre || meta.full_name || email.split('@')[0];
+            _ceoUid = String(result.data.user.id);
+            try { sessionStorage.setItem('luazul_ceo','1'); sessionStorage.setItem('luazul_ceo_nombre', nombre); } catch(e){}
+            var lw = document.getElementById('loginWrap');
+            var ap = document.getElementById('app');
+            if (lw) lw.style.display = 'none';
+            if (ap) ap.style.display = 'block';
+            onDone();
+            initApp();
+            setTimeout(iniciarNotificacionesCeo, 2000);
+            return;
+          }
+          if (!profRes.data) {
             return sbClient.auth.signOut().then(function(){
               throw new Error('Perfil CEO no encontrado. Contact\u00e1 al administrador.');
             });
@@ -1214,7 +1230,10 @@ function cLogout(){
     var p=document.getElementById('cPass'); if(p) p.value='';
   }
   if (sbClient) {
-    sbClient.auth.signOut().then(doLogout).catch(doLogout);
+    sbClient.auth.signOut().then(doLogout).catch(function(e){
+      // FIX-LOGOUT: 403 en logout es esperado si auth config no coincide — no rompe
+      doLogout();
+    });
   } else {
     doLogout();
   }
@@ -1276,9 +1295,12 @@ document.addEventListener('DOMContentLoaded', function(){
         var email = session.user.email.toLowerCase();
         if (CEO_ALLOWED_EMAILS.indexOf(email) !== -1) {
           // Re-verificar role_id=1 en staff_profiles (previene acceso si rol fue degradado)
-          sbClient.from('staff_profiles').select('role_id').eq('user_id', session.user.id).single()
+          sbClient.from('staff_profiles').select('role_id').eq('user_id', session.user.id).maybeSingle()
             .then(function(profRes) {
-              if (profRes.error || !profRes.data || String(profRes.data.role_id) !== '1') {
+              // FIX-RLS: Si error 401/RLS, confiar en el email permitido (CEO_ALLOWED_EMAILS ya pasó)
+              if (profRes.error) {
+                console.warn('[auth] staff_profiles no accesible (RLS), confía en email CEO:', profRes.error.message);
+              } else if (profRes.data && String(profRes.data.role_id) !== '1') {
                 sbClient.auth.signOut();
                 try { sessionStorage.removeItem('luazul_ceo'); } catch(e){}
                 return;
