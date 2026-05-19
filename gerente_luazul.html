@@ -2458,8 +2458,17 @@ function renderPagos() {
   var vf = document.getElementById('pagoVFilt') ? document.getElementById('pagoVFilt').value : '';
   var ef = document.getElementById('pagoEstFilt') ? document.getElementById('pagoEstFilt').value : '';
 
-  // Get all payment notifications
-  var allPays = ns.filter(function(n) { return n.tipo === 'payment'; });
+  // FIX-GERENTE-CUOTAS: Solo mostrar aprobados (historial) + siguiente cuota pendiente por cliente
+  var allPays = ns.filter(function(n) {
+    if (n.tipo !== 'payment') return false;
+    // Aprobados: siempre mostrar (historial completo)
+    if (n.aprobada) return true;
+    // Pendientes: solo la SIGUIENTE cuota debida (cuotas_pagadas + 1)
+    var cli = clientes.find(function(x) { return String(x.id) === String(n.cid); });
+    if (!cli) return false;
+    var siguienteCuota = (parseInt(cli.cuotas_pagadas) || 0) + 1;
+    return parseInt(n.cuota) === siguienteCuota;
+  });
   if (vf) allPays = allPays.filter(function(n) { return n.vid && String(n.vid) === String(vf); });
   if (ef === 'pendiente') allPays = allPays.filter(function(n) { return !n.aprobada; });
   if (ef === 'aprobado') allPays = allPays.filter(function(n) { return !!n.aprobada; });
@@ -2611,6 +2620,24 @@ function renderPagos() {
     var pct = Math.round((pagadas / tot) * 100);
     html += '<div style="height:4px;background:rgba(255,255,255,.07);border-radius:4px;overflow:hidden;">'
       + '<div style="height:100%;width:' + pct + '%;background:' + (pct >= 80 ? 'var(--red)' : pct >= 60 ? 'var(--orange)' : 'var(--green)') + ';border-radius:4px;"></div></div>';
+
+    // FIX-GERENTE-COMP: Boton ver comprobante de la cuota pendiente
+    if (nextPend && nextPend.comp) {
+      html += '<div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap;">'
+        + '<button onclick="viewPagoComp(\'' + String(nextPend.id) + '\')" style="padding:6px 14px;background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.25);color:#34d399;border-radius:8px;font-size:.72rem;font-weight:700;cursor:pointer;">\uD83D\uDCC4 Ver comprobante cuota ' + nextCuotaNum + '</button>'
+        + '</div>';
+    }
+
+    // FIX-GERENTE-COMP: Links a comprobantes aprobados
+    var histAprob = pays.filter(function(p){ return p.aprobada && p.comp; });
+    if (histAprob.length > 0) {
+      html += '<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;">';
+      for (var hi = 0; hi < histAprob.length; hi++) {
+        var ha = histAprob[hi];
+        html += '<a href="' + ha.comp + '" target="_blank" style="font-size:.62rem;color:rgba(34,197,94,.6);text-decoration:none;border-bottom:1px dotted rgba(34,197,94,.3);">\u2705 Cuota ' + ha.cuota + ' comp.</a>';
+      }
+      html += '</div>';
+    }
 
     html += '</div>';
   });
