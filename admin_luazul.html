@@ -1996,124 +1996,13 @@ function closePayModal() {
   currentClient = null;
 }
 
+// FIX-BR2: Solo el Panel Cliente puede enviar comprobantes de pago.
+// El Asesor/Vendedor NO tiene permiso para registrar pagos — eso genera registros fantasma.
 function abrirRegistroPago(clientId) {
-  var c = allClients.find(function(x){ return x.id==clientId; });
-  if (!c) return;
-  var proxima = parseInt(c.cuotas_pagadas||0)+1;
-  var modal = document.createElement('div');
-  modal.id = 'payModal';
-  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(8px);';
-  modal.innerHTML='<div style="background:linear-gradient(160deg,rgba(5,20,65,.98),rgba(2,10,30,.99));border:1px solid rgba(100,160,255,.25);border-radius:20px;padding:32px;width:100%;max-width:480px;">'+
-    '<h3 style="font-size:1rem;font-weight:900;margin-bottom:6px;">📤 Enviar Comprobante de Pago</h3>'+
-    '<div style="font-size:.78rem;color:rgba(200,220,255,.7);margin-bottom:22px;">'+LZ.esc(c.nombre)+' · Cuota '+proxima+' de '+c.cuotas_total+'</div>'+
-    '<div style="margin-bottom:14px;"><label style="display:block;font-size:.65rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:rgba(150,190,255,.5);margin-bottom:7px;">Número de cuota *</label>'+
-    '<input id="pCuotaNum" type="number" min="1" max="'+c.cuotas_total+'" value="'+proxima+'" class="edit-input">'+
-    '<div style="font-size:.65rem; color:var(--muted); margin-top:3px;">📌 Debe coincidir con la cuota que el cliente está pagando actualmente</div></div>'+
-    '<div style="margin-bottom:14px;"><label style="display:block;font-size:.65rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:rgba(150,190,255,.5);margin-bottom:7px;">Monto recibido (USD) *</label>'+
-    '<input id="pMonto" type="number" value="'+(c.monto_cuota||0)+'" class="edit-input"></div>'+
-    '<div style="margin-bottom:14px;"><label style="display:block;font-size:.65rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:rgba(150,190,255,.5);margin-bottom:7px;">Fecha de pago</label>'+
-    '<input id="pFecha" type="date" value="'+new Date().toISOString().slice(0,10)+'" class="edit-input"></div>'+
-    '<div style="margin-bottom:14px;"><label style="display:block;font-size:.65rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:rgba(150,190,255,.5);margin-bottom:7px;">Comprobante (imagen/foto)</label>'+
-    '<input id="pFile" type="file" accept="image/*,application/pdf" style="width:100%;background:rgba(2,10,30,.6);border:1px dashed rgba(100,160,255,.3);border-radius:10px;padding:11px 14px;font-family:inherit;font-size:.82rem;color:rgba(200,220,255,.7);cursor:pointer;"></div>'+
-    '<div style="margin-bottom:22px;"><label style="display:block;font-size:.65rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:rgba(150,190,255,.5);margin-bottom:7px;">Observaciones</label>'+
-    '<textarea id="pObs" placeholder="Transferencia bancaria, efectivo, MP..." style="width:100%;background:rgba(2,10,30,.6);border:1px solid rgba(100,160,255,.2);border-radius:10px;padding:11px 14px;font-family:inherit;font-size:.88rem;color:white;resize:vertical;min-height:60px;outline:none;"></textarea></div>'+
-    '<div style="display:flex;gap:10px;">'+
-    '<button onclick="enviarComprobante(\''+clientId+'\')" style="flex:1;padding:13px;background:linear-gradient(135deg,#1a5bb5,#0B3D91);border:1px solid rgba(100,160,255,.3);border-radius:50px;font-family:inherit;font-size:.85rem;font-weight:700;color:white;cursor:pointer;">✅ Confirmar Pago</button>'+
-    '<button onclick="closePayModal()" style="padding:13px 20px;background:rgba(100,160,255,.1);border:1px solid rgba(100,160,255,.2);border-radius:50px;font-family:inherit;font-size:.85rem;font-weight:700;color:rgba(200,220,255,.7);cursor:pointer;">Cancelar</button>'+
-    '</div></div>';
-  document.body.appendChild(modal);
+  showToast('🔒 Solo el cliente puede enviar comprobantes desde su panel personal');
 }
-
-async function enviarComprobante(clientId) {
-  var cuotaNum = parseInt(document.getElementById('pCuotaNum').value, 10);
-  var monto    = parseFloat(document.getElementById('pMonto').value);
-  var fecha    = document.getElementById('pFecha').value;
-  var fileInput= document.getElementById('pFile');
-  if (!cuotaNum || isNaN(monto) || monto <= 0) { showToast('⚠️ Completá cuota y monto'); return; }
-  var c = allClients.find(function(x) { return x.id == clientId; });
-  if (!c || !sbClient) { showToast('❌ Sin conexión'); return; }
-
-  var btn = document.querySelector('#payModal button[onclick*="enviarComprobante"]');
-  if (btn) { btn.disabled = true; btn.textContent = '⏳ Enviando...'; }
-  var asesor = _currentProfile ? (_currentProfile.nombre || 'Asesor') : 'Asesor';
-
-  try {
-    var publicUrl = null;
-
-    // ── Subir archivo a Storage (nunca Base64) ───────────────
-    if (fileInput.files && fileInput.files[0]) {
-      var file = fileInput.files[0];
-
-      // Validar tipo y tamaño (máx 5 MB)
-      var tiposPermitidos = ['image/jpeg','image/png','image/webp','application/pdf'];
-      if (!tiposPermitidos.includes(file.type)) {
-        showToast('⚠️ Solo se permiten imágenes JPG/PNG/WEBP o PDF');
-        if (btn) { btn.disabled = false; btn.textContent = '✅ Confirmar Pago'; }
-        return;
-      }
-      if (file.size > 5 * 1024 * 1024) {
-        showToast('⚠️ El archivo no puede superar los 5 MB');
-        if (btn) { btn.disabled = false; btn.textContent = '✅ Confirmar Pago'; }
-        return;
-      }
-
-      var ext      = file.name.split('.').pop().toLowerCase();
-      var fileName = 'comp_' + clientId + '_c' + cuotaNum + '_' + Date.now() + '.' + ext;
-      var filePath = 'comprobantes/' + fileName;
-
-      var uploadRes = await sbClient.storage.from('comprobantes').upload(filePath, file, {
-        cacheControl: '3600', upsert: false, contentType: file.type
-      });
-      if (uploadRes.error) throw new Error('Storage: ' + uploadRes.error.message);
-
-      var urlRes = sbClient.storage.from('comprobantes').getPublicUrl(filePath);
-      publicUrl  = urlRes.data ? urlRes.data.publicUrl : null;
-    }
-
-    // ── Insertar registro de pago con URL pública ─────────────
-    // FIX-F23d: fecha_vencimiento — cuota 1 = mañana (24h), cuotas 2+ = fin de mes
-    var _fvNow = new Date();
-    var _fechaVenc;
-    if (cuotaNum === 1) {
-      var _maniana = new Date(_fvNow);
-      _maniana.setDate(_maniana.getDate() + 1);
-      _maniana.setHours(23, 59, 59, 999);
-      _fechaVenc = _maniana.toISOString();
-    } else {
-      _fechaVenc = new Date(Date.UTC(_fvNow.getFullYear(), _fvNow.getMonth() + 1, 0, 23, 59, 59, 999)).toISOString();
-    }
-    var insRes = await sbClient.from('pagos').insert([{
-      cliente_id:      parseInt(c.id, 10),
-      cliente_nombre:  c.nombre,
-      vendedor_nombre: asesor,
-      numero_cuota:    cuotaNum,
-      monto_usd:       monto,
-      estado:          'pendiente',
-      fecha_pago:      fecha || new Date().toISOString().slice(0, 10),
-      fecha_vencimiento: _fechaVenc,
-      comprobante_url: publicUrl || null,
-      seller_id:       _currentProfile ? (parseInt(_currentProfile.id, 10) || null) : null
-    }]);
-    if (insRes.error) throw insRes.error;
-
-    await notificarAccion(
-      'pago_pendiente',
-      'Comprobante enviado: Cuota ' + cuotaNum + ' - USD ' + monto,
-      c.id,
-      JSON.stringify({ cuota: cuotaNum, monto: monto })
-    );
-
-    closePayModal();
-    renderTable();
-    refreshAdminNotifBadge();
-    showToast('✅ Comprobante enviado · Cuota ' + cuotaNum);
-
-  } catch(e) {
-    console.error('[enviarComprobante]', e);
-    showToast('❌ Error al enviar comprobante: ' + (e.message || e));
-  } finally {
-    if (btn) { btn.disabled = false; btn.textContent = '✅ Confirmar Pago'; }
-  }
+function enviarComprobante(clientId) {
+  showToast('🔒 Solo el cliente puede enviar comprobantes desde su panel personal');
 }
 
 function verComprobantes(clientId) {

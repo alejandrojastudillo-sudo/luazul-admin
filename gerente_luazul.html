@@ -1976,29 +1976,10 @@ function waRecordatorioGerente(clientId) {
 }
 
 // Abrir modal de registro de pago (Storage)
+// FIX-BR2: Solo el Panel Cliente puede enviar comprobantes de pago.
+// El Gerente NO tiene permiso para registrar pagos — eso genera registros fantasma.
 function abrirRegistroPagoGerente(clientId) {
-  var cs = _memCache[DB_KEY] || [];
-  var c = cs.find(function(x) { return x.id == clientId; });
-  if (!c) return;
-  var nextCuota = (parseInt(c.cuotas_pagadas) || 0) + 1;
-  document.getElementById('mbox').innerHTML =
-    '<div class="mhead"><div><h2>💳 Registrar Pago · ' + esc(c.nombre) + '</h2></div><button class="mclose" onclick="closeModal()">✕</button></div>' +
-    '<div class="mbody">' +
-      '<div class="mgrid" style="grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;">' +
-        '<div><label class="ml">Nº de Cuota</label><input class="medit" id="pCuotaNum" type="number" min="1" max="' + (c.cuotas_total || 12) + '" value="' + nextCuota + '"/></div>' +
-        '<div><label class="ml">Monto USD</label><input class="medit" id="pMonto" type="number" min="1" step="0.01" value="' + (c.monto_cuota || '') + '" placeholder="0.00"/></div>' +
-        '<div><label class="ml">Fecha de pago</label><input class="medit" id="pFecha" type="date" value="' + new Date().toISOString().slice(0, 10) + '"/></div>' +
-        '<div><label class="ml">📎 Comprobante (opcional)</label><input class="medit" id="pFile" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" style="font-size:.78rem;cursor:pointer;"/></div>' +
-      '</div>' +
-      '<div style="background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.2);border-radius:10px;padding:10px 14px;margin-bottom:14px;font-size:.78rem;color:var(--muted);">' +
-        '⚠️ El pago quedará en estado <strong style="color:var(--gold);">Pendiente</strong> hasta ser aprobado.' +
-      '</div>' +
-      '<div class="mact">' +
-        '<button class="mbtn gold" onclick="enviarComprobante(\'' + clientId + '\')">✅ Confirmar Pago</button>' +
-        '<button class="mbtn ghost" onclick="closeModal()">Cancelar</button>' +
-      '</div>' +
-    '</div>';
-  document.getElementById('modal').classList.add('open');
+  showToast('🔒 Solo el cliente puede enviar comprobantes desde su panel personal');
 }
 window.abrirRegistroPagoGerente = abrirRegistroPagoGerente;
 
@@ -3146,73 +3127,9 @@ function notificarAccion(tipo, mensaje, clienteId, destinatarioId) {
 }
 
 // ===================== ENVIAR COMPROBANTE (con Storage) =====================
+// FIX-BR2: Solo el Panel Cliente puede enviar comprobantes de pago.
 async function enviarComprobante(clientId) {
-  var cuotaNum  = parseInt((document.getElementById('pCuotaNum') || {}).value, 10);
-  var monto     = parseFloat((document.getElementById('pMonto')   || {}).value);
-  var fecha     = (document.getElementById('pFecha')  || {}).value || new Date().toISOString().slice(0, 10);
-  var fileInput = document.getElementById('pFile');
-  if (!cuotaNum || isNaN(monto) || monto <= 0) { showToast('⚠️ Completá cuota y monto'); return; }
-  var cs = (_memCache[DB_KEY] || []);
-  var c = cs.find(function(x) { return String(x.id) === String(clientId); });
-  if (!c || !sbClient) { showToast('❌ Sin conexión o cliente no encontrado'); return; }
-
-  var btn = document.querySelector('#modal .mbtn.gold[onclick*="enviarComprobante"]');
-  if (btn) { btn.disabled = true; btn.textContent = '⏳ Enviando...'; }
-  var asesor = window._gerenteProfile ? (window._gerenteProfile.nombre || 'Gerente') : 'Gerente';
-
-  try {
-    var publicUrl = null;
-    if (fileInput && fileInput.files && fileInput.files[0]) {
-      var file = fileInput.files[0];
-      var tiposPermitidos = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
-      if (!tiposPermitidos.includes(file.type)) {
-        showToast('⚠️ Solo JPG / PNG / WEBP / PDF'); return;
-      }
-      if (file.size > 5 * 1024 * 1024) { showToast('⚠️ Máximo 5 MB'); return; }
-      var ext = file.name.split('.').pop().toLowerCase();
-      var filePath = 'comprobantes/comp_' + clientId + '_c' + cuotaNum + '_' + Date.now() + '.' + ext;
-      var upRes = await sbClient.storage.from('comprobantes').upload(filePath, file);
-      if (upRes.error) throw upRes.error;
-      var urlRes = sbClient.storage.from('comprobantes').getPublicUrl(filePath);
-      publicUrl = (urlRes.data && urlRes.data.publicUrl) || '';
-    }
-    // FIX-F23c: fecha_vencimiento — cuota 1 = mañana (24h), cuotas 2+ = fin de mes
-    var _fvNow = new Date();
-    var _fechaVenc;
-    if (cuotaNum === 1) {
-      var _maniana = new Date(_fvNow);
-      _maniana.setDate(_maniana.getDate() + 1);
-      _maniana.setHours(23, 59, 59, 999);
-      _fechaVenc = _maniana.toISOString();
-    } else {
-      _fechaVenc = new Date(Date.UTC(_fvNow.getFullYear(), _fvNow.getMonth() + 1, 0, 23, 59, 59, 999)).toISOString();
-    }
-    var sellerId = window._gerenteProfile ? (parseInt(window._gerenteProfile.id, 10) || null) : null;
-    var insRes = await sbClient.from('pagos').insert([{
-      cliente_id:     parseInt(c.id, 10),
-      cliente_nombre: c.nombre,
-      vendedor_nombre: asesor,
-      numero_cuota:   cuotaNum,
-      monto_usd:      monto,
-      estado:         'pendiente',
-      fecha_pago:     fecha,
-      fecha_vencimiento: _fechaVenc,
-      comprobante_url: publicUrl || null,
-      seller_id:      sellerId
-    }]);
-    if (insRes.error) throw insRes.error;
-    await notificarAccion('pago_pendiente', 'Comprobante enviado: Cuota ' + cuotaNum, c.id, null);
-    closeModal();
-    await _sbLoad();
-    renderAll();
-    refreshNotifBadge();
-    showToast('✅ Comprobante enviado · Cuota ' + cuotaNum);
-  } catch (e) {
-    console.error(e);
-    showToast('❌ Error: ' + (e.message || e));
-  } finally {
-    if (btn) { btn.disabled = false; btn.textContent = '✅ Confirmar Pago'; }
-  }
+  showToast('🔒 Solo el cliente puede enviar comprobantes desde su panel personal');
 }
 window.enviarComprobante = enviarComprobante;
 window.notificarAccion   = notificarAccion;
