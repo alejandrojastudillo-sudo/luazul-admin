@@ -1860,7 +1860,9 @@ function openClientDetail(id) {
         if (!isNaN(_base)) { _base.setDate(_base.getDate() + (_i - 1) * 30); _venc = _base; }
       }
       var _vencStr = _venc ? _venc.toLocaleDateString('es-AR') : '';
-      var _vencStyle = _venc && new Date() > _venc ? 'color:#f87171;font-weight:700;' : 'color:rgba(180,200,240,.35);';
+      var _hoyOC = new Date(); _hoyOC.setHours(0,0,0,0);
+      var _vencEOD2 = _venc ? new Date(_venc) : null; if(_vencEOD2) _vencEOD2.setHours(23,59,59,999);
+      var _vencStyle = _vencEOD2 && _hoyOC > _vencEOD2 ? 'color:#f87171;font-weight:700;' : 'color:rgba(180,200,240,.35);';
       tl += '<div style="background:' + _bg + ';border:1px solid ' + _bd + ';border-radius:7px;padding:6px 8px;min-width:58px;text-align:center;">'
         + '<div style="font-size:.78rem;font-weight:800;color:' + _tc + ';">' + (_cls === 'pagada' ? '\u2705' : _cls === 'proxima' ? '\u23F3' : '\u2B1C') + ' ' + _i + '</div>'
         + (_venc ? '<div style="font-size:.52rem;' + _vencStyle + 'margin-top:2px;">' + _vencStr + '</div>' : '')
@@ -2544,7 +2546,10 @@ function renderPagos() {
     var nextPend = pays.find(function(p) { return !p.aprobada; });
     var nextCuotaNum = nextPend ? parseInt(nextPend.cuota) : (pagadas + 1);
     var venc = calcVenc(fechaAlta, nextCuotaNum);
-    var estaVencida = venc && new Date() > venc;
+    // FIX: Comparar solo fechas sin hora — el día de vencimiento NO cuenta como vencida
+    var hoyG = new Date(); hoyG.setHours(0,0,0,0);
+    var vencEOD = venc ? new Date(venc) : null; if(vencEOD) vencEOD.setHours(23,59,59,999);
+    var estaVencida = vencEOD && hoyG > vencEOD;
 
     // ── Client card ──
     html += '<div style="background:var(--surface);border:1px solid ' + (estaVencida ? 'rgba(248,113,113,.3)' : 'var(--border)') + ';border-radius:14px;padding:18px;margin-bottom:14px;">';
@@ -2563,11 +2568,11 @@ function renderPagos() {
     // Vencimiento info
     if (nextPend && venc) {
       if (estaVencida) {
-        var diasVenc = Math.ceil((new Date() - venc) / 86400000);
+        var diasVenc = Math.ceil((hoyG - venc) / 86400000);
         html += '<div style="background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.2);border-radius:8px;padding:8px 12px;margin-bottom:12px;font-size:.74rem;color:#fca5a5;">'
           + '\uD83D\uDD34 <strong>Cuota ' + nextCuotaNum + ' vencida:</strong> ' + fmtFecha(venc) + ' \u2014 hace ' + diasVenc + ' d\u00edas</div>';
       } else {
-        var diasRest = Math.ceil((venc - new Date()) / 86400000);
+        var diasRest = Math.ceil((vencEOD - hoyG) / 86400000);
         html += '<div style="background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.2);border-radius:8px;padding:8px 12px;margin-bottom:12px;font-size:.74rem;color:var(--gold);">'
           + '\uD83D\uDCC5 <strong>Cuota ' + nextCuotaNum + ' vence:</strong> ' + fmtFecha(venc) + ' \u2014 faltan ' + diasRest + ' d\u00edas</div>';
       }
@@ -2592,7 +2597,8 @@ function renderPagos() {
 
       var cuotaVenc = calcVenc(fechaAlta, i);
       var cuotaVencStr = cuotaVenc ? fmtFecha(cuotaVenc) : '';
-      var cuotaVencStyle = cuotaVenc && new Date() > cuotaVenc ? 'color:#f87171;font-weight:700;' : 'color:rgba(180,200,240,.35);';
+      var cuotaVencEOD = cuotaVenc ? new Date(cuotaVenc) : null; if(cuotaVencEOD) cuotaVencEOD.setHours(23,59,59,999);
+      var cuotaVencStyle = cuotaVencEOD && hoyG > cuotaVencEOD ? 'color:#f87171;font-weight:700;' : 'color:rgba(180,200,240,.35);';
 
       html += '<div style="background:' + bg + ';border:1px solid ' + bd + ';border-radius:7px;padding:6px 8px;min-width:58px;text-align:center;">'
         + '<div style="font-size:.78rem;font-weight:800;color:' + tc + ';">' + icon + ' ' + i + '</div>'
