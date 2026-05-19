@@ -5,7 +5,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- CEO v4.1 — FIX-DEFINITIVO: comprobantes visibles + nombre en contratos + vencimiento robusto · 2026-05-20 -->
+<!-- CEO v4.2 — FIX-DEFINITIVO: TypeError .then corregido, notificaciones 400 corregido, nombre en contratos con fetch BD, cuotas aprobadas visibles, comprobantes accesibles, rechazados visibles · 2026-05-20 -->
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="manifest" href="manifest_ceo.json">
   <meta name="theme-color" content="#0B3D91">
@@ -340,8 +340,10 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
             <option value="">Todos</option>
             <option value="pendiente">Pendientes</option>
             <option value="aprobado">Aprobados</option>
+            <option value="rechazado">Rechazados</option>
           </select>
           <button class="addbtn" onclick="showTab('pagos_aprobacion')" style="background:linear-gradient(135deg,#2563eb,#1d4ed8);">👁 Ir a Aprobación CEO</button>
+          <button class="addbtn" onclick="refreshPagosCache().then(function(){renderPagos();showToast('✅ Pagos refrescados');}).catch(function(e){showToast('❌ Error: '+e.message);})" style="background:linear-gradient(135deg,#059669,#10b981);">🔄 Refrescar</button>
         </div>
       </div>
       <div id="pagosBody"></div>
@@ -1338,7 +1340,7 @@ function limpiarCuotasFantasma(){
       aEliminar.push(p.id);
     }
   }
-  if (!aEliminar.length) return;
+  if (!aEliminar.length) return Promise.resolve();
   console.log('[limpiarCuotasFantasma] Eliminando ' + aEliminar.length + ' cuotas pendientes huérfanas...');
   // Borrar en lotes de 100
   var batches = [];
@@ -1363,12 +1365,19 @@ function initApp(){
   cargarDatosSupabase().then(function(){
     renderAll();
     populateAllFilters();
-    limpiarCuotasFantasma().then(function(){
-      // Refrescar cache después de limpiar
-      return refreshPagosCache();
-    }).then(function(){
-      renderAll();
-    });
+    var cleanPromise = limpiarCuotasFantasma();
+    if (cleanPromise && typeof cleanPromise.then === 'function') {
+      cleanPromise.then(function(){
+        return refreshPagosCache();
+      }).then(function(){
+        renderAll();
+      }).catch(function(e){
+        console.warn('[initApp] Error en limpieza/cache:', e);
+        renderAll();
+      });
+    }
+  }).catch(function(e){
+    console.error('[initApp] Error cargando datos:', e);
   });
 }
 
@@ -2046,11 +2055,13 @@ function renderVendDash(){
 
 // ── PAGOS ─────────────────────────────────────────────
 function renderPagos(){
-  // ── Filtro: solo la siguiente cuota debida por cliente ──
+  // ── FIX-PAGOS-V2: Mostrar TODOS los pagos (aprobados, pendientes debidos, rechazados) ──
   var clientes = _cacheClientes||[];
   var pays = (_cachePagos||[]).filter(function(n){
     // Aprobados: siempre mostrar (historial completo)
     if(n.estado==='aprobado') return true;
+    // Rechazados: también mostrar para control
+    if(n.estado==='rechazado') return true;
     // Pendientes: solo la siguiente cuota debida (cuotas_pagadas + 1)
     if(n.estado==='pendiente'){
       var c = clientes.find(function(x){ return String(x.id)===String(n.cliente_id); });
@@ -2063,6 +2074,7 @@ function renderPagos(){
   var ef=(document.getElementById('pagoEstFilt')||{}).value||'';
   if(ef==='pendiente') pays=pays.filter(function(n){ return n.estado==='pendiente'; });
   if(ef==='aprobado')  pays=pays.filter(function(n){ return n.estado==='aprobado'; });
+  if(ef==='rechazado') pays=pays.filter(function(n){ return n.estado==='rechazado'; });
 
   // ── KPI: pendientes = siguiente cuota debida ──
   var pendMes=(_cachePagos||[]).filter(function(n){
@@ -2089,6 +2101,7 @@ function renderPagos(){
     +'</div>'
     +pays.map(function(n){
       var aprobado = n.estado==='aprobado';
+      var rechazado = n.estado==='rechazado';
       var ts = n.created_at ? new Date(n.created_at).getTime() : Date.now();
       // ── Resolver nombres desde cache en vez de columna raw ──
       var cl = (_cacheClientes||[]).find(function(x){ return String(x.id)===String(n.cliente_id); });
@@ -2098,7 +2111,7 @@ function renderPagos(){
         var vnd = (_cacheVendedores||[]).find(function(x){ return String(x.user_id)===String(cl.vid) || String(x.id)===String(cl.vid); });
         if(vnd) nombreAsesor = vnd.nombre;
       }
-      // FIX COMP-VIEW: Boton ver comprobante para TODOS los pagos (aprobados y pendientes)
+      // FIX COMP-VIEW: Boton ver comprobante para TODOS los pagos (aprobados, pendientes, rechazados)
       var compUrl = n.comprobante_url || '';
       var compBtn = '';
       if (compUrl) {
@@ -2107,17 +2120,20 @@ function renderPagos(){
         compBtn = '<span style="font-size:.58rem;color:var(--muted);">\u2014 Sin comp.</span>';
       }
       var actionBtn = '';
-      if (!aprobado) {
+      if (!aprobado && !rechazado) {
         actionBtn = '<button onclick="showTab(\'pagos_aprobacion\')" style="padding:3px 7px;background:var(--blue-bg);border:1px solid var(--blue-bd);color:#93c5fd;border-radius:5px;font-size:.62rem;font-weight:700;cursor:pointer;" title="Ir a Aprobaci\u00f3n CEO">\uD83D\uDC41 Aprobar</button>';
       }
+      var estadoStyle = aprobado ? 'background:var(--green-bg);color:var(--green);' : rechazado ? 'background:var(--red-bg);color:var(--red);' : 'background:var(--gold-bg);color:var(--gold);';
+      var estadoLabel = aprobado ? 'OK' : rechazado ? 'Rech.' : 'Pend.';
+      var estadoIcon = aprobado ? '\u2705' : rechazado ? '\u274C' : '\u23F3';
       return '<div class="trow-ceo" style="grid-template-columns:30px 2fr 1.2fr 80px 80px 100px 80px 130px;">'
-        +'<span style="font-size:1rem;">'+(aprobado?'\u2705':'\u23F3')+'</span>'
+        +'<span style="font-size:1rem;">'+estadoIcon+'</span>'
         +'<div><div style="font-size:.84rem;font-weight:600;">'+nombreCli+'</div></div>'
         +'<div style="font-size:.76rem;color:var(--muted);">'+nombreAsesor+'</div>'
         +'<div style="text-align:center;">#'+n.numero_cuota+'</div>'
-        +'<div style="font-weight:700;color:'+(aprobado?'var(--green)':'var(--gold)')+';">USD '+n.monto_usd+'</div>'
+        +'<div style="font-weight:700;color:'+(aprobado?'var(--green)':rechazado?'var(--red)':'var(--gold)')+';">USD '+n.monto_usd+'</div>'
         +'<div style="font-size:.7rem;color:var(--muted);">'+fmtTs(ts)+'</div>'
-        +'<div><span style="font-size:.68rem;font-weight:700;padding:2px 7px;border-radius:6px;'+(aprobado?'background:var(--green-bg);color:var(--green);':'background:var(--gold-bg);color:var(--gold);')+'">'+(aprobado?'OK':'Pend.')+'</span></div>'
+        +'<div><span style="font-size:.68rem;font-weight:700;padding:2px 7px;border-radius:6px;'+estadoStyle+'">'+estadoLabel+'</span></div>'
         +'<div style="display:flex;flex-direction:column;gap:3px;">'
         +compBtn + actionBtn
         +'</div></div>';
@@ -4321,20 +4337,42 @@ function renderContratosPendientes(){
         return;
       }
 
-      var html = '<div style="display:flex;flex-direction:column;gap:14px;">';
+      // FIX CONTRATO-NOMBRE V2: Detectar IDs de clientes sin nombre en cache y consultar BD
+      var missingClientIds = [];
       rows.forEach(function(ct){
-        var contenido = {};
-        try { contenido = JSON.parse(ct.contenido_json || '{}'); } catch(e){}
-        // FIX CONTRATO-NOMBRE: Buscar nombre real del cliente en cache PRIMERO
         var clData = clCache.find(function(x){ return String(x.id) === String(ct.cliente_id); });
-        var clienteNombre = clData ? clData.nombre : (contenido.cliente_nombre || contenido.nombre || ct.cliente_id || '\u2014');
-        var destino       = clData ? (clData.destino || contenido.destino || '\u2014') : (contenido.destino || '\u2014');
-        var totalUsd      = clData && clData.total_usd ? 'USD ' + Number(clData.total_usd).toLocaleString('es-AR') : (contenido.total_usd ? 'USD ' + Number(contenido.total_usd).toLocaleString('es-AR') : '\u2014');
-        var cuotasInfo    = clData ? (clData.cuotas_total || contenido.cuotas_total || '\u2014') : (contenido.cuotas_total || '\u2014');
-        var cuotasLabel   = clData ? (clData.cuotas_pagadas + '/' + cuotasInfo + ' cuotas') : (cuotasInfo + ' cuotas');
-        // FIX CONTRATO-NOMBRE: Buscar nombre real del vendedor
-        var vendData = vCache.find(function(x){ return String(x.id) === String(ct.vendedor_id) || String(x.user_id) === String(ct.vendedor_id); });
-        var vendedor      = vendData ? vendData.nombre : (contenido.vendedor_nombre || '\u2014');
+        if(!clData) missingClientIds.push(String(ct.cliente_id));
+      });
+
+      // Si faltan clientes, fetch directo de BD
+      var fetchMissing = missingClientIds.length === 0 ? Promise.resolve([]) :
+        sbClient.from('clientes').select('id,nombre,destino,paquete,cuotas_total,cuotas_pagadas,total_usd,vendedor_id')
+          .in('id', missingClientIds).then(function(r){
+            if(r.error) return [];
+            return r.data || [];
+          }).catch(function(){ return []; });
+
+      return fetchMissing.then(function(fetchedClients){
+        // Merge fetched clients into cache temporal
+        var allClients = clCache.concat(fetchedClients.filter(function(fc){
+          return !clCache.find(function(x){ return String(x.id) === String(fc.id); });
+        }));
+
+        var html = '<div style="display:flex;flex-direction:column;gap:14px;">';
+        rows.forEach(function(ct){
+          var contenido = {};
+          try { contenido = JSON.parse(ct.contenido_json || '{}'); } catch(e){}
+          // FIX CONTRATO-NOMBRE: Buscar nombre real del cliente en cache PRIMERO
+          var clData = allClients.find(function(x){ return String(x.id) === String(ct.cliente_id); });
+          var clienteNombre = clData ? clData.nombre : (contenido.cliente_nombre || contenido.nombre || ct.cliente_id || '\u2014');
+          var destino       = clData ? (clData.destino || contenido.destino || '\u2014') : (contenido.destino || '\u2014');
+          var totalUsd      = clData && clData.total_usd ? 'USD ' + Number(clData.total_usd).toLocaleString('es-AR') : (contenido.total_usd ? 'USD ' + Number(contenido.total_usd).toLocaleString('es-AR') : '\u2014');
+          var cuotasInfo    = clData ? (clData.cuotas_total || contenido.cuotas_total || '\u2014') : (contenido.cuotas_total || '\u2014');
+          var cuotasLabel   = clData ? (clData.cuotas_pagadas + '/' + cuotasInfo + ' cuotas') : (cuotasInfo + ' cuotas');
+          // FIX CONTRATO-NOMBRE: Buscar nombre real del vendedor
+          var vid = clData ? (clData.vendedor_id || ct.vendedor_id) : ct.vendedor_id;
+          var vendData = vCache.find(function(x){ return String(x.id) === String(vid) || String(x.user_id) === String(vid); });
+          var vendedor      = vendData ? vendData.nombre : (contenido.vendedor_nombre || '\u2014');
         var fechaCreado   = new Date(ct.created_at).toLocaleDateString('es-AR');
         var estadoColor   = ct.estado === 'pendiente' ? '#fb923c' : ct.estado === 'revisado' ? '#fbbf24' : '#93c5fd';
         var estadoBg      = ct.estado === 'pendiente' ? 'rgba(251,146,60,.1)' : ct.estado === 'revisado' ? 'rgba(251,191,36,.1)' : 'rgba(59,130,246,.1)';
@@ -4382,6 +4420,7 @@ function renderContratosPendientes(){
       });
       html += '</div>';
       el.innerHTML = html;
+      }); // cierra fetchMissing.then
     })
     .catch(function(e){
       el.innerHTML = '<div style="padding:30px;color:#f87171;text-align:center;">\u274C Error al cargar contratos: ' + (e.message||'') + '</div>';
@@ -6107,7 +6146,7 @@ function cargarTickets() {
   var prioridadFiltro = (document.getElementById('ticketFiltroPrioridad') || {}).value || 'todos';
   var search = ((document.getElementById('ticketSearch') || {}).value || '').toLowerCase();
   var query = sbClient.from('notificaciones')
-    .select('*, cliente:clientes(nombre, email)')
+    .select('*')
     .in('tipo', ['incidencia', 'soporte', 'mejora', 'falla_tecnica', 'error_datos', 'otro'])
     .order('created_at', { ascending: false }).limit(200);
   if (estadoFiltro !== 'todos') query = query.eq('estado', estadoFiltro);
@@ -6115,11 +6154,19 @@ function cargarTickets() {
   query.then(function(res) {
     if (res.error) throw res.error;
     var tickets = res.data || [];
+    // Resolver nombre de cliente desde cache cuando sea posible
+    tickets = tickets.map(function(t) {
+      if (t.cliente_id && !t.cliente_nombre_resuelto) {
+        var cl = (_cacheClientes || []).find(function(x){ return String(x.id) === String(t.cliente_id); });
+        t.cliente_nombre_resuelto = cl ? cl.nombre : '';
+      }
+      return t;
+    });
     if (search) {
       tickets = tickets.filter(function(t) {
         var num = (t.numero_ticket || '').toLowerCase();
         var asunto = (t.mensaje || '').toLowerCase();
-        var cliente = (t.cliente && t.cliente.nombre) ? t.cliente.nombre.toLowerCase() : '';
+        var cliente = (t.cliente_nombre_resuelto || '').toLowerCase();
         return num.indexOf(search) !== -1 || asunto.indexOf(search) !== -1 || cliente.indexOf(search) !== -1;
       });
     }
@@ -6139,7 +6186,7 @@ function renderListaTickets(tickets) {
     var estadoClase = estadoTexto === 'abierto' ? 'bdg atraso' : estadoTexto === 'en_progreso' ? 'bdg atraso_gestion' : estadoTexto === 'resuelto' ? 'bdg completo' : 'bdg baja';
     var prioridadTexto = t.prioridad || 'media';
     var prioridadColor = prioridadTexto === 'urgente' ? '#ef4444' : prioridadTexto === 'alta' ? '#f97316' : prioridadTexto === 'media' ? '#eab308' : '#22c55e';
-    var clienteNombre = t.cliente ? t.cliente.nombre : (t.cliente_id ? 'ID: ' + t.cliente_id : '—');
+    var clienteNombre = t.cliente_nombre_resuelto || (t.cliente_id ? 'ID: ' + t.cliente_id : '—');
     var vendedorNombre = t.vendedor_nombre || (t.vendedor_id ? 'ID: ' + t.vendedor_id : '—');
     var diasInactivos = calcularDiasInactivos(t.updated_at || t.created_at);
     var highlight = (diasInactivos > 7 && estadoTexto !== 'cerrado') ? '⚠️ ' : '';
@@ -6279,7 +6326,7 @@ function verTicket(ticketId) {
 function renderDetalleTicket(ticket, comentarios) {
   var eO = '<option value="abierto"' + (ticket.estado==='abierto'?' selected':'') + '>Abierto</option><option value="en_progreso"' + (ticket.estado==='en_progreso'?' selected':'') + '>En progreso</option><option value="resuelto"' + (ticket.estado==='resuelto'?' selected':'') + '>Resuelto</option><option value="cerrado"' + (ticket.estado==='cerrado'?' selected':'') + '>Cerrado</option>';
   var pO = '<option value="baja"' + (ticket.prioridad==='baja'?' selected':'') + '>Baja</option><option value="media"' + (ticket.prioridad==='media'?' selected':'') + '>Media</option><option value="alta"' + (ticket.prioridad==='alta'?' selected':'') + '>Alta</option><option value="urgente"' + (ticket.prioridad==='urgente'?' selected':'') + '>Urgente</option>';
-  var cN = ticket.cliente ? ticket.cliente.nombre : (ticket.cliente_id ? 'ID:'+ticket.cliente_id : '—');
+  var cN = ticket.cliente_nombre_resuelto || (ticket.cliente_id ? 'ID:'+ticket.cliente_id : '—');
   var vN = ticket.vendedor_nombre || (ticket.vendedor_id ? 'ID:'+ticket.vendedor_id : '—');
   var adjH = '';
   if (ticket.adjuntos && ticket.adjuntos.length) {
