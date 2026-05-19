@@ -412,6 +412,7 @@ body::after {
   animation:pulse-dot 1.5s infinite;
 }
 @keyframes pulse-dot { 0%,100%{transform:scale(1)} 50%{transform:scale(1.25)} }
+@keyframes pulse-badge { 0%,100%{transform:scale(1);opacity:1;} 50%{transform:scale(1.25);opacity:.85;} }
 
 /* ── MAIN ─────────────────────────────────────────────────────────────── */
 .main { padding:20px 20px 40px; max-width:1200px; margin:0 auto; }
@@ -904,7 +905,9 @@ body::after {
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
         <h2 style="font-size:1rem;font-weight:900;">📩 Comunicaciones internas</h2>
         <div style="display:flex;gap:8px;">
+          <button class="tb-btn" onclick="abrirNuevoDMAdmin()" style="background:rgba(168,85,247,.12);border-color:rgba(168,85,247,.3);color:#a855f7;">💬 Mensaje directo</button>
           <button class="tb-btn" onclick="abrirCrearCanal()" style="background:rgba(74,222,128,.1);border-color:rgba(74,222,128,.25);color:#4ade80;">➕ Nuevo Canal</button>
+          <button class="tb-btn" onclick="renderComunicaciones()" style="background:rgba(103,232,249,.1);border-color:rgba(103,232,249,.25);color:#67e8f9;">🔄 Actualizar</button>
           <button class="tb-btn" onclick="volverAClientes()">← Volver a mis clientes</button>
         </div>
       </div>
@@ -1119,6 +1122,7 @@ function adminLogin() {
       LZ_AUTH._showApp('loginWrap','app');
       loadClients();
       setTimeout(refreshAdminNotifBadge, 100);
+      setTimeout(iniciarNotificacionesAdmin, 200);
       showToast('✅ Bienvenido, ' + profile.nombre);
     })
     .catch(function(err) {
@@ -3001,207 +3005,500 @@ async function subirAdjuntoATicketAsesor(ticketId) {
 }
 
 // ──────────────────────────────────────────────────────────────────────────
-// 33. MÓDULO DE MENSAJERÍA INTERNA (ASESOR)
+// 33. MÓDULO DE MENSAJERÍA INTERNA (ASESOR) — CON MENSAJE DIRECTO
 // ──────────────────────────────────────────────────────────────────────────
 
-async function cargarCanales() {
-  // Panel Asesor: cargar todos los canales y filtrar por rol 'asesor' en miembros (JSONB)
-  var { data, error } = await sbClient.from('canales_equipo').select('*');
-  if (error) { console.warn('[cargarCanales]', error.message); return []; }
-  var canales = (data || []).filter(function(c) {
-    if (!c.miembros) return false;
-    try {
-      var m = typeof c.miembros === 'string' ? JSON.parse(c.miembros) : (c.miembros || {});
-      var roles = m.roles || [];
-      return roles.indexOf('asesor') !== -1;
-    } catch(e) { return false; }
-  });
-  return canales;
+var _canalActivoAdmin = null;
+var _staffCacheAdmin = [];
+var _ROLE_NAMES = {1:'CEO', 2:'Gerente', 3:'Asesor', 4:'Cliente', 5:'Jefe de Ventas'};
+
+async function cargarStaffAdmin() {
+  if (_staffCacheAdmin.length) return _staffCacheAdmin;
+  try {
+    var res = await sbClient.from('staff_profiles').select('*');
+    if (res.error) throw res.error;
+    _staffCacheAdmin = (res.data || []).map(function(r) {
+      return {
+        user_id: r.user_id || r.id,
+        nombre: (r.nombre || '') + (r.apellido ? ' ' + r.apellido : ''),
+        role: _ROLE_NAMES[r.role_id] || ('Rol ' + (r.role_id || '?')),
+        badge: r.badge || r.email || '',
+        activo: r.activo !== false
+      };
+    });
+    return _staffCacheAdmin;
+  } catch(e) { console.warn('[cargarStaffAdmin] ERROR:', e.message || e); return []; }
 }
 
-async function renderComunicaciones() {
-  var container = document.getElementById('comunicacionesContainer');
-  if (!container) return;
-  container.innerHTML = '<div style="padding:30px;text-align:center;color:var(--muted);">⏳ Cargando canales...</div>';
+// ── Badge de mensajes no leídos ──
+var _unreadCountAdmin = 0;
+var _notifIntervalAdmin = null;
+
+async function contarNoLeidosAdmin() {
+  if (!sbClient || !_currentProfile) return 0;
   try {
-    var canales = await cargarCanales();
-    if (!canales.length) {
-      container.innerHTML = '<div style="padding:40px;text-align:center;color:var(--muted);"><div style="font-size:2rem;margin-bottom:12px;">📭</div><p>No tenés canales asignados aún.</p></div>';
-      return;
+    var userId = _currentProfile.user_id;
+    var vistosRes = await sbClient.from('mensajes_vistos').select('mensaje_id').eq('usuario_id', userId);
+    var vistosIds = [];
+    if (!vistosRes.error && vistosRes.data) {
+      vistosIds = vistosRes.data.map(function(v) { return v.mensaje_id; });
     }
-    var html = '<div style="display:flex;gap:0;background:var(--surface);border:1px solid var(--border);border-radius:18px;overflow:hidden;min-height:500px;">';
-    // Panel izquierdo: lista de canales
-    html += '<div style="width:240px;flex-shrink:0;border-right:1px solid var(--border);padding:12px 0;">';
-    html += '<div style="font-size:.65rem;font-weight:800;text-transform:uppercase;letter-spacing:1.2px;color:var(--muted);padding:8px 16px 12px;">Canales</div>';
-    canales.forEach(function(c) {
-      html += '<div class="canal-item" data-canal="' + esc(String(c.id)) + '" style="padding:10px 16px;cursor:pointer;border-radius:0;transition:background .15s;font-size:.88rem;font-weight:600;display:flex;align-items:center;gap:8px;" onmouseenter="this.style.background=\'rgba(255,255,255,.04)\'" onmouseleave="this.style.background=\'\'">&#128172; ' + esc(c.nombre) + '</div>';
-    });
-    html += '</div>';
-    // Panel derecho: mensajes
-    html += '<div id="mensajesPanel" style="flex:1;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:.9rem;">Seleccioná un canal para ver los mensajes</div>';
-    html += '</div>';
-    container.innerHTML = html;
-    // Event listeners para canales
-    document.querySelectorAll('.canal-item').forEach(function(el) {
-      el.addEventListener('click', function() {
-        document.querySelectorAll('.canal-item').forEach(function(x){ x.style.background=''; x.style.color=''; });
-        el.style.background = 'rgba(59,130,246,.12)';
-        el.style.color = 'var(--accent2)';
-        cargarMensajesCanal(el.getAttribute('data-canal'));
-      });
-    });
-  } catch(e) {
-    container.innerHTML = '<div style="padding:30px;text-align:center;color:var(--red);">❌ Error al cargar comunicaciones: ' + esc(e.message) + '</div>';
+    var canalesRes = await sbClient.from('canales_equipo').select('id,tipo,miembros');
+    if (canalesRes.error) return 0;
+    var misCanalesIds = [];
+    for (var i = 0; i < canalesRes.data.length; i++) {
+      var c = canalesRes.data[i];
+      try {
+        var m = typeof c.miembros === 'string' ? JSON.parse(c.miembros) : (c.miembros || {});
+        if (c.tipo === 'directo') {
+          var users = m.usuarios || [];
+          if (users.indexOf(userId) !== -1) misCanalesIds.push(c.id);
+        } else {
+          var roles = m.roles || [];
+          var users = m.usuarios || [];
+          if (roles.indexOf('asesor') !== -1 || roles.indexOf('todos') !== -1 || users.indexOf(userId) !== -1) {
+            misCanalesIds.push(c.id);
+          }
+        }
+      } catch(e) {}
+    }
+    if (!misCanalesIds.length) return 0;
+    var res = await sbClient.from('mensajes_equipo')
+      .select('id, remitente_id, canal_id, created_at')
+      .in('canal_id', misCanalesIds)
+      .order('created_at', { ascending: false })
+      .limit(300);
+    if (res.error) return 0;
+    var noLeidos = 0;
+    for (var i = 0; i < res.data.length; i++) {
+      var msg = res.data[i];
+      if (String(msg.remitente_id) === String(userId)) continue;
+      if (vistosIds.indexOf(msg.id) === -1) noLeidos++;
+    }
+    return noLeidos;
+  } catch(e) { return 0; }
+}
+
+async function actualizarBadgeAdmin() {
+  var count = await contarNoLeidosAdmin();
+  _unreadCountAdmin = count;
+  var tab = document.querySelector('[data-f="comunicaciones"]');
+  if (!tab) return;
+  var oldBadge = tab.querySelector('.msg-badge');
+  if (oldBadge) oldBadge.remove();
+  if (count > 0) {
+    var badge = document.createElement('span');
+    badge.className = 'msg-badge';
+    badge.style.cssText = 'background:#ef4444;color:white;font-size:.6rem;font-weight:800;min-width:16px;height:16px;border-radius:99px;display:inline-flex;align-items:center;justify-content:center;margin-left:5px;padding:0 4px;animation:pulse-badge 2s infinite;';
+    badge.textContent = count > 99 ? '99+' : count;
+    tab.appendChild(badge);
   }
 }
 
+async function marcarLeidosAdmin(canalId) {
+  if (!sbClient || !_currentProfile) return;
+  try {
+    var userId = _currentProfile.user_id;
+    var res = await sbClient.from('mensajes_equipo').select('id').eq('canal_id', canalId).limit(500);
+    if (res.error || !res.data) return;
+    var msgIds = res.data.map(function(m) { return m.id; });
+    if (!msgIds.length) return;
+    var inserts = msgIds.map(function(mid) { return { mensaje_id: mid, usuario_id: userId }; });
+    await sbClient.from('mensajes_vistos').upsert(inserts, { onConflict: 'mensaje_id,usuario_id' });
+  } catch(e) {}
+}
+
+function iniciarNotificacionesAdmin() {
+  if (_notifIntervalAdmin) return;
+  actualizarBadgeAdmin();
+  _notifIntervalAdmin = setInterval(function() {
+    contarNoLeidosAdmin().then(function(count) {
+      if (count > _unreadCountAdmin) showToast('💬 Tenés ' + count + ' mensaje' + (count > 1 ? 's' : '') + ' sin leer');
+      _unreadCountAdmin = count;
+      actualizarBadgeAdmin();
+    });
+  }, 30000);
+}
+
+// ── Cargar canales (grupales + DMs) ──
+async function cargarCanales() {
+  if (!sbClient || !_currentProfile) return [];
+  var uid = _currentProfile.user_id;
+  try {
+    var res = await sbClient.from('canales_equipo').select('*').order('nombre');
+    if (res.error) { console.warn('[cargarCanales]', res.error); return []; }
+    var todos = res.data || [];
+    var visibles = todos.filter(function(c) {
+      try {
+        var m = typeof c.miembros === 'string' ? JSON.parse(c.miembros) : (c.miembros || {});
+        if (c.tipo === 'directo') {
+          var users = m.usuarios || [];
+          return users.indexOf(uid) !== -1;
+        }
+        var roles = m.roles || [];
+        var users = m.usuarios || [];
+        return roles.indexOf('asesor') !== -1 || roles.indexOf('todos') !== -1 || users.indexOf(uid) !== -1;
+      } catch(e) { return false; }
+    });
+    return visibles;
+  } catch(err) { return []; }
+}
+
+// ── Render principal de comunicaciones ──
+async function renderComunicaciones() {
+  var container = document.getElementById('comunicacionesContainer');
+  if (!container) return;
+  container.innerHTML = '<div style="color:var(--muted);padding:20px;text-align:center;">Cargando canales...</div>';
+  try {
+    await cargarStaffAdmin();
+    var canales = await cargarCanales();
+    var dms = canales.filter(function(c) { return c.tipo === 'directo'; });
+    var grupos = canales.filter(function(c) { return c.tipo !== 'directo'; });
+    var uid = _currentProfile ? _currentProfile.user_id : '';
+
+    var html = '<div style="display:flex;gap:0;border:1px solid var(--border);border-radius:16px;overflow:hidden;min-height:500px;">';
+    // Panel izquierdo: lista
+    html += '<div style="width:260px;flex-shrink:0;border-right:1px solid var(--border);background:rgba(255,255,255,.02);overflow-y:auto;max-height:600px;">';
+
+    // Sección DMs
+    html += '<div style="padding:14px 16px;font-family:Syne,sans-serif;font-size:.7rem;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#a855f7;border-bottom:1px solid var(--border);">Mensajes directos (' + dms.length + ')</div>';
+    for (var i = 0; i < dms.length; i++) {
+      var c = dms[i];
+      var otherUser = '';
+      try {
+        var m = typeof c.miembros === 'string' ? JSON.parse(c.miembros) : (c.miembros || {});
+        var users = m.usuarios || [];
+        var otherId = users.filter(function(u) { return u !== uid; })[0];
+        if (otherId) {
+          var st = _staffCacheAdmin.find(function(s) { return String(s.user_id) === String(otherId); });
+          otherUser = st ? st.nombre : 'Usuario';
+        }
+      } catch(e) {}
+      var isActive = _canalActivoAdmin && String(_canalActivoAdmin) === String(c.id);
+      html += '<div class="canal-item-admin" data-canal="' + c.id + '" style="padding:12px 16px;cursor:pointer;border-bottom:1px solid var(--border);font-size:.85rem;font-weight:600;transition:background .15s;' + (isActive ? 'background:rgba(168,85,247,.10);color:#a855f7;border-left:3px solid #a855f7;' : 'color:var(--text);border-left:3px solid transparent;') + '">' +
+        '👤 ' + esc(otherUser || c.nombre) + '</div>';
+    }
+
+    // Sección Canales grupales
+    html += '<div style="padding:14px 16px;font-family:Syne,sans-serif;font-size:.7rem;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#67e8f9;border-bottom:1px solid var(--border);margin-top:4px;">Canales (' + grupos.length + ')</div>';
+    for (var i = 0; i < grupos.length; i++) {
+      var c = grupos[i];
+      var isActive = _canalActivoAdmin && String(_canalActivoAdmin) === String(c.id);
+      html += '<div class="canal-item-admin" data-canal="' + c.id + '" style="padding:12px 16px;cursor:pointer;border-bottom:1px solid var(--border);font-size:.85rem;font-weight:600;transition:background .15s;' + (isActive ? 'background:rgba(103,232,249,.10);color:#67e8f9;border-left:3px solid #67e8f9;' : 'color:var(--text);border-left:3px solid transparent;') + '">' +
+        '# ' + esc(c.nombre) +
+        (c.descripcion ? '<div style="font-size:.68rem;color:var(--muted);font-weight:400;margin-top:2px;">' + esc(c.descripcion) + '</div>' : '') +
+        '</div>';
+    }
+
+    if (!canales.length) {
+      html += '<div style="padding:20px;text-align:center;color:var(--muted);font-size:.82rem;">No hay canales. Usá los botones de arriba para crear uno o iniciar un mensaje directo.</div>';
+    }
+    html += '</div>';
+
+    html += '<div id="mensajesPanel" style="flex:1;display:flex;flex-direction:column;">';
+    html += '<div style="padding:20px;color:var(--muted);text-align:center;margin:auto;">Seleccioná un canal o conversación para ver los mensajes</div>';
+    html += '</div>';
+    html += '</div>';
+    container.innerHTML = html;
+
+    // Event listeners
+    document.querySelectorAll('#comunicacionesContainer .canal-item-admin').forEach(function(el) {
+      el.addEventListener('click', function() {
+        _canalActivoAdmin = el.getAttribute('data-canal');
+        var canal = canales.find(function(c) { return String(c.id) === String(_canalActivoAdmin); });
+        var isDM = canal && canal.tipo === 'directo';
+        document.querySelectorAll('#comunicacionesContainer .canal-item-admin').forEach(function(x) {
+          x.style.background = ''; x.style.color = 'var(--text)'; x.style.borderLeft = '3px solid transparent';
+        });
+        el.style.background = isDM ? 'rgba(168,85,247,.10)' : 'rgba(103,232,249,.10)';
+        el.style.color = isDM ? '#a855f7' : '#67e8f9';
+        el.style.borderLeft = '3px solid ' + (isDM ? '#a855f7' : '#67e8f9');
+        cargarMensajesCanal(_canalActivoAdmin);
+        marcarLeidosAdmin(_canalActivoAdmin);
+        actualizarBadgeAdmin();
+      });
+    });
+
+    if (_canalActivoAdmin) cargarMensajesCanal(_canalActivoAdmin);
+
+  } catch(err) {
+    console.error('[renderComunicaciones]', err);
+    container.innerHTML = '<div style="padding:20px;color:var(--red);">Error al cargar comunicaciones: ' + esc(err.message || err) + '</div>';
+  }
+}
+
+// ── Cargar mensajes de un canal ──
 async function cargarMensajesCanal(canalId) {
   var panel = document.getElementById('mensajesPanel');
   if (!panel) return;
-  panel.innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted);">⏳ Cargando mensajes...</div>';
+  panel.innerHTML = '<div style="padding:20px;color:var(--muted);">Cargando mensajes...</div>';
   try {
-    var { data: mensajes, error } = await sbClient
-      .from('mensajes_equipo')
+    var res = await sbClient.from('mensajes_equipo')
       .select('*')
       .eq('canal_id', canalId)
       .is('respuesta_a', null)
       .order('created_at', { ascending: true });
-    if (error) throw error;
+    if (res.error) throw res.error;
+    var mensajes = res.data || [];
 
-    // F21b: Batch query — obtener TODOS los hijos del canal en 1 sola consulta
+    // Batch query — hijos
     var childrenMap = {};
     try {
-      var { data: allChildren } = await sbClient
-        .from('mensajes_equipo')
+      var childRes = await sbClient.from('mensajes_equipo')
         .select('*')
         .eq('canal_id', canalId)
         .not('respuesta_a', 'is', null)
         .order('created_at', { ascending: true });
-      if (allChildren && allChildren.length) {
-        for (var ci = 0; ci < allChildren.length; ci++) {
-          var child = allChildren[ci];
+      if (!childRes.error && childRes.data && childRes.data.length) {
+        for (var ci = 0; ci < childRes.data.length; ci++) {
+          var child = childRes.data[ci];
           if (!childrenMap[child.respuesta_a]) childrenMap[child.respuesta_a] = [];
           childrenMap[child.respuesta_a].push(child);
         }
       }
-    } catch(childErr) { console.warn('F21b: Error cargando hijos batch:', childErr); }
+    } catch(childErr) { console.warn('Error cargando hijos batch:', childErr); }
 
-    var html = '<div style="display:flex;flex-direction:column;height:100%;">';
-    html += '<div style="flex:1;overflow-y:auto;padding:20px;max-height:420px;">';
-    if (!mensajes || !mensajes.length) {
-      html += '<div style="text-align:center;color:var(--muted);padding:40px;font-size:.88rem;">Sin mensajes en este canal todavía.</div>';
-    } else {
-      for (var i = 0; i < mensajes.length; i++) {
-        html += renderMensaje(mensajes[i], childrenMap);
-      }
+    // Batch resolver nombres
+    var nameMap = {};
+    var myUserId = _currentProfile ? _currentProfile.user_id : null;
+    if (myUserId) nameMap[String(myUserId)] = _currentProfile.nombre || 'Asesor';
+    for (var vi = 0; vi < _staffCacheAdmin.length; vi++) {
+      nameMap[String(_staffCacheAdmin[vi].user_id)] = _staffCacheAdmin[vi].nombre;
     }
-    html += '</div>';
-    // Área de nuevo mensaje
-    html += '<div style="padding:16px;border-top:1px solid var(--border);">';
-    html += '<textarea id="nuevoMensaje" rows="3" class="edit-input" placeholder="Escribí tu mensaje..." style="width:100%;resize:vertical;margin-bottom:10px;"></textarea>';
-    html += '<div style="display:flex;gap:10px;">';
-    html += '<input id="nuevoAsunto" class="edit-input" placeholder="Asunto..." style="flex:1;" />';
-    html += '<button class="m-btn primary" onclick="enviarMensaje(\'' + canalId + '\')">📨 Enviar</button>';
-    html += '</div></div></div>';
-    panel.innerHTML = html;
-  } catch(e) {
-    panel.innerHTML = '<div style="padding:20px;color:var(--red);">❌ Error: ' + esc(e.message) + '</div>';
+    // Recolectar IDs desconocidos
+    var allMsgs = mensajes.slice();
+    var childKeys = Object.keys(childrenMap);
+    for (var ck = 0; ck < childKeys.length; ck++) {
+      var arr = childrenMap[childKeys[ck]];
+      for (var ai = 0; ai < arr.length; ai++) allMsgs.push(arr[ai]);
+    }
+    var unknownIds = [];
+    for (var mi = 0; mi < allMsgs.length; mi++) {
+      var rid = allMsgs[mi].remitente_id;
+      if (rid && !nameMap[String(rid)] && unknownIds.indexOf(String(rid)) === -1) unknownIds.push(String(rid));
+    }
+    if (unknownIds.length) {
+      try {
+        var { data: unknownStaff } = await sbClient.from('staff_profiles').select('user_id, nombre').in('user_id', unknownIds);
+        if (unknownStaff) {
+          for (var ui = 0; ui < unknownStaff.length; ui++) {
+            nameMap[String(unknownStaff[ui].user_id)] = unknownStaff[ui].nombre;
+          }
+        }
+      } catch(nameErr) { console.warn('Error resolviendo nombres batch:', nameErr); }
+    }
+
+    var msgsHtml = '';
+    for (var i = 0; i < mensajes.length; i++) {
+      msgsHtml += renderMensajeAdmin(mensajes[i], childrenMap, nameMap);
+    }
+    if (!msgsHtml) {
+      msgsHtml = '<div style="text-align:center;padding:40px;color:var(--muted);">Sin mensajes en este canal. ¡Sé el primero en escribir!</div>';
+    }
+
+    panel.innerHTML =
+      '<div id="msgsScrollAreaAdmin" style="flex:1;overflow-y:auto;padding:16px;max-height:420px;">' + msgsHtml + '</div>' +
+      '<div style="padding:12px 16px;border-top:1px solid var(--border);background:rgba(255,255,255,.02);">' +
+        '<div style="display:flex;gap:8px;align-items:flex-end;">' +
+          '<textarea id="nuevoMensaje" rows="2" placeholder="Escribí tu mensaje..." style="flex:1;background:rgba(255,255,255,.04);border:1px solid var(--border2);border-radius:10px;color:var(--text);font-family:inherit;font-size:.85rem;padding:10px;resize:none;transition:border-color .2s;" onfocus="this.style.borderColor=\'#67e8f9\'" onblur="this.style.borderColor=\'var(--border2)\'" onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();enviarMensaje(\'' + canalId + '\')}"></textarea>' +
+          '<button onclick="enviarMensaje(\'' + canalId + '\')" style="padding:10px 18px;background:linear-gradient(135deg,#0891b2,#06b6d4);border:none;border-radius:10px;color:white;font-family:inherit;font-size:.82rem;font-weight:700;cursor:pointer;white-space:nowrap;">Enviar</button>' +
+        '</div>' +
+      '</div>';
+
+    var scrollEl = document.getElementById('msgsScrollAreaAdmin');
+    if (scrollEl) scrollEl.scrollTop = scrollEl.scrollHeight;
+
+  } catch(err) {
+    panel.innerHTML = '<div style="padding:20px;color:var(--red);">Error al cargar mensajes: ' + esc(err.message || err) + '</div>';
   }
 }
 
-function renderMensaje(m, childrenMap) {
-  var remitente = m.remitente_nombre || m.remitente_id || 'Usuario';
-  // F21b: Usar childrenMap precargado en vez de query individual
+function renderMensajeAdmin(m, childrenMap, nameMap) {
+  var remitente = (nameMap && nameMap[String(m.remitente_id)]) || m.remitente_nombre || 'Usuario';
+  var fecha = m.created_at ? new Date(m.created_at).toLocaleString('es-AR', { day:'2-digit', month:'2-digit', year:'2-digit', hour:'2-digit', minute:'2-digit' }) : '';
+  var myUserId = _currentProfile ? _currentProfile.user_id : null;
+  var esMio = myUserId && String(m.remitente_id) === String(myUserId);
+  var tipoColor = m.tipo_mensaje === 'urgente' ? 'var(--red)' : m.tipo_mensaje === 'aviso' ? 'var(--gold)' : 'var(--cyan,#06b6d4)';
+
   var respuestasHtml = '';
   var hijos = (childrenMap && childrenMap[m.id]) || [];
   if (hijos.length) {
     for (var i = 0; i < hijos.length; i++) {
-      respuestasHtml += renderMensaje(hijos[i], childrenMap);
+      respuestasHtml += renderMensajeAdmin(hijos[i], childrenMap, nameMap);
     }
   }
-  var tipoColor = m.tipo_mensaje === 'urgente' ? 'var(--red)' : m.tipo_mensaje === 'aviso' ? 'var(--accent2)' : 'var(--muted)';
-  return '<div style="border-left:3px solid var(--border2);padding-left:14px;margin-bottom:16px;">' +
-    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">' +
-    '<strong style="font-size:.85rem;">' + esc(remitente) + '</strong>' +
-    '<span style="font-size:.72rem;color:var(--muted);">' + new Date(m.created_at).toLocaleString('es-AR') + '</span>' +
-    '<span style="font-size:.65rem;font-weight:700;padding:2px 7px;border-radius:20px;background:rgba(255,255,255,.05);color:' + tipoColor + ';">' + esc(m.tipo_mensaje||'aviso') + '</span>' +
+
+  var idMsg = m.id;
+  var idCanal = m.canal_id;
+
+  return '<div style="margin-bottom:16px;padding-left:' + (m.respuesta_a ? '24px' : '0') + ';border-left:' + (m.respuesta_a ? '3px solid var(--border2)' : 'none') + ';">' +
+    '<div style="background:' + (esMio ? 'rgba(103,232,249,.07)' : 'rgba(255,255,255,.03)') + ';border:1px solid ' + (esMio ? 'rgba(103,232,249,.2)' : 'var(--border)') + ';border-radius:12px;padding:12px 14px;">' +
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap;">' +
+        '<span style="font-weight:700;font-size:.82rem;color:' + (esMio ? '#67e8f9' : 'var(--text)') + ';">' + esc(remitente) + '</span>' +
+        '<span style="font-size:.65rem;color:var(--muted);">' + fecha + '</span>' +
+        (m.tipo_mensaje ? '<span style="font-size:.62rem;padding:2px 7px;border-radius:6px;background:rgba(255,255,255,.06);color:' + tipoColor + ';font-weight:700;text-transform:uppercase;">' + esc(m.tipo_mensaje) + '</span>' : '') +
+      '</div>' +
+      (m.asunto ? '<div style="font-weight:700;font-size:.85rem;margin-bottom:4px;">' + esc(m.asunto) + '</div>' : '') +
+      '<div style="font-size:.85rem;line-height:1.5;white-space:pre-wrap;">' + esc(m.cuerpo || '') + '</div>' +
+      '<div style="margin-top:8px;">' +
+        '<button onclick="mostrarRespuestaAdmin(\'' + idMsg + '\')" style="background:none;border:none;cursor:pointer;font-size:.72rem;color:var(--muted);padding:0;font-family:inherit;transition:color .15s;" onmouseover="this.style.color=\'#67e8f9\'" onmouseout="this.style.color=\'var(--muted)\'">Responder</button>' +
+      '</div>' +
+      '<div id="resp-admin-' + idMsg + '" style="display:none;margin-top:10px;">' +
+        '<textarea id="respuestaTextoAdmin-' + idMsg + '" rows="2" placeholder="Escribí tu respuesta..." style="width:100%;background:rgba(255,255,255,.04);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-family:inherit;font-size:.82rem;padding:8px;resize:none;"></textarea>' +
+        '<button onclick="enviarRespuesta(\'' + idMsg + '\', \'' + idCanal + '\')" style="margin-top:6px;padding:6px 14px;background:linear-gradient(135deg,#0891b2,#06b6d4);border:none;border-radius:8px;color:white;font-family:inherit;font-size:.78rem;font-weight:700;cursor:pointer;">Enviar respuesta</button>' +
+      '</div>' +
     '</div>' +
-    (m.asunto ? '<div style="font-weight:700;font-size:.85rem;margin-bottom:4px;">' + esc(m.asunto) + '</div>' : '') +
-    '<div style="font-size:.88rem;color:rgba(220,235,255,.85);">' + esc(m.cuerpo||'') + '</div>' +
-    '<button onclick="mostrarRespuesta(' + m.id + ')" style="margin-top:6px;background:none;border:none;cursor:pointer;color:var(--muted);font-size:.75rem;padding:0;">↩️ Responder</button>' +
-    '<div id="resp-' + m.id + '" style="display:none;margin-top:8px;">' +
-      '<textarea id="respuestaTexto-' + m.id + '" rows="2" class="edit-input" placeholder="Escribí tu respuesta..." style="width:100%;resize:vertical;margin-bottom:6px;"></textarea>' +
-      '<button class="m-btn primary" style="font-size:.78rem;padding:6px 14px;" onclick="enviarRespuesta(' + m.id + ',' + m.canal_id + ')">Enviar respuesta</button>' +
-    '</div>' +
-    (respuestasHtml ? '<div style="margin-left:16px;margin-top:12px;">' + respuestasHtml + '</div>' : '') +
-    '</div>';
+    (respuestasHtml ? '<div style="margin-top:8px;">' + respuestasHtml + '</div>' : '') +
+  '</div>';
 }
 
-function mostrarRespuesta(msgId) {
-  var el = document.getElementById('resp-' + msgId);
+function mostrarRespuestaAdmin(msgId) {
+  var el = document.getElementById('resp-admin-' + msgId);
   if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
 }
 
+// ── Enviar mensaje ──
 async function enviarMensaje(canalId, respuestaA) {
-  if (!_currentProfile || !sbClient) { showToast('❌ Sin sesión'); return; }
+  if (!_currentProfile || !sbClient) { showToast('Sin sesión'); return; }
   var cuerpo, asunto;
   if (respuestaA) {
-    var el = document.getElementById('respuestaTexto-' + respuestaA);
+    var el = document.getElementById('respuestaTextoAdmin-' + respuestaA);
     cuerpo = el ? el.value.trim() : '';
     asunto = 'Re: mensaje';
   } else {
-    var cuerpoEl = document.getElementById('nuevoMensaje');
-    var asuntoEl = document.getElementById('nuevoAsunto');
-    cuerpo = cuerpoEl ? cuerpoEl.value.trim() : '';
-    asunto = asuntoEl ? asuntoEl.value.trim() : 'Sin asunto';
+    var el = document.getElementById('nuevoMensaje');
+    cuerpo = el ? el.value.trim() : '';
+    asunto = 'Mensaje Asesor';
   }
-  if (!cuerpo) { showToast('⚠️ Escribí un mensaje antes de enviar'); return; }
+  if (!cuerpo) { showToast('Escribí algo antes de enviar'); return; }
   try {
-    var { error } = await sbClient.from('mensajes_equipo').insert({
+    var ins = await sbClient.from('mensajes_equipo').insert({
       remitente_id: _currentProfile.user_id,
-      remitente_nombre: _currentProfile.nombre || 'Asesor',
-      asunto: asunto || 'Sin asunto',
+      asunto: asunto,
       cuerpo: cuerpo,
-      canal_id: parseInt(canalId),
+      canal_id: canalId,
       respuesta_a: respuestaA || null,
       tipo_mensaje: 'aviso'
     });
-    if (error) throw error;
-    showToast('✅ Mensaje enviado');
+    if (ins.error) throw ins.error;
+    showToast('Mensaje enviado');
     cargarMensajesCanal(canalId);
-  } catch(e) {
-    showToast('❌ Error al enviar: ' + (e.message || e));
+  } catch(err) {
+    console.error('[enviarMensaje]', err);
+    showToast('Error al enviar: ' + (err.message || err));
   }
 }
 
 async function enviarRespuesta(msgId, canalId) {
-  await enviarMensaje(String(canalId), msgId);
+  await enviarMensaje(canalId, msgId);
+}
+
+// ── Mensaje directo (DM) Admin ──
+async function abrirNuevoDMAdmin() {
+  var ov = document.getElementById('dmOverlayAdmin');
+  if (ov) { ov.style.display = 'flex'; return; }
+  _staffCacheAdmin = [];
+  var staff = await cargarStaffAdmin();
+  var uid = _currentProfile ? _currentProfile.user_id : '';
+  ov = document.createElement('div');
+  ov.id = 'dmOverlayAdmin';
+  ov.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.6);z-index:9999;display:flex;align-items:center;justify-content:center;';
+  ov.onclick = function(e) { if (e.target === ov) ov.remove(); };
+  var staffOpts = '';
+  for (var i = 0; i < staff.length; i++) {
+    var s = staff[i];
+    if (String(s.user_id) === String(uid)) continue;
+    staffOpts += '<div data-uid="' + s.user_id + '" style="padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;transition:background .15s;" onmouseenter="this.style.background=\'rgba(168,85,247,.08)\'" onmouseleave="this.style.background=\'\'" onclick="crearOBuscarDMAdmin(\'' + s.user_id + '\')">' +
+      '👤 <div style="flex:1;"><div style="font-weight:600;font-size:.85rem;">' + esc(s.nombre) + '</div>' +
+      '<div style="font-size:.68rem;color:var(--muted);">' + esc(s.role || '') + '</div></div>' +
+      '<span style="font-size:.75rem;color:#a855f7;">💬 Chatear</span></div>';
+  }
+  var emptyMsg = '<div style="padding:20px;text-align:center;color:var(--muted);">No hay otros usuarios registrados.<br><small>Asegurate de que los usuarios tengan un perfil en staff_profiles.</small></div>';
+  ov.innerHTML = '<div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:24px;width:380px;max-width:90vw;">' +
+    '<h3 style="font-family:Syne,sans-serif;font-size:.95rem;font-weight:800;margin-bottom:16px;">💬 Mensaje directo</h3>' +
+    '<p style="font-size:.78rem;color:var(--muted);margin-bottom:14px;">Seleccioná con quién querés chatear:</p>' +
+    '<div style="max-height:320px;overflow-y:auto;border:1px solid var(--border);border-radius:10px;">' + (staffOpts || emptyMsg) + '</div>' +
+    '<button onclick="document.getElementById(\'dmOverlayAdmin\').remove()" style="margin-top:14px;padding:8px 16px;background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:8px;color:var(--text);cursor:pointer;font-family:inherit;font-size:.82rem;width:100%;">Cerrar</button>' +
+  '</div>';
+  document.body.appendChild(ov);
+}
+
+async function crearOBuscarDMAdmin(targetUserId) {
+  if (document.getElementById('dmOverlayAdmin')) document.getElementById('dmOverlayAdmin').remove();
+  var uid = _currentProfile ? _currentProfile.user_id : '';
+  try {
+    var res = await sbClient.from('canales_equipo').select('*').eq('tipo', 'directo');
+    if (res.error) throw res.error;
+    var existing = null;
+    for (var i = 0; i < res.data.length; i++) {
+      var c = res.data[i];
+      try {
+        var m = typeof c.miembros === 'string' ? JSON.parse(c.miembros) : (c.miembros || {});
+        var users = m.usuarios || [];
+        if (users.indexOf(uid) !== -1 && users.indexOf(targetUserId) !== -1) { existing = c; break; }
+      } catch(e) {}
+    }
+    if (existing) {
+      _canalActivoAdmin = String(existing.id);
+      showToast('Conversación abierta');
+      renderComunicaciones();
+      return;
+    }
+    var st = _staffCacheAdmin.find(function(s) { return String(s.user_id) === String(targetUserId); });
+    var otherName = st ? st.nombre : 'Usuario';
+    var datosInsert = {
+      nombre: 'DM: ' + otherName,
+      tipo: 'directo',
+      descripcion: 'Conversación directa',
+      miembros: { tipo: 'directo', usuarios: [uid, targetUserId] },
+      creado_por: uid
+    };
+    var ins = await sbClient.from('canales_equipo').insert(datosInsert).select();
+    if (ins.error) throw ins.error;
+    _canalActivoAdmin = String(ins.data[0].id);
+    showToast('Conversación creada con ' + otherName);
+    renderComunicaciones();
+  } catch(err) {
+    console.error('[crearOBuscarDMAdmin]', err);
+    showToast('Error: ' + (err.message || err));
+  }
 }
 
 // ── Crear nuevo canal ──
 function abrirCrearCanal() {
   var ov = document.getElementById('crearCanalOverlay');
   if (ov) { ov.style.display = 'flex'; return; }
+  var uid = _currentProfile ? _currentProfile.user_id : '';
+  var staffOpts = '';
+  for (var i = 0; i < _staffCacheAdmin.length; i++) {
+    var s = _staffCacheAdmin[i];
+    if (String(s.user_id) === String(uid)) continue;
+    staffOpts += '<label style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:.82rem;cursor:pointer;"><input type="checkbox" class="nc-user-cb" value="' + s.user_id + '" /> ' + esc(s.nombre) + ' <span style="font-size:.65rem;color:var(--muted);">(' + esc(s.role || '') + ')</span></label>';
+  }
   ov = document.createElement('div');
   ov.id = 'crearCanalOverlay';
   ov.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.6);z-index:9999;display:flex;align-items:center;justify-content:center;';
   ov.onclick = function(e) { if (e.target === ov) cerrarCrearCanal(); };
-  ov.innerHTML = '<div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:24px;width:420px;max-width:90vw;">' +
-    '<h3 style="font-family:Syne,sans-serif;font-size:.95rem;font-weight:800;margin-bottom:16px;">&#x2795; Nuevo Canal</h3>' +
+  ov.innerHTML = '<div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:24px;width:460px;max-width:90vw;max-height:85vh;overflow-y:auto;">' +
+    '<h3 style="font-family:Syne,sans-serif;font-size:.95rem;font-weight:800;margin-bottom:16px;">➕ Nuevo Canal</h3>' +
     '<label style="display:block;margin-bottom:12px;">' +
       '<span style="font-size:.78rem;font-weight:600;color:var(--muted);">Nombre del canal</span>' +
-      '<input id="ncNombre" type="text" placeholder="Ej: general-moras" style="width:100%;margin-top:4px;padding:8px 12px;background:rgba(255,255,255,.04);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-family:inherit;font-size:.85rem;" />' +
+      '<input id="ncNombre" type="text" placeholder="Ej: seguimiento-cliente-X" style="width:100%;margin-top:4px;padding:8px 12px;background:rgba(255,255,255,.04);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-family:inherit;font-size:.85rem;" />' +
     '</label>' +
     '<label style="display:block;margin-bottom:12px;">' +
       '<span style="font-size:.78rem;font-weight:600;color:var(--muted);">Descripción</span>' +
       '<input id="ncDesc" type="text" placeholder="Descripción breve..." style="width:100%;margin-top:4px;padding:8px 12px;background:rgba(255,255,255,.04);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-family:inherit;font-size:.85rem;" />' +
     '</label>' +
-    '<div style="margin-bottom:16px;">' +
-      '<span style="font-size:.78rem;font-weight:600;color:var(--muted);display:block;margin-bottom:8px;">¿Quién puede ver este canal?</span>' +
+    '<div style="margin-bottom:12px;">' +
+      '<span style="font-size:.78rem;font-weight:600;color:var(--muted);display:block;margin-bottom:8px;">Roles con acceso</span>' +
       '<label style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:.85rem;cursor:pointer;"><input type="checkbox" id="ncRolCeo" /> CEO</label>' +
       '<label style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:.85rem;cursor:pointer;"><input type="checkbox" id="ncRolGerente" /> Gerente</label>' +
       '<label style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:.85rem;cursor:pointer;"><input type="checkbox" id="ncRolJefe" /> Jefe de Ventas</label>' +
       '<label style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:.85rem;cursor:pointer;"><input type="checkbox" id="ncRolAsesor" checked /> Asesor</label>' +
+    '</div>' +
+    '<div style="margin-bottom:16px;">' +
+      '<span style="font-size:.78rem;font-weight:600;color:var(--muted);display:block;margin-bottom:8px;">Usuarios específicos <span style="font-size:.68rem;color:var(--muted);font-weight:400;">(opcional)</span></span>' +
+      '<div style="max-height:150px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:8px;">' + (staffOpts || '<div style="padding:8px;color:var(--muted);font-size:.82rem;">No hay otros usuarios</div>') + '</div>' +
     '</div>' +
     '<div style="display:flex;gap:10px;justify-content:flex-end;">' +
       '<button onclick="cerrarCrearCanal()" style="padding:8px 16px;background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:8px;color:var(--text);cursor:pointer;font-family:inherit;font-size:.82rem;">Cancelar</button>' +
@@ -3224,23 +3521,27 @@ async function crearNuevoCanal() {
   if (document.getElementById('ncRolGerente').checked) roles.push('gerente');
   if (document.getElementById('ncRolJefe').checked) roles.push('jefe_ventas');
   if (document.getElementById('ncRolAsesor').checked) roles.push('asesor');
-  if (!nombre || !nombre.value.trim()) { showToast('⚠️ Ingresá un nombre para el canal'); return; }
-  if (!roles.length) { showToast('⚠️ Seleccioná al menos un rol'); return; }
+  var usuarios = [];
+  document.querySelectorAll('.nc-user-cb:checked').forEach(function(cb) { usuarios.push(cb.value); });
+  if (!nombre || !nombre.value.trim()) { showToast('Ingresá un nombre para el canal'); return; }
+  if (!roles.length && !usuarios.length) { showToast('Seleccioná al menos un rol o usuario'); return; }
   try {
-    var { error } = await sbClient.from('canales_equipo').insert({
+    var miembros = { roles: roles };
+    if (usuarios.length) miembros.usuarios = usuarios;
+    var ins = await sbClient.from('canales_equipo').insert({
       nombre: nombre.value.trim(),
       descripcion: desc ? desc.value.trim() : '',
-      tipo: 'publico',
-      miembros: { roles: roles },
+      tipo: 'grupo',
+      miembros: miembros,
       creado_por: _currentProfile.user_id
-    });
-    if (error) throw error;
-    showToast('✅ Canal "' + nombre.value.trim() + '" creado');
+    }).select();
+    if (ins.error) throw ins.error;
+    showToast('Canal "' + nombre.value.trim() + '" creado');
     cerrarCrearCanal();
     renderComunicaciones();
   } catch(err) {
     console.error('[crearNuevoCanal]', err);
-    showToast('❌ Error: ' + (err.message || err));
+    showToast('Error: ' + (err.message || err));
   }
 }
 
