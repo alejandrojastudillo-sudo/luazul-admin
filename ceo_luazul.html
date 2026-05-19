@@ -2109,7 +2109,7 @@ function _approveSinglePago(pago){
   var _clientEstado = ((_cacheClientes||[]).find(function(x){ return String(x.id)===_clientId; }) || {}).estado || '';
   var _esCuota1 = Number(cuotaKey) === 1;
   return sbClient.from('pagos').update({
-    estado: 'aprobado', aprobado_por: 'CEO', fecha_pago: new Date().toISOString()
+    estado: 'aprobado', fecha_pago: new Date().toISOString()
   }).eq('id', _pagoId).select().single().then(function(res) {
     if (res.error) throw res.error;
     var idx = (_cachePagos||[]).findIndex(function(x){ return String(x.id) === _pagoId; });
@@ -3789,7 +3789,7 @@ function aprobarPago(clientId, cuotaKey, dbKey){
 
   // PASO 1 — Aprobar el pago en tabla `pagos`
   sbClient.from('pagos')
-    .update({ estado: 'aprobado', aprobado_por: 'CEO', fecha_pago: new Date().toISOString() })
+    .update({ estado: 'aprobado', fecha_pago: new Date().toISOString() })
     .eq('id', _pagoId)
     .select().single()
     .then(function(res){
@@ -3991,7 +3991,7 @@ function confirmarRechazo(){
 
   // PASO 1 — Rechazar el pago usando id (UUID) — misma lógica que aprobarPago()
   sbClient.from('pagos')
-    .update({ estado: 'rechazado', aprobado_por: aprobadoPor })
+    .update({ estado: 'rechazado' })
     .eq('id', _pagoId)
     .select().single()
     .then(function(res){
@@ -4004,7 +4004,6 @@ function confirmarRechazo(){
       var cacheIdx = (_cachePagos||[]).findIndex(function(x){ return String(x.id) === _pagoId; });
       if(cacheIdx >= 0){
         _cachePagos[cacheIdx].estado = 'rechazado';
-        _cachePagos[cacheIdx].aprobado_por = aprobadoPor;
       }
       // PASO 2 — Si es cuota 1, también rechazar el contrato asociado
       if(esCuota1){
