@@ -5,11 +5,11 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- CEO v2.1 — 9 regiones · 9 gerentes · 54 asesores · 2200 activos — 2026-03-07 -->
+<!-- CEO v4.0 — FIX-SYNC: cache re-fetch post-aprobación · FIX-A nombre en pagos · FIX 406 — 2026-05-19 -->
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="manifest" href="manifest_ceo.json">
   <meta name="theme-color" content="#0B3D91">
-<title>Luazul Smart Travel · CEO v2 — 9 Regiones</title>
+<title>Luazul Smart Travel · CEO v4</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Mulish:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
@@ -2069,6 +2069,21 @@ function renderPagos(){
     :'<div style="text-align:center;padding:40px;color:var(--muted);">Sin pagos para mostrar</div>');
 }
 
+// FIX-SYNC: Refresca _cachePagos y _cacheClientes desde Supabase para garantizar sincronía con la BD
+function refreshPagosCache(){
+  return Promise.all([
+    sbClient.from('pagos').select('*').order('created_at',{ascending:false}).limit(500),
+    sbClient.from('clientes').select('id,user_id,seller_id,nombre,email,telefono,documento,estado,destino,paquete,fecha_viaje,monto_cuota,cuotas_total,cuotas_pagadas,total_usd,fecha_alta,notas,region_id')
+  ]).then(function(results){
+    var pRes = results[0], cRes = results[1];
+    if(!pRes.error && pRes.data) _cachePagos = pRes.data;
+    if(!cRes.error && cRes.data) _cacheClientes = cRes.data.map(mapCliente);
+    console.log('[refreshPagosCache] Pagos:', (_cachePagos||[]).length, '| Clientes:', (_cacheClientes||[]).length);
+  }).catch(function(e){
+    console.warn('[refreshPagosCache] Error refrescando cache:', e.message);
+  });
+}
+
 function aprobarPagoSb(pagoId){
   var pago = (_cachePagos||[]).find(function(p){ return String(p.id)===String(pagoId); });
   if(!pago){ showToast('⚠️ Pago no encontrado'); return; }
@@ -2101,13 +2116,16 @@ function aprobarTodos(){
     });
   });
   chain.then(function() {
-    renderOverview();
-    renderPagosAprobacion();
-    renderClientes();
-    renderMora();
-    var msg = '✅ ' + count + ' pagos aprobados';
-    if (errores > 0) msg += ' (' + errores + ' errores — ver consola)';
-    showToast(msg);
+    // FIX-SYNC: Refrescar cache desde Supabase ANTES de re-renderizar
+    return refreshPagosCache().then(function(){
+      renderOverview();
+      renderPagosAprobacion();
+      renderClientes();
+      renderMora();
+      var msg = '✅ ' + count + ' pagos aprobados';
+      if (errores > 0) msg += ' (' + errores + ' errores — ver consola)';
+      showToast(msg);
+    });
   }).catch(function(e) {
     console.error('aprobarTodos error:', e);
     showToast('❌ Error: ' + (e.message || ''));
@@ -2124,11 +2142,15 @@ function _approveSinglePago(pago){
   // FIX MORA-L-04: Pre-lookup client estado before the chain
   var _clientEstado = ((_cacheClientes||[]).find(function(x){ return String(x.id)===_clientId; }) || {}).estado || '';
   var _esCuota1 = Number(cuotaKey) === 1;
-  // FIX 406: Sin .select().single() — evita error de coercion si RLS bloquea o no retorna fila
+  // FIX 406 + FIX-SYNC: .select() para verificar fila actualizada, sin .single() para evitar 406
   return sbClient.from('pagos').update({
     estado: 'aprobado'
-  }).eq('id', _pagoId).then(function(res) {
+  }).eq('id', _pagoId).select().then(function(res) {
     if (res.error) throw res.error;
+    // FIX-SYNC: Verificar que la fila fue efectivamente actualizada
+    if(!res.data || res.data.length === 0){
+      console.error('[_approveSinglePago] WARNING: UPDATE no afectó ninguna fila. pago_id=' + _pagoId + ' — posible RLS block o ID incorrecto');
+    }
     var idx = (_cachePagos||[]).findIndex(function(x){ return String(x.id) === _pagoId; });
     if (idx >= 0) _cachePagos[idx].estado = 'aprobado';
     var c = (_cacheClientes||[]).find(function(x){ return String(x.id) === _clientId; });
@@ -3805,11 +3827,17 @@ function aprobarPago(clientId, cuotaKey, dbKey){
 
   // PASO 1 — Aprobar el pago en tabla `pagos`
   // FIX 406: Sin .select().single() — evita error de coercion si RLS bloquea o no retorna fila
+  // FIX-SYNC: Agregar .select() para verificar si realmente se actualizó la fila
   sbClient.from('pagos')
     .update({ estado: 'aprobado' })
     .eq('id', _pagoId)
+    .select()
     .then(function(res){
       if(res.error) throw res.error;
+      // FIX-SYNC: Verificar que la fila fue efectivamente actualizada
+      if(!res.data || res.data.length === 0){
+        console.error('[aprobarPago] WARNING: UPDATE no afectó ninguna fila. pago_id=' + _pagoId + ' — posible RLS block o ID incorrecto');
+      }
       // Actualizar caché local manualmente (sin depender del response)
       var idx = (_cachePagos||[]).findIndex(function(x){ return String(x.id) === _pagoId; });
       if(idx >= 0) _cachePagos[idx].estado = 'aprobado';
@@ -3881,11 +3909,14 @@ function aprobarPago(clientId, cuotaKey, dbKey){
       // F6-9: Refrescar comisiones si la tab está visible
       var comTab = document.getElementById('tabpg-pagocomisiones');
       if(comTab && comTab.style.display !== 'none') renderPagoComisiones();
-      // FIX H4: Refrescar todas las vistas afectadas por la aprobación
-      renderOverview();
-      renderPagosAprobacion();
-      renderClientes();
-      renderMora();
+      // FIX-SYNC: Refrescar cache desde Supabase ANTES de re-renderizar, para garantizar sincronía con BD
+      refreshPagosCache().then(function(){
+        // FIX H4: Refrescar todas las vistas afectadas por la aprobación
+        renderOverview();
+        renderPagosAprobacion();
+        renderClientes();
+        renderMora();
+      });
       // FIX MORA-M-03 + CEO-C01: Toast dinámico — solo indica eventos que efectivamente ocurrieron
       var toastMsg = '\u2705 Pago aprobado';
       if (_moraResuelta) toastMsg += ' \u00b7 Mora resuelta';
