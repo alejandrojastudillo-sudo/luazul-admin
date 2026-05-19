@@ -1320,11 +1320,55 @@ document.addEventListener('DOMContentLoaded', function(){
   }
 });
 
+// ── LIMPIEZA DE CUOTAS FANTASMA ─────────────────────────
+// Ejecuta una vez al cargar: elimina cuotas "pendiente" que NO son
+// la siguiente cuota debida. Esto limpia cuotas creadas erróneamente
+// antes del fix secuencial del panel cliente.
+function limpiarCuotasFantasma(){
+  var clientes = _cacheClientes || [];
+  var pagos   = _cachePagos   || [];
+  var aEliminar = [];
+  for (var pi = 0; pi < pagos.length; pi++) {
+    var p = pagos[pi];
+    if (p.estado !== 'pendiente') continue;
+    var c = clientes.find(function(x){ return String(x.id) === String(p.cliente_id); });
+    if (!c) continue;
+    var siguienteCuota = (parseInt(c.cuotas_pagadas) || 0) + 1;
+    if (parseInt(p.numero_cuota) !== siguienteCuota) {
+      aEliminar.push(p.id);
+    }
+  }
+  if (!aEliminar.length) return;
+  console.log('[limpiarCuotasFantasma] Eliminando ' + aEliminar.length + ' cuotas pendientes huérfanas...');
+  // Borrar en lotes de 100
+  var batches = [];
+  while (aEliminar.length) {
+    batches.push(aEliminar.splice(0, 100));
+  }
+  var chain = Promise.resolve();
+  batches.forEach(function(batch) {
+    chain = chain.then(function() {
+      return sbClient.from('pagos').delete().in('id', batch).then(function(res) {
+        if (res.error) console.warn('[limpiarCuotasFantasma] Error:', res.error.message);
+      });
+    });
+  });
+  return chain.then(function() {
+    console.log('[limpiarCuotasFantasma] Limpieza completada');
+  });
+}
+
 // ── INIT ──────────────────────────────────────────────
 function initApp(){
   cargarDatosSupabase().then(function(){
     renderAll();
     populateAllFilters();
+    limpiarCuotasFantasma().then(function(){
+      // Refrescar cache después de limpiar
+      return refreshPagosCache();
+    }).then(function(){
+      renderAll();
+    });
   });
 }
 
