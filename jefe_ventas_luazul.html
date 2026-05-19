@@ -1912,7 +1912,7 @@ function openClientDetail(id) {
         <button class="m-btn green" onclick="waMensajeGerente('${c.id}')">💬 WhatsApp</button>
         <button class="m-btn ghost" onclick="waRecordatorioGerente('${c.id}')">📲 Recordatorio</button>
         <button class="m-btn ghost" onclick="verComprobantesGerente('${c.id}')">📎 Ver pagos</button>
-        <button class="m-btn ghost" onclick="abrirRegistroPagoGerente('${c.id}')" style="color:#34d399;">💳 Registrar pago</button>
+        <!-- FIX-BR2: Botón "Registrar pago" eliminado — solo el Panel Cliente envía comprobantes -->
         <button class="m-btn ghost" onclick="abrirCargaReferidoGerente('${c.id}')" style="color:#fbbf24;">🎁 Referido</button>
         <button class="m-btn ghost" onclick="closeModal()">Cerrar</button>
       </div>
