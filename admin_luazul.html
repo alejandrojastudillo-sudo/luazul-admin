@@ -3479,15 +3479,32 @@ async function generarPresupuestoPDF(prospectoId) {
     try {
         const { data: p, error: pErr } = await sbClient.from('prospectos').select('*').eq('id', prospectoId).single();
         if (pErr) throw pErr;
+        // FIX-406: .maybeSingle() en vez de .single() para evitar error 406 cuando no hay resultados
         const { data: destino, error: dErr } = await sbClient
             .from('catalogo_precios')
             .select('*')
             .eq('slug', p.destino_slug)
             .eq('personas', p.personas)
-            .single();
-        if (dErr || !destino) throw new Error('No se encontró el paquete para ese destino y cantidad de personas');
+            .maybeSingle();
+        if (dErr) throw dErr;
+        if (!destino) {
+            // Consultar qué paquetes sí existen para ese destino
+            const { data: disponibles } = await sbClient
+                .from('catalogo_precios')
+                .select('personas, paquete, precio_usd')
+                .eq('slug', p.destino_slug)
+                .eq('activo', true);
+            var msg = 'No se encontró el paquete para ' + p.destino_slug + ' con ' + p.personas + ' personas.';
+            if (disponibles && disponibles.length > 0) {
+                msg += ' Opciones disponibles: ' + disponibles.map(function(d) { return d.personas + ' pers. (USD ' + d.precio_usd + ')'; }).join(', ') + '.';
+            } else {
+                msg += ' No hay paquetes activos para ese destino.';
+            }
+            throw new Error(msg);
+        }
 
-        const { data: tasaData } = await sbClient.from('exchange_rates').select('cotizacion_venta').eq('moneda_destino', p.moneda).single();
+        // FIX: .maybeSingle() para evitar 406 si no hay tasa para esa moneda
+        const { data: tasaData } = await sbClient.from('exchange_rates').select('cotizacion_venta').eq('moneda_destino', p.moneda).maybeSingle();
         const cotizacion = tasaData ? tasaData.cotizacion_venta : 1;
         const precioTotalUSD = destino.precio_usd;
         const cuotaUSD = (precioTotalUSD / p.cuotas).toFixed(2);
