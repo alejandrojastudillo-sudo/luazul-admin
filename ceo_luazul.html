@@ -3120,19 +3120,17 @@ function closeModalOut(e){if(e.target===document.getElementById('modal'))closeMo
 // ── FIX COMP-VIEW: Modal para ver comprobante de pago ──
 function verComprobanteModal(url, titulo) {
   if (!url) { showToast('Sin comprobante adjunto'); return; }
-  var modal = document.getElementById('modal');
-  modal.querySelector('.mhead h2').textContent = titulo || 'Comprobante de pago';
-  modal.querySelector('.mhead p').textContent = '';
-  modal.querySelector('.mbody').innerHTML =
-    '<div style="text-align:center;padding:10px;">'
+  document.getElementById('mbox').innerHTML =
+    '<div class="mhead"><h2>' + (titulo || 'Comprobante de pago') + '</h2><p></p></div>'
+    + '<div class="mbody">'
+    + '<div style="text-align:center;padding:10px;">'
     + '<img src="' + url + '" style="max-width:100%;max-height:70vh;border-radius:10px;object-fit:contain;" onerror="this.outerHTML=\'<div style=padding:40px;color:#f87171;>Error al cargar la imagen del comprobante</div>\'"/>'
     + '</div>'
     + '<div style="text-align:center;margin-top:14px;">'
     + '<a href="' + url + '" target="_blank" style="display:inline-flex;align-items:center;gap:6px;padding:9px 20px;background:linear-gradient(135deg,#7c3aed,#a78bfa);border-radius:10px;font-size:.82rem;font-weight:700;color:white;text-decoration:none;">\uD83D\uDD0D Abrir en nueva pesta\u00f1a</a>'
-    + '</div>';
-  modal.querySelector('.mact').innerHTML =
-    '<button class="mbtn ghost" onclick="closeModal()">Cerrar</button>';
-  modal.classList.add('open');
+    + '</div></div>'
+    + '<div class="mact"><button class="mbtn ghost" onclick="closeModal()">Cerrar</button></div>';
+  document.getElementById('modal').classList.add('open');
 }
 
 
