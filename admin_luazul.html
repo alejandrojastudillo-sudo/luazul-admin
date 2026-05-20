@@ -461,7 +461,7 @@ body::after {
 .ftab.active { background:var(--accent); color:white; border-color:var(--accent); box-shadow:0 2px 8px rgba(59,130,246,0.3); }
 
 .sort-select { background:var(--surface); border:1px solid var(--border); color:var(--text); font-family:'Montserrat',sans-serif; font-size:.82rem; padding:8px 12px; border-radius:10px; cursor:pointer; }
-.sort-select option { background:var(--surface); }
+.sort-select option, .edit-input option, select option { background:var(--surface); color:var(--text); }
 
 /* ── LEGEND ─────────────────────────────────────────────────────────────── */
 .legend { display:flex; flex-wrap:wrap; gap:12px; margin-bottom:20px; padding:14px 20px; background:var(--surface); border:1px solid var(--border); border-radius:16px; }
@@ -2476,7 +2476,7 @@ function openAddModal() {
 }
 
 // ── Dynamic pricing: carga destinos desde catalogo_precios ──
-var _catalogoDestinos = [];   // cache [{slug, nombre_destino, precio_adulto_noche, max_ocupacion, moneda_destino}]
+var _catalogoDestinos = [];   // cache [{slug, nombre_destino, precio_adulto_noche, max_ocupacion}]
 var _simuladorConfig = { pct_menor_5_11: 0.50, pct_menor_12_17: 0.80, group_discounts: [] };
 
 async function loadDestinosDropdown() {
@@ -2486,7 +2486,7 @@ async function loadDestinosDropdown() {
     // Cargar destinos
     var { data: destinos, error: dErr } = await sbClient
       .from('catalogo_precios')
-      .select('slug, nombre_destino, precio_adulto_noche, max_ocupacion, moneda_destino')
+      .select('slug, nombre_destino, precio_adulto_noche, max_ocupacion')
       .eq('activo', true);
     if (dErr) throw dErr;
     _catalogoDestinos = destinos || [];
