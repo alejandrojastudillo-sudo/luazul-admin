@@ -593,7 +593,6 @@ body::after {
   font-size:.9rem; padding:9px 13px; width:100%; transition:border .2s;
 }
 .edit-input:focus { outline:none; border-color:var(--accent); }
-option{background:#0d1b2a;color:#e8eeff;padding:6px 8px;}
 
 /* ── EMPTY STATE / TOAST ─────────────────────────────────────────────── */
 .empty-state { text-align:center; padding:60px 20px; color:var(--muted); }
@@ -2366,10 +2365,13 @@ async function guardarFirma() {
 }
 
 // ──────────────────────────────────────────────────────────────────────────
-// 29. SIMULADOR DE CUOTAS (v2 — BD en vez de hardcodeado)
-// Modal: destino → paquete → cuotas → menores → resultado
+// 29. SIMULADOR DE CUOTAS
 // ──────────────────────────────────────────────────────────────────────────
-var _simAdminCatalogo = [];
+var PKG_PRICES = {
+  'Escapada en Pareja': { price:870,  pers:2 },
+  'Paquete 4 Amigos':   { price:1450, pers:4 },
+  'Paquete 6 Amigos':   { price:1740, pers:6 }
+};
 
 function openSimulador() {
   document.getElementById('modalBox').innerHTML=
@@ -2377,158 +2379,43 @@ function openSimulador() {
     '<button class="modal-close" onclick="closeModal()">✕</button></div>'+
     '<div class="modal-body">'+
     '<div class="modal-grid" style="grid-template-columns:1fr 1fr;">'+
-    '<div class="m-item"><div class="m-label">Destino</div>'+
-    '<select class="edit-input" id="simDest" onchange="simAdminDestChanged()"><option value="">Cargando...</option></select></div>'+
     '<div class="m-item"><div class="m-label">Paquete</div>'+
-    '<select class="edit-input" id="simPkg" onchange="calcSim()"><option value="">Elegí destino primero</option></select></div>'+
+    '<select class="edit-input" id="simPkg" onchange="calcSim()">'+
+    '<option value="Escapada en Pareja">Escapada en Pareja · USD 870</option>'+
+    '<option value="Paquete 4 Amigos">Paquete 4 Amigos · USD 1.450</option>'+
+    '<option value="Paquete 6 Amigos">Paquete 6 Amigos · USD 1.740</option>'+
+    '</select></div>'+
     '<div class="m-item"><div class="m-label">Número de cuotas</div>'+
     '<select class="edit-input" id="simCuotas" onchange="calcSim()">'+
-    '<option value="3">3 cuotas</option><option value="6">6 cuotas</option><option value="10" selected>10 cuotas</option>'+
-    '<option value="12">12 cuotas</option><option value="18">18 cuotas</option><option value="24">24 cuotas</option>'+
+    '<option value="6">6 cuotas</option><option value="10" selected>10 cuotas</option>'+
+    '<option value="12">12 cuotas</option><option value="18">18 cuotas</option>'+
     '</select></div>'+
     '</div>'+
-    '<div style="margin-top:16px;padding:14px;background:rgba(251,191,36,.06);border:1px solid rgba(251,191,36,.15);border-radius:12px;">'+
-    '<div style="font-size:.68rem;font-weight:700;color:#fbbf24;margin-bottom:10px;text-transform:uppercase;letter-spacing:1px;">👶 Menores de edad (opcional)</div>'+
-    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">'+
-    '<div class="m-item"><div class="m-label" style="font-size:.62rem;">Bebé 0-2 <span id="simM1Pct" style="color:#fbbf24;">—</span></div><select class="edit-input" id="simM1" onchange="calcSim()"><option value="0">0</option><option value="1">1</option><option value="2">2</option><option value="3">3</option></select></div>'+
-    '<div class="m-item"><div class="m-label" style="font-size:.62rem;">Niño 3-5 <span id="simM2Pct" style="color:#fbbf24;">—</span></div><select class="edit-input" id="simM2" onchange="calcSim()"><option value="0">0</option><option value="1">1</option><option value="2">2</option><option value="3">3</option></select></div>'+
-    '<div class="m-item"><div class="m-label" style="font-size:.62rem;">Niño 6-11 <span id="simM3Pct" style="color:#fbbf24;">—</span></div><select class="edit-input" id="simM3" onchange="calcSim()"><option value="0">0</option><option value="1">1</option><option value="2">2</option><option value="3">3</option></select></div>'+
-    '<div class="m-item"><div class="m-label" style="font-size:.62rem;">Adolescente 12-17 <span id="simM4Pct" style="color:#fbbf24;">—</span></div><select class="edit-input" id="simM4" onchange="calcSim()"><option value="0">0</option><option value="1">1</option><option value="2">2</option><option value="3">3</option></select></div>'+
-    '</div></div>'+
     '<div class="sim-grid" id="simResult" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;">'+
-    '<div class="sim-card"><div class="sim-lbl">Total plan</div><div class="sim-val" id="simTotal" style="color:var(--accent2);">—</div></div>'+
-    '<div class="sim-card"><div class="sim-lbl">Cuota mensual</div><div class="sim-val" id="simCuota" style="color:var(--green);">—</div></div>'+
-    '<div class="sim-card"><div class="sim-lbl">USD/pers/mes</div><div class="sim-val" id="simPers" style="color:var(--yellow);">—</div></div>'+
+    '<div class="sim-card"><div class="sim-lbl">Total plan</div><div class="sim-val" id="simTotal" style="color:var(--accent2);">USD 870</div></div>'+
+    '<div class="sim-card"><div class="sim-lbl">Cuota mensual</div><div class="sim-val" id="simCuota" style="color:var(--green);">USD 87</div></div>'+
+    '<div class="sim-card"><div class="sim-lbl">Personas</div><div class="sim-val" id="simPers" style="color:var(--yellow);">2</div></div>'+
     '</div>'+
-    '<div id="simBreakdown" style="margin-top:16px;padding:14px 18px;background:rgba(59,130,246,.07);border:1px solid rgba(59,130,246,.2);border-radius:12px;font-size:.9rem;text-align:center;color:var(--muted);">Seleccioná un destino y paquete para ver la cotización</div>'+
+    '<div id="simBreakdown" style="margin-top:16px;padding:14px 18px;background:rgba(59,130,246,.07);border:1px solid rgba(59,130,246,.2);border-radius:12px;font-size:.9rem;text-align:center;color:var(--muted);"></div>'+
     '<div class="modal-actions"><button class="m-btn primary" onclick="closeModal()">Cerrar</button></div>'+
     '</div>';
   document.getElementById('modal').classList.add('open');
-  // Cargar catálogo desde BD
-  sbClient.from('catalogo_precios').select('id, nombre_destino, slug, paquete, personas, noches, precio_usd, activo, precio_menor_1, precio_menor_2, precio_menor_3, precio_menor_4, max_ocupacion').order('nombre_destino').order('orden').then(function(res) {
-    if (res.error) {
-      document.getElementById('simDest').innerHTML = '<option value="">Error al cargar</option>';
-      return;
-    }
-    _simAdminCatalogo = res.data || [];
-    var activos = _simAdminCatalogo.filter(function(p) { return p.activo; });
-    var dests = {};
-    activos.forEach(function(p) { dests[p.nombre_destino] = true; });
-    var destNames = Object.keys(dests).sort();
-    var opts = '<option value="">— Elegí destino —</option>';
-    destNames.forEach(function(d) { opts += '<option value="'+d+'">'+d+'</option>'; });
-    document.getElementById('simDest').innerHTML = opts;
-  });
-}
-
-/* ── Cuando cambia destino → llenar paquetes ── */
-function simAdminDestChanged() {
-  var dest = (document.getElementById('simDest')||{}).value;
-  var pkgSel = document.getElementById('simPkg');
-  if (!dest || !pkgSel) { calcSim(); return; }
-  var pkgs = _simAdminCatalogo.filter(function(p) { return p.activo && p.nombre_destino === dest; });
-  if (!pkgs.length) {
-    pkgSel.innerHTML = '<option value="">Sin paquetes</option>';
-    calcSim();
-    return;
-  }
-  var opts = '';
-  pkgs.forEach(function(p) {
-    var ppPers = p.personas > 0 ? Math.round(p.precio_usd / p.personas) : p.precio_usd;
-    opts += '<option value="'+p.id+'"'
-      + ' data-ppp="'+ppPers+'"'
-      + ' data-pers="'+p.personas+'"'
-      + ' data-noc="'+p.noches+'"'
-      + ' data-pre="'+p.precio_usd+'"'
-      + ' data-m1="'+(p.precio_menor_1||0)+'"'
-      + ' data-m2="'+(p.precio_menor_2||0)+'"'
-      + ' data-m3="'+(p.precio_menor_3||0)+'"'
-      + ' data-m4="'+(p.precio_menor_4||0)+'"'
-      + ' data-maxocc="'+(p.max_ocupacion||4)+'">'
-      + (p.paquete||p.nombre_destino) + ' · ' + p.personas + ' pers · ' + p.noches + ' noches · USD ' + p.precio_usd.toLocaleString('es-AR')
-      + '</option>';
-  });
-  pkgSel.innerHTML = opts;
-  calcSim();
+  setTimeout(calcSim, 50);
 }
 
 function calcSim() {
-  var pkgSel  = document.getElementById('simPkg');
-  var cuoSel  = document.getElementById('simCuotas');
-  var opt     = pkgSel ? pkgSel.options[pkgSel.selectedIndex] : null;
-  var bd      = document.getElementById('simBreakdown');
+  var pkgKey = (document.getElementById('simPkg')||{}).value || 'Escapada en Pareja';
+  var cuotas = parseInt((document.getElementById('simCuotas')||{}).value,10) || 10;
+  var pkg    = PKG_PRICES[pkgKey] || { price:870, pers:2 };
+  // FIX 7: Math.floor para cuota, última cuota ajustada para no superar el total
+  var cuotaBase  = Math.floor(pkg.price / cuotas * 100) / 100;
+  var ultimaCuota = Math.round((pkg.price - cuotaBase * (cuotas - 1)) * 100) / 100;
   var tEl=document.getElementById('simTotal'), cEl=document.getElementById('simCuota'), pEl=document.getElementById('simPers');
-
-  if (!opt || !opt.dataset.ppp) {
-    if (tEl) tEl.textContent = '—';
-    if (cEl) cEl.textContent = '—';
-    if (pEl) pEl.textContent = '—';
-    if (bd) bd.innerHTML = 'Seleccioná un destino y paquete para ver la cotización';
-    return;
-  }
-
-  var pppBase    = parseInt(opt.dataset.ppp) || 0;
-  var origPers   = parseInt(opt.dataset.pers) || 1;
-  var noches     = parseInt(opt.dataset.noc) || 1;
-  var cuotas     = parseInt(cuoSel ? cuoSel.value : 10) || 10;
-
-  // Menores: precios desde BD
-  var m1Price = parseInt(opt.dataset.m1) || 0;
-  var m2Price = parseInt(opt.dataset.m2) || 0;
-  var m3Price = parseInt(opt.dataset.m3) || 0;
-  var m4Price = parseInt(opt.dataset.m4) || 0;
-  var maxOcup = parseInt(opt.dataset.maxocc) || 4;
-  var nM1 = parseInt((document.getElementById('simM1')||{}).value,10) || 0;
-  var nM2 = parseInt((document.getElementById('simM2')||{}).value,10) || 0;
-  var nM3 = parseInt((document.getElementById('simM3')||{}).value,10) || 0;
-  var nM4 = parseInt((document.getElementById('simM4')||{}).value,10) || 0;
-
-  // Descuentos reales desde BD
-  var pct1 = pppBase > 0 && m1Price > 0 ? Math.round((1 - m1Price / pppBase) * 100) : (m1Price === 0 && pppBase > 0 ? 100 : 0);
-  var pct2 = pppBase > 0 && m2Price > 0 ? Math.round((1 - m2Price / pppBase) * 100) : (m2Price === 0 && pppBase > 0 ? 100 : 0);
-  var pct3 = pppBase > 0 && m3Price > 0 ? Math.round((1 - m3Price / pppBase) * 100) : (m3Price === 0 && pppBase > 0 ? 100 : 0);
-  var pct4 = pppBase > 0 && m4Price > 0 && m4Price < pppBase ? Math.round((1 - m4Price / pppBase) * 100) : 0;
-
-  // Actualizar labels dinámicos con porcentaje real
-  var eP1=document.getElementById('simM1Pct'), eP2=document.getElementById('simM2Pct'), eP3=document.getElementById('simM3Pct'), eP4=document.getElementById('simM4Pct');
-  if (eP1) eP1.textContent = pppBase > 0 ? (m1Price === 0 ? '100% dto. (gratis)' : pct1+'% dto.') : '—';
-  if (eP2) eP2.textContent = pppBase > 0 ? (m2Price === 0 ? '100% dto.' : pct2+'% dto.') : '—';
-  if (eP3) eP3.textContent = pppBase > 0 ? (m3Price === 0 ? '100% dto.' : pct3+'% dto.') : '—';
-  if (eP4) eP4.textContent = pppBase > 0 ? (m4Price >= pppBase ? 'precio completo' : (m4Price === 0 ? '100% dto.' : pct4+'% dto.')) : '—';
-
-  var totalAdultos  = pppBase * origPers;
-  var totalMenores  = (m1Price * nM1) + (m2Price * nM2) + (m3Price * nM3) + (m4Price * nM4);
-  var totalFinal    = totalAdultos + totalMenores;
-  var totalPersonas = origPers + nM1 + nM2 + nM3 + nM4;
-
-  var cuotaBase   = Math.floor(totalFinal / cuotas * 100) / 100;
-  var ultimaCuota = Math.round((totalFinal - cuotaBase * (cuotas - 1)) * 100) / 100;
-  var usdPersMes  = totalPersonas > 0 ? Math.round(cuotaBase / totalPersonas * 100) / 100 : 0;
-
-  if (tEl) tEl.textContent = 'USD '+totalFinal.toLocaleString('es-AR');
+  if (tEl) tEl.textContent = 'USD '+pkg.price.toLocaleString('es-AR');
   if (cEl) cEl.textContent = 'USD '+cuotaBase.toLocaleString('es-AR');
-  if (pEl) pEl.textContent = 'USD '+usdPersMes.toLocaleString('es-AR');
-
-  if (bd) {
-    var html = '<span style="color:var(--muted);">USD '+totalFinal.toLocaleString('es-AR')+' en '+cuotas+' cuotas de </span><strong style="color:#60a5fa;font-size:1.1rem;">USD '+cuotaBase.toLocaleString('es-AR')+'</strong>'+(ultimaCuota!==cuotaBase?' <span style="color:var(--muted);font-size:.82rem;">(última cuota: USD '+ultimaCuota.toLocaleString('es-AR')+')</span>':'');
-    html += '<div style="margin-top:8px;text-align:left;font-size:.82rem;">';
-    html += '<div>Adultos: '+origPers+' × USD '+pppBase.toLocaleString('es-AR')+' = <strong>USD '+totalAdultos.toLocaleString('es-AR')+'</strong></div>';
-    if (nM1 > 0) html += '<div style="color:#fbbf24;">Bebé 0-2: '+nM1+' × USD '+m1Price.toLocaleString('es-AR')+' ('+pct1+'% dto.) = USD '+(m1Price*nM1).toLocaleString('es-AR')+'</div>';
-    if (nM2 > 0) html += '<div style="color:#fbbf24;">Niño 3-5: '+nM2+' × USD '+m2Price.toLocaleString('es-AR')+' ('+pct2+'% dto.) = USD '+(m2Price*nM2).toLocaleString('es-AR')+'</div>';
-    if (nM3 > 0) html += '<div style="color:#fbbf24;">Niño 6-11: '+nM3+' × USD '+m3Price.toLocaleString('es-AR')+' ('+pct3+'% dto.) = USD '+(m3Price*nM3).toLocaleString('es-AR')+'</div>';
-    if (nM4 > 0) html += '<div style="color:#fbbf24;">Adolescente 12-17: '+nM4+' × USD '+m4Price.toLocaleString('es-AR')+(pct4>0?' ('+pct4+'% dto.)':' (precio completo)')+' = USD '+(m4Price*nM4).toLocaleString('es-AR')+'</div>';
-    html += '</div>';
-    html += '<div style="border-top:1px solid var(--border);margin:6px 0;padding-top:6px;font-size:.82rem;color:var(--muted);">';
-    html += '<strong>TOTAL: USD '+totalFinal.toLocaleString('es-AR')+'</strong> · '+totalPersonas+' personas · '+noches+' noches</div>';
-    // Ocupación warning
-    if (totalPersonas > maxOcup) {
-      var habNecesarias = Math.ceil(totalPersonas / maxOcup);
-      html += '<div style="margin-top:6px;padding:8px;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.25);border-radius:8px;font-size:.75rem;color:var(--muted);">⚠️ Ocupación: '+totalPersonas+' personas — SUPERA máximo '+maxOcup+'. Necesitás '+habNecesarias+' habitaciones.</div>';
-    } else if (nM1+nM2+nM3+nM4 > 0) {
-      html += '<div style="margin-top:6px;padding:8px;background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.2);border-radius:8px;font-size:.75rem;color:var(--muted);">✅ Ocupación: '+totalPersonas+' personas (máx '+maxOcup+' por habitación) · 1 habitación</div>';
-    }
-    bd.innerHTML = html;
-  }
+  if (pEl) pEl.textContent = pkg.pers+(pkg.pers===1?' persona':' personas');
+  var bd=document.getElementById('simBreakdown');
+  if (bd) bd.innerHTML='<span style="color:var(--muted);">USD '+pkg.price.toLocaleString('es-AR')+' en '+cuotas+' cuotas de </span><strong style="color:#60a5fa;font-size:1.1rem;">USD '+cuotaBase.toLocaleString('es-AR')+'</strong>'+(ultimaCuota!==cuotaBase?' <span style="color:var(--muted);font-size:.82rem;">(última cuota: USD '+ultimaCuota.toLocaleString('es-AR')+')</span>':'');
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -2538,24 +2425,22 @@ function calcCuota() {
   var pkgSel   = document.getElementById('nPkg');
   var cuotasSel= document.getElementById('nCuotas');
   var cuotas   = parseInt(cuotasSel ? cuotasSel.value : 10, 10) || 10;
-  // Leer desde data attributes del option (compatible con BD y hardcode)
-  var opt      = pkgSel ? pkgSel.options[pkgSel.selectedIndex] : null;
-  var pkgPers  = opt ? parseInt(opt.dataset.pers, 10) || 2 : 2;
-  var pkgPrice = opt ? parseFloat(opt.dataset.price) || 870 : 870;
+  var pkgKey   = pkgSel ? pkgSel.value : 'Escapada en Pareja';
+  var pkg      = PKG_PRICES[pkgKey] || { price: 870, pers: 2 };
 
   // Cuota base con 2 decimales exactos; última cuota absorbe diferencia de centavos
-  var cuota       = Math.floor(pkgPrice / cuotas * 100) / 100;
-  var ultimaCuota = Math.round((pkgPrice - cuota * (cuotas - 1)) * 100) / 100;
+  var cuota       = Math.floor(pkg.price / cuotas * 100) / 100;
+  var ultimaCuota = Math.round((pkg.price - cuota * (cuotas - 1)) * 100) / 100;
 
-  var td = document.getElementById('nTotalDisplay');  if (td) td.textContent = 'USD ' + pkgPrice.toLocaleString('es-AR');
+  var td = document.getElementById('nTotalDisplay');  if (td) td.textContent = 'USD ' + pkg.price.toLocaleString('es-AR');
   var cd = document.getElementById('nCuotaDisplay');  if (cd) cd.textContent = 'USD ' + cuota.toLocaleString('es-AR');
-  var pd = document.getElementById('nPersDisplay');   if (pd) pd.textContent = pkgPers + (pkgPers === 1 ? ' persona' : ' personas');
-  var tf = document.getElementById('nTotal');         if (tf) tf.value = pkgPrice;
-  var pf = document.getElementById('nPersonas');      if (pf) pf.value = pkgPers;
+  var pd = document.getElementById('nPersDisplay');   if (pd) pd.textContent = pkg.pers + (pkg.pers === 1 ? ' persona' : ' personas');
+  var tf = document.getElementById('nTotal');         if (tf) tf.value = pkg.price;
+  var pf = document.getElementById('nPersonas');      if (pf) pf.value = pkg.pers;
   // Guardar última cuota para que addClient la use en el cálculo real
   var uf = document.getElementById('nUltimaCuota');   if (uf) uf.value = ultimaCuota;
   var bd = document.getElementById('nBreakdown');
-  if (bd) bd.innerHTML = '<span style="color:var(--muted);">USD ' + pkgPrice.toLocaleString('es-AR') + ' en ' + cuotas + ' cuotas de </span><strong style="color:#60a5fa;">USD ' + cuota.toLocaleString('es-AR') + '</strong>' + (ultimaCuota !== cuota ? ' <span style="font-size:.78rem;color:var(--muted);">(última: USD ' + ultimaCuota + ')</span>' : '');
+  if (bd) bd.innerHTML = '<span style="color:var(--muted);">USD ' + pkg.price.toLocaleString('es-AR') + ' en ' + cuotas + ' cuotas de </span><strong style="color:#60a5fa;">USD ' + cuota.toLocaleString('es-AR') + '</strong>' + (ultimaCuota !== cuota ? ' <span style="font-size:.78rem;color:var(--muted);">(última: USD ' + ultimaCuota + ')</span>' : '');
 
   // Asegurar que los campos ocultos existan
   var mbody = document.querySelector('.modal-body');
@@ -2571,11 +2456,11 @@ function calcCuota() {
       }
     }
   }
-  document.getElementById('nTotal').value        = pkgPrice;
+  document.getElementById('nTotal').value        = pkg.price;
   document.getElementById('nMontoCuota').value   = cuota;
   document.getElementById('nCuotasTotal').value  = cuotas;
   document.getElementById('nUltimaCuota').value  = ultimaCuota;
-  document.getElementById('nPersonas').value     = pkgPers;
+  document.getElementById('nPersonas').value     = pkg.pers;
 }
 
 function openAddModal() {
@@ -2595,9 +2480,9 @@ function openAddModal() {
     '<option value="Cabo Frío, Brasil">🏖️ Cabo Frío</option><option value="Arraial do Cabo, Brasil">🌊 Arraial do Cabo</option>'+
     '<option value="Búzios, Brasil">⛵ Búzios</option><option value="Río de Janeiro – Copacabana, Brasil">🏙️ Río de Janeiro</option></select></div>'+
     '<div class="m-item"><div class="m-label">Paquete</div><select class="edit-input" id="nPkg" onchange="calcCuota()">'+
-    '<option value="2|870" data-pers="2" data-price="870">Escapada en Pareja · USD 870</option>'+
-    '<option value="4|1450" data-pers="4" data-price="1450">Paquete 4 Amigos · USD 1.450</option>'+
-    '<option value="6|1740" data-pers="6" data-price="1740">Paquete 6 Amigos · USD 1.740</option></select></div>'+
+    '<option value="Escapada en Pareja">Escapada en Pareja · USD 870</option>'+
+    '<option value="Paquete 4 Amigos">Paquete 4 Amigos · USD 1.450</option>'+
+    '<option value="Paquete 6 Amigos">Paquete 6 Amigos · USD 1.740</option></select></div>'+
     '<div class="m-item"><div class="m-label">Cuotas totales</div><select class="edit-input" id="nCuotas" onchange="calcCuota()">'+
     '<option value="6">6 cuotas</option><option value="10" selected>10 cuotas</option>'+
     '<option value="12">12 cuotas</option><option value="18">18 cuotas</option></select>'+
@@ -3825,20 +3710,11 @@ async function abrirFormPresupuesto(id) {
                 <div><label class="ml">Apellido</label><input id="proApellido" class="edit-input" value="${LZ.esc(datos.apellido || '')}"></div>
                 <div><label class="ml">Email</label><input id="proEmail" class="edit-input" type="email" value="${LZ.esc(datos.email || '')}"></div>
                 <div><label class="ml">Teléfono *</label><input id="proTelefono" class="edit-input" value="${LZ.esc(datos.telefono || '')}" placeholder="+54 9 ..."></div>
-                <div><label class="ml">Destino</label><select id="proDestino" class="edit-input" onchange="proDestChanged()">${destinosOptions}</select></div>
-                <div><label class="ml">Adultos</label><select id="proAdultos" class="edit-input"><option value="1" ${datos.adultos == 1 ? 'selected' : ''}>1</option><option value="2" ${datos.adultos == 2 || !datos.adultos ? 'selected' : ''}>2</option><option value="3" ${datos.adultos == 3 ? 'selected' : ''}>3</option><option value="4" ${datos.adultos == 4 ? 'selected' : ''}>4</option><option value="5" ${datos.adultos == 5 ? 'selected' : ''}>5</option><option value="6" ${datos.adultos == 6 ? 'selected' : ''}>6</option><option value="7" ${datos.adultos == 7 ? 'selected' : ''}>7</option></select></div>
+                <div><label class="ml">Destino</label><select id="proDestino" class="edit-input">${destinosOptions}</select></div>
+                <div><label class="ml">Personas</label><select id="proPersonas" class="edit-input"><option value="2" ${datos.personas == 2 ? 'selected' : ''}>2</option><option value="4" ${datos.personas == 4 ? 'selected' : ''}>4</option><option value="6" ${datos.personas == 6 ? 'selected' : ''}>6</option></select></div>
                 <div><label class="ml">Cuotas</label><select id="proCuotas" class="edit-input"><option value="6" ${datos.cuotas == 6 ? 'selected' : ''}>6</option><option value="10" ${datos.cuotas == 10 ? 'selected' : ''}>10</option><option value="12" ${datos.cuotas == 12 ? 'selected' : ''}>12</option><option value="18" ${datos.cuotas == 18 ? 'selected' : ''}>18</option></select></div>
                 <div><label class="ml">Moneda</label><select id="proMoneda" class="edit-input">${monedaOptions}</select></div>
                 <div><label class="ml">Estado</label><select id="proEstado" class="edit-input"><option value="nuevo" ${datos.estado === 'nuevo' ? 'selected' : ''}>Nuevo</option><option value="contactado" ${datos.estado === 'contactado' ? 'selected' : ''}>Contactado</option><option value="cerrado" ${datos.estado === 'cerrado' ? 'selected' : ''}>Cerrado</option><option value="perdido" ${datos.estado === 'perdido' ? 'selected' : ''}>Perdido</option></select></div>
-                <div style="grid-column:span 2;margin-top:4px;padding:12px;background:rgba(251,191,36,.06);border:1px solid rgba(251,191,36,.15);border-radius:12px;">
-                  <div style="font-size:.68rem;font-weight:700;color:#fbbf24;margin-bottom:8px;text-transform:uppercase;letter-spacing:1px;">👶 Menores de edad</div>
-                  <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;">
-                    <div><label class="ml" style="font-size:.6rem;">Bebé 0-2 <span id="proM1Pct" style="color:#fbbf24;">—</span></label><select id="proM1" class="edit-input" style="padding:6px 8px;font-size:.78rem;"><option value="0" ${datos.menores_bebe == 0 ? 'selected' : ''}>0</option><option value="1" ${datos.menores_bebe == 1 ? 'selected' : ''}>1</option><option value="2" ${datos.menores_bebe == 2 ? 'selected' : ''}>2</option></select></div>
-                    <div><label class="ml" style="font-size:.6rem;">Niño 3-5 <span id="proM2Pct" style="color:#fbbf24;">—</span></label><select id="proM2" class="edit-input" style="padding:6px 8px;font-size:.78rem;"><option value="0" ${datos.menores_nino == 0 ? 'selected' : ''}>0</option><option value="1" ${datos.menores_nino == 1 ? 'selected' : ''}>1</option><option value="2" ${datos.menores_nino == 2 ? 'selected' : ''}>2</option><option value="3" ${datos.menores_nino == 3 ? 'selected' : ''}>3</option></select></div>
-                    <div><label class="ml" style="font-size:.6rem;">Niño 6-11 <span id="proM3Pct" style="color:#fbbf24;">—</span></label><select id="proM3" class="edit-input" style="padding:6px 8px;font-size:.78rem;"><option value="0" ${datos.menores_nino_mayor == 0 ? 'selected' : ''}>0</option><option value="1" ${datos.menores_nino_mayor == 1 ? 'selected' : ''}>1</option><option value="2" ${datos.menores_nino_mayor == 2 ? 'selected' : ''}>2</option><option value="3" ${datos.menores_nino_mayor == 3 ? 'selected' : ''}>3</option></select></div>
-                    <div><label class="ml" style="font-size:.6rem;">Adolesc. 12-17 <span id="proM4Pct" style="color:#fbbf24;">—</span></label><select id="proM4" class="edit-input" style="padding:6px 8px;font-size:.78rem;"><option value="0" ${datos.menores_adolescente == 0 ? 'selected' : ''}>0</option><option value="1" ${datos.menores_adolescente == 1 ? 'selected' : ''}>1</option><option value="2" ${datos.menores_adolescente == 2 ? 'selected' : ''}>2</option><option value="3" ${datos.menores_adolescente == 3 ? 'selected' : ''}>3</option></select></div>
-                  </div>
-                </div>
                 <div style="grid-column:span 2;"><label class="ml">Notas</label><textarea id="proNotas" class="edit-input" rows="2">${LZ.esc(datos.notas || '')}</textarea></div>
             </div>
         </div>
@@ -3848,39 +3724,6 @@ async function abrirFormPresupuesto(id) {
     document.getElementById('modal').classList.add('open');
     if (id && datos.destino_slug) document.getElementById('proDestino').value = datos.destino_slug;
     if (id && datos.moneda) document.getElementById('proMoneda').value = datos.moneda;
-    // Cargar labels de menores con % real si ya tiene destino
-    if (datos.destino_slug) proDestChanged();
-}
-
-// ──────────────────────────────────────────────────────────────────────────
-// 2.5. Actualizar labels de menores con % real al elegir destino
-// ──────────────────────────────────────────────────────────────────────────
-async function proDestChanged() {
-    var slug = (document.getElementById('proDestino')||{}).value;
-    if (!slug) return;
-    // Cargar primer paquete activo para ese destino para obtener precios de menores
-    const { data: pkgs } = await sbClient
-        .from('catalogo_precios')
-        .select('precio_usd, personas, precio_menor_1, precio_menor_2, precio_menor_3, precio_menor_4')
-        .eq('slug', slug)
-        .eq('activo', true)
-        .limit(1);
-    if (!pkgs || !pkgs.length) return;
-    var p = pkgs[0];
-    var pppBase = p.personas > 0 ? Math.round(p.precio_usd / p.personas) : 0;
-    if (pppBase <= 0) return;
-    var m1 = p.precio_menor_1 || 0, m2 = p.precio_menor_2 || 0, m3 = p.precio_menor_3 || 0, m4 = p.precio_menor_4 || 0;
-    var pct1 = m1 === 0 ? 100 : Math.round((1 - m1 / pppBase) * 100);
-    var pct2 = m2 === 0 ? 100 : Math.round((1 - m2 / pppBase) * 100);
-    var pct3 = m3 === 0 ? 100 : Math.round((1 - m3 / pppBase) * 100);
-    var pct4 = m4 >= pppBase ? 0 : (m4 === 0 ? 100 : Math.round((1 - m4 / pppBase) * 100));
-    var e1=document.getElementById('proM1Pct'), e2=document.getElementById('proM2Pct'), e3=document.getElementById('proM3Pct'), e4=document.getElementById('proM4Pct');
-    if (e1) e1.textContent = m1 === 0 ? '100% dto. (gratis)' : pct1+'% dto. — USD '+m1;
-    if (e2) e2.textContent = m2 === 0 ? '100% dto.' : pct2+'% dto. — USD '+m2;
-    if (e3) e3.textContent = m3 === 0 ? '100% dto.' : pct3+'% dto. — USD '+m3;
-    if (e4) e4.textContent = m4 >= pppBase ? 'precio completo — USD '+m4 : (m4 === 0 ? '100% dto.' : pct4+'% dto. — USD '+m4);
-    // Ejecutar al final de la carga del modal para preset si hay destino
-    window.proDestChanged = proDestChanged;
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -3894,12 +3737,7 @@ async function guardarPresupuesto(id) {
         email: document.getElementById('proEmail').value.trim(),
         telefono: document.getElementById('proTelefono').value.trim(),
         destino_slug: document.getElementById('proDestino').value,
-        adultos: parseInt((document.getElementById('proAdultos')||{}).value) || 2,
-        menores_bebe: parseInt((document.getElementById('proM1')||{}).value) || 0,
-        menores_nino: parseInt((document.getElementById('proM2')||{}).value) || 0,
-        menores_nino_mayor: parseInt((document.getElementById('proM3')||{}).value) || 0,
-        menores_adolescente: parseInt((document.getElementById('proM4')||{}).value) || 0,
-        personas: (parseInt((document.getElementById('proAdultos')||{}).value)||2) + (parseInt((document.getElementById('proM1')||{}).value)||0) + (parseInt((document.getElementById('proM2')||{}).value)||0) + (parseInt((document.getElementById('proM3')||{}).value)||0) + (parseInt((document.getElementById('proM4')||{}).value)||0),
+        personas: parseInt(document.getElementById('proPersonas').value),
         cuotas: parseInt(document.getElementById('proCuotas').value),
         moneda: document.getElementById('proMoneda').value,
         notas: document.getElementById('proNotas').value.trim(),
@@ -3969,57 +3807,17 @@ async function generarPresupuestoPDF(prospectoId) {
         // FIX: .maybeSingle() para evitar 406 si no hay tasa para esa moneda
         const { data: tasaData } = await sbClient.from('exchange_rates').select('cotizacion_venta').eq('moneda_destino', p.moneda).maybeSingle();
         const cotizacion = tasaData ? tasaData.cotizacion_venta : 1;
-
-        // Menores calculation
-        var adultos = p.adultos || p.personas || 2;
-        var menoresBebe = p.menores_bebe || 0;
-        var menoresNino = p.menores_nino || 0;
-        var menoresNinoMayor = p.menores_nino_mayor || 0;
-        var menoresAdolescente = p.menores_adolescente || 0;
-        var totalMenores = menoresBebe + menoresNino + menoresNinoMayor + menoresAdolescente;
-
-        // Get menor prices from catalogo_precios or compute from adult price
-        var precioAdultoPer = Math.round(destino.precio_usd / destino.personas);
-        var precioM1 = destino.precio_menor_1 || 0;
-        var precioM2 = destino.precio_menor_2 || Math.round(precioAdultoPer * 0.5);
-        var precioM3 = destino.precio_menor_3 || Math.round(precioAdultoPer * 0.7);
-        var precioM4 = destino.precio_menor_4 || precioAdultoPer;
-
-        var totalAdultoUSD = Math.round(precioAdultoPer * adultos);
-        var totalMenorUSD = (precioM1 * menoresBebe) + (precioM2 * menoresNino) + (precioM3 * menoresNinoMayor) + (precioM4 * menoresAdolescente);
-        var precioTotalConMenores = totalAdultoUSD + totalMenorUSD;
-        var precioTotalUSD = totalMenores > 0 ? precioTotalConMenores : destino.precio_usd;
-
+        const precioTotalUSD = destino.precio_usd;
         const cuotaUSD = (precioTotalUSD / p.cuotas).toFixed(2);
         const cuotaLocal = (cuotaUSD * cotizacion).toFixed(0);
-        var totalOcupantes = adultos + totalMenores;
-        const valorPorPersona = totalOcupantes > 0 ? (precioTotalUSD / totalOcupantes).toFixed(0) : destino.precio_usd;
-        const valorPorMesPersona = totalOcupantes > 0 ? (cuotaUSD / totalOcupantes).toFixed(2) : cuotaUSD;
-        const valorPorDiaPersona = totalOcupantes > 0 ? (cuotaUSD / totalOcupantes / 30).toFixed(2) : (cuotaUSD / 30).toFixed(2);
+        const valorPorPersona = (precioTotalUSD / p.personas).toFixed(0);
+        const valorPorMesPersona = (cuotaUSD / p.personas).toFixed(2);
+        const valorPorDiaPersona = (cuotaUSD / p.personas / 30).toFixed(2);
         let simboloMoneda = p.moneda;
         if (p.moneda === 'ARS') simboloMoneda = '$';
         else if (p.moneda === 'BRL') simboloMoneda = 'R$';
         else if (p.moneda === 'USD') simboloMoneda = 'USD';
         const cuotaLocalFormateada = `${simboloMoneda} ${Number(cuotaLocal).toLocaleString('es-AR')}`;
-
-        // Build menores line HTML for PDF
-        var menoresLineHTML = '';
-        if (menoresBebe > 0) {
-            var pctM1 = precioM1 > 0 ? Math.round((1 - precioM1 / precioAdultoPer) * 100) : 100;
-            menoresLineHTML += 'Bebés (0-2): ' + menoresBebe + ' × USD ' + precioM1 + ' (' + pctM1 + '% dto.) = USD ' + (precioM1 * menoresBebe) + '<br>';
-        }
-        if (menoresNino > 0) {
-            var pctM2 = precioM2 > 0 ? Math.round((1 - precioM2 / precioAdultoPer) * 100) : 50;
-            menoresLineHTML += 'Niños (3-5): ' + menoresNino + ' × USD ' + precioM2 + ' (' + pctM2 + '% dto.) = USD ' + (precioM2 * menoresNino) + '<br>';
-        }
-        if (menoresNinoMayor > 0) {
-            var pctM3 = precioM3 > 0 ? Math.round((1 - precioM3 / precioAdultoPer) * 100) : 30;
-            menoresLineHTML += 'Niños (6-11): ' + menoresNinoMayor + ' × USD ' + precioM3 + ' (' + pctM3 + '% dto.) = USD ' + (precioM3 * menoresNinoMayor) + '<br>';
-        }
-        if (menoresAdolescente > 0) {
-            var pctM4 = precioM4 > 0 && precioM4 < precioAdultoPer ? Math.round((1 - precioM4 / precioAdultoPer) * 100) : 0;
-            menoresLineHTML += 'Adolescentes (12-17): ' + menoresAdolescente + ' × USD ' + precioM4 + (pctM4 > 0 ? ' (' + pctM4 + '% dto.)' : ' (precio completo)') + ' = USD ' + (precioM4 * menoresAdolescente) + '<br>';
-        }
 
         const vendedorNombre = _currentProfile.nombre || 'Asesor Luazul';
         const vendedorWhatsapp = _currentProfile.telefono1 || '5492974726449';
@@ -4070,7 +3868,7 @@ body{background:#f0f4fa;font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif
       <div class="seccion-titulo">✨ Para ${p.nombre} ${p.apellido || ''}</div>
       <div class="datos-cliente">
         <p>📞 ${p.telefono || '—'} · ✉️ ${p.email || '—'}</p>
-        <p>👥 ${adultos} adultos${totalMenores > 0 ? ' + ' + totalMenores + ' menores' : ''} · 📆 ${p.cuotas} cuotas (0% interés)</p>
+        <p>👥 ${p.personas} viajeros · 📆 ${p.cuotas} cuotas (0% interés)</p>
       </div>
     </div>
     <div class="precio-destacado">
@@ -4078,20 +3876,11 @@ body{background:#f0f4fa;font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif
       <div class="monto">${cuotaLocalFormateada}</div>
       <div class="sub">Equivalente a USD ${cuotaUSD} por mes · ${p.cuotas} cuotas · Total USD ${precioTotalUSD}</div>
     </div>
-    ${totalMenores > 0 ? `
-    <div style="background:#fefce8;border:1px solid #fde047;border-radius:12px;padding:14px;margin:16px 0;">
-      <div style="font-size:.72rem;font-weight:700;color:#a16207;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">📋 Desglose por ocupante</div>
-      <div style="font-size:.82rem;color:#1e293b;line-height:1.8;">
-        Adultos: ${adultos} × USD ${precioAdultoPer} = USD ${totalAdultoUSD}<br>
-        ${menoresLineHTML}
-        <strong>Total: USD ${precioTotalConMenores}</strong>
-      </div>
-    </div>` : ''}
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:20px 0;">
       <div style="background:linear-gradient(135deg,#fefce8,#fef9c3);border-radius:16px;padding:20px;text-align:center;border:1px solid #fde047;">
         <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#ca8a04;margin-bottom:6px;">USD por mes por persona</div>
         <div style="font-size:2rem;font-weight:900;color:#a16207;">$${Number(valorPorMesPersona).toLocaleString('es-AR')}</div>
-        <div style="font-size:.75rem;color:#ca8a04;margin-top:4px;">Cuota USD ${cuotaUSD} ÷ ${totalOcupantes} viajeros</div>
+        <div style="font-size:.75rem;color:#ca8a04;margin-top:4px;">Cuota USD ${cuotaUSD} ÷ ${p.personas} viajeros</div>
       </div>
       <div style="background:linear-gradient(135deg,#eff6ff,#dbeafe);border-radius:16px;padding:20px;text-align:center;border:1px solid #bfdbfe;">
         <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#2563eb;margin-bottom:6px;">USD por día por persona</div>
@@ -4174,52 +3963,7 @@ async function enviarWhatsAppPresupuesto(prospectoId) {
       showToast('⚠️ Número de teléfono inválido');
       return;
     }
-
-    // Menores calculation for WhatsApp message — detailed breakdown with prices and discount %
-    var adultosWA = p.adultos || p.personas || 2;
-    var menoresBebeWA = p.menores_bebe || 0;
-    var menoresNinoWA = p.menores_nino || 0;
-    var menoresNinoMayorWA = p.menores_nino_mayor || 0;
-    var menoresAdolescenteWA = p.menores_adolescente || 0;
-    var totalMenoresWA = menoresBebeWA + menoresNinoWA + menoresNinoMayorWA + menoresAdolescenteWA;
-
-    var msgDesglose = '';
-    if (totalMenoresWA > 0) {
-        // Load catalogo to get real prices and percentages
-        const { data: catPkg } = await sbClient
-            .from('catalogo_precios')
-            .select('precio_usd, personas, precio_menor_1, precio_menor_2, precio_menor_3, precio_menor_4')
-            .eq('slug', p.destino_slug)
-            .eq('personas', p.personas)
-            .maybeSingle();
-        if (catPkg) {
-            var pppWA = catPkg.personas > 0 ? Math.round(catPkg.precio_usd / catPkg.personas) : 0;
-            var m1WA = catPkg.precio_menor_1 || 0, m2WA = catPkg.precio_menor_2 || 0, m3WA = catPkg.precio_menor_3 || 0, m4WA = catPkg.precio_menor_4 || 0;
-            msgDesglose = '\n\n📋 *Desglose de viajeros:*\n';
-            msgDesglose += '👤 Adultos: ' + adultosWA + ' × USD ' + pppWA + ' = USD ' + (pppWA * adultosWA);
-            if (menoresBebeWA > 0) {
-                var pWA1 = m1WA === 0 ? 100 : Math.round((1 - m1WA / pppWA) * 100);
-                msgDesglose += '\n👶 Bebés (0-2): ' + menoresBebeWA + ' × USD ' + m1WA + ' (' + pWA1 + '% dto.)';
-            }
-            if (menoresNinoWA > 0) {
-                var pWA2 = m2WA === 0 ? 100 : Math.round((1 - m2WA / pppWA) * 100);
-                msgDesglose += '\n👦 Niños (3-5): ' + menoresNinoWA + ' × USD ' + m2WA + ' (' + pWA2 + '% dto.)';
-            }
-            if (menoresNinoMayorWA > 0) {
-                var pWA3 = m3WA === 0 ? 100 : Math.round((1 - m3WA / pppWA) * 100);
-                msgDesglose += '\n🧒 Niños (6-11): ' + menoresNinoMayorWA + ' × USD ' + m3WA + ' (' + pWA3 + '% dto.)';
-            }
-            if (menoresAdolescenteWA > 0) {
-                var pWA4 = m4WA >= pppWA ? 0 : (m4WA === 0 ? 100 : Math.round((1 - m4WA / pppWA) * 100));
-                msgDesglose += '\n🧑‍🎓 Adolescentes (12-17): ' + menoresAdolescenteWA + ' × USD ' + m4WA + (pWA4 > 0 ? ' (' + pWA4 + '% dto.)' : ' (precio completo)');
-            }
-            msgDesglose += '\n👥 Total: ' + (adultosWA + totalMenoresWA) + ' personas';
-        } else {
-            msgDesglose = '\n\n📋 *Desglose:* ' + adultosWA + ' adultos + ' + totalMenoresWA + ' menores. Total: ' + (adultosWA + totalMenoresWA) + ' personas.';
-        }
-    }
-
-    const mensaje = `¡Hola ${p.nombre}! 🌊 *Tu presupuesto para Luazul Smart Travel está listo.* 📄 Descargalo aquí: ${presup.pdf_url} - Válido por 48 horas. ¡Comenzá hoy tu plan en cuotas!${msgDesglose}`;
+    const mensaje = `¡Hola ${p.nombre}! 🌊 *Tu presupuesto para Luazul Smart Travel está listo.* 📄 Descargalo aquí: ${presup.pdf_url} - Válido por 48 horas. ¡Comenzá hoy tu plan en cuotas!`;
     window.open(`https://wa.me/${telefono}?text=${encodeURIComponent(mensaje)}`, '_blank');
     await sbClient.from('presupuestos').update({ enviado_whatsapp: true }).eq('pdf_url', presup.pdf_url);
     showToast('📱 Se abrirá WhatsApp con el mensaje listo para enviar.');
