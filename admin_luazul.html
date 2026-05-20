@@ -80,6 +80,9 @@ function mapClientFromSB(c) {
     nombre: c.nombre || '', email: c.email || '', telefono: c.telefono || '',
     documento: c.documento || '', domicilio: c.domicilio || '', estado: c.estado || 'activo',
     destino: c.destino || '', paquete: c.paquete || '', fecha_viaje: c.fecha_viaje || '',
+    adultos: parseInt(c.adultos) || null, menores_0_4: parseInt(c.menores_0_4) || 0,
+    menores_5_11: parseInt(c.menores_5_11) || 0, menores_12_17: parseInt(c.menores_12_17) || 0,
+    noches: parseInt(c.noches) || null, personas: c.personas || null,
     monto_cuota: parseFloat(c.monto_cuota) || 0, cuotas_total: parseInt(c.cuotas_total) || 10,
     cuotas_pagadas: parseInt(c.cuotas_pagadas) || 0, total_usd: parseFloat(c.total_usd) || 0,
     fechaAlta: c.fecha_alta ? c.fecha_alta.slice(0, 10) : '', notas: c.notas || '',
@@ -2365,8 +2368,10 @@ async function guardarFirma() {
 }
 
 // ──────────────────────────────────────────────────────────────────────────
-// 29. SIMULADOR DE CUOTAS
+// 29. SIMULADOR DE CUOTAS (LEGACY — usa precios estáticos; ver calcPrecioDinamico para pricing dinámico)
 // ──────────────────────────────────────────────────────────────────────────
+// LEGACY: PKG_PRICES is kept for the old simulador (openSimulador/calcSim).
+// The new client form uses calcPrecioDinamico() with catalogo_precios instead.
 var PKG_PRICES = {
   'Escapada en Pareja': { price:870,  pers:2 },
   'Paquete 4 Amigos':   { price:1450, pers:4 },
@@ -2421,47 +2426,7 @@ function calcSim() {
 // ──────────────────────────────────────────────────────────────────────────
 // 30. NUEVO CLIENTE (MODAL Y LÓGICA)
 // ──────────────────────────────────────────────────────────────────────────
-function calcCuota() {
-  var pkgSel   = document.getElementById('nPkg');
-  var cuotasSel= document.getElementById('nCuotas');
-  var cuotas   = parseInt(cuotasSel ? cuotasSel.value : 10, 10) || 10;
-  var pkgKey   = pkgSel ? pkgSel.value : 'Escapada en Pareja';
-  var pkg      = PKG_PRICES[pkgKey] || { price: 870, pers: 2 };
-
-  // Cuota base con 2 decimales exactos; última cuota absorbe diferencia de centavos
-  var cuota       = Math.floor(pkg.price / cuotas * 100) / 100;
-  var ultimaCuota = Math.round((pkg.price - cuota * (cuotas - 1)) * 100) / 100;
-
-  var td = document.getElementById('nTotalDisplay');  if (td) td.textContent = 'USD ' + pkg.price.toLocaleString('es-AR');
-  var cd = document.getElementById('nCuotaDisplay');  if (cd) cd.textContent = 'USD ' + cuota.toLocaleString('es-AR');
-  var pd = document.getElementById('nPersDisplay');   if (pd) pd.textContent = pkg.pers + (pkg.pers === 1 ? ' persona' : ' personas');
-  var tf = document.getElementById('nTotal');         if (tf) tf.value = pkg.price;
-  var pf = document.getElementById('nPersonas');      if (pf) pf.value = pkg.pers;
-  // Guardar última cuota para que addClient la use en el cálculo real
-  var uf = document.getElementById('nUltimaCuota');   if (uf) uf.value = ultimaCuota;
-  var bd = document.getElementById('nBreakdown');
-  if (bd) bd.innerHTML = '<span style="color:var(--muted);">USD ' + pkg.price.toLocaleString('es-AR') + ' en ' + cuotas + ' cuotas de </span><strong style="color:#60a5fa;">USD ' + cuota.toLocaleString('es-AR') + '</strong>' + (ultimaCuota !== cuota ? ' <span style="font-size:.78rem;color:var(--muted);">(última: USD ' + ultimaCuota + ')</span>' : '');
-
-  // Asegurar que los campos ocultos existan
-  var mbody = document.querySelector('.modal-body');
-  if (mbody) {
-    var ids = ['nTotal', 'nMontoCuota', 'nCuotasTotal', 'nUltimaCuota', 'nPersonas'];
-    for (var i = 0; i < ids.length; i++) {
-      var el = document.getElementById(ids[i]);
-      if (!el) {
-        el = document.createElement('input');
-        el.type = 'hidden';
-        el.id = ids[i];
-        mbody.appendChild(el);
-      }
-    }
-  }
-  document.getElementById('nTotal').value        = pkg.price;
-  document.getElementById('nMontoCuota').value   = cuota;
-  document.getElementById('nCuotasTotal').value  = cuotas;
-  document.getElementById('nUltimaCuota').value  = ultimaCuota;
-  document.getElementById('nPersonas').value     = pkg.pers;
-}
+// calcCuota() removed — replaced by calcPrecioDinamico() (uses catalogo_precios)
 
 function openAddModal() {
   document.getElementById('modalBox').innerHTML=
@@ -2476,26 +2441,29 @@ function openAddModal() {
     '<div class="m-item"><div class="m-label">Teléfono principal</div><input class="edit-input" id="nTel1" placeholder="+54 9 11 1234-5678" /></div>'+
     '<div class="m-item"><div class="m-label">Teléfono de referencia</div><input class="edit-input" id="nTel2" placeholder="+54 9 351 9876-5432" /></div>'+
     '<div class="m-item" style="grid-column:span 2;"><div class="m-label">Domicilio</div><input class="edit-input" id="nDomicilio" placeholder="Av. Corrientes 1234, Buenos Aires" /></div>'+
-    '<div class="m-item"><div class="m-label">Destino</div><select class="edit-input" id="nDest">'+
-    '<option value="Cabo Frío, Brasil">🏖️ Cabo Frío</option><option value="Arraial do Cabo, Brasil">🌊 Arraial do Cabo</option>'+
-    '<option value="Búzios, Brasil">⛵ Búzios</option><option value="Río de Janeiro – Copacabana, Brasil">🏙️ Río de Janeiro</option></select></div>'+
-    '<div class="m-item"><div class="m-label">Paquete</div><select class="edit-input" id="nPkg" onchange="calcCuota()">'+
-    '<option value="Escapada en Pareja">Escapada en Pareja · USD 870</option>'+
-    '<option value="Paquete 4 Amigos">Paquete 4 Amigos · USD 1.450</option>'+
-    '<option value="Paquete 6 Amigos">Paquete 6 Amigos · USD 1.740</option></select></div>'+
-    '<div class="m-item"><div class="m-label">Cuotas totales</div><select class="edit-input" id="nCuotas" onchange="calcCuota()">'+
+    '<div class="m-item"><div class="m-label">Destino</div><select class="edit-input" id="nDest" onchange="calcPrecioDinamico()">'+
+    '<option value="">Cargando destinos...</option></select></div>'+
+    '<div class="m-item"><div class="m-label">Noches</div><input class="edit-input" type="number" id="nNoches" min="1" max="30" value="7" onchange="calcPrecioDinamico()" /></div>'+
+    '<div class="m-item"><div class="m-label">Adultos</div><select class="edit-input" id="nAdultos" onchange="calcPrecioDinamico()">'+
+    '<option value="1">1 adulto</option><option value="2" selected>2 adultos</option><option value="3">3 adultos</option><option value="4">4 adultos</option>'+
+    '<option value="5">5 adultos</option><option value="6">6 adultos</option><option value="7">7 adultos</option><option value="8">8 adultos</option></select></div>'+
+    '<div class="m-item"><div class="m-label">Menores (0-4 años) — Gratis</div><input class="edit-input" type="number" id="nMenores04" min="0" max="6" value="0" onchange="calcPrecioDinamico()" /></div>'+
+    '<div class="m-item"><div class="m-label">Menores (5-11 años) — 50%</div><input class="edit-input" type="number" id="nMenores511" min="0" max="6" value="0" onchange="calcPrecioDinamico()" /></div>'+
+    '<div class="m-item"><div class="m-label">Menores (12-17 años) — 80%</div><input class="edit-input" type="number" id="nMenores1217" min="0" max="6" value="0" onchange="calcPrecioDinamico()" /></div>'+
+    '<div class="m-item"><div class="m-label">Cuotas totales</div><select class="edit-input" id="nCuotas" onchange="calcPrecioDinamico()">'+
     '<option value="6">6 cuotas</option><option value="10" selected>10 cuotas</option>'+
     '<option value="12">12 cuotas</option><option value="18">18 cuotas</option></select>'+
     '<div id="nBreakdown" style="margin-top:6px;font-size:.82rem;"></div></div>'+
+    '<div class="m-item" style="grid-column:span 2;"><div class="m-label">Paquete Personalizado</div>'+
+    '<div id="nPaqueteDisplay" style="font-weight:700;color:#60a5fa;font-size:1rem;">Seleccioná destino y viajeros</div></div>'+
     '<div class="m-item" style="grid-column:span 2;">'+
     '<div style="display:flex;gap:12px;padding:12px;background:rgba(59,130,246,.08);border-radius:12px;">'+
-    '<div><div class="m-label">Total plan</div><div id="nTotalDisplay" style="font-size:1.3rem;font-weight:800;">USD 870</div></div>'+
-    '<div><div class="m-label">Cuota</div><div id="nCuotaDisplay" style="font-size:1.3rem;font-weight:800;color:#60a5fa;">USD 87</div></div>'+
-    '<div><div class="m-label">Personas</div><div id="nPersDisplay" style="font-size:1.3rem;font-weight:800;">2</div></div></div></div>'+
-    '<input type="hidden" id="nTotal" value="870"><input type="hidden" id="nPersonas" value="2"><input type="hidden" id="nUltimaCuota" value="87">'+
+    '<div><div class="m-label">Total plan</div><div id="nTotalDisplay" style="font-size:1.3rem;font-weight:800;">—</div></div>'+
+    '<div><div class="m-label">Cuota</div><div id="nCuotaDisplay" style="font-size:1.3rem;font-weight:800;color:#60a5fa;">—</div></div>'+
+    '<div><div class="m-label">Personas</div><div id="nPersDisplay" style="font-size:1.3rem;font-weight:800;">—</div></div></div></div>'+
+    '<input type="hidden" id="nTotal" value="0"><input type="hidden" id="nPersonas" value="0"><input type="hidden" id="nUltimaCuota" value="0"><input type="hidden" id="nMontoCuota" value="0"><input type="hidden" id="nCuotasTotal" value="10">'+
     '<!-- Fecha de viaje eliminada: la elige el cliente al 80% -->'+
     '<input type="hidden" id="nFecha" value="">'+
-    '<div class="m-item"><div class="m-label">Noches</div><input class="edit-input" id="nNoches" placeholder="7" value="7" /></div>'+
     '<div class="m-item" style="grid-column:span 2;"><div class="m-label">🎁 Código de referido</div>'+
     '<input class="edit-input" id="nRefCodigo" placeholder="Ej: LUA-VALENTINA" oninput="buscarReferidor(this.value)" />'+
     '<div id="nRefInfo" style="margin-top:6px;font-size:.78rem;color:#fbbf24;"></div></div>'+
@@ -2504,7 +2472,153 @@ function openAddModal() {
     '<button class="m-btn primary" onclick="addClient()">✅ Agregar cliente</button>'+
     '<button class="m-btn ghost" onclick="closeModal()">Cancelar</button></div></div>';
   document.getElementById('modal').classList.add('open');
-  setTimeout(calcCuota,50);
+  setTimeout(loadDestinosDropdown,100);
+}
+
+// ── Dynamic pricing: carga destinos desde catalogo_precios ──
+var _catalogoDestinos = [];   // cache [{slug, nombre_destino, precio_adulto_noche, max_ocupacion, moneda_destino}]
+var _simuladorConfig = { pct_menor_5_11: 0.50, pct_menor_12_17: 0.80, group_discounts: [] };
+
+async function loadDestinosDropdown() {
+  var sel = document.getElementById('nDest');
+  if (!sel) return;
+  try {
+    // Cargar destinos
+    var { data: destinos, error: dErr } = await sbClient
+      .from('catalogo_precios')
+      .select('slug, nombre_destino, precio_adulto_noche, max_ocupacion, moneda_destino')
+      .eq('activo', true);
+    if (dErr) throw dErr;
+    _catalogoDestinos = destinos || [];
+
+    // Cargar configuración del simulador (menor percentages + group discounts)
+    var { data: simConf, error: sErr } = await sbClient
+      .from('configuracion_simulador')
+      .select('*')
+      .maybeSingle();
+    if (!sErr && simConf) {
+      _simuladorConfig.pct_menor_5_11 = parseFloat(simConf.pct_menor_5_11) || 0.50;
+      _simuladorConfig.pct_menor_12_17 = parseFloat(simConf.pct_menor_12_17) || 0.80;
+      _simuladorConfig.group_discounts = simConf.group_discounts || [];
+    }
+
+    // Poblar select
+    var html = '<option value="">Seleccionar destino...</option>';
+    _catalogoDestinos.forEach(function(d) {
+      var precio = parseFloat(d.precio_adulto_noche) || 0;
+      var maxOc = parseInt(d.max_ocupacion) || 8;
+      html += '<option value="' + d.slug + '" data-precio="' + precio + '" data-max="' + maxOc + '" data-nombre="' + (d.nombre_destino || '') + '">' +
+        (d.nombre_destino || d.slug) + ' — USD ' + precio + '/noche' + '</option>';
+    });
+    sel.innerHTML = html;
+  } catch (err) {
+    console.error('[loadDestinosDropdown] Error:', err);
+    sel.innerHTML = '<option value="">Error al cargar destinos</option>';
+  }
+}
+
+function calcPrecioDinamico() {
+  var selDest = document.getElementById('nDest');
+  var adultos  = parseInt((document.getElementById('nAdultos') || {}).value, 10) || 0;
+  var m04      = parseInt((document.getElementById('nMenores04') || {}).value, 10) || 0;
+  var m511     = parseInt((document.getElementById('nMenores511') || {}).value, 10) || 0;
+  var m1217    = parseInt((document.getElementById('nMenores1217') || {}).value, 10) || 0;
+  var noches   = parseInt((document.getElementById('nNoches') || {}).value, 10) || 1;
+  var cuotas   = parseInt((document.getElementById('nCuotas') || {}).value, 10) || 10;
+  var totalPersonas = adultos + m04 + m511 + m1217;
+
+  // Display elements
+  var td = document.getElementById('nTotalDisplay');
+  var cd = document.getElementById('nCuotaDisplay');
+  var pd = document.getElementById('nPersDisplay');
+  var bd = document.getElementById('nBreakdown');
+  var pkgDisp = document.getElementById('nPaqueteDisplay');
+
+  if (!selDest || !selDest.value) {
+    if (td) td.textContent = '—';
+    if (cd) cd.textContent = '—';
+    if (pd) pd.textContent = totalPersonas > 0 ? totalPersonas + ' persona' + (totalPersonas !== 1 ? 's' : '') : '—';
+    if (bd) bd.innerHTML = '';
+    if (pkgDisp) pkgDisp.textContent = 'Seleccioná destino y viajeros';
+    return;
+  }
+
+  var opt = selDest.options[selDest.selectedIndex];
+  var precioNoche = parseFloat(opt.getAttribute('data-precio')) || 0;
+  var maxOcupacion = parseInt(opt.getAttribute('data-max')) || 8;
+  var nombreDestino = opt.getAttribute('data-nombre') || opt.textContent.split('—')[0].trim();
+
+  // Validate max_ocupacion
+  if (totalPersonas > maxOcupacion) {
+    if (bd) bd.innerHTML = '<span style="color:#f87171;font-weight:600;">⚠️ Máximo ' + maxOcupacion + ' personas para este destino</span>';
+  } else if (bd) {
+    bd.innerHTML = '';
+  }
+
+  // Calculate
+  var baseAdultos = adultos * precioNoche * noches;
+  var costoM511 = m511 * precioNoche * noches * _simuladorConfig.pct_menor_5_11;
+  var costoM1217 = m1217 * precioNoche * noches * _simuladorConfig.pct_menor_12_17;
+  var subtotal = baseAdultos + costoM511 + costoM1217;
+
+  // Group discount
+  var descuentoPct = 0;
+  var descuentoLabel = '';
+  if (_simuladorConfig.group_discounts && Array.isArray(_simuladorConfig.group_discounts)) {
+    _simuladorConfig.group_discounts.forEach(function(gd) {
+      if (adultos >= parseInt(gd.threshold, 10)) {
+        descuentoPct = parseFloat(gd.discount_pct) || 0;
+        descuentoLabel = ' (' + descuentoPct + '% desc. grupo)';
+      }
+    });
+  }
+  var total = subtotal * (1 - descuentoPct);
+  total = Math.round(total * 100) / 100;
+
+  // Cuota calculation
+  var cuotaBase = Math.floor(total / cuotas * 100) / 100;
+  var ultimaCuota = Math.round((total - cuotaBase * (cuotas - 1)) * 100) / 100;
+
+  // Display
+  if (td) td.textContent = 'USD ' + total.toLocaleString('es-AR');
+  if (cd) cd.textContent = 'USD ' + cuotaBase.toLocaleString('es-AR');
+  if (pd) pd.textContent = totalPersonas + ' persona' + (totalPersonas !== 1 ? 's' : '');
+
+  if (bd) {
+    var html = '';
+    if (totalPersonas > maxOcupacion) {
+      html = '<span style="color:#f87171;font-weight:600;">⚠️ Máximo ' + maxOcupacion + ' personas para este destino</span><br>';
+    }
+    html += '<span style="color:var(--muted);">USD ' + total.toLocaleString('es-AR') + descuentoLabel + ' en ' + cuotas + ' cuotas de </span>' +
+      '<strong style="color:#60a5fa;">USD ' + cuotaBase.toLocaleString('es-AR') + '</strong>' +
+      (ultimaCuota !== cuotaBase ? ' <span style="font-size:.78rem;color:var(--muted);">(última: USD ' + ultimaCuota.toLocaleString('es-AR') + ')</span>' : '');
+    if (costoM511 > 0 || costoM1217 > 0) {
+      html += '<br><span style="color:var(--muted);font-size:.82rem;">Menores: ' +
+        (m511 > 0 ? m511 + '×50% = USD ' + Math.round(costoM511).toLocaleString('es-AR') : '') +
+        (m511 > 0 && m1217 > 0 ? ' + ' : '') +
+        (m1217 > 0 ? m1217 + '×80% = USD ' + Math.round(costoM1217).toLocaleString('es-AR') : '') + '</span>';
+    }
+    bd.innerHTML = html;
+  }
+
+  // Auto-generate paquete name
+  if (pkgDisp) {
+    pkgDisp.textContent = nombreDestino + ' · ' + adultos + ' adulto' + (adultos !== 1 ? 's' : '') +
+      (totalPersonas > adultos ? ' · ' + (totalPersonas - adultos) + ' menor' + (totalPersonas - adultos !== 1 ? 'es' : '') : '') +
+      ' · ' + noches + ' noche' + (noches !== 1 ? 's' : '');
+  }
+
+  // Hidden fields
+  var tf = document.getElementById('nTotal');
+  if (tf) tf.value = total;
+  var pf = document.getElementById('nPersonas');
+  if (pf) pf.value = totalPersonas;
+  var uf = document.getElementById('nUltimaCuota');
+  if (uf) uf.value = ultimaCuota;
+  var mf = document.getElementById('nMontoCuota');
+  if (mf) mf.value = cuotaBase;
+  var cf = document.getElementById('nCuotasTotal');
+  if (cf) cf.value = cuotas;
 }
 
 async function buscarReferidor(codigo) {
@@ -2546,12 +2660,17 @@ async function addClient() {
   if (!pass || pass.length < 6) { showToast('⚠️ La contraseña debe tener al menos 6 caracteres'); return; }
   if (!_currentProfile) { showToast('⚠️ Sesión no cargada'); return; }
   if (!sbClient) { showToast('❌ Sin conexión'); return; }
+  // Validar destino seleccionado
+  var selDest = document.getElementById('nDest');
+  var selectedDestinoNombre = '';
+  if (selDest && selDest.value) {
+    var optDest = selDest.options[selDest.selectedIndex];
+    selectedDestinoNombre = optDest.getAttribute('data-nombre') || optDest.textContent.split('—')[0].trim();
+  } else {
+    showToast('⚠️ Seleccioná un destino'); return;
+  }
   if (!total || total <= 0) {
-    // fallback: calcular desde el paquete seleccionado
-    var pkgKeyFb = (document.getElementById('nPkg') || {}).value || 'Escapada en Pareja';
-    var pkgPricesFb = { 'Escapada en Pareja': 870, 'Paquete 4 Amigos': 1450, 'Paquete 6 Amigos': 1740 };
-    total = pkgPricesFb[pkgKeyFb] || 870;
-    if (!total) { showToast('⚠️ Error al calcular el total del plan'); return; }
+    showToast('⚠️ Seleccioná destino, viajeros y noches para calcular el precio'); return;
   }
 
   // ── Verificación local de caché ────────────────────────────
@@ -2651,15 +2770,28 @@ async function addClient() {
 
     var nuevoClienteId = data.id;
 
+    // Leer campos dinámicos
+    var adultosVal   = parseInt((document.getElementById('nAdultos') || {}).value, 10) || 0;
+    var m04Val       = parseInt((document.getElementById('nMenores04') || {}).value, 10) || 0;
+    var m511Val      = parseInt((document.getElementById('nMenores511') || {}).value, 10) || 0;
+    var m1217Val     = parseInt((document.getElementById('nMenores1217') || {}).value, 10) || 0;
+    var nochesVal    = parseInt((document.getElementById('nNoches') || {}).value, 10) || null;
+    var paqueteNombre = (document.getElementById('nPaqueteDisplay') || {}).textContent || '';
+    var totalPersonasVal = adultosVal + m04Val + m511Val + m1217Val;
+
     var camposExtra = {
       documento: (document.getElementById('nDoc') || {}).value.trim() || null,
       telefono: telefono1,
-      destino: (document.getElementById('nDest') || {}).value || null,
-      paquete: (document.getElementById('nPkg') || {}).value || null,
+      destino: selectedDestinoNombre,
+      paquete: paqueteNombre,
+      adultos: adultosVal,
+      menores_0_4: m04Val,
+      menores_5_11: m511Val,
+      menores_12_17: m1217Val,
+      personas: totalPersonasVal,
+      noches: nochesVal,
       domicilio: domicilio,
       notas: (document.getElementById('nNotas') || {}).value && document.getElementById('nNotas').value.trim() || null,
-      personas: parseInt((document.getElementById('nPersDisplay') || {}).innerText, 10) || null,
-      noches: parseInt((document.getElementById('nNoches') || {}).value, 10) || null,
       // REGIÓN HEREDADA del gerente (nunca null — safeguard verificó arriba)
       region_id: sellerRegion
     };

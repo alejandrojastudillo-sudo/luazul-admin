@@ -231,7 +231,6 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;back
 /* ── EDIT INPUT ─────────────────────────────────────────────────────── */
 .edit-input{background:rgba(255,255,255,.06);border:1px solid var(--border2);border-radius:10px;color:var(--text);font-family:'Mulish',sans-serif;font-size:.9rem;padding:9px 13px;width:100%;transition:border .2s;}
 .edit-input:focus{outline:none;border-color:var(--gold);}
-option{background:#0d1b2a;color:#e8eeff;padding:6px 8px;}
 /* ── BOTÓN VERDE EN MODAL ───────────────────────────────────────────── */
 .m-btn.green{background:var(--green-bg);color:var(--green);border:1px solid var(--green-bd);}
 .m-btn.green:hover{background:rgba(34,197,94,.2);}
@@ -320,6 +319,8 @@ function _lzMapClient(c) {
     estado: c.estado || 'activo',
     score: 50, destino: c.destino || '', paquete: c.paquete || '',
     fecha_viaje: c.fecha_viaje || '', noches: c.noches || null, personas: c.personas || null,
+    adultos: parseInt(c.adultos) || null, menores_0_4: parseInt(c.menores_0_4) || 0,
+    menores_5_11: parseInt(c.menores_5_11) || 0, menores_12_17: parseInt(c.menores_12_17) || 0,
     monto_cuota: parseFloat(c.monto_cuota) || 0, cuotas_total: parseInt(c.cuotas_total) || 10,
     cuotas_pagadas: parseInt(c.cuotas_pagadas) || 0, total_usd: parseFloat(c.total_usd) || 0,
     fechaAlta: c.fecha_alta ? c.fecha_alta.slice(0, 10) : '', notas: c.notas || '',
@@ -589,7 +590,7 @@ function _sbLoad() { return loadClients(); }
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
           <select class="msel" id="pagoVFilt" onchange="renderPagos()" style="width:auto;padding:7px 11px;"><option value="">Todos los asesores</option></select>
           <select class="msel" id="pagoEstFilt" onchange="renderPagos()" style="width:auto;padding:7px 11px;"><option value="">Todos</option><option value="pendiente">Pendientes de aprobación</option><option value="aprobado">Aprobados</option></select>
-          <button class="addbtn" onclick="aprobarTodos()" style="background:linear-gradient(135deg,#059669,#10b981);font-size:.78rem;padding:8px 14px;">✅ Aprobar todos pendientes</button>
+          <!-- Solo el CEO aprueba pagos -->
         </div>
       </div>
       <div id="pagosBody"></div>
@@ -708,11 +709,7 @@ async function _sbUpdateVendor(vid, data) {
   if (result.error) throw result.error;
 }
 
-async function _sbApprovePayment(pagoId) {
-  var result = await sbClient.from('pagos').update({ estado: 'aprobado', aprobado_por: 'gerente' }).eq('id', pagoId);
-  if (result.error) throw result.error;
-  return true;
-}
+// _sbApprovePayment — REMOVIDO. Solo el CEO aprueba pagos.
 
 //  COMMISSION ENGINE (Reglas de negocio)
 // ══════════════════════════════════════════════════════
@@ -1868,7 +1865,7 @@ function openClientDetail(id) {
       <div class="mgrid" style="grid-template-columns:1fr 1fr; gap:10px; margin-bottom:20px;">
         <div class="mi"><div class="ml">🏖️ Destino</div><div class="mv">${c.destino || '—'}</div></div>
         <div class="mi"><div class="ml">📦 Paquete</div><div class="mv">${c.paquete || '—'}</div></div>
-        <div class="mi"><div class="ml">👥 Personas</div><div class="mv">${c.personas || '—'} · ${c.noches || '—'} noches</div></div>
+        <div class="mi"><div class="ml">👥 Viajeros</div><div class="mv">${c.adultos || '?'} adultos${parseInt(c.menores_0_4) > 0 ? ', ' + c.menores_0_4 + ' menores (0-4)' : ''}${parseInt(c.menores_5_11) > 0 ? ', ' + c.menores_5_11 + ' (5-11)' : ''}${parseInt(c.menores_12_17) > 0 ? ', ' + c.menores_12_17 + ' (12-17)' : ''} · ${c.noches || '—'} noches</div></div>
         <div class="mi"><div class="ml">📅 Fecha viaje</div><div class="mv">${c.fecha_viaje || 'Por confirmar'} · ${diasStr}</div></div>
         <div class="mi"><div class="ml">💰 Total plan</div><div class="mv">USD ${c.total_usd || '—'}</div></div>
         <div class="mi"><div class="ml">💵 Cuota mensual</div><div class="mv">USD ${c.monto_cuota || '—'}</div></div>
@@ -1887,23 +1884,17 @@ function openClientDetail(id) {
           <div><label style="font-size:.68rem;color:var(--muted);display:block;margin-bottom:4px;">Documento</label><input class="edit-input" id="efDoc" value="${esc(c.documento || '')}"></div>
           <div><label style="font-size:.68rem;color:var(--muted);display:block;margin-bottom:4px;">Teléfono</label><input class="edit-input" id="efTel" value="${esc(c.telefono || '')}"></div>
           <div><label style="font-size:.68rem;color:var(--muted);display:block;margin-bottom:4px;">Destino</label>
-            <select class="edit-input" id="efDest">
-              <option value="Cabo Frío, Brasil" ${c.destino === 'Cabo Frío, Brasil' ? 'selected' : ''}>🏖️ Cabo Frío</option>
-              <option value="Arraial do Cabo, Brasil" ${c.destino === 'Arraial do Cabo, Brasil' ? 'selected' : ''}>🌊 Arraial do Cabo</option>
-              <option value="Búzios, Brasil" ${c.destino === 'Búzios, Brasil' ? 'selected' : ''}>⛵ Búzios</option>
-              <option value="Río de Janeiro – Copacabana, Brasil" ${c.destino === 'Río de Janeiro – Copacabana, Brasil' ? 'selected' : ''}>🏙️ Río de Janeiro</option>
-            </select>
+            <input class="edit-input" value="${c.destino || '—'}" readonly style="opacity:.7;cursor:default;background:rgba(100,160,255,.08);" />
           </div>
           <div><label style="font-size:.68rem;color:var(--muted);display:block;margin-bottom:4px;">Paquete</label>
-            <select class="edit-input" id="efPkg">
-              <option value="Escapada en Pareja" ${c.paquete === 'Escapada en Pareja' ? 'selected' : ''}>Escapada en Pareja</option>
-              <option value="Paquete 4 Amigos" ${c.paquete === 'Paquete 4 Amigos' ? 'selected' : ''}>Paquete 4 Amigos</option>
-              <option value="Paquete 6 Amigos" ${c.paquete === 'Paquete 6 Amigos' ? 'selected' : ''}>Paquete 6 Amigos</option>
-            </select>
+            <input class="edit-input" id="editPaquete" value="${c.paquete || '—'}" readonly style="opacity:.7;cursor:default;background:rgba(100,160,255,.08);" />
           </div>
+          <div class="m-item"><div class="m-label">Adultos</div><input class="edit-input" value="${c.adultos || '—'}" readonly style="opacity:.7;cursor:default;" /></div>
+          <div class="m-item"><div class="m-label">Menores (0-4)</div><input class="edit-input" value="${c.menores_0_4 || 0}" readonly style="opacity:.7;cursor:default;" /></div>
+          <div class="m-item"><div class="m-label">Menores (5-11)</div><input class="edit-input" value="${c.menores_5_11 || 0}" readonly style="opacity:.7;cursor:default;" /></div>
+          <div class="m-item"><div class="m-label">Menores (12-17)</div><input class="edit-input" value="${c.menores_12_17 || 0}" readonly style="opacity:.7;cursor:default;" /></div>
+          <div class="m-item"><div class="m-label">Noches</div><input class="edit-input" value="${c.noches || '—'}" readonly style="opacity:.7;cursor:default;" /></div>
           <div><label style="font-size:.68rem;color:var(--muted);display:block;margin-bottom:4px;">Fecha de viaje</label><input class="edit-input" id="efFecha" type="date" value="${c.fecha_viaje || ''}"></div>
-          <div><label style="font-size:.68rem;color:var(--muted);display:block;margin-bottom:4px;">Noches</label><input class="edit-input" id="efNoches" type="number" value="${c.noches || ''}"></div>
-          <div><label style="font-size:.68rem;color:var(--muted);display:block;margin-bottom:4px;">Personas</label><input class="edit-input" id="efPersonas" type="number" value="${c.personas || ''}"></div>
           <div><label style="font-size:.68rem;color:var(--muted);display:block;margin-bottom:4px;">Estado</label><select class="edit-input" id="efEstado">${estadoOptions}</select></div>
           <div><label style="font-size:.68rem;color:var(--muted);display:block;margin-bottom:4px;">Vendedor</label><select class="edit-input" id="efVendedor">${vOptions}</select></div>
         </div>
@@ -2004,11 +1995,8 @@ function updateClientFullGerente(clientId) {
     email:       document.getElementById('efEmail').value.trim().toLowerCase(),
     documento:   document.getElementById('efDoc').value.trim() || null,
     telefono:    document.getElementById('efTel').value.trim() || null,
-    destino:     document.getElementById('efDest').value,
-    paquete:     document.getElementById('efPkg').value,
+    // destino: READ-ONLY — no se puede modificar desde este panel
     fecha_viaje: document.getElementById('efFecha').value || null,
-    noches:      parseInt(document.getElementById('efNoches').value, 10) || null,
-    personas:    parseInt(document.getElementById('efPersonas').value, 10) || null,
     estado:      document.getElementById('efEstado').value,
     seller_id:   document.getElementById('efVendedor').value ? parseInt(document.getElementById('efVendedor').value, 10) : null
   };
@@ -2102,8 +2090,8 @@ function renderNotifs() {
     if (n.comp) { comp = '<img src="' + n.comp + '" class="cthumb" onclick="viewComp(' + JSON.stringify(n.id) + ')" title="Ver comprobante"/>'; }
     var acts = '';
     if (isPay && !n.aprobada) {
-      acts = '<button class="nbtn ok" onclick="approvePayment(' + JSON.stringify(n.id) + ')">\u2705 Aprobar</button>'
-        + '<button class="nbtn sm" onclick="viewComp(' + JSON.stringify(n.id) + ')">\uD83D\uDD0D Ver</button>'
+      // Aprobar button REMOVIDO — Solo el CEO aprueba pagos
+      acts = '<button class="nbtn sm" onclick="viewComp(' + JSON.stringify(n.id) + ')">\uD83D\uDD0D Ver</button>'
         + '<button class="nbtn sm" onclick="mkRead(' + JSON.stringify(n.id) + ')">\uD83D\uDC41\uFE0F Le\xedda</button>';
     } else if (isG) {
       acts = '<button class="nbtn sm" onclick="mkReadG(' + JSON.stringify(n.id) + ')">\uD83D\uDC41\uFE0F Marcar le\xedda</button>';
@@ -2132,12 +2120,7 @@ function refreshBadge() {
   else { b.style.display = 'none'; tb.style.display = 'none'; }
 }
 
-function approvePayment(nid) {
-  _sbApprovePayment(nid).then(function(ok) {
-    if (!ok) { showToast('❌ Error al aprobar el pago'); return; }
-    return _sbLoad().then(function() { renderAll(); showToast('✅ Pago aprobado en Supabase'); });
-  });
-}
+// approvePayment — REMOVIDO. Solo el CEO aprueba pagos.
 
 function mkRead(nid) {
   var ns = (_memCache[NK] || []).map(function(n) { if (String(n.id) === String(nid)) n.leida = true; return n; });
@@ -2448,7 +2431,7 @@ function renderPagos() {
         + '<div><span style="font-size:.7rem;font-weight:700;padding:3px 8px;border-radius:8px;' + (aprobado ? 'background:var(--green-bg);color:var(--green);border:1px solid var(--green-bd);' : 'background:var(--gold-bg);color:var(--gold);border:1px solid var(--gold-bd);') + '">' + (aprobado ? 'Aprobado' : 'Pendiente') + '</span></div>'
         + '<div style="display:flex;gap:4px;">'
         + (n.comp ? '<button onclick="viewPagoComp(\'' + n.id + '\')" style="padding:4px 7px;background:var(--blue-bg);border:1px solid var(--blue-bd);color:#93c5fd;border-radius:6px;font-size:.68rem;cursor:pointer;" title="Ver comprobante">🔍</button>' : '')
-        + (!aprobado ? '<button onclick="aprobarPago(\'' + n.id + '\')" style="padding:4px 8px;background:var(--green-bg);border:1px solid var(--green-bd);color:var(--green);border-radius:6px;font-size:.68rem;font-weight:700;cursor:pointer;">✅ OK</button>' : '<span style="font-size:.62rem;color:var(--muted);padding:4px;">' + (n.aprobadoPor ? 'Por: ' + n.aprobadoPor : 'Gerencia') + '</span>')
+        + (aprobado ? '<span style="font-size:.62rem;color:var(--muted);padding:4px;">' + (n.aprobadoPor ? 'Por: ' + n.aprobadoPor : 'Gerencia') + '</span>' : '')
         + '</div></div>';
     }).join('')
     + '</div>';
@@ -2465,40 +2448,14 @@ function viewPagoComp(nid) {
     + '<div style="margin-top:12px;font-size:.78rem;color:var(--muted);">Asesor: ' + n.vendedor + ' · ' + fmtTs(n.ts) + (n.aprobada ? ' · ✅ Aprobado' + (n.aprobadoPor ? ' por ' + n.aprobadoPor : '') : ' · ⏳ Pendiente') + '</div>'
     + '</div>'
     + '<div class="mact">'
-    + (!n.aprobada ? '<button class="mbtn gold" onclick="aprobarPago(\'' + n.id + '\');closeModal()">✅ Aprobar pago</button>' : '')
     + '<button class="mbtn ghost" onclick="closeModal()">Cerrar</button>'
     + '</div>';
   document.getElementById('modal').classList.add('open');
 }
 
-function aprobarPago(nid) {
-  _sbApprovePayment(nid).then(function(ok) {
-    if (!ok) { showToast('❌ Error al aprobar el pago'); return; }
-    return _sbLoad().then(function() { renderAll(); renderPagos(); refreshNotifBadge(); showToast('✅ Pago aprobado en Supabase'); });
-  });
-}
+// aprobarPago — REMOVIDO. Solo el CEO aprueba pagos.
 
-// ══════════════════════════════════════════════════════
-//  APROBAR TODOS (versión optimizada con Promise.all)
-// ══════════════════════════════════════════════════════
-async function aprobarTodos() {
-  var ns = _memCache[NK] || [];
-  var pendientes = ns.filter(function(n) { return n.tipo === 'payment' && !n.aprobada && n.id; });
-  if (!pendientes.length) { showToast('✅ No hay pagos pendientes'); return; }
-  showToast('⏳ Aprobando ' + pendientes.length + ' pagos...');
-  var count = 0;
-  for (var i = 0; i < pendientes.length; i++) {
-    try {
-      await _sbApprovePayment(pendientes[i].id);
-      count++;
-    } catch(e) { console.warn(e); }
-  }
-  await _sbLoad();
-  renderAll();
-  renderPagos();
-  refreshNotifBadge();
-  showToast('✅ ' + count + ' pagos aprobados');
-}
+// aprobarTodos — REMOVIDO. Solo el CEO aprueba pagos.
 
 // ══════════════════════════════════════════════════════
 //  GESTIÓN DE MORA — Tab 5
