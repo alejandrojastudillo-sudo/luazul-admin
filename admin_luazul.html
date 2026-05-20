@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es" style="color-scheme:dark;">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
@@ -2510,7 +2510,7 @@ async function loadDestinosDropdown() {
       var precio = parseFloat(d.precio_adulto_noche) || 0;
       var maxOc = parseInt(d.max_ocupacion) || 8;
       html += '<option value="' + d.slug + '" data-precio="' + precio + '" data-max="' + maxOc + '" data-nombre="' + (d.nombre_destino || '') + '">' +
-        (d.nombre_destino || d.slug) + ' — USD ' + precio + '/noche' + '</option>';
+        (d.nombre_destino || d.slug) + '</option>';
     });
     sel.innerHTML = html;
   } catch (err) {
