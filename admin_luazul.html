@@ -2441,12 +2441,14 @@ function openAddModal() {
     '<div class="m-item"><div class="m-label">Teléfono principal</div><input class="edit-input" id="nTel1" placeholder="+54 9 11 1234-5678" /></div>'+
     '<div class="m-item"><div class="m-label">Teléfono de referencia</div><input class="edit-input" id="nTel2" placeholder="+54 9 351 9876-5432" /></div>'+
     '<div class="m-item" style="grid-column:span 2;"><div class="m-label">Domicilio</div><input class="edit-input" id="nDomicilio" placeholder="Av. Corrientes 1234, Buenos Aires" /></div>'+
-    '<div class="m-item"><div class="m-label">Destino</div><select class="edit-input" id="nDest" onchange="calcPrecioDinamico()">'+
+    '<div class="m-item"><div class="m-label">Destino</div><select class="edit-input" id="nDest" onchange="onDestinoChanged()">'+
     '<option value="">Cargando destinos...</option></select></div>'+
     '<div class="m-item"><div class="m-label">Noches</div><input class="edit-input" type="number" id="nNoches" min="1" max="30" value="7" onchange="calcPrecioDinamico()" /></div>'+
     '<div class="m-item"><div class="m-label">Adultos</div><select class="edit-input" id="nAdultos" onchange="calcPrecioDinamico()">'+
     '<option value="1">1 adulto</option><option value="2" selected>2 adultos</option><option value="3">3 adultos</option><option value="4">4 adultos</option>'+
-    '<option value="5">5 adultos</option><option value="6">6 adultos</option><option value="7">7 adultos</option><option value="8">8 adultos</option></select></div>'+
+    '<option value="5">5 adultos</option><option value="6">6 adultos</option><option value="7">7 adultos</option><option value="8">8 adultos</option>'+
+    '<option value="9">9 adultos</option><option value="10">10 adultos</option></select></div>'+
+    '<div id="maxOcupMsg" style="grid-column:span 2;font-size:.75rem;color:#fbbf24;margin-top:-4px;"></div>'+
     '<div class="m-item"><div class="m-label">Menores (0-4 años) — Gratis</div><input class="edit-input" type="number" id="nMenores04" min="0" max="6" value="0" onchange="calcPrecioDinamico()" /></div>'+
     '<div class="m-item"><div class="m-label">Menores (5-11 años) — 50%</div><input class="edit-input" type="number" id="nMenores511" min="0" max="6" value="0" onchange="calcPrecioDinamico()" /></div>'+
     '<div class="m-item"><div class="m-label">Menores (12-17 años) — 80%</div><input class="edit-input" type="number" id="nMenores1217" min="0" max="6" value="0" onchange="calcPrecioDinamico()" /></div>'+
@@ -2515,6 +2517,32 @@ async function loadDestinosDropdown() {
     console.error('[loadDestinosDropdown] Error:', err);
     sel.innerHTML = '<option value="">Error al cargar destinos</option>';
   }
+}
+
+function onDestinoChanged() {
+  var selDest = document.getElementById('nDest');
+  var selAdultos = document.getElementById('nAdultos');
+  if (!selDest || !selAdultos) return;
+  var opt = selDest.options[selDest.selectedIndex];
+  var maxOc = parseInt(opt.getAttribute('data-max')) || 0;
+  var msgEl = document.getElementById('maxOcupMsg');
+  if (maxOc > 0) {
+    var currentVal = parseInt(selAdultos.value) || 2;
+    var html = '';
+    for (var i = 1; i <= maxOc; i++) {
+      html += '<option value="' + i + '"' + (i === Math.min(currentVal, maxOc) ? ' selected' : '') + '>' + i + ' adulto' + (i > 1 ? 's' : '') + '</option>';
+    }
+    selAdultos.innerHTML = html;
+    if (msgEl) msgEl.innerHTML = '<span style="color:#34d399;">Máximo ' + maxOc + ' personas para este destino</span>';
+    // Also cap menores inputs
+    ['nMenores04', 'nMenores511', 'nMenores1217'].forEach(function(id) {
+      var el = document.getElementById(id);
+      if (el) el.max = maxOc;
+    });
+  } else {
+    if (msgEl) msgEl.innerHTML = '';
+  }
+  calcPrecioDinamico();
 }
 
 function calcPrecioDinamico() {
@@ -2668,6 +2696,16 @@ async function addClient() {
     selectedDestinoNombre = optDest.getAttribute('data-nombre') || optDest.textContent.split('—')[0].trim();
   } else {
     showToast('⚠️ Seleccioná un destino'); return;
+  }
+  // Validar max_ocupacion del destino
+  var maxOcSave = parseInt(optDest.getAttribute('data-max')) || 0;
+  var adultosSave = parseInt((document.getElementById('nAdultos') || {}).value, 10) || 0;
+  var m04Save    = parseInt((document.getElementById('nMenores04') || {}).value, 10) || 0;
+  var m511Save   = parseInt((document.getElementById('nMenores511') || {}).value, 10) || 0;
+  var m1217Save  = parseInt((document.getElementById('nMenores1217') || {}).value, 10) || 0;
+  var totalPersSave = adultosSave + m04Save + m511Save + m1217Save;
+  if (maxOcSave > 0 && totalPersSave > maxOcSave) {
+    showToast('⚠️ Máximo ' + maxOcSave + ' personas para ' + (selectedDestinoNombre || 'este destino')); return;
   }
   if (!total || total <= 0) {
     showToast('⚠️ Seleccioná destino, viajeros y noches para calcular el precio'); return;
