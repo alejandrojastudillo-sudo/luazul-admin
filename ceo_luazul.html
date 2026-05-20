@@ -5,7 +5,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- CEO v5.1 — Destinos simples (precio/noche) · Calculadora dinámica · % globales menores + grupos · 2026-05-20 -->
+<!-- CEO v6 — Destinos únicos (1 fila por destino) · Sin paquetes · Dedup client-side · 2026-05-20 -->
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="manifest" href="manifest_ceo.json">
   <meta name="theme-color" content="#0B3D91">
@@ -583,8 +583,8 @@ optgroup{background:#0a1128;color:#a78bfa;font-weight:700;}
         <div style="margin-left:auto;font-size:.75rem;color:var(--muted);"><span id="catCount">0</span> destinos</div>
       </div>
       <div class="cat-table-wrap">
-        <div class="cat-table-head" style="grid-template-columns:30% 20% 14% 14% 10% 12%;">
-          <div>Destino</div><div>Slug</div><div>USD adulto/noche</div><div>Max.ocup.</div><div>Estado</div><div>Acciones</div>
+        <div class="cat-table-head" style="grid-template-columns:35% 20% 15% 15% 15%;">
+          <div>Destino</div><div>USD adulto/noche</div><div>Max.ocup.</div><div>Estado</div><div>Acciones</div>
         </div>
         <div id="catalogoBody"></div>
       </div>
@@ -6519,12 +6519,20 @@ async function renderCatalogo() {
     var r = await sbClient.from('catalogo_precios').select('*').order('nombre_destino', { ascending: true }).order('orden', { ascending: true });
     if (r.error) throw r.error;
     _catCache = r.data || [];
+    // ── DEDUPLICACIÓN: una sola fila por destino (si quedan duplicados en BD) ──
+    var _seen = {};
+    var _deduped = [];
+    for (var di = 0; di < _catCache.length; di++) {
+      var dName = _catCache[di].nombre_destino;
+      if (!_seen[dName]) { _seen[dName] = true; _deduped.push(_catCache[di]); }
+    }
+    _catCache = _deduped;
     // Apply filters
     var fEstVal = (document.getElementById('catFiltroEstado') || {}).value || '';
     var fBusq = ((document.getElementById('catBusqueda') || {}).value || '').toLowerCase();
     var filtered = _catCache.filter(function(p) {
       if (fEstVal !== '' && String(p.activo) !== fEstVal) return false;
-      if (fBusq && (p.nombre_destino || '').toLowerCase().indexOf(fBusq) === -1 && (p.slug || '').toLowerCase().indexOf(fBusq) === -1) return false;
+      if (fBusq && (p.nombre_destino || '').toLowerCase().indexOf(fBusq) === -1) return false;
       return true;
     });
     document.getElementById('catCount').textContent = filtered.length;
@@ -6543,9 +6551,8 @@ async function renderCatalogo() {
     for (var i = 0; i < filtered.length; i++) {
       var p = filtered[i];
       var pan = p.precio_adulto_noche || 0;
-      html += '<div class="cat-table-row' + (p.activo ? '' : ' inactive') + '" style="grid-template-columns:30% 20% 14% 14% 10% 12%;">'
+      html += '<div class="cat-table-row' + (p.activo ? '' : ' inactive') + '" style="grid-template-columns:35% 20% 15% 15% 15%;">'
         + '<div style="font-weight:700;font-size:.88rem;">' + esc(p.nombre_destino) + '</div>'
-        + '<div style="font-size:.78rem;color:var(--muted);">' + esc(p.slug) + '</div>'
         + '<div style="font-weight:800;color:var(--gold);font-size:1rem;">USD ' + pan.toLocaleString('es-AR') + '</div>'
         + '<div style="color:var(--cyan);font-weight:700;">' + (p.max_ocupacion || '—') + ' pers.</div>'
         + '<div><span class="cat-status ' + (p.activo ? 'active' : 'inactive') + '" onclick="toggleCatalogoActivo(' + p.id + ')">' + (p.activo ? '● Activo' : '○ Inactivo') + '</span></div>'
@@ -6580,10 +6587,17 @@ async function saveAddDestino() {
   var slug = document.getElementById('newDestSlug').value.trim();
   var precio = parseFloat(document.getElementById('newDestPrecio').value);
   if (!nombre || !slug || !precio) { showToast('⚠️ Completá nombre, slug y precio'); return; }
-  var d = { nombre_destino: nombre, slug: slug, paquete: 'Personalizado', personas: 2, noches: 7,
+  // Check duplicados: nombre_destino ya existe?
+  var dupNombre = _catCache.find(function(c) { return c.nombre_destino.toLowerCase() === nombre.toLowerCase(); });
+  if (dupNombre) { showToast('⚠️ Ya existe un destino llamado "' + dupNombre.nombre_destino + '"'); return; }
+  // Check slug duplicado
+  var dupSlug = _catCache.find(function(c) { return c.slug.toLowerCase() === slug.toLowerCase(); });
+  if (dupSlug) { showToast('⚠️ Ya existe un destino con slug "' + dupSlug.slug + '"'); return; }
+  var d = {
+    nombre_destino: nombre,
+    slug: slug,
     precio_adulto_noche: precio,
-    precio_usd: Math.round(precio * 2 * 7),
-    orden: 0, activo: true,
+    activo: true, orden: 0,
     max_ocupacion: parseInt((document.getElementById('newDestMaxOcup') || {}).value, 10) || 4
   };
   var btn = document.querySelector('#modal .mbtn.gold'); if (btn) btn.disabled = true;
@@ -6594,8 +6608,8 @@ async function saveAddDestino() {
 
 
 async function openEditCatalogo(id) {
-  var r = await sbClient.from('catalogo_precios').select('*').eq('id', id).single();
-  if (r.error) { showToast('❌ Error al cargar'); return; }
+  var r = await sbClient.from('catalogo_precios').select('*').eq('id', id).maybeSingle();
+  if (r.error || !r.data) { showToast('❌ Destino no encontrado'); return; }
   var d = r.data;
   var pan = d.precio_adulto_noche || 0;
   var h = '<div class="mhead"><div><h2>✏️ Editar Destino</h2><p style="font-size:.72rem;color:var(--muted);">ID: ' + d.id + '</p></div><button class="mclose" onclick="closeModal()">✕</button></div>'
@@ -6617,10 +6631,15 @@ async function saveEditCatalogo(id) {
     nombre_destino: document.getElementById('eCatDest').value.trim(),
     slug: document.getElementById('eCatSlug').value.trim().toLowerCase(),
     precio_adulto_noche: precio,
-    precio_usd: Math.round(precio * 2 * 7),
     activo: document.getElementById('eCatAct').value === 'true',
     max_ocupacion: parseInt((document.getElementById('eCatMaxOcup') || {}).value, 10) || 4
   };
+  // Check slug duplicado (excluyendo el registro actual)
+  var dupSlug = _catCache.find(function(c) { return c.id !== id && c.slug.toLowerCase() === u.slug.toLowerCase(); });
+  if (dupSlug) { showToast('⚠️ Slug "' + u.slug + '" ya usado por "' + dupSlug.nombre_destino + '"'); return; }
+  // Check nombre duplicado (excluyendo el registro actual)
+  var dupNombre = _catCache.find(function(c) { return c.id !== id && c.nombre_destino.toLowerCase() === u.nombre_destino.toLowerCase(); });
+  if (dupNombre) { showToast('⚠️ Ya existe "' + dupNombre.nombre_destino + '"'); return; }
   if (!u.nombre_destino || !precio) { showToast('⚠️ Completá campos obligatorios'); return; }
   var btn = document.querySelector('#modal .mbtn.gold'); if (btn) btn.disabled = true;
   try { var r = await sbClient.from('catalogo_precios').update(u).eq('id', id); if (r.error) throw r.error; showToast('✅ Destino actualizado'); closeModal(); renderCatalogo(); }
