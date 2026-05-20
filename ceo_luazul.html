@@ -5,7 +5,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- CEO v4.4 — Simulador simple estilo Divisas: tabla limpia 1 fila por paquete, cálculos automáticos, modal para agregar/editar · 2026-05-20 -->
+<!-- CEO v4.6 — Menores de edad: Catálogo + Simulador con franjas etarias (0-2, 3-5, 6-11, 12-17), % descuento, max_ocupacion · 2026-05-20 -->
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="manifest" href="manifest_ceo.json">
   <meta name="theme-color" content="#0B3D91">
@@ -557,27 +557,21 @@ optgroup{background:#0a1128;color:#a78bfa;font-weight:700;}
       </div>
     </div>
 
-    <!-- ═══ SIMULADOR DE CUOTAS ═══ -->
+    <!-- ═══ SIMULADOR DE CUOTAS (simple estilo divisa) ═══ -->
     <div class="tabpg" id="tabpg-simulador">
       <div class="sec-head">
         <h2>📊 Simulador de Cuotas</h2>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;">
-          <button class="addbtn" onclick="simModalAgregarPaquete()" style="background:linear-gradient(135deg,#059669,#10b981);">➕ Nuevo paquete</button>
-          <button onclick="simLoadTable()" style="padding:8px 16px;border-radius:9px;background:rgba(255,255,255,.05);border:1px solid var(--border);color:var(--muted);font-family:inherit;font-size:.78rem;font-weight:700;cursor:pointer;">🔁 Recargar</button>
-        </div>
+        <button onclick="openSimuladorCeo()" class="addbtn" style="background:linear-gradient(135deg,#059669,#10b981);">🧮 Abrir Simulador</button>
       </div>
-      <div style="display:flex;gap:8px;margin-bottom:14px;align-items:center;">
-        <div class="ml" style="margin:0;white-space:nowrap;">Filtrar destino</div>
-        <select id="simFiltroDest" class="msel" style="width:auto;min-width:180px;" onchange="simLoadTable()">
-          <option value="">Todos los destinos</option>
-        </select>
-        <div style="margin-left:auto;font-size:.72rem;color:var(--muted);"><span id="simPkgCount">0</span> paquetes activos</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-bottom:20px;">
+        <div class="kpi"><div class="kpi-v" id="simKpiDest" style="color:var(--gold);">—</div><div class="kpi-l">Destinos disponibles</div></div>
+        <div class="kpi"><div class="kpi-v" id="simKpiPkg" style="color:var(--purple);">—</div><div class="kpi-l">Paquetes activos</div></div>
+        <div class="kpi"><div class="kpi-v" id="simKpiDesde" style="color:var(--green);">—</div><div class="kpi-l">Desde USD/pers</div></div>
       </div>
-      <div class="twrap">
-        <div class="thead-ceo" style="grid-template-columns:1.5fr 0.9fr 0.7fr 1fr 1fr 1fr 0.9fr;">
-          <div>Destino / Paquete</div><div>Personas</div><div>Noches</div><div>Total USD</div><div>Cuota 12x</div><div>USD/pers/mes</div><div>Acciones</div>
-        </div>
-        <div id="simBody"></div>
+      <div class="twrap" style="padding:24px;text-align:center;">
+        <div style="font-size:2.5rem;margin-bottom:12px;">🧮</div>
+        <p style="color:var(--muted);font-size:.9rem;margin-bottom:6px;">Hacé clic en <strong>"Abrir Simulador"</strong> para cotizar un paquete</p>
+        <p style="color:var(--muted);font-size:.78rem;">Elegí destino, paquete, cantidad de personas (1, 3, 5...) y cuotas</p>
       </div>
     </div>
 
@@ -1599,7 +1593,7 @@ function showTab(id){
   if(id==='vouchers')         renderVoucherClientes();
   // ── Checkpoint v3.2: DIVISAS, SIMULADOR, TICKETS ──
   if(id==='divisas')          renderDivisas();
-  if(id==='simulador')        simLoadTable();
+  if(id==='simulador')        simLoadKpis();
   if(id==='tickets')          cargarTickets();
   if(id==='catalogo')          renderCatalogo();
   if(id==='premios_referidos') renderPremiosReferidos();
@@ -6050,207 +6044,222 @@ function actualizarCotizaciones() {
 }
 
 // ════════════════════════════════════════════════════════════════
-// 📊 SIMULADOR DE CUOTAS — Tabla simple estilo Divisas
+// 📊 SIMULADOR DE CUOTAS — Simple estilo Divisas
+// Modal limpio: destino → paquete → personas impares → cuotas → resultado
 // ════════════════════════════════════════════════════════════════
 
 var _simCatalogo = [];
 
-function simLoadTable() {
-  var body = document.getElementById('simBody');
-  var filtro = ((document.getElementById('simFiltroDest') || {}).value || '');
-  if (!body) return;
-  body.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted);">Cargando paquetes...</div>';
+/* ── Cargar KPIs del tab simulador ── */
+function simLoadKpis() {
+  if (!sbClient) return;
+  sbClient.from('catalogo_precios').select('id, nombre_destino, personas, precio_usd, activo, precio_menor_1, precio_menor_2, precio_menor_3, precio_menor_4, max_ocupacion').then(function(res) {
+    if (res.error) return;
+    var data = res.data || [];
+    var activos = data.filter(function(p) { return p.activo; });
+    var dests = {};
+    activos.forEach(function(p) { dests[p.nombre_destino] = true; });
+    var minPers = Infinity;
+    activos.forEach(function(p) {
+      if (p.personas > 0) {
+        var pp = Math.round(p.precio_usd / p.personas);
+        if (pp < minPers) minPers = pp;
+      }
+    });
+    var elD = document.getElementById('simKpiDest');
+    var elP = document.getElementById('simKpiPkg');
+    var elS = document.getElementById('simKpiDesde');
+    if (elD) elD.textContent = Object.keys(dests).length;
+    if (elP) elP.textContent = activos.length;
+    if (elS) elS.textContent = minPers < Infinity ? 'USD ' + minPers.toLocaleString('es-AR') : '—';
+    _simCatalogo = activos;
+  });
+}
 
-  sbClient.from('catalogo_precios').select('id, nombre_destino, slug, paquete, personas, noches, precio_usd, activo, orden').order('nombre_destino', { ascending: true }).order('orden', { ascending: true }).then(function(res) {
-    if (res.error) { body.innerHTML = '<div style="padding:20px;color:var(--red);">Error al cargar</div>'; return; }
+/* ── Abrir modal simulador ── */
+function openSimuladorCeo() {
+  if (!sbClient) { showToast('Sin conexión a BD'); return; }
+
+  var h = '<div class="mhead"><div><h2>🧮 Simulador de Cuotas</h2><p>Elegí destino, paquete, personas y cuotas</p></div><button class="mclose" onclick="closeModal()">✕</button></div>'
+    + '<div class="mbody">'
+    // Fila 1: Destino + Paquete
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;">'
+    + '<div class="mitem"><div class="ml">Destino</div><select id="simCeoDest" class="msel" onchange="simCeoDestChanged()"><option value="">Cargando destinos...</option></select></div>'
+    + '<div class="mitem"><div class="ml">Paquete</div><select id="simCeoPkg" class="msel" onchange="simCeoCalc()"><option value="">Elegí destino primero</option></select></div>'
+    + '</div>'
+    // Fila 2: Personas (impares) + Cuotas
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;">'
+    + '<div class="mitem"><div class="ml">Personas</div><select id="simCeoPers" class="msel" onchange="simCeoCalc()"><option value="1">1 persona (Individual)</option><option value="3">3 personas</option><option value="5">5 personas</option><option value="7">7 personas</option><option value="9">9 personas</option><option value="11">11 personas</option></select></div>'
+    + '<div class="mitem"><div class="ml">Cuotas</div><select id="simCeoCuotas" class="msel" onchange="simCeoCalc()"><option value="3">3 cuotas</option><option value="6">6 cuotas</option><option value="10">10 cuotas</option><option value="12" selected>12 cuotas</option><option value="18">18 cuotas</option><option value="24">24 cuotas</option></select></div>'
+    + '</div>'
+    // ── Menores de edad ──
+    + '<div style="margin-top:4px;padding:12px;background:rgba(251,191,36,.06);border:1px solid rgba(251,191,36,.15);border-radius:10px;margin-bottom:14px;">'
+    + '<div style="font-size:.72rem;font-weight:700;color:#fbbf24;margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px;">👶 Menores de edad (opcional)</div>'
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">'
+    + '<div class="mitem" style="margin:0;"><div class="ml" style="font-size:.62rem;">Bebé 0-2 <span id="simCeoM1Pct" style="color:#fbbf24;">—</span></div><select id="simCeoM1" class="msel" onchange="simCeoCalc()"><option value="0">0</option><option value="1">1</option><option value="2">2</option><option value="3">3</option></select></div>'
+    + '<div class="mitem" style="margin:0;"><div class="ml" style="font-size:.62rem;">Niño 3-5 <span id="simCeoM2Pct" style="color:#fbbf24;">—</span></div><select id="simCeoM2" class="msel" onchange="simCeoCalc()"><option value="0">0</option><option value="1">1</option><option value="2">2</option><option value="3">3</option></select></div>'
+    + '<div class="mitem" style="margin:0;"><div class="ml" style="font-size:.62rem;">Niño 6-11 <span id="simCeoM3Pct" style="color:#fbbf24;">—</span></div><select id="simCeoM3" class="msel" onchange="simCeoCalc()"><option value="0">0</option><option value="1">1</option><option value="2">2</option><option value="3">3</option></select></div>'
+    + '<div class="mitem" style="margin:0;"><div class="ml" style="font-size:.62rem;">Adolescente 12-17 <span id="simCeoM4Pct" style="color:#fbbf24;">—</span></div><select id="simCeoM4" class="msel" onchange="simCeoCalc()"><option value="0">0</option><option value="1">1</option><option value="2">2</option><option value="3">3</option></select></div>'
+    + '</div></div>'
+    // Resultados
+    + '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:14px;">'
+    + '<div style="background:rgba(245,158,11,.08);border:1px solid var(--gold-bd);border-radius:12px;padding:14px;text-align:center;"><div style="font-size:.65rem;font-weight:700;text-transform:uppercase;color:var(--gold);letter-spacing:.5px;">Total Plan</div><div id="simCeoTotal" style="font-family:Syne,sans-serif;font-size:1.5rem;font-weight:900;color:var(--gold);margin-top:6px;">—</div></div>'
+    + '<div style="background:rgba(167,139,250,.08);border:1px solid var(--purple-bd);border-radius:12px;padding:14px;text-align:center;"><div style="font-size:.65rem;font-weight:700;text-transform:uppercase;color:var(--purple);letter-spacing:.5px;">Cuota Mensual</div><div id="simCeoCuota" style="font-family:Syne,sans-serif;font-size:1.5rem;font-weight:900;color:var(--purple);margin-top:6px;">—</div></div>'
+    + '<div style="background:rgba(6,182,212,.08);border:1px solid rgba(6,182,212,.25);border-radius:12px;padding:14px;text-align:center;"><div style="font-size:.65rem;font-weight:700;text-transform:uppercase;color:var(--cyan);letter-spacing:.5px;">USD/pers/mes</div><div id="simCeoPpm" style="font-family:Syne,sans-serif;font-size:1.5rem;font-weight:900;color:var(--cyan);margin-top:6px;">—</div></div>'
+    + '</div>'
+    // Detalle
+    + '<div id="simCeoDetalle" style="padding:12px 16px;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:10px;font-size:.82rem;color:var(--muted);text-align:center;">Seleccioná un destino y paquete para ver la cotización</div>'
+    + '</div>'
+    + '<div class="mact"><button class="mbtn ghost" onclick="closeModal()">Cerrar</button></div>';
+
+  document.getElementById('mbox').innerHTML = h;
+  document.getElementById('modal').classList.add('open');
+
+  // Cargar destinos dinámicamente
+  sbClient.from('catalogo_precios').select('id, nombre_destino, slug, paquete, personas, noches, precio_usd, activo, precio_menor_1, precio_menor_2, precio_menor_3, precio_menor_4, max_ocupacion').order('nombre_destino').order('orden').then(function(res) {
+    if (res.error) {
+      document.getElementById('simCeoDest').innerHTML = '<option value="">Error al cargar</option>';
+      return;
+    }
     _simCatalogo = res.data || [];
-
-    var fDest = document.getElementById('simFiltroDest');
-    if (fDest && fDest.options.length <= 1) {
-      var seen = {};
-      _simCatalogo.forEach(function(p) {
-        if (!seen[p.nombre_destino]) {
-          seen[p.nombre_destino] = true;
-          var o = document.createElement('option');
-          o.value = p.nombre_destino; o.textContent = p.nombre_destino;
-          fDest.appendChild(o);
-        }
-      });
-    }
-
     var activos = _simCatalogo.filter(function(p) { return p.activo; });
-    if (filtro) activos = activos.filter(function(p) { return p.nombre_destino === filtro; });
-
-    document.getElementById('simPkgCount').textContent = activos.length;
-
-    if (!activos.length) { body.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted);">Sin paquetes activos</div>'; return; }
-
-    var html = '';
-    for (var i = 0; i < activos.length; i++) {
-      var p = activos[i];
-      var cuota12 = Math.round(p.precio_usd / 12);
-      var persMes = p.personas > 0 ? Math.round(cuota12 / p.personas) : 0;
-      var persLabel = p.personas === 1 ? 'Individual' : p.personas === 2 ? 'En par' : p.personas + ' pers.';
-      html += '<div class="trow-ceo" style="grid-template-columns:1.5fr 0.9fr 0.7fr 1fr 1fr 1fr 0.9fr;">'
-        + '<div><strong>' + esc(p.nombre_destino) + '</strong><div style="font-size:.68rem;color:var(--muted);">' + esc(p.paquete) + '</div></div>'
-        + '<div>' + persLabel + '</div>'
-        + '<div>' + p.noches + '</div>'
-        + '<div style="font-weight:800;color:var(--gold);">USD ' + p.precio_usd.toLocaleString('es-AR') + '</div>'
-        + '<div style="font-weight:700;color:var(--purple);">USD ' + cuota12.toLocaleString('es-AR') + '</div>'
-        + '<div style="font-weight:600;color:var(--cyan);font-size:.78rem;">USD ' + persMes.toLocaleString('es-AR') + '</div>'
-        + '<div style="display:flex;gap:4px;">'
-        + '<button onclick="simModalEditar(' + p.id + ')" style="padding:4px 8px;background:rgba(59,130,246,.1);border:1px solid var(--blue-bd);color:#93c5fd;border-radius:6px;font-size:.7rem;font-weight:700;cursor:pointer;">✏️</button>'
-        + '<button onclick="simToggleActivo(' + p.id + ')" style="padding:4px 8px;background:rgba(239,68,68,.08);border:1px solid var(--red-bd);color:#fca5a5;border-radius:6px;font-size:.7rem;font-weight:700;cursor:pointer;">🗑</button>'
-        + '</div></div>';
-    }
-    body.innerHTML = html;
+    // Poblar destinos agrupados
+    var dests = {};
+    activos.forEach(function(p) { dests[p.nombre_destino] = true; });
+    var destNames = Object.keys(dests).sort();
+    var opts = '<option value="">— Elegí destino —</option>';
+    destNames.forEach(function(d) { opts += '<option value="' + esc(d) + '">' + esc(d) + '</option>'; });
+    document.getElementById('simCeoDest').innerHTML = opts;
   });
 }
 
-function simModalAgregarPaquete() {
-  var destOpts = '';
-  var seen = {};
-  _simCatalogo.forEach(function(p) {
-    if (!seen[p.nombre_destino]) {
-      seen[p.nombre_destino] = true;
-      destOpts += '<option value="' + esc(p.nombre_destino) + '">' + esc(p.nombre_destino) + '</option>';
-    }
-  });
-  if (!destOpts) destOpts = '<option value="">Sin destinos</option>';
-
-  var h = '<div class="mhead"><div><h2>➕ Nuevo Paquete</h2><p>Se agrega al destino seleccionado</p></div><button class="mclose" onclick="closeModal()">✕</button></div>'
-    + '<div class="mbody" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
-    + '<div class="mitem"><div class="ml">Destino</div><select id="simNewDest" class="msel" onchange="simNewDestChanged()">' + destOpts + '<option value="__nuevo">+ Nuevo destino...</option></select></div>'
-    + '<div class="mitem" id="simNewDestWrap" style="display:none;"><div class="ml">Nombre nuevo destino</div><input id="simNewDestName" class="medit" placeholder="Ej: Buzios"></div>'
-    + '<div class="mitem"><div class="ml">Nombre del paquete</div><input id="simNewPkg" class="medit" placeholder="Ej: Escapada en Pareja"></div>'
-    + '<div class="mitem"><div class="ml">Personas</div><select id="simNewPers" class="msel" onchange="simNewPreview()"><option value="1">Individual (1)</option><option value="2" selected>En par (2)</option><option value="4">Grupo 4</option><option value="6">Grupo 6</option><option value="8">Grupo 8</option><option value="10">Grupo 10</option></select></div>'
-    + '<div class="mitem"><div class="ml">Noches</div><input id="simNewNoc" type="number" class="medit" value="7" min="1" oninput="simNewPreview()"></div>'
-    + '<div class="mitem"><div class="ml">Precio total USD</div><input id="simNewPre" type="number" class="medit" placeholder="Ej: 3500" min="1" oninput="simNewPreview()"></div>'
-    + '</div>'
-    + '<div id="simNewPreview" style="margin:0 24px 12px;padding:10px;background:rgba(0,0,0,.2);border-radius:8px;font-size:.78rem;color:var(--muted);text-align:center;">Ingresá el precio para ver la simulacion</div>'
-    + '<div class="mact"><button class="mbtn gold" onclick="simSaveNuevo()">💾 Guardar</button><button class="mbtn ghost" onclick="closeModal()">Cancelar</button></div>';
-  document.getElementById('mbox').innerHTML = h;
-  document.getElementById('modal').classList.add('open');
-}
-
-function simNewDestChanged() {
-  var val = (document.getElementById('simNewDest') || {}).value;
-  var wrap = document.getElementById('simNewDestWrap');
-  if (wrap) wrap.style.display = val === '__nuevo' ? 'block' : 'none';
-}
-
-function simNewPreview() {
-  var pre = parseFloat((document.getElementById('simNewPre') || {}).value) || 0;
-  var per = parseInt((document.getElementById('simNewPers') || {}).value) || 1;
-  var noc = parseInt((document.getElementById('simNewNoc') || {}).value) || 1;
-  var el = document.getElementById('simNewPreview');
-  if (!el) return;
-  if (pre <= 0) { el.innerHTML = 'Ingresá el precio para ver la simulacion'; return; }
-  var c12 = Math.round(pre / 12);
-  var pm = per > 0 ? Math.round(c12 / per) : 0;
-  var pd = per > 0 && noc > 0 ? Math.round(pre / per / noc) : 0;
-  el.innerHTML = 'Cuota 12x: <strong style="color:var(--purple);">USD ' + c12.toLocaleString('es-AR') + '</strong> · USD/pers/mes: <strong style="color:var(--cyan);">' + pm.toLocaleString('es-AR') + '</strong> · USD/pers/día: <strong style="color:var(--green);">' + pd.toLocaleString('es-AR') + '</strong>';
-}
-
-async function simSaveNuevo() {
-  var destSel = (document.getElementById('simNewDest') || {}).value;
-  var pkg = (document.getElementById('simNewPkg') || {}).value.trim();
-  var pers = parseInt((document.getElementById('simNewPers') || {}).value) || 2;
-  var noc = parseInt((document.getElementById('simNewNoc') || {}).value) || 7;
-  var pre = parseFloat((document.getElementById('simNewPre') || {}).value);
-
-  if (destSel === '__nuevo') {
-    var nuevoNombre = (document.getElementById('simNewDestName') || {}).value.trim();
-    if (!nuevoNombre) { showToast('Completá el nombre del destino'); return; }
-    destSel = nuevoNombre;
+/* ── Cuando cambia destino → llenar paquetes ── */
+function simCeoDestChanged() {
+  var dest = (document.getElementById('simCeoDest') || {}).value;
+  var pkgSel = document.getElementById('simCeoPkg');
+  if (!dest || !pkgSel) { simCeoCalc(); return; }
+  var pkgs = _simCatalogo.filter(function(p) { return p.activo && p.nombre_destino === dest; });
+  if (!pkgs.length) {
+    pkgSel.innerHTML = '<option value="">Sin paquetes</option>';
+    simCeoCalc();
+    return;
   }
-  if (!destSel || !pkg || !pre) { showToast('Completá destino, nombre y precio'); return; }
+  var opts = '';
+  pkgs.forEach(function(p) {
+    var ppPers = p.personas > 0 ? Math.round(p.precio_usd / p.personas) : p.precio_usd;
+    opts += '<option value="' + p.id + '"'
+      + ' data-ppp="' + ppPers + '"'
+      + ' data-pers="' + p.personas + '"'
+      + ' data-noc="' + p.noches + '"'
+      + ' data-pre="' + p.precio_usd + '"'
+      + ' data-m1="' + (p.precio_menor_1 || 0) + '"'
+      + ' data-m2="' + (p.precio_menor_2 || 0) + '"'
+      + ' data-m3="' + (p.precio_menor_3 || 0) + '"'
+      + ' data-m4="' + (p.precio_menor_4 || 0) + '"'
+      + ' data-maxocc="' + (p.max_ocupacion || 4) + '">'
+      + esc(p.paquete) + ' · ' + p.personas + ' pers · ' + p.noches + ' noches · USD ' + p.precio_usd.toLocaleString('es-AR')
+      + '</option>';
+  });
+  pkgSel.innerHTML = opts;
+  simCeoCalc();
+}
 
-  var destObj = _simCatalogo.find(function(p) { return p.nombre_destino === destSel; });
-  var slug = destObj ? destObj.slug : destSel.toLowerCase().trim().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '').replace(/-+/g, '-');
+/* ── Calcular resultado ── */
+function simCeoCalc() {
+  var pkgSel  = document.getElementById('simCeoPkg');
+  var persSel = document.getElementById('simCeoPers');
+  var cuoSel  = document.getElementById('simCeoCuotas');
+  var opt     = pkgSel ? pkgSel.options[pkgSel.selectedIndex] : null;
 
-  var d = { nombre_destino: destSel, slug: slug, paquete: pkg, personas: pers, noches: noc, precio_usd: pre, orden: 0, activo: true };
-  var btn = document.querySelector('#modal .mbtn.gold');
-  if (btn) { btn.disabled = true; btn.textContent = 'Guardando...'; }
-  try {
-    var r = await sbClient.from('catalogo_precios').insert([d]);
-    if (r.error) throw r.error;
-    showToast('Paquete "' + pkg + '" creado');
-    closeModal();
-    var fDest = document.getElementById('simFiltroDest');
-    if (fDest) {
-      var existe = false;
-      for (var i = 0; i < fDest.options.length; i++) { if (fDest.options[i].value === destSel) { existe = true; break; } }
-      if (!existe) { var o = document.createElement('option'); o.value = destSel; o.textContent = destSel; fDest.appendChild(o); }
+  var elTotal = document.getElementById('simCeoTotal');
+  var elCuota = document.getElementById('simCeoCuota');
+  var elPpm   = document.getElementById('simCeoPpm');
+  var elDet   = document.getElementById('simCeoDetalle');
+
+  if (!opt || !opt.dataset.ppp) {
+    if (elTotal) elTotal.textContent = '—';
+    if (elCuota) elCuota.textContent = '—';
+    if (elPpm) elPpm.textContent = '—';
+    if (elDet) elDet.innerHTML = 'Seleccioná un destino y paquete para ver la cotización';
+    return;
+  }
+
+  var pppBase  = parseInt(opt.dataset.ppp) || 0;   // precio por persona del paquete original
+  var origPers = parseInt(opt.dataset.pers) || 1;
+  var noches   = parseInt(opt.dataset.noc) || 1;
+  var numPers  = parseInt(persSel ? persSel.value : 1) || 1;
+  var cuotas   = parseInt(cuoSel ? cuoSel.value : 12) || 12;
+
+  // Menores
+  var m1Price = parseInt(opt.dataset.m1) || 0;
+  var m2Price = parseInt(opt.dataset.m2) || 0;
+  var m3Price = parseInt(opt.dataset.m3) || 0;
+  var m4Price = parseInt(opt.dataset.m4) || 0;
+  var maxOcup = parseInt(opt.dataset.maxocc) || 4;
+  var nM1 = parseInt((document.getElementById('simCeoM1') || {}).value) || 0;
+  var nM2 = parseInt((document.getElementById('simCeoM2') || {}).value) || 0;
+  var nM3 = parseInt((document.getElementById('simCeoM3') || {}).value) || 0;
+  var nM4 = parseInt((document.getElementById('simCeoM4') || {}).value) || 0;
+  var totalMenores = (m1Price * nM1) + (m2Price * nM2) + (m3Price * nM3) + (m4Price * nM4);
+  var totalPersonas = numPers + nM1 + nM2 + nM3 + nM4;
+
+  // Descuentos porcentuales para display (calculados desde precios reales de BD)
+  var pct1 = pppBase > 0 && m1Price > 0 ? Math.round((1 - m1Price / pppBase) * 100) : (m1Price === 0 && pppBase > 0 ? 100 : 0);
+  var pct2 = pppBase > 0 && m2Price > 0 ? Math.round((1 - m2Price / pppBase) * 100) : (m2Price === 0 && pppBase > 0 ? 100 : 0);
+  var pct3 = pppBase > 0 && m3Price > 0 ? Math.round((1 - m3Price / pppBase) * 100) : (m3Price === 0 && pppBase > 0 ? 100 : 0);
+  var pct4 = pppBase > 0 && m4Price > 0 && m4Price < pppBase ? Math.round((1 - m4Price / pppBase) * 100) : 0;
+
+  // Actualizar labels dinámicos con porcentaje real del paquete seleccionado
+  var elPct1 = document.getElementById('simCeoM1Pct');
+  var elPct2 = document.getElementById('simCeoM2Pct');
+  var elPct3 = document.getElementById('simCeoM3Pct');
+  var elPct4 = document.getElementById('simCeoM4Pct');
+  if (elPct1) elPct1.textContent = pppBase > 0 ? (m1Price === 0 ? '100% dto. (gratis)' : pct1 + '% dto.') : '—';
+  if (elPct2) elPct2.textContent = pppBase > 0 ? (m2Price === 0 ? '100% dto.' : pct2 + '% dto.') : '—';
+  if (elPct3) elPct3.textContent = pppBase > 0 ? (m3Price === 0 ? '100% dto.' : pct3 + '% dto.') : '—';
+  if (elPct4) elPct4.textContent = pppBase > 0 ? (m4Price >= pppBase ? 'precio completo' : (m4Price === 0 ? '100% dto.' : pct4 + '% dto.')) : '—';
+
+  // Calcular total: precio por persona × cantidad de personas elegida + menores
+  var total = (pppBase * numPers) + totalMenores;
+  // Cuota base redondeada, última cuota ajustada
+  var cuotaBase  = Math.floor(total / cuotas * 100) / 100;
+  var ultCuota   = Math.round((total - cuotaBase * (cuotas - 1)) * 100) / 100;
+  var ppm = totalPersonas > 0 ? Math.round(cuotaBase / totalPersonas) : 0;
+  var ppDia = totalPersonas > 0 && noches > 0 ? Math.round(total / totalPersonas / noches) : 0;
+
+  if (elTotal) elTotal.textContent = 'USD ' + total.toLocaleString('es-AR');
+  if (elCuota) elCuota.textContent = 'USD ' + cuotaBase.toLocaleString('es-AR');
+  if (elPpm) elPpm.textContent = 'USD ' + ppm.toLocaleString('es-AR');
+
+  if (elDet) {
+    var html = '';
+    // Breakdown por tipo
+    html += '<div style="text-align:left;padding:6px 0;">';
+    html += '<div>Adultos: ' + numPers + ' × USD ' + pppBase.toLocaleString('es-AR') + ' = <strong>USD ' + (pppBase * numPers).toLocaleString('es-AR') + '</strong></div>';
+    if (nM1 > 0) html += '<div style="color:#fbbf24;">Bebé 0-2: ' + nM1 + ' × USD ' + m1Price.toLocaleString('es-AR') + ' (' + pct1 + '% dto.) = USD ' + (m1Price * nM1).toLocaleString('es-AR') + '</div>';
+    if (nM2 > 0) html += '<div style="color:#fbbf24;">Niño 3-5: ' + nM2 + ' × USD ' + m2Price.toLocaleString('es-AR') + ' (' + pct2 + '% dto.) = USD ' + (m2Price * nM2).toLocaleString('es-AR') + '</div>';
+    if (nM3 > 0) html += '<div style="color:#fbbf24;">Niño 6-11: ' + nM3 + ' × USD ' + m3Price.toLocaleString('es-AR') + ' (' + pct3 + '% dto.) = USD ' + (m3Price * nM3).toLocaleString('es-AR') + '</div>';
+    if (nM4 > 0) html += '<div style="color:#fbbf24;">Adolescente 12-17: ' + nM4 + ' × USD ' + m4Price.toLocaleString('es-AR') + ' (' + pct4 + '% dto.) = USD ' + (m4Price * nM4).toLocaleString('es-AR') + '</div>';
+    html += '</div>';
+    html += '<div style="border-top:1px solid var(--border);margin:6px 0;padding-top:6px;">';
+    html += '<strong>TOTAL: USD ' + total.toLocaleString('es-AR') + '</strong> · ' + cuotas + ' cuotas de <strong style="color:var(--purple);">USD ' + cuotaBase.toLocaleString('es-AR') + '</strong>';
+    if (ultCuota !== cuotaBase) html += ' <span style="font-size:.75rem;">(última: USD ' + ultCuota.toLocaleString('es-AR') + ')</span>';
+    html += '</div>';
+    // Info adicional
+    html += '<span style="font-size:.78rem;">' + totalPersonas + ' personas · ' + noches + ' noches · USD ' + ppDia + '/pers/día</span>';
+    if (numPers !== origPers) {
+      html += '<br><span style="font-size:.72rem;color:#fbbf24;">Paquete original: ' + origPers + ' personas — cotización ajustada a ' + numPers + ' adultos</span>';
     }
-    simLoadTable();
-  } catch (e) { showToast('Error: ' + e.message); }
-  finally { if (btn) { btn.disabled = false; btn.textContent = '💾 Guardar'; } }
+    // Ocupación warning
+    var habNecesarias = Math.ceil(totalPersonas / maxOcup);
+    if (totalPersonas > maxOcup) {
+      html += '<br><div style="margin-top:6px;padding:8px;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.25);border-radius:8px;font-size:.75rem;">⚠️ Ocupación: ' + totalPersonas + ' personas — SUPERA máximo ' + maxOcup + '. Necesitás ' + habNecesarias + ' habitaciones.</div>';
+    } else if (nM1 + nM2 + nM3 + nM4 > 0) {
+      html += '<br><div style="margin-top:6px;padding:8px;background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.2);border-radius:8px;font-size:.75rem;">✅ Ocupación: ' + totalPersonas + ' personas (máx ' + maxOcup + ' por habitación) · 1 habitación</div>';
+    }
+    elDet.innerHTML = html;
+  }
 }
-
-function simModalEditar(id) {
-  var item = _simCatalogo.find(function(p) { return p.id === id; });
-  if (!item) return;
-  var persOpts = [1,2,4,6,8,10].map(function(n) { return '<option value="' + n + '"' + (item.personas === n ? ' selected' : '') + '>' + (n === 1 ? 'Individual (1)' : n === 2 ? 'En par (2)' : 'Grupo ' + n) + '</option>'; }).join('');
-
-  var h = '<div class="mhead"><div><h2>✏️ Editar Paquete</h2><p style="font-size:.72rem;color:var(--muted);">' + esc(item.nombre_destino) + ' · ID ' + item.id + '</p></div><button class="mclose" onclick="closeModal()">✕</button></div>'
-    + '<div class="mbody" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
-    + '<div class="mitem"><div class="ml">Paquete</div><input id="simEdPkg" class="medit" value="' + esc(item.paquete) + '"></div>'
-    + '<div class="mitem"><div class="ml">Personas</div><select id="simEdPers" class="msel" onchange="simEdPreview()">' + persOpts + '</select></div>'
-    + '<div class="mitem"><div class="ml">Noches</div><input id="simEdNoc" type="number" class="medit" value="' + item.noches + '" min="1" oninput="simEdPreview()"></div>'
-    + '<div class="mitem"><div class="ml">Precio USD</div><input id="simEdPre" type="number" class="medit" value="' + item.precio_usd + '" min="1" oninput="simEdPreview()"></div>'
-    + '</div>'
-    + '<div id="simEdPreview" style="margin:0 24px 12px;padding:10px;background:rgba(0,0,0,.2);border-radius:8px;font-size:.78rem;color:var(--muted);text-align:center;"></div>'
-    + '<div class="mact"><button class="mbtn gold" onclick="simSaveEditar(' + id + ')">💾 Guardar</button><button class="mbtn ghost" onclick="closeModal()">Cancelar</button></div>';
-  document.getElementById('mbox').innerHTML = h;
-  document.getElementById('modal').classList.add('open');
-  simEdPreview();
-}
-
-function simEdPreview() {
-  var pre = parseFloat((document.getElementById('simEdPre') || {}).value) || 0;
-  var per = parseInt((document.getElementById('simEdPers') || {}).value) || 1;
-  var noc = parseInt((document.getElementById('simEdNoc') || {}).value) || 1;
-  var el = document.getElementById('simEdPreview');
-  if (!el || pre <= 0) return;
-  var c12 = Math.round(pre / 12);
-  var pm = Math.round(c12 / per);
-  var pd = Math.round(pre / per / noc);
-  el.innerHTML = 'Cuota 12x: <strong style="color:var(--purple);">USD ' + c12.toLocaleString('es-AR') + '</strong> · USD/pers/mes: <strong style="color:var(--cyan);">' + pm.toLocaleString('es-AR') + '</strong> · USD/pers/día: <strong style="color:var(--green);">' + pd.toLocaleString('es-AR') + '</strong>';
-}
-
-async function simSaveEditar(id) {
-  var u = {
-    paquete: (document.getElementById('simEdPkg') || {}).value.trim(),
-    personas: parseInt((document.getElementById('simEdPers') || {}).value) || 2,
-    noches: parseInt((document.getElementById('simEdNoc') || {}).value) || 7,
-    precio_usd: parseFloat((document.getElementById('simEdPre') || {}).value)
-  };
-  if (!u.paquete || !u.precio_usd) { showToast('Completá los campos'); return; }
-  var btn = document.querySelector('#modal .mbtn.gold');
-  if (btn) { btn.disabled = true; btn.textContent = 'Guardando...'; }
-  try {
-    var r = await sbClient.from('catalogo_precios').update(u).eq('id', id);
-    if (r.error) throw r.error;
-    showToast('Paquete actualizado');
-    closeModal(); simLoadTable();
-  } catch (e) { showToast('Error: ' + e.message); }
-  finally { if (btn) { btn.disabled = false; btn.textContent = '💾 Guardar'; } }
-}
-
-async function simToggleActivo(id) {
-  if (!confirm('Desactivar este paquete? Podés reactivarlo desde Catálogo.')) return;
-  try {
-    var r = await sbClient.from('catalogo_precios').update({ activo: false }).eq('id', id);
-    if (r.error) throw r.error;
-    showToast('Paquete desactivado');
-    simLoadTable();
-  } catch (e) { showToast('Error: ' + e.message); }
-}
-
-// Legacy wrappers
-function simOnDestinoChange() {}
-function simLoadDestinos() { simLoadTable(); }
 
 
 // ════════════════════════════════════════════════════════════════
@@ -6662,12 +6671,22 @@ function openAddPaquete(defaultSlug) {
     + '<div class="mitem"><div class="ml">Precio total USD *</div><input id="catPkgPrecio" type="number" class="medit" placeholder="Ej: 3500" min="1"></div>'
     + '<div class="mitem"><div class="ml">Orden</div><input id="catPkgOrden" type="number" class="medit" value="0"></div>'
     + '</div>'
+    // ── Menores de edad ──
+    + '<div style="margin-top:4px;padding:12px;background:rgba(251,191,36,.06);border:1px solid rgba(251,191,36,.15);border-radius:10px;">'
+    + '<div style="font-size:.72rem;font-weight:700;color:#fbbf24;margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px;">👶 Precios por menor de edad</div>'
+    + '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">'
+    + '<div class="mitem" style="margin:0;"><div class="ml" style="font-size:.62rem;">Precio Bebé 0-2 USD <span id="catM1Pct" style="color:#fbbf24;">—</span></div><input id="catPkgMenor1" type="number" class="medit" value="0" min="0" placeholder="0" oninput="_catPkgPreview()"></div>'
+    + '<div class="mitem" style="margin:0;"><div class="ml" style="font-size:.62rem;">Precio Niño 3-5 USD <span id="catM2Pct" style="color:#fbbf24;">—</span></div><input id="catPkgMenor2" type="number" class="medit" value="0" min="0" placeholder="0" oninput="_catPkgPreview()"></div>'
+    + '<div class="mitem" style="margin:0;"><div class="ml" style="font-size:.62rem;">Precio Niño 6-11 USD <span id="catM3Pct" style="color:#fbbf24;">—</span></div><input id="catPkgMenor3" type="number" class="medit" value="0" min="0" placeholder="0" oninput="_catPkgPreview()"></div>'
+    + '<div class="mitem" style="margin:0;"><div class="ml" style="font-size:.62rem;">Precio Adolescente 12-17 USD <span id="catM4Pct" style="color:#fbbf24;">—</span></div><input id="catPkgMenor4" type="number" class="medit" value="0" min="0" placeholder="0" oninput="_catPkgPreview()"></div>'
+    + '<div class="mitem" style="margin:0;"><div class="ml" style="font-size:.62rem;">Máx. ocupación habitación</div><select id="catPkgMaxOcup" class="msel"><option value="2">2</option><option value="3">3</option><option value="4" selected>4</option><option value="5">5</option><option value="6">6</option></select></div>'
+    + '</div></div>'
     + '<div id="catPkgPreview" style="margin:12px 24px;padding:12px;background:rgba(0,0,0,.2);border-radius:10px;font-size:.78rem;color:var(--muted);text-align:center;">Ingresá los datos para ver la estimación</div>'
     + '<div class="mact"><button class="mbtn gold" onclick="saveAddPaquete()">💾 Guardar paquete</button><button class="mbtn ghost" onclick="closeModal()">Cancelar</button></div>';
   document.getElementById('mbox').innerHTML = h;
   document.getElementById('modal').classList.add('open');
   // Add live preview
-  ['catPkgPersonas','catPkgPrecio','catPkgNoches'].forEach(function(id) {
+  ['catPkgPersonas','catPkgPrecio','catPkgNoches','catPkgMenor1','catPkgMenor2','catPkgMenor3','catPkgMenor4'].forEach(function(id) {
     var el = document.getElementById(id); if (el) el.addEventListener('input', _catPkgPreview);
   });
 }
@@ -6676,11 +6695,33 @@ function _catPkgPreview() {
   var pers = parseInt((document.getElementById('catPkgPersonas') || {}).value, 10) || 0;
   var prec = parseFloat((document.getElementById('catPkgPrecio') || {}).value) || 0;
   var noch = parseInt((document.getElementById('catPkgNoches') || {}).value, 10) || 0;
+  var m1 = parseFloat((document.getElementById('catPkgMenor1') || {}).value) || 0;
+  var m2 = parseFloat((document.getElementById('catPkgMenor2') || {}).value) || 0;
+  var m3 = parseFloat((document.getElementById('catPkgMenor3') || {}).value) || 0;
+  var m4 = parseFloat((document.getElementById('catPkgMenor4') || {}).value) || 0;
   var el = document.getElementById('catPkgPreview'); if (!el) return;
   if (!pers || !prec) { el.innerHTML = 'Ingresá los datos para ver la estimación'; return; }
   var ppm10 = Math.round((prec / 10) / pers);
   var ppd = noch > 0 ? Math.round(prec / noch / pers) : 0;
-  el.innerHTML = 'USD ' + ppm10 + '/persona/mes (10 cuotas) · USD ' + ppd + '/persona/día (' + noch + ' noches)';
+  var pppBase = pers > 0 ? Math.round(prec / pers) : 0;
+  var html = 'USD ' + ppm10 + '/persona/mes (10 cuotas) · USD ' + ppd + '/persona/día (' + noch + ' noches)';
+  // Show menor percentages if any price is set
+  // Actualizar labels dinámicos del formulario con % real
+  var cL1=document.getElementById('catM1Pct'), cL2=document.getElementById('catM2Pct'), cL3=document.getElementById('catM3Pct'), cL4=document.getElementById('catM4Pct');
+  if (cL1) cL1.textContent = pppBase > 0 ? (m1 === 0 ? '100% dto. (gratis)' : Math.round((1 - m1 / pppBase) * 100) + '% dto.') : '—';
+  if (cL2) cL2.textContent = pppBase > 0 ? (m2 === 0 ? '100% dto.' : Math.round((1 - m2 / pppBase) * 100) + '% dto.') : '—';
+  if (cL3) cL3.textContent = pppBase > 0 ? (m3 === 0 ? '100% dto.' : Math.round((1 - m3 / pppBase) * 100) + '% dto.') : '—';
+  if (cL4) cL4.textContent = pppBase > 0 ? (m4 >= pppBase ? 'precio completo' : (m4 === 0 ? '100% dto.' : Math.round((1 - m4 / pppBase) * 100) + '% dto.')) : '—';
+  if (m1 > 0 || m2 > 0 || m3 > 0 || m4 > 0) {
+    html += '<br><span style="font-size:.7rem;color:#fbbf24;">👶 Menores: ';
+    var parts = [];
+    if (m1 > 0) parts.push('0-2: USD ' + m1 + (pppBase > 0 ? ' (' + Math.round((1 - m1 / pppBase) * 100) + '% dto.)' : ''));
+    if (m2 > 0) parts.push('3-5: USD ' + m2 + (pppBase > 0 ? ' (' + Math.round((1 - m2 / pppBase) * 100) + '% dto.)' : ''));
+    if (m3 > 0) parts.push('6-11: USD ' + m3 + (pppBase > 0 ? ' (' + Math.round((1 - m3 / pppBase) * 100) + '% dto.)' : ''));
+    if (m4 > 0) parts.push('12-17: USD ' + m4 + (pppBase > 0 ? (m4 >= pppBase ? ' (precio completo)' : ' (' + Math.round((1 - m4 / pppBase) * 100) + '% dto.)') : ''));
+    html += parts.join(' · ') + '</span>';
+  }
+  el.innerHTML = html;
 }
 
 async function saveAddPaquete() {
@@ -6694,7 +6735,13 @@ async function saveAddPaquete() {
   // Get destino name from cache
   var destObj = _catCache.find(function(p) { return p.slug === slug; });
   var nombreDestino = destObj ? destObj.nombre_destino : slug;
-  var d = { nombre_destino: nombreDestino, slug: slug, paquete: paquete, personas: personas, noches: noches, precio_usd: precio, orden: orden, activo: true };
+  var d = { nombre_destino: nombreDestino, slug: slug, paquete: paquete, personas: personas, noches: noches, precio_usd: precio, orden: orden, activo: true,
+    precio_menor_1: parseFloat((document.getElementById('catPkgMenor1') || {}).value) || 0,
+    precio_menor_2: parseFloat((document.getElementById('catPkgMenor2') || {}).value) || 0,
+    precio_menor_3: parseFloat((document.getElementById('catPkgMenor3') || {}).value) || 0,
+    precio_menor_4: parseFloat((document.getElementById('catPkgMenor4') || {}).value) || 0,
+    max_ocupacion: parseInt((document.getElementById('catPkgMaxOcup') || {}).value, 10) || 4
+  };
   var btn = document.querySelector('#modal .mbtn.gold'); if (btn) btn.disabled = true;
   try { var r = await sbClient.from('catalogo_precios').insert([d]); if (r.error) throw r.error; showToast('✅ Paquete "' + paquete + '" agregado'); closeModal(); renderCatalogo(); }
   catch (e) { showToast('❌ ' + e.message); } finally { if (btn) btn.disabled = false; }
@@ -6715,15 +6762,36 @@ async function openEditCatalogo(id) {
     + '<div class="mitem"><div class="ml">Orden</div><input id="eCatOrd" type="number" class="medit" value="' + (d.orden || 0) + '"></div>'
     + '<div class="mitem"><div class="ml">Estado</div><select id="eCatAct" class="msel"><option value="true"' + (d.activo ? ' selected' : '') + '>✅ Activo</option><option value="false"' + (!d.activo ? ' selected' : '') + '>❌ Inactivo</option></select></div>'
     + '</div>'
+    // ── Menores de edad ──
+    + '<div style="margin-top:4px;padding:12px;background:rgba(251,191,36,.06);border:1px solid rgba(251,191,36,.15);border-radius:10px;">'
+    + '<div style="font-size:.72rem;font-weight:700;color:#fbbf24;margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px;">👶 Precios por menor de edad</div>'
+    + '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">'
+    + '<div class="mitem" style="margin:0;"><div class="ml" style="font-size:.62rem;">Precio Bebé 0-2 USD <span id="eCatM1Pct" style="color:#fbbf24;">—</span></div><input id="eCatMenor1" type="number" class="medit" value="' + (d.precio_menor_1 || 0) + '" min="0"></div>'
+    + '<div class="mitem" style="margin:0;"><div class="ml" style="font-size:.62rem;">Precio Niño 3-5 USD <span id="eCatM2Pct" style="color:#fbbf24;">—</span></div><input id="eCatMenor2" type="number" class="medit" value="' + (d.precio_menor_2 || 0) + '" min="0"></div>'
+    + '<div class="mitem" style="margin:0;"><div class="ml" style="font-size:.62rem;">Precio Niño 6-11 USD <span id="eCatM3Pct" style="color:#fbbf24;">—</span></div><input id="eCatMenor3" type="number" class="medit" value="' + (d.precio_menor_3 || 0) + '" min="0"></div>'
+    + '<div class="mitem" style="margin:0;"><div class="ml" style="font-size:.62rem;">Precio Adolescente 12-17 USD <span id="eCatM4Pct" style="color:#fbbf24;">—</span></div><input id="eCatMenor4" type="number" class="medit" value="' + (d.precio_menor_4 || 0) + '" min="0"></div>'
+    + '<div class="mitem" style="margin:0;"><div class="ml" style="font-size:.62rem;">Máx. ocupación habitación</div><select id="eCatMaxOcup" class="msel"><option value="2"' + ((d.max_ocupacion || 4) == 2 ? ' selected' : '') + '>2</option><option value="3"' + ((d.max_ocupacion || 4) == 3 ? ' selected' : '') + '>3</option><option value="4"' + ((d.max_ocupacion || 4) == 4 ? ' selected' : '') + '>4</option><option value="5"' + ((d.max_ocupacion || 4) == 5 ? ' selected' : '') + '>5</option><option value="6"' + ((d.max_ocupacion || 4) == 6 ? ' selected' : '') + '>6</option></select></div>'
+    + '</div></div>'
     + '<div id="eCatPreview" style="margin:12px 24px;padding:12px;background:rgba(0,0,0,.2);border-radius:10px;font-size:.78rem;color:var(--muted);text-align:center;">USD ' + Math.round((d.precio_usd / 10) / d.personas) + '/persona/mes (10 cuotas)</div>'
     + '<div class="mact"><button class="mbtn gold" onclick="saveEditCatalogo(' + d.id + ')">💾 Guardar cambios</button><button class="mbtn ghost" onclick="closeModal()">Cancelar</button></div>';
   document.getElementById('mbox').innerHTML = h;
   document.getElementById('modal').classList.add('open');
-  ['eCatPer','eCatPre','eCatNoc'].forEach(function(id) {
+  ['eCatPer','eCatPre','eCatNoc','eCatMenor1','eCatMenor2','eCatMenor3','eCatMenor4'].forEach(function(id) {
     var el = document.getElementById(id); if (el) el.addEventListener('input', function() {
       var p = parseInt(document.getElementById('eCatPer').value,10)||1;
       var pr = parseFloat(document.getElementById('eCatPre').value)||0;
+      var ppBase = p > 0 ? Math.round(pr / p) : 0;
       document.getElementById('eCatPreview').innerHTML = 'USD ' + Math.round((pr/10)/p) + '/persona/mes (10 cuotas)';
+      // Update menor labels dynamically
+      var m1v = parseFloat((document.getElementById('eCatMenor1')||{}).value)||0;
+      var m2v = parseFloat((document.getElementById('eCatMenor2')||{}).value)||0;
+      var m3v = parseFloat((document.getElementById('eCatMenor3')||{}).value)||0;
+      var m4v = parseFloat((document.getElementById('eCatMenor4')||{}).value)||0;
+      var e1=document.getElementById('eCatM1Pct'), e2=document.getElementById('eCatM2Pct'), e3=document.getElementById('eCatM3Pct'), e4=document.getElementById('eCatM4Pct');
+      if (e1) e1.textContent = ppBase > 0 ? (m1v === 0 ? '100% dto. (gratis)' : Math.round((1 - m1v / ppBase) * 100) + '% dto.') : '—';
+      if (e2) e2.textContent = ppBase > 0 ? (m2v === 0 ? '100% dto.' : Math.round((1 - m2v / ppBase) * 100) + '% dto.') : '—';
+      if (e3) e3.textContent = ppBase > 0 ? (m3v === 0 ? '100% dto.' : Math.round((1 - m3v / ppBase) * 100) + '% dto.') : '—';
+      if (e4) e4.textContent = ppBase > 0 ? (m4v >= ppBase ? 'precio completo' : (m4v === 0 ? '100% dto.' : Math.round((1 - m4v / ppBase) * 100) + '% dto.')) : '—';
     });
   });
 }
@@ -6737,7 +6805,12 @@ async function saveEditCatalogo(id) {
     noches: parseInt(document.getElementById('eCatNoc').value, 10) || 7,
     precio_usd: parseFloat(document.getElementById('eCatPre').value),
     orden: parseInt(document.getElementById('eCatOrd').value, 10) || 0,
-    activo: document.getElementById('eCatAct').value === 'true'
+    activo: document.getElementById('eCatAct').value === 'true',
+    precio_menor_1: parseFloat((document.getElementById('eCatMenor1') || {}).value) || 0,
+    precio_menor_2: parseFloat((document.getElementById('eCatMenor2') || {}).value) || 0,
+    precio_menor_3: parseFloat((document.getElementById('eCatMenor3') || {}).value) || 0,
+    precio_menor_4: parseFloat((document.getElementById('eCatMenor4') || {}).value) || 0,
+    max_ocupacion: parseInt((document.getElementById('eCatMaxOcup') || {}).value, 10) || 4
   };
   if (!u.nombre_destino || !u.paquete || !u.personas || !u.precio_usd) { showToast('⚠️ Completá campos obligatorios'); return; }
   var btn = document.querySelector('#modal .mbtn.gold'); if (btn) btn.disabled = true;
