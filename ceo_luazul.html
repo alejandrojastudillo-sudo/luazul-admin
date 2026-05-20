@@ -5,7 +5,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- CEO v4.7 — Simulador simplificado (preview catálogo) · Catálogo CRUD con menores, destinos, paquetes editables · 2026-05-20 -->
+<!-- CEO v4.8 — Simulador + Catálogo fusionado (estilo Divisas) · CRUD completo con menores, destinos, paquetes · 2026-05-20 -->
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="manifest" href="manifest_ceo.json">
   <meta name="theme-color" content="#0B3D91">
@@ -189,7 +189,7 @@ optgroup{background:#0a1128;color:#a78bfa;font-weight:700;}
 .cat-kpi{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;}
 .cat-kpi .cat-kpi-v{font-family:'Syne',sans-serif;font-size:1.3rem;font-weight:800;}
 .cat-kpi .cat-kpi-l{font-size:.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-top:2px;}
-@media(max-width:900px){.cat-table-head,.cat-table-row{grid-template-columns:1fr;gap:4px;}.cat-table-head{display:none;}.cat-table-row{padding:14px;}.cat-ppm{margin-top:2px;}}
+@media(max-width:900px){.cat-table-head,.cat-table-row{grid-template-columns:1fr!important;gap:4px;}.cat-table-head{display:none;}.cat-table-row{padding:14px;}.cat-ppm{margin-top:2px;}}
 .ref-badge{padding:3px 10px;border-radius:20px;font-size:.7rem;font-weight:700;}
 .ref-badge.confirmado{background:var(--green-bg);color:var(--green);border:1px solid var(--green-bd);}
 .ref-badge.pendiente{background:var(--gold-bg);color:var(--gold);border:1px solid var(--gold-bd);}
@@ -267,9 +267,8 @@ optgroup{background:#0a1128;color:#a78bfa;font-weight:700;}
       <div class="tab" onclick="showTab('auditoria')" id="tab-auditoria" style="color:#fca5a5;">👁️ Auditoría</div>
       <div class="tab" onclick="showTab('vouchers')" id="tab-vouchers" style="color:#fbbf24;">🎟️ Vouchers</div>
       <div class="tab" onclick="showTab('divisas')" id="tab-divisas" style="color:#22d3ee;">💱 Divisas</div>
-      <div class="tab" onclick="showTab('simulador')" id="tab-simulador" style="color:#a78bfa;">📊 Simulador</div>
+      <div class="tab" onclick="showTab('simulador')" id="tab-simulador" style="color:#a78bfa;">📊 Simulador y Catálogo</div>
       <div class="tab" onclick="showTab('tickets')" id="tab-tickets" style="color:#fb923c;">🎫 Tickets</div>
-      <div class="tab" onclick="showTab('catalogo')" id="tab-catalogo" style="color:#fbbf24;">🏷️ Catálogo</div>
     </div>
 
     <!-- ══ OVERVIEW ══ -->
@@ -557,21 +556,34 @@ optgroup{background:#0a1128;color:#a78bfa;font-weight:700;}
       </div>
     </div>
 
-    <!-- ═══ SIMULADOR DE CUOTAS (simple estilo divisa) ═══ -->
+    <!-- ══ SIMULADOR Y CATÁLOGO (estilo Divisas — funcional/editor) ══ -->
     <div class="tabpg" id="tabpg-simulador">
       <div class="sec-head">
-        <h2>📊 Simulador de Cuotas</h2>
-        <button onclick="openSimuladorCeo()" class="addbtn" style="background:linear-gradient(135deg,#059669,#10b981);">🧮 Abrir Simulador</button>
+        <h2>📊 Simulador y Catálogo</h2>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="addbtn" onclick="openSimuladorCeo()" style="background:linear-gradient(135deg,#059669,#10b981);">🧮 Calculadora rápida</button>
+          <button class="addbtn" onclick="openAddDestino()">🌍 Nuevo destino</button>
+          <button class="addbtn" onclick="openAddPaquete()">➕ Nuevo paquete</button>
+        </div>
       </div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-bottom:20px;">
-        <div class="kpi"><div class="kpi-v" id="simKpiDest" style="color:var(--gold);">—</div><div class="kpi-l">Destinos disponibles</div></div>
-        <div class="kpi"><div class="kpi-v" id="simKpiPkg" style="color:var(--purple);">—</div><div class="kpi-l">Paquetes activos</div></div>
-        <div class="kpi"><div class="kpi-v" id="simKpiDesde" style="color:var(--green);">—</div><div class="kpi-l">Desde USD/pers</div></div>
+      <div id="catKpis" class="cat-kpi-row"></div>
+      <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;align-items:center;">
+        <select id="catFiltroDestino" onchange="renderCatalogo()" class="msel" style="width:auto;min-width:160px;">
+          <option value="">Todos los destinos</option>
+        </select>
+        <select id="catFiltroEstado" onchange="renderCatalogo()" class="msel" style="width:auto;">
+          <option value="">Todos los estados</option>
+          <option value="true">✅ Activos</option>
+          <option value="false">❌ Inactivos</option>
+        </select>
+        <input type="text" id="catBusqueda" placeholder="🔍 Buscar paquete..." oninput="renderCatalogo()" class="medit" style="width:220px;">
+        <div style="margin-left:auto;font-size:.75rem;color:var(--muted);"><span id="catCount">0</span> paquetes</div>
       </div>
-      <div class="twrap" style="padding:24px;text-align:center;">
-        <div style="font-size:2.5rem;margin-bottom:12px;">🧮</div>
-        <p style="color:var(--muted);font-size:.9rem;margin-bottom:6px;">Hacé clic en <strong>"Abrir Simulador"</strong> para cotizar un paquete</p>
-        <p style="color:var(--muted);font-size:.78rem;">Elegí destino, paquete, cantidad de personas (1, 3, 5...) y cuotas</p>
+      <div class="cat-table-wrap">
+        <div class="cat-table-head" style="grid-template-columns:14% 18% 7% 7% 10% 11% 14% 7% 12%;">
+          <div>Destino</div><div>Paquete</div><div>Pers.</div><div>Noch.</div><div>Precio USD</div><div>USD/pers/mes</div><div>Menores</div><div>Estado</div><div>Acciones</div>
+        </div>
+        <div id="catalogoBody"></div>
       </div>
     </div>
 
@@ -610,36 +622,6 @@ optgroup{background:#0a1128;color:#a78bfa;font-weight:700;}
     </div>
     </div>
 
-
-    <!-- ══ CATÁLOGO DE PRECIOS Y SIMULADOR (CRUD PROFESIONAL) ══ -->
-    <div class="tabpg" id="tabpg-catalogo">
-      <div class="sec-head">
-        <h2>🏷️ Catálogo de Precios y Paquetes</h2>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;">
-          <button class="addbtn" onclick="openAddDestino()">🌍 Nuevo destino</button>
-          <button class="addbtn" onclick="openAddPaquete()">➕ Nuevo paquete</button>
-        </div>
-      </div>
-      <div id="catKpis" class="cat-kpi-row"></div>
-      <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;align-items:center;">
-        <select id="catFiltroDestino" onchange="renderCatalogo()" class="msel" style="width:auto;min-width:160px;">
-          <option value="">Todos los destinos</option>
-        </select>
-        <select id="catFiltroEstado" onchange="renderCatalogo()" class="msel" style="width:auto;">
-          <option value="">Todos los estados</option>
-          <option value="true">✅ Activos</option>
-          <option value="false">❌ Inactivos</option>
-        </select>
-        <input type="text" id="catBusqueda" placeholder="🔍 Buscar paquete..." oninput="renderCatalogo()" class="medit" style="width:220px;">
-        <div style="margin-left:auto;font-size:.75rem;color:var(--muted);"><span id="catCount">0</span> paquetes</div>
-      </div>
-      <div class="cat-table-wrap">
-        <div class="cat-table-head">
-          <div>Destino</div><div>Paquete</div><div>Pers.</div><div>Noches</div><div>Precio USD</div><div>USD/pers/mes</div><div>Orden</div><div>Estado</div><div>Acciones</div>
-        </div>
-        <div id="catalogoBody"></div>
-      </div>
-    </div>
 
     <!-- ══ PREMIOS POR REFERIDOS ══ -->
     <div class="tabpg" id="tabpg-premios_referidos">
@@ -1593,9 +1575,9 @@ function showTab(id){
   if(id==='vouchers')         renderVoucherClientes();
   // ── Checkpoint v3.2: DIVISAS, SIMULADOR, TICKETS ──
   if(id==='divisas')          renderDivisas();
-  if(id==='simulador')        simLoadKpis();
+  if(id==='simulador')        renderCatalogo();
+  if(id==='catalogo')          showTab('simulador');
   if(id==='tickets')          cargarTickets();
-  if(id==='catalogo')          renderCatalogo();
   if(id==='premios_referidos') renderPremiosReferidos();
   if(id==='auditoria')         renderAuditoria();
 }
@@ -6533,14 +6515,25 @@ async function renderCatalogo() {
         html += '<div class="cat-dest-group">' + esc(lastDest) + '<span>' + destCount + ' paquete' + (destCount > 1 ? 's' : '') + ' · slug: ' + esc(p.slug) + '</span></div>';
       }
       var ppm10 = p.personas > 0 ? Math.round((p.precio_usd / 10) / p.personas) : 0;
-      html += '<div class="cat-table-row' + (p.activo ? '' : ' inactive') + '">'
+      var pppBase = p.personas > 0 ? Math.round(p.precio_usd / p.personas) : 0;
+      // Menores summary
+      var mCount = 0;
+      var mParts = [];
+      if (p.precio_menor_1 > 0) { mCount++; mParts.push('0-2:' + Math.round((1 - p.precio_menor_1 / pppBase) * 100) + '%'); }
+      if (p.precio_menor_2 > 0) { mCount++; mParts.push('3-5:' + Math.round((1 - p.precio_menor_2 / pppBase) * 100) + '%'); }
+      if (p.precio_menor_3 > 0) { mCount++; mParts.push('6-11:' + Math.round((1 - p.precio_menor_3 / pppBase) * 100) + '%'); }
+      if (p.precio_menor_4 > 0) { mCount++; mParts.push('12-17:' + Math.round((1 - p.precio_menor_4 / pppBase) * 100) + '%'); }
+      var mHtml = mCount > 0 ? '<span style="color:#fbbf24;font-size:.68rem;font-weight:700;">👶 ' + mParts.join(' · ') + '</span>' : '<span style="color:var(--muted);font-size:.68rem;">—</span>';
+      var maxOcupHtml = p.max_ocupacion ? '<br><span style="font-size:.58rem;color:var(--muted);">Max.ocup: ' + p.max_ocupacion + '</span>' : '';
+
+      html += '<div class="cat-table-row' + (p.activo ? '' : ' inactive') + '" style="grid-template-columns:14% 18% 7% 7% 10% 11% 14% 7% 12%;">'
         + '<div style="font-weight:700;font-size:.78rem;">' + esc(p.nombre_destino) + '</div>'
         + '<div>' + esc(p.paquete) + '</div>'
         + '<div>' + p.personas + '</div>'
         + '<div>' + p.noches + '</div>'
         + '<div style="font-weight:800;color:var(--gold);">USD ' + p.precio_usd.toLocaleString('es-AR') + '</div>'
         + '<div class="cat-ppm">USD ' + ppm10 + '<span style="font-size:.62rem;color:var(--muted);"> /10c</span></div>'
-        + '<div style="color:var(--muted);">' + (p.orden || 0) + '</div>'
+        + '<div>' + mHtml + maxOcupHtml + '</div>'
         + '<div><span class="cat-status ' + (p.activo ? 'active' : 'inactive') + '" onclick="toggleCatalogoActivo(' + p.id + ')">' + (p.activo ? '● Activo' : '○ Inactivo') + '</span></div>'
         + '<div style="display:flex;gap:4px;">'
         + '<button class="cat-act-btn edit" onclick="openEditCatalogo(' + p.id + ')" title="Editar">✏️</button>'
@@ -6566,6 +6559,16 @@ function openAddDestino() {
     + '<div class="mitem"><div class="ml">Noches</div><input id="newDestNoches" type="number" class="medit" value="7" min="1"></div>'
     + '<div class="mitem"><div class="ml">Precio USD *</div><input id="newDestPrecio" type="number" class="medit" placeholder="Ej: 3500" min="1"></div>'
     + '</div>'
+    // ── Menores de edad ──
+    + '<div style="margin-top:4px;padding:12px;background:rgba(251,191,36,.06);border:1px solid rgba(251,191,36,.15);border-radius:10px;">'
+    + '<div style="font-size:.72rem;font-weight:700;color:#fbbf24;margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px;">👶 Precios por menor de edad</div>'
+    + '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">'
+    + '<div class="mitem" style="margin:0;"><div class="ml" style="font-size:.62rem;">Precio Bebé 0-2 USD</div><input id="newDestMenor1" type="number" class="medit" value="0" min="0"></div>'
+    + '<div class="mitem" style="margin:0;"><div class="ml" style="font-size:.62rem;">Precio Niño 3-5 USD</div><input id="newDestMenor2" type="number" class="medit" value="0" min="0"></div>'
+    + '<div class="mitem" style="margin:0;"><div class="ml" style="font-size:.62rem;">Precio Niño 6-11 USD</div><input id="newDestMenor3" type="number" class="medit" value="0" min="0"></div>'
+    + '<div class="mitem" style="margin:0;"><div class="ml" style="font-size:.62rem;">Precio Adolescente 12-17 USD</div><input id="newDestMenor4" type="number" class="medit" value="0" min="0"></div>'
+    + '<div class="mitem" style="margin:0;"><div class="ml" style="font-size:.62rem;">Máx. ocupación habitación</div><select id="newDestMaxOcup" class="msel"><option value="2">2</option><option value="3">3</option><option value="4" selected>4</option><option value="5">5</option><option value="6">6</option></select></div>'
+    + '</div></div>'
     + '<div class="mact"><button class="mbtn gold" onclick="saveAddDestino()">💾 Crear destino</button><button class="mbtn ghost" onclick="closeModal()">Cancelar</button></div>';
   document.getElementById('mbox').innerHTML = h;
   document.getElementById('modal').classList.add('open');
@@ -6579,7 +6582,13 @@ async function saveAddDestino() {
   var noches = parseInt(document.getElementById('newDestNoches').value, 10) || 7;
   var precio = parseFloat(document.getElementById('newDestPrecio').value);
   if (!nombre || !slug || !paquete || !personas || !precio) { showToast('⚠️ Completá todos los campos obligatorios'); return; }
-  var d = { nombre_destino: nombre, slug: slug, paquete: paquete, personas: personas, noches: noches, precio_usd: precio, orden: 0, activo: true };
+  var d = { nombre_destino: nombre, slug: slug, paquete: paquete, personas: personas, noches: noches, precio_usd: precio, orden: 0, activo: true,
+    precio_menor_1: parseFloat((document.getElementById('newDestMenor1') || {}).value) || 0,
+    precio_menor_2: parseFloat((document.getElementById('newDestMenor2') || {}).value) || 0,
+    precio_menor_3: parseFloat((document.getElementById('newDestMenor3') || {}).value) || 0,
+    precio_menor_4: parseFloat((document.getElementById('newDestMenor4') || {}).value) || 0,
+    max_ocupacion: parseInt((document.getElementById('newDestMaxOcup') || {}).value, 10) || 4
+  };
   var btn = document.querySelector('#modal .mbtn.gold'); if (btn) btn.disabled = true;
   try { var r = await sbClient.from('catalogo_precios').insert([d]); if (r.error) throw r.error; showToast('✅ Destino "' + nombre + '" creado con paquete base'); closeModal(); renderCatalogo(); }
   catch (e) { showToast('❌ ' + e.message); } finally { if (btn) btn.disabled = false; }
