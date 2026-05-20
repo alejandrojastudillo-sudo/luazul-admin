@@ -5,7 +5,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- CEO v4.6 — Menores de edad: Catálogo + Simulador con franjas etarias (0-2, 3-5, 6-11, 12-17), % descuento, max_ocupacion · 2026-05-20 -->
+<!-- CEO v4.7 — Simulador simplificado (preview catálogo) · Catálogo CRUD con menores, destinos, paquetes editables · 2026-05-20 -->
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="manifest" href="manifest_ceo.json">
   <meta name="theme-color" content="#0B3D91">
@@ -6080,27 +6080,17 @@ function simLoadKpis() {
 function openSimuladorCeo() {
   if (!sbClient) { showToast('Sin conexión a BD'); return; }
 
-  var h = '<div class="mhead"><div><h2>🧮 Simulador de Cuotas</h2><p>Elegí destino, paquete, personas y cuotas</p></div><button class="mclose" onclick="closeModal()">✕</button></div>'
+  var h = '<div class="mhead"><div><h2>🧮 Simulador de Cuotas</h2><p>Elegí destino, paquete y cuotas — preview rápido del catálogo</p></div><button class="mclose" onclick="closeModal()">✕</button></div>'
     + '<div class="mbody">'
     // Fila 1: Destino + Paquete
     + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;">'
     + '<div class="mitem"><div class="ml">Destino</div><select id="simCeoDest" class="msel" onchange="simCeoDestChanged()"><option value="">Cargando destinos...</option></select></div>'
     + '<div class="mitem"><div class="ml">Paquete</div><select id="simCeoPkg" class="msel" onchange="simCeoCalc()"><option value="">Elegí destino primero</option></select></div>'
     + '</div>'
-    // Fila 2: Personas (impares) + Cuotas
-    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;">'
-    + '<div class="mitem"><div class="ml">Personas</div><select id="simCeoPers" class="msel" onchange="simCeoCalc()"><option value="1">1 persona (Individual)</option><option value="3">3 personas</option><option value="5">5 personas</option><option value="7">7 personas</option><option value="9">9 personas</option><option value="11">11 personas</option></select></div>'
+    // Fila 2: Cuotas
+    + '<div style="margin-bottom:14px;">'
     + '<div class="mitem"><div class="ml">Cuotas</div><select id="simCeoCuotas" class="msel" onchange="simCeoCalc()"><option value="3">3 cuotas</option><option value="6">6 cuotas</option><option value="10">10 cuotas</option><option value="12" selected>12 cuotas</option><option value="18">18 cuotas</option><option value="24">24 cuotas</option></select></div>'
     + '</div>'
-    // ── Menores de edad ──
-    + '<div style="margin-top:4px;padding:12px;background:rgba(251,191,36,.06);border:1px solid rgba(251,191,36,.15);border-radius:10px;margin-bottom:14px;">'
-    + '<div style="font-size:.72rem;font-weight:700;color:#fbbf24;margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px;">👶 Menores de edad (opcional)</div>'
-    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">'
-    + '<div class="mitem" style="margin:0;"><div class="ml" style="font-size:.62rem;">Bebé 0-2 <span id="simCeoM1Pct" style="color:#fbbf24;">—</span></div><select id="simCeoM1" class="msel" onchange="simCeoCalc()"><option value="0">0</option><option value="1">1</option><option value="2">2</option><option value="3">3</option></select></div>'
-    + '<div class="mitem" style="margin:0;"><div class="ml" style="font-size:.62rem;">Niño 3-5 <span id="simCeoM2Pct" style="color:#fbbf24;">—</span></div><select id="simCeoM2" class="msel" onchange="simCeoCalc()"><option value="0">0</option><option value="1">1</option><option value="2">2</option><option value="3">3</option></select></div>'
-    + '<div class="mitem" style="margin:0;"><div class="ml" style="font-size:.62rem;">Niño 6-11 <span id="simCeoM3Pct" style="color:#fbbf24;">—</span></div><select id="simCeoM3" class="msel" onchange="simCeoCalc()"><option value="0">0</option><option value="1">1</option><option value="2">2</option><option value="3">3</option></select></div>'
-    + '<div class="mitem" style="margin:0;"><div class="ml" style="font-size:.62rem;">Adolescente 12-17 <span id="simCeoM4Pct" style="color:#fbbf24;">—</span></div><select id="simCeoM4" class="msel" onchange="simCeoCalc()"><option value="0">0</option><option value="1">1</option><option value="2">2</option><option value="3">3</option></select></div>'
-    + '</div></div>'
     // Resultados
     + '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:14px;">'
     + '<div style="background:rgba(245,158,11,.08);border:1px solid var(--gold-bd);border-radius:12px;padding:14px;text-align:center;"><div style="font-size:.65rem;font-weight:700;text-transform:uppercase;color:var(--gold);letter-spacing:.5px;">Total Plan</div><div id="simCeoTotal" style="font-family:Syne,sans-serif;font-size:1.5rem;font-weight:900;color:var(--gold);margin-top:6px;">—</div></div>'
@@ -6116,7 +6106,7 @@ function openSimuladorCeo() {
   document.getElementById('modal').classList.add('open');
 
   // Cargar destinos dinámicamente
-  sbClient.from('catalogo_precios').select('id, nombre_destino, slug, paquete, personas, noches, precio_usd, activo, precio_menor_1, precio_menor_2, precio_menor_3, precio_menor_4, max_ocupacion').order('nombre_destino').order('orden').then(function(res) {
+  sbClient.from('catalogo_precios').select('id, nombre_destino, slug, paquete, personas, noches, precio_usd, activo').order('nombre_destino').order('orden').then(function(res) {
     if (res.error) {
       document.getElementById('simCeoDest').innerHTML = '<option value="">Error al cargar</option>';
       return;
@@ -6151,12 +6141,7 @@ function simCeoDestChanged() {
       + ' data-ppp="' + ppPers + '"'
       + ' data-pers="' + p.personas + '"'
       + ' data-noc="' + p.noches + '"'
-      + ' data-pre="' + p.precio_usd + '"'
-      + ' data-m1="' + (p.precio_menor_1 || 0) + '"'
-      + ' data-m2="' + (p.precio_menor_2 || 0) + '"'
-      + ' data-m3="' + (p.precio_menor_3 || 0) + '"'
-      + ' data-m4="' + (p.precio_menor_4 || 0) + '"'
-      + ' data-maxocc="' + (p.max_ocupacion || 4) + '">'
+      + ' data-pre="' + p.precio_usd + '">'
       + esc(p.paquete) + ' · ' + p.personas + ' pers · ' + p.noches + ' noches · USD ' + p.precio_usd.toLocaleString('es-AR')
       + '</option>';
   });
@@ -6164,12 +6149,11 @@ function simCeoDestChanged() {
   simCeoCalc();
 }
 
-/* ── Calcular resultado ── */
+/* ── Calcular resultado (preview simple del catálogo) ── */
 function simCeoCalc() {
-  var pkgSel  = document.getElementById('simCeoPkg');
-  var persSel = document.getElementById('simCeoPers');
-  var cuoSel  = document.getElementById('simCeoCuotas');
-  var opt     = pkgSel ? pkgSel.options[pkgSel.selectedIndex] : null;
+  var pkgSel = document.getElementById('simCeoPkg');
+  var cuoSel = document.getElementById('simCeoCuotas');
+  var opt    = pkgSel ? pkgSel.options[pkgSel.selectedIndex] : null;
 
   var elTotal = document.getElementById('simCeoTotal');
   var elCuota = document.getElementById('simCeoCuota');
@@ -6184,79 +6168,24 @@ function simCeoCalc() {
     return;
   }
 
-  var pppBase  = parseInt(opt.dataset.ppp) || 0;   // precio por persona del paquete original
-  var origPers = parseInt(opt.dataset.pers) || 1;
+  var total    = parseInt(opt.dataset.pre) || 0;    // precio total del paquete
+  var personas = parseInt(opt.dataset.pers) || 1;
   var noches   = parseInt(opt.dataset.noc) || 1;
-  var numPers  = parseInt(persSel ? persSel.value : 1) || 1;
   var cuotas   = parseInt(cuoSel ? cuoSel.value : 12) || 12;
 
-  // Menores
-  var m1Price = parseInt(opt.dataset.m1) || 0;
-  var m2Price = parseInt(opt.dataset.m2) || 0;
-  var m3Price = parseInt(opt.dataset.m3) || 0;
-  var m4Price = parseInt(opt.dataset.m4) || 0;
-  var maxOcup = parseInt(opt.dataset.maxocc) || 4;
-  var nM1 = parseInt((document.getElementById('simCeoM1') || {}).value) || 0;
-  var nM2 = parseInt((document.getElementById('simCeoM2') || {}).value) || 0;
-  var nM3 = parseInt((document.getElementById('simCeoM3') || {}).value) || 0;
-  var nM4 = parseInt((document.getElementById('simCeoM4') || {}).value) || 0;
-  var totalMenores = (m1Price * nM1) + (m2Price * nM2) + (m3Price * nM3) + (m4Price * nM4);
-  var totalPersonas = numPers + nM1 + nM2 + nM3 + nM4;
-
-  // Descuentos porcentuales para display (calculados desde precios reales de BD)
-  var pct1 = pppBase > 0 && m1Price > 0 ? Math.round((1 - m1Price / pppBase) * 100) : (m1Price === 0 && pppBase > 0 ? 100 : 0);
-  var pct2 = pppBase > 0 && m2Price > 0 ? Math.round((1 - m2Price / pppBase) * 100) : (m2Price === 0 && pppBase > 0 ? 100 : 0);
-  var pct3 = pppBase > 0 && m3Price > 0 ? Math.round((1 - m3Price / pppBase) * 100) : (m3Price === 0 && pppBase > 0 ? 100 : 0);
-  var pct4 = pppBase > 0 && m4Price > 0 && m4Price < pppBase ? Math.round((1 - m4Price / pppBase) * 100) : 0;
-
-  // Actualizar labels dinámicos con porcentaje real del paquete seleccionado
-  var elPct1 = document.getElementById('simCeoM1Pct');
-  var elPct2 = document.getElementById('simCeoM2Pct');
-  var elPct3 = document.getElementById('simCeoM3Pct');
-  var elPct4 = document.getElementById('simCeoM4Pct');
-  if (elPct1) elPct1.textContent = pppBase > 0 ? (m1Price === 0 ? '100% dto. (gratis)' : pct1 + '% dto.') : '—';
-  if (elPct2) elPct2.textContent = pppBase > 0 ? (m2Price === 0 ? '100% dto.' : pct2 + '% dto.') : '—';
-  if (elPct3) elPct3.textContent = pppBase > 0 ? (m3Price === 0 ? '100% dto.' : pct3 + '% dto.') : '—';
-  if (elPct4) elPct4.textContent = pppBase > 0 ? (m4Price >= pppBase ? 'precio completo' : (m4Price === 0 ? '100% dto.' : pct4 + '% dto.')) : '—';
-
-  // Calcular total: precio por persona × cantidad de personas elegida + menores
-  var total = (pppBase * numPers) + totalMenores;
-  // Cuota base redondeada, última cuota ajustada
-  var cuotaBase  = Math.floor(total / cuotas * 100) / 100;
-  var ultCuota   = Math.round((total - cuotaBase * (cuotas - 1)) * 100) / 100;
-  var ppm = totalPersonas > 0 ? Math.round(cuotaBase / totalPersonas) : 0;
-  var ppDia = totalPersonas > 0 && noches > 0 ? Math.round(total / totalPersonas / noches) : 0;
+  var cuotaBase = Math.floor(total / cuotas * 100) / 100;
+  var ultCuota  = Math.round((total - cuotaBase * (cuotas - 1)) * 100) / 100;
+  var ppm       = personas > 0 ? Math.round(cuotaBase / personas * 100) / 100 : 0;
+  var ppDia     = personas > 0 && noches > 0 ? Math.round(total / personas / noches) : 0;
 
   if (elTotal) elTotal.textContent = 'USD ' + total.toLocaleString('es-AR');
   if (elCuota) elCuota.textContent = 'USD ' + cuotaBase.toLocaleString('es-AR');
-  if (elPpm) elPpm.textContent = 'USD ' + ppm.toLocaleString('es-AR');
+  if (elPpm)   elPpm.textContent   = 'USD ' + ppm.toLocaleString('es-AR');
 
   if (elDet) {
-    var html = '';
-    // Breakdown por tipo
-    html += '<div style="text-align:left;padding:6px 0;">';
-    html += '<div>Adultos: ' + numPers + ' × USD ' + pppBase.toLocaleString('es-AR') + ' = <strong>USD ' + (pppBase * numPers).toLocaleString('es-AR') + '</strong></div>';
-    if (nM1 > 0) html += '<div style="color:#fbbf24;">Bebé 0-2: ' + nM1 + ' × USD ' + m1Price.toLocaleString('es-AR') + ' (' + pct1 + '% dto.) = USD ' + (m1Price * nM1).toLocaleString('es-AR') + '</div>';
-    if (nM2 > 0) html += '<div style="color:#fbbf24;">Niño 3-5: ' + nM2 + ' × USD ' + m2Price.toLocaleString('es-AR') + ' (' + pct2 + '% dto.) = USD ' + (m2Price * nM2).toLocaleString('es-AR') + '</div>';
-    if (nM3 > 0) html += '<div style="color:#fbbf24;">Niño 6-11: ' + nM3 + ' × USD ' + m3Price.toLocaleString('es-AR') + ' (' + pct3 + '% dto.) = USD ' + (m3Price * nM3).toLocaleString('es-AR') + '</div>';
-    if (nM4 > 0) html += '<div style="color:#fbbf24;">Adolescente 12-17: ' + nM4 + ' × USD ' + m4Price.toLocaleString('es-AR') + ' (' + pct4 + '% dto.) = USD ' + (m4Price * nM4).toLocaleString('es-AR') + '</div>';
-    html += '</div>';
-    html += '<div style="border-top:1px solid var(--border);margin:6px 0;padding-top:6px;">';
-    html += '<strong>TOTAL: USD ' + total.toLocaleString('es-AR') + '</strong> · ' + cuotas + ' cuotas de <strong style="color:var(--purple);">USD ' + cuotaBase.toLocaleString('es-AR') + '</strong>';
+    var html = '<strong>TOTAL: USD ' + total.toLocaleString('es-AR') + '</strong> · ' + cuotas + ' cuotas de <strong style="color:var(--purple);">USD ' + cuotaBase.toLocaleString('es-AR') + '</strong>';
     if (ultCuota !== cuotaBase) html += ' <span style="font-size:.75rem;">(última: USD ' + ultCuota.toLocaleString('es-AR') + ')</span>';
-    html += '</div>';
-    // Info adicional
-    html += '<span style="font-size:.78rem;">' + totalPersonas + ' personas · ' + noches + ' noches · USD ' + ppDia + '/pers/día</span>';
-    if (numPers !== origPers) {
-      html += '<br><span style="font-size:.72rem;color:#fbbf24;">Paquete original: ' + origPers + ' personas — cotización ajustada a ' + numPers + ' adultos</span>';
-    }
-    // Ocupación warning
-    var habNecesarias = Math.ceil(totalPersonas / maxOcup);
-    if (totalPersonas > maxOcup) {
-      html += '<br><div style="margin-top:6px;padding:8px;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.25);border-radius:8px;font-size:.75rem;">⚠️ Ocupación: ' + totalPersonas + ' personas — SUPERA máximo ' + maxOcup + '. Necesitás ' + habNecesarias + ' habitaciones.</div>';
-    } else if (nM1 + nM2 + nM3 + nM4 > 0) {
-      html += '<br><div style="margin-top:6px;padding:8px;background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.2);border-radius:8px;font-size:.75rem;">✅ Ocupación: ' + totalPersonas + ' personas (máx ' + maxOcup + ' por habitación) · 1 habitación</div>';
-    }
+    html += '<br><span style="font-size:.78rem;">' + personas + ' personas · ' + noches + ' noches · USD ' + ppDia + '/pers/día</span>';
     elDet.innerHTML = html;
   }
 }
