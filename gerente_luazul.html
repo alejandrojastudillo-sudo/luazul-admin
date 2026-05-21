@@ -419,19 +419,24 @@ const LZ_LOAD = {
 
     // FIX-COM-GERENTE: Cargar clientes por región Y por vendedor del staff (merge sin duplicados)
     // Igual lógica que CEO: si un vendedor pertenece al gerente, todos sus clientes cuentan
-    var staffUserIds = staff.map(function(s) { return String(s.user_id); }).filter(Boolean);
     var cliPromises = [];
     if (rIds.length) cliPromises.push(sbClient.from('clientes').select('*').in('region_id', rIds));
-    if (staffUserIds.length) cliPromises.push(sbClient.from('clientes').select('*').in('seller_id', staffUserIds));
-    console.log('[loadData] consultas paralelas — regiones:', rIds.length, '| seller_ids:', staffUserIds.length);
+    // seller_id en clientes es integer (staff_profiles.id), NO UUID (user_id)
+    var staffIds = staff.map(function(s) { return s.id; }).filter(function(x) { return x != null; });
+    if (staffIds.length) cliPromises.push(sbClient.from('clientes').select('*').in('seller_id', staffIds));
+    console.log('[loadData] consultas paralelas — regiones:', rIds.length, '| seller_ids (int):', staffIds.length);
 
-    var cliResults = await Promise.all(cliPromises);
+    var cliResults = await Promise.allSettled(cliPromises);
     var seenCli = {};
     var allCliRaw = [];
     cliResults.forEach(function(res) {
-      if (res.data) res.data.forEach(function(c) {
-        if (!seenCli[c.id]) { seenCli[c.id] = true; allCliRaw.push(c); }
-      });
+      if (res.status === 'fulfilled' && res.value && res.value.data) {
+        res.value.data.forEach(function(c) {
+          if (!seenCli[c.id]) { seenCli[c.id] = true; allCliRaw.push(c); }
+        });
+      } else if (res.status === 'rejected') {
+        console.warn('[loadData] ⚠️ consulta falló:', res.reason);
+      }
     });
     console.log('[loadData] clientes mergeados (sin duplicados):', allCliRaw.length);
 
