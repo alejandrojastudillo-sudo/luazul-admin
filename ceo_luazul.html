@@ -5,14 +5,14 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- CEO v4.1 — FIX-DEFINITIVO: comprobantes visibles + nombre en contratos + vencimiento robusto · 2026-05-20 -->
+<!-- CEO v4.1 — FIX: asesor name/email en Backup Excel + Excel profesional con estilos + freeze/autofilter · 2026-05-21 -->
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <!-- manifest solo funciona en HTTP/HTTPS, no file:// -->
   <!-- <link rel="manifest" href="manifest_ceo.json"> -->
   <meta name="theme-color" content="#0B3D91">
-<title>Luazul Smart Travel · CEO v4</title>
+<title>Luazul Smart Travel · CEO v4.1</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Mulish:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <style>
@@ -1471,7 +1471,7 @@ function enrich(c){
 }
 function rby(id){return reg().find(function(r){return String(r.id)===String(id);})||{nombre:'—',bandera:''};}
 function gby(id){return ger().find(function(g){return String(g.id)===String(id);})||{nombre:'—'};}
-function vby(id){return vend().find(function(v){return String(v.user_id)===String(id);})||{nombre:'Sin asignar',id:'',user_id:''};}
+function vby(id){return vend().find(function(v){return String(v.user_id)===String(id)||String(v.id)===String(id);})||{nombre:'Sin asignar',id:'',user_id:'',email:''};}
 function fmtTs(ts){var d=Math.round((Date.now()-ts)/60000);return d<60?'Hace '+d+' min':d<1440?'Hace '+Math.round(d/60)+' h':'Hace '+Math.round(d/1440)+' días';}
 function fmtUSD(n){return 'USD '+Math.round(n).toLocaleString('es-AR');}
 function getClientMonth(c){
@@ -3238,11 +3238,40 @@ function updateBackupCount(){
   if(el3) el3.innerHTML = '📊 <strong>' + total + '</strong> clientes · <strong>' + vs.length + '</strong> asesores · <strong>' + rs.length + '</strong> regiones';
 }
 
+// ── Resolver asesor de forma robusta: busca por id, user_id, y también en cache de jefes/gerentes ──
+function _resolveAsesor(c){
+  // 1) Búsqueda estándar por vid (seller_id)
+  var v = vby(c.vid);
+  if(v && v.nombre && v.nombre !== 'Sin asignar') return v;
+  // 2) Búsqueda directa en todos los caches de personal
+  var allStaff = [].concat(_cacheVendedores||[], _cacheSalesLeaders||[], _cacheGerentes||[]);
+  var vid = String(c.vid||'');
+  if(vid){
+    for(var i=0; i<allStaff.length; i++){
+      var s = allStaff[i];
+      if(String(s.id)===vid || String(s.user_id)===vid) return s;
+    }
+  }
+  // 3) Fallback: buscar por region como última opción
+  if(c.rid){
+    for(var j=0; j<allStaff.length; j++){
+      if(String(allStaff[j].rid)===String(c.rid) && allStaff[j].nombre) return allStaff[j];
+    }
+  }
+  // 4) Si el _raw del cliente tiene vendedor_nombre (de pagos), usarlo
+  if(c._raw && c._raw.vendedor_nombre){
+    return { nombre: c._raw.vendedor_nombre, email: c._raw.vendedor_email || '' };
+  }
+  return v; // devuelve el default de vby
+}
+
 function _filaCliente(c){
-  var v = vby(c.vid), r = rby(c.rid);
+  var v = _resolveAsesor(c), r = rby(c.rid);
   var totalPkg = (parseFloat(c.total_usd)||0) || ((parseFloat(c.monto_cuota)||0) * (parseInt(c.cuotas_total)||10));
   var totalPagado = (parseInt(c.cuotas_pagadas)||0) * (parseFloat(c.monto_cuota)||0);
   var saldo = totalPkg - totalPagado;
+  var asesorNombre = (v && v.nombre && v.nombre !== 'Sin asignar') ? v.nombre : '';
+  var asesorEmail  = (v && v.email) ? v.email : '';
   return {
     'ID':             c.id || '',
     'Nombre':         c.nombre || '',
@@ -3259,8 +3288,8 @@ function _filaCliente(c){
     'Total Cobrado':  totalPagado,
     'Saldo Pendiente':saldo,
     'Estado':         c.estado || '',
-    'Asesor':         v.nombre || '',
-    'Email Asesor':   v.email || '',
+    'Asesor':         asesorNombre,
+    'Email Asesor':   asesorEmail,
     'Región':         r.nombre || '',
     'Bandera':        r.bandera || '',
     'Fecha Alta':     c.fecha_alta || c.createdAt || '',
@@ -3331,6 +3360,111 @@ function _registrarHistorial(tipo, cantidad, nombre){
   }).join('');
 }
 
+// ── ESTILOS EXCEL PROFESIONAL ──
+var _stTitle = { font:{ bold:true, sz:16, color:{ rgb:"0B3D91" }}, alignment:{ horizontal:"center", vertical:"center" }};
+var _stSub   = { font:{ bold:true, sz:11, color:{ rgb:"666666" }}, alignment:{ horizontal:"center", vertical:"center" }};
+var _stHead  = { font:{ bold:true, sz:11, color:{ rgb:"FFFFFF" }}, fill:{ fgColor:{ rgb:"0B3D91" }}, alignment:{ horizontal:"center", vertical:"center", wrapText:true }, border: _bdThin };
+var _stHead2 = { font:{ bold:true, sz:11, color:{ rgb:"FFFFFF" }}, fill:{ fgColor:{ rgb:"1E5FAA" }}, alignment:{ horizontal:"center", vertical:"center", wrapText:true }, border: _bdThin };
+var _stCell  = { font:{ sz:10, color:{ rgb:"333333" }}, alignment:{ vertical:"center" }, border: _bdThin };
+var _stAlt   = { font:{ sz:10, color:{ rgb:"333333" }}, fill:{ fgColor:{ rgb:"EBF1FA" }}, alignment:{ vertical:"center" }, border: _bdThin };
+var _stGreen = { font:{ bold:true, sz:10, color:{ rgb:"16A34A" }}, fill:{ fgColor:{ rgb:"DCFCE7" }}, alignment:{ vertical:"center" }, border: _bdThin };
+var _stRed   = { font:{ bold:true, sz:10, color:{ rgb:"DC2626" }}, fill:{ fgColor:{ rgb:"FEE2E2" }}, alignment:{ vertical:"center" }, border: _bdThin };
+var _stGold  = { font:{ bold:true, sz:10, color:{ rgb:"B45309" }}, fill:{ fgColor:{ rgb:"FEF3C7" }}, alignment:{ vertical:"center" }, border: _bdThin };
+var _stGray  = { font:{ sz:10, color:{ rgb:"999999" }, italic:true }, fill:{ fgColor:{ rgb:"F5F5F5" }}, alignment:{ vertical:"center" }, border: _bdThin };
+var _stMoney = { font:{ bold:true, sz:10, color:{ rgb:"16A34A" }}, alignment:{ vertical:"center", format:"#,##0.00" }, border: _bdThin };
+var _stMoneyH= { font:{ bold:true, sz:10, color:{ rgb:"FFFFFF" }}, fill:{ fgColor:{ rgb:"0B3D91" }}, alignment:{ horizontal:"center", vertical:"center", format:"#,##0.00" }, border: _bdThin };
+var _bdThin  = { top:{ style:"thin", color:{ rgb:"CCCCCC" }}, bottom:{ style:"thin", color:{ rgb:"CCCCCC" }}, left:{ style:"thin", color:{ rgb:"CCCCCC" }}, right:{ style:"thin", color:{ rgb:"CCCCCC" }}};
+var _bdBot   = { bottom:{ style:"medium", color:{ rgb:"0B3D91" }}};
+
+function _addTitle(ws, titulo, subtitulo, numCols){
+  ws['!rows'] = [{ hpt: 36 }, { hpt: 20 }];
+  var r1 = XLSX.utils.encode_cell({r:0,c:0}), r2 = XLSX.utils.encode_cell({r:0,c:numCols-1});
+  ws[r1] = { v: titulo, t:"s", s: _stTitle };
+  ws[r2] = { v: titulo, t:"s", s: _stTitle };
+  ws['!merges'] = [{ s:{r:0,c:0}, e:{r:0,c:numCols-1} }];
+  var r3 = XLSX.utils.encode_cell({r:1,c:0}), r4 = XLSX.utils.encode_cell({r:1,c:numCols-1});
+  ws[r3] = { v: subtitulo, t:"s", s: _stSub };
+  ws[r4] = { v: subtitulo, t:"s", s: _stSub };
+  ws['!merges'].push({ s:{r:1,c:0}, e:{r:1,c:numCols-1} });
+}
+
+function _styleHeaders(ws, keys, row){
+  keys.forEach(function(k, ci){
+    var cell = XLSX.utils.encode_cell({r:row, c:ci});
+    if(!ws[cell]) ws[cell] = { v:k, t:"s" };
+    ws[cell].s = ci % 2 === 0 ? _stHead : _stHead2;
+  });
+}
+
+function _styleRows(ws, filas, startRow, moneyCols, estadoCol, altStart){
+  var moneyIdx = moneyCols || [];
+  var estIdx = estadoCol != null ? estadoCol : -1;
+  filas.forEach(function(fila, ri){
+    var row = startRow + ri;
+    var isAlt = ri % 2 === (altStart || 0);
+    Object.keys(fila).forEach(function(k, ci){
+      var cell = XLSX.utils.encode_cell({r:row, c:ci});
+      if(!ws[cell]) ws[cell] = { v: fila[k], t:"s" };
+      var val = String(fila[k]||'').toLowerCase();
+      if(estIdx >= 0 && ci === estIdx){
+        if(val === 'activo') ws[cell].s = _stGreen;
+        else if(val === 'atraso' || val === 'atraso_gestion') ws[cell].s = _stRed;
+        else if(val === 'baja') ws[cell].s = _stGray;
+        else ws[cell].s = isAlt ? _stAlt : _stCell;
+      } else if(moneyIdx.indexOf(ci) !== -1 && typeof fila[k] === 'number'){
+        ws[cell].s = isAlt
+          ? { font:{ bold:true, sz:10, color:{ rgb:"16A34A" }}, fill:{ fgColor:{ rgb:"EBF1FA" }}, alignment:{ vertical:"center", format:"#,##0.00" }, border: _bdThin }
+          : _stMoney;
+        ws[cell].t = 'n';
+        ws[cell].z = '#,##0.00';
+      } else {
+        ws[cell].s = isAlt ? _stAlt : _stCell;
+      }
+    });
+  });
+}
+
+function _addResumen(ws, filasCli, filasVend, filasReg){
+  var startRow = 3;
+  if(!filasCli || !filasCli.length) return startRow;
+  // Calculos
+  var totalRec = filasCli.reduce(function(s,c){ return s + (parseFloat(c['Total Cobrado'])||0); }, 0);
+  var totalPend = filasCli.reduce(function(s,c){ return s + (parseFloat(c['Saldo Pendiente'])||0); }, 0);
+  var totalCli = filasCli.length;
+  var activos = filasCli.filter(function(c){ return (c['Estado']||'').toLowerCase()==='activo'; }).length;
+  var atraso = filasCli.filter(function(c){ var e=(c['Estado']||'').toLowerCase(); return e==='atraso'||e==='atraso_gestion'; }).length;
+  var completos = filasCli.filter(function(c){ return (c['Estado']||'').toLowerCase()==='completo'; }).length;
+  var bajas = filasCli.filter(function(c){ return (c['Estado']||'').toLowerCase()==='baja'; }).length;
+
+  var datos = [
+    ['RESUMEN EJECUTIVO', '', '', ''],
+    ['Total Clientes', totalCli, 'Asesores', filasVend ? filasVend.length : 0],
+    ['Activos', activos, 'En Atraso', atraso],
+    ['Completos', completos, 'Bajas', bajas],
+    ['Recaudación Total', 'USD ' + Math.round(totalRec).toLocaleString(), 'Saldo Pendiente', 'USD ' + Math.round(totalPend).toLocaleString()],
+    ['Regiones', filasReg ? filasReg.length : 0, 'Fecha Reporte', new Date().toLocaleDateString('es-AR')],
+  ];
+  var resumen = XLSX.utils.aoa_to_sheet(datos);
+  // Estilos del resumen
+  var r0 = XLSX.utils.encode_cell({r:0,c:0});
+  resumen[r0] = { v:'RESUMEN EJECUTIVO', t:'s', s:{ font:{ bold:true, sz:14, color:{ rgb:"0B3D91" }}};
+  resumen['!merges'] = [{ s:{r:0,c:0}, e:{r:0,c:3} }];
+  // Etiquetas en negrita
+  for(var ri=1; ri<datos.length; ri++){
+    var cLabel = XLSX.utils.encode_cell({r:ri,c:0});
+    if(resumen[cLabel]) resumen[cLabel].s = { font:{ bold:true, sz:10, color:{ rgb:"555555" }}, alignment:{ vertical:"center" }, border: _bdThin };
+    var cVal = XLSX.utils.encode_cell({r:ri,c:1});
+    if(resumen[cVal]) resumen[cVal].s = { font:{ bold:true, sz:11, color:{ rgb:"0B3D91" }}, alignment:{ vertical:"center" }, border: _bdThin };
+    var cLabel2 = XLSX.utils.encode_cell({r:ri,c:2});
+    if(resumen[cLabel2]) resumen[cLabel2].s = { font:{ bold:true, sz:10, color:{ rgb:"555555" }}, alignment:{ vertical:"center" }, border: _bdThin };
+    var cVal2 = XLSX.utils.encode_cell({r:ri,c:3});
+    if(resumen[cVal2]) resumen[cVal2].s = { font:{ bold:true, sz:11, color:{ rgb:"0B3D91" }}, alignment:{ vertical:"center" }, border: _bdThin };
+  }
+  resumen['!cols'] = [{ wch:22 },{ wch:22 },{ wch:22 },{ wch:22 }];
+  resumen['!rows'] = [{ hpt:30 },{ hpt:22 },{ hpt:22 },{ hpt:22 },{ hpt:22 },{ hpt:22 }];
+  return resumen;
+}
+
 function exportarExcel(tipo){
   if(typeof XLSX === 'undefined'){
     showToast('⚠️ Librería Excel no cargada. Verificá la conexión a internet.');
@@ -3338,8 +3472,11 @@ function exportarExcel(tipo){
   }
 
   var fecha = new Date().toLocaleDateString('es-AR').replace(/\//g,'-');
+  var hora  = new Date().toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
   var wb = XLSX.utils.book_new();
+  wb['!properties'] = { company:'LuAzul Smart Travel', category:'Reporte CRM', author:'CEO Panel' };
 
+  // ── HOJA DE CLIENTES ──
   if(tipo === 'clientes' || tipo === 'completo'){
     var cs = cli();
     var ef = (document.getElementById('bkp-estado-filt')||{}).value || '';
@@ -3350,9 +3487,43 @@ function exportarExcel(tipo){
     }
     var filasCli = cs.map(_filaCliente);
     if(!filasCli.length) filasCli = [{ Nota: 'Sin clientes con ese filtro' }];
+    var keysCli = Object.keys(filasCli[0]);
     var wsCli = XLSX.utils.json_to_sheet(filasCli);
+    _addTitle(wsCli, 'LuAzul Smart Travel', 'Reporte de Clientes · ' + fecha + ' ' + hora + (ef?' · Filtro: '+ef:'') + (rf?' · Por región':''), keysCli.length);
+    _styleHeaders(wsCli, keysCli, 2);
+    // Columnas de dinero: Total USD(7), Monto Cuota(8), Total Cobrado(12), Saldo Pendiente(13)
+    var moneyColsCli = [keysCli.indexOf('Total USD'), keysCli.indexOf('Monto Cuota'), keysCli.indexOf('Total Cobrado'), keysCli.indexOf('Saldo Pendiente')];
+    _styleRows(wsCli, filasCli, 3, moneyColsCli, keysCli.indexOf('Estado'), 1);
     _autoAncho(wsCli, filasCli);
+    // Freeze pane: congelar filas de título + encabezado (row 3)
+    wsCli['!freeze'] = { xSplit:0, ySplit:3 };
+    // Auto-filter en los encabezados
+    wsCli['!autofilter'] = { ref: XLSX.utils.encode_range({s:{r:2,c:0},e:{r:2+filasCli.length,c:keysCli.length-1}}) };
     XLSX.utils.book_append_sheet(wb, wsCli, 'Clientes');
+    // Fila de totales
+    var lastRow = 3 + filasCli.length;
+    var totCell = XLSX.utils.encode_cell({r:lastRow,c:0});
+    wsCli[totCell] = { v:'TOTALES', t:'s', s:{ font:{ bold:true, sz:11, color:{ rgb:"FFFFFF" }}, fill:{ fgColor:{ rgb:"0B3D91" }}, border: _bdThin }};
+    moneyColsCli.forEach(function(ci){
+      var keyName = keysCli[ci];
+      var sum = filasCli.reduce(function(s,f){ return s + (parseFloat(f[keyName])||0); }, 0);
+      var c = XLSX.utils.encode_cell({r:lastRow, c:ci});
+      wsCli[c] = { v:sum, t:'n', z:'#,##0.00', s:{ font:{ bold:true, sz:11, color:{ rgb:"FFFFFF" }}, fill:{ fgColor:{ rgb:"0B3D91" }}, alignment:{ horizontal:"center" }, border: _bdThin }};
+    });
+    // Also style the "Cuotas Total" and "Cuotas Pagas" total cells
+    var ctIdx = keysCli.indexOf('Cuotas Total');
+    var cpIdx = keysCli.indexOf('Cuotas Pagas');
+    [ctIdx, cpIdx].forEach(function(ci){
+      if(ci < 0) return;
+      var keyName = keysCli[ci];
+      var sum = filasCli.reduce(function(s,f){ return s + (parseInt(f[keyName])||0); }, 0);
+      var c = XLSX.utils.encode_cell({r:lastRow, c:ci});
+      wsCli[c] = { v:sum, t:'n', z:'#,##0', s:{ font:{ bold:true, sz:11, color:{ rgb:"FFFFFF" }}, fill:{ fgColor:{ rgb:"0B3D91" }}, alignment:{ horizontal:"center" }, border: _bdThin }};
+    });
+    // Total row height
+    if(!wsCli['!rows']) wsCli['!rows'] = [];
+    wsCli['!rows'][lastRow] = { hpt: 24 };
+
     if(tipo === 'clientes'){
       var nombre = 'LuAzul_Clientes_' + fecha + (ef?'_'+ef:'') + (rf?'_reg':'') + '.xlsx';
       XLSX.writeFile(wb, nombre);
@@ -3362,13 +3533,35 @@ function exportarExcel(tipo){
     }
   }
 
+  // ── HOJA DE ASESORES ──
   if(tipo === 'asesores' || tipo === 'completo'){
     var vs = vend();
     var filasVend = vs.map(_filaAsesor);
     if(!filasVend.length) filasVend = [{ Nota: 'Sin asesores' }];
+    var keysVend = Object.keys(filasVend[0]);
     var wsVend = XLSX.utils.json_to_sheet(filasVend);
+    _addTitle(wsVend, 'LuAzul Smart Travel', 'Reporte de Asesores · ' + fecha + ' ' + hora, keysVend.length);
+    _styleHeaders(wsVend, keysVend, 2);
+    var moneyVend = [keysVend.indexOf('Recaudación USD')];
+    _styleRows(wsVend, filasVend, 3, moneyVend, -1, 1);
     _autoAncho(wsVend, filasVend);
+    wsVend['!freeze'] = { xSplit:0, ySplit:3 };
+    wsVend['!autofilter'] = { ref: XLSX.utils.encode_range({s:{r:2,c:0},e:{r:2+filasVend.length,c:keysVend.length-1}}) };
     XLSX.utils.book_append_sheet(wb, wsVend, 'Asesores');
+    // Total row for asesores
+    var lastRV = 3 + filasVend.length;
+    var totVCell = XLSX.utils.encode_cell({r:lastRV,c:0});
+    wsVend[totVCell] = { v:'TOTALES', t:'s', s:{ font:{ bold:true, sz:11, color:{ rgb:"FFFFFF" }}, fill:{ fgColor:{ rgb:"B45309" }}, border: _bdThin }};
+    moneyVend.forEach(function(ci){
+      if(ci<0) return;
+      var keyName = keysVend[ci];
+      var sum = filasVend.reduce(function(s,f){ return s + (parseFloat(f[keyName])||0); }, 0);
+      var c = XLSX.utils.encode_cell({r:lastRV, c:ci});
+      wsVend[c] = { v:sum, t:'n', z:'#,##0.00', s:{ font:{ bold:true, sz:11, color:{ rgb:"FFFFFF" }}, fill:{ fgColor:{ rgb:"B45309" }}, alignment:{ horizontal:"center" }, border: _bdThin }};
+    });
+    if(!wsVend['!rows']) wsVend['!rows'] = [];
+    wsVend['!rows'][lastRV] = { hpt: 24 };
+
     if(tipo === 'asesores'){
       var nombre = 'LuAzul_Asesores_' + fecha + '.xlsx';
       XLSX.writeFile(wb, nombre);
@@ -3378,17 +3571,32 @@ function exportarExcel(tipo){
     }
   }
 
+  // ── REPORTE COMPLETO ──
   if(tipo === 'completo'){
     var rs = reg();
     var filasReg = rs.map(_filaRegion);
     if(!filasReg.length) filasReg = [{ Nota: 'Sin regiones' }];
+    var keysReg = Object.keys(filasReg[0]);
     var wsReg = XLSX.utils.json_to_sheet(filasReg);
+    _addTitle(wsReg, 'LuAzul Smart Travel', 'Reporte de Regiones · ' + fecha + ' ' + hora, keysReg.length);
+    _styleHeaders(wsReg, keysReg, 2);
+    var moneyReg = [keysReg.indexOf('Recaudación')];
+    _styleRows(wsReg, filasReg, 3, moneyReg, -1, 1);
     _autoAncho(wsReg, filasReg);
+    wsReg['!freeze'] = { xSplit:0, ySplit:3 };
+    wsReg['!autofilter'] = { ref: XLSX.utils.encode_range({s:{r:2,c:0},e:{r:2+filasReg.length,c:keysReg.length-1}}) };
     XLSX.utils.book_append_sheet(wb, wsReg, 'Regiones');
+
+    // Hoja de resumen ejecutivo
+    var wsRes = _addResumen(null, filasCli, filasVend, filasReg);
+    XLSX.utils.book_append_sheet(wb, wsRes, 'Resumen');
+    // Mover resumen al principio
+    wb.SheetNames = ['Resumen','Clientes','Asesores','Regiones'];
+
     var nombre = 'LuAzul_ReporteCompleto_' + fecha + '.xlsx';
     XLSX.writeFile(wb, nombre);
     var totalFilas = cli().length + vend().length + reg().length;
-    showToast('✅ Reporte completo descargado: 3 hojas');
+    showToast('✅ Reporte completo descargado: 4 hojas con estilos profesionales');
     _registrarHistorial('📊 Reporte Completo', totalFilas, nombre);
   }
 }
