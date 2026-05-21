@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="manifest" href="manifest_gerente.json">
   <meta name="theme-color" content="#0B3D91">
-<title>Luazul Smart Travel · Gerencia Regional v3.6</title>
+<title>Luazul Smart Travel · Gerencia Regional v3.7</title>
 <!-- Mirror-Clean v1.0 — Auditoría 2026-04 · Correcciones integradas (versión completa) -->
   <script>
   // ── Limpiar Service Worker caché cruzada (staff_login.html lo registraba) ──
@@ -970,7 +970,16 @@ function renderMisComisionesGerente() {
   var el = document.getElementById('misComisionesGerente');
   if (!el) return;
   var yo = window._gerenteProfile || null;
-  var clientes = _memCache[DB_KEY] || [];
+  var todosClientes = _memCache[DB_KEY] || [];
+
+  // FIX-COM-GERENTE: Filtrar clientes por vendedor (igual que CEO), no por region_id del cliente.
+  // Un cliente puede tener region_id distinto al del gerente si se asignó mal, pero el CEO lo cuenta
+  // porque lo vincula por vendedor → gerente.
+  var allStaffIds = {};
+  (_memCache[VK] || []).forEach(function(v) { allStaffIds[String(v.user_id)] = true; allStaffIds[String(v.id)] = true; });
+  (window._cacheSalesLeaders || []).forEach(function(j) { allStaffIds[String(j.user_id)] = true; allStaffIds[String(j.id)] = true; });
+  var clientes = todosClientes.filter(function(c) { return allStaffIds[String(c.vid)]; });
+  console.log('[renderMisComisionesGerente] total clientes:', todosClientes.length, '| filtrados por staff:', clientes.length, '| staffIds:', Object.keys(allStaffIds));
 
   function fmtM(v) { return 'USD ' + Number(v || 0).toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 0 }); }
   function getMonth(c) {
