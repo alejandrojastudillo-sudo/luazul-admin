@@ -417,15 +417,22 @@ const LZ_LOAD = {
     if (staffRes.error) throw staffRes.error;
     var staff = (staffRes.data || []).map(_lzMapStaff);
 
+    // FIX-COM-GERENTE: Cargar clientes por región O por vendedor del staff (igual lógica que CEO)
+    // Esto resuelve la inconsistencia donde el CEO cuenta clientes que el gerente no veía
     var cliQuery = sbClient.from('clientes').select('*');
-    if (rIds.length) {
-      cliQuery = cliQuery.in('region_id', rIds);
+    var staffUserIds = staff.map(function(s) { return String(s.user_id); }).filter(Boolean);
+    var orParts = [];
+    if (rIds.length) orParts.push('region_id.in.(' + rIds.join(',') + ')');
+    if (staffUserIds.length) orParts.push('seller_id.in.(' + staffUserIds.join(',') + ')');
+    if (orParts.length) {
+      cliQuery = cliQuery.or(orParts.join(','));
+      console.log('[loadData] cliQuery usando OR — regiones + seller_ids:', rIds.length, '|', staffUserIds.length);
     } else {
-      // Si el gerente no tiene regiones asignadas, no mostrar clientes
-      cliQuery = cliQuery.eq('region_id', -1);
+      cliQuery = cliQuery.eq('id', -1);
+      console.warn('[loadData] Sin regiones ni staff — no se cargan clientes');
     }
 
-    // ── RONDA 2: clientes (necesita rIds de gerente_regiones) ──
+    // ── RONDA 2: clientes ──
     var cliRes = await cliQuery.order('nombre');
     if (cliRes.error) throw cliRes.error;
     var clientes  = (cliRes.data || []).map(_lzMapClient);
