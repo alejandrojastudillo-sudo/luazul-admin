@@ -731,7 +731,8 @@ function cargarDatosSupabase(){
       var grData=grRes.data||[];
       _cacheGerentes.forEach(function(g){
         // gerente_id en DB es UUID (user_id), NO integer (id)
-        g.region_ids=grData.filter(function(x){return x.gerente_id===g.user_id;}).map(function(x){return x.region_id;});
+        // FIX-COM-TIPO: Convertir region_id a String para coincidir con String(v.rid) en calcComisionGerente
+        g.region_ids=grData.filter(function(x){return x.gerente_id===g.user_id;}).map(function(x){return String(x.region_id);});
       });
       return sbClient.from('staff_profiles')
         .select('*')
@@ -1483,6 +1484,13 @@ function calcComisionGerente(g, allVendedores, allClients){
   var regionClients    = allClients.filter(function(c){
     return regionVendedores.some(function(v){ return String(v.user_id)===String(c.vid)||String(v.id)===String(c.vid); });
   });
+  // FIX-COM-TIPO: Log diagnóstico para verificar match de regiones
+  if(regionVendedores.length===0 && allVendedores.length>0){
+    console.warn('[calcComisionGerente] ⚠️ Sin vendedores para gerente:', g.nombre,
+      '| region_ids:', g.region_ids,
+      '| g.rid:', g.rid,
+      '| vendedores.rid disponibles:', allVendedores.map(function(v){return {nombre:v.nombre, rid:v.rid, ridType:typeof v.rid};}));
+  }
 
   var now = new Date();
   var curKey = now.getFullYear() + '-' + now.getMonth();
