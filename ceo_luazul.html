@@ -3377,11 +3377,33 @@ var _stTotG  = { font:{bold:true,sz:11,color:{rgb:"FFFFFF"}}, fill:{fgColor:{rgb
 
 function _mkCell(r,c,val,sheet,style){ var cell=XLSX.utils.encode_cell({r:r,c:c}); if(style) sheet[cell]={v:val,t:typeof val==='number'?'n':'s',s:style}; else sheet[cell]={v:val,t:typeof val==='number'?'n':'s'}; }
 
+function _shiftSheet(ws, n){
+  // Mover todas las celdas de datos hacia abajo n filas
+  var moves = {};
+  Object.keys(ws).forEach(function(k){
+    if(k[0]==='!') return;
+    var addr = XLSX.utils.decode_cell(k);
+    addr.r += n;
+    moves[XLSX.utils.encode_cell(addr)] = ws[k];
+    delete ws[k];
+  });
+  Object.keys(moves).forEach(function(k){ ws[k] = moves[k]; });
+  // Actualizar !ref
+  if(ws['!ref']){
+    var rng = XLSX.utils.decode_range(ws['!ref']);
+    rng.s.r += n; rng.e.r += n;
+    ws['!ref'] = XLSX.utils.encode_range(rng);
+  }
+}
+
 function _addTitle(ws, titulo, subtitulo, numCols){
-  ws['!rows'] = [{hpt:36},{hpt:20}];
+  var rowH = ws['!rows'] || [];
+  rowH[0] = {hpt:36}; rowH[1] = {hpt:20};
+  ws['!rows'] = rowH;
   for(var ci=0; ci<numCols; ci++){ _mkCell(0,ci,ci===0?titulo:'',ws,ci===0?_stTitle:null); _mkCell(1,ci,ci===0?subtitulo:'',ws,ci===0?_stSub:null); }
-  ws['!merges'] = [{s:{r:0,c:0},e:{r:0,c:numCols-1}},{s:{r:1,c:0},e:{r:1,c:numCols-1}}];
-  ws['!ref'] = XLSX.utils.encode_range({s:{r:0,c:0},e:{r:1,c:numCols-1}});
+  var merges = ws['!merges'] || [];
+  merges.push({s:{r:0,c:0},e:{r:0,c:numCols-1}},{s:{r:1,c:0},e:{r:1,c:numCols-1}});
+  ws['!merges'] = merges;
 }
 
 function _styleHeaders(ws, keys, row){
@@ -3494,9 +3516,9 @@ function exportarExcel(tipo){
     var filasCli = cs.map(_filaCliente);
     if(!filasCli.length) filasCli = [{ Nota: 'Sin clientes con ese filtro' }];
     var keysCli = Object.keys(filasCli[0]);
-    var wsCli = {};
+    var wsCli = XLSX.utils.json_to_sheet(filasCli);
+    _shiftSheet(wsCli, 2);
     _addTitle(wsCli, 'LuAzul Smart Travel', 'Reporte de Clientes — '+fecha+' '+hora+(ef?' · Estado: '+ef:'')+(rf?' · Por región':''), keysCli.length);
-    XLSX.utils.sheet_add_json(wsCli, filasCli, { origin: 2 });
     _styleHeaders(wsCli, keysCli, 2);
     var moneyColsCli = [keysCli.indexOf('Total USD'), keysCli.indexOf('Monto Cuota'), keysCli.indexOf('Total Cobrado'), keysCli.indexOf('Saldo Pendiente')];
     _styleRows(wsCli, filasCli, 3, moneyColsCli, keysCli.indexOf('Estado'), 1);
@@ -3540,9 +3562,9 @@ function exportarExcel(tipo){
     var filasVend = vs.map(_filaAsesor);
     if(!filasVend.length) filasVend = [{ Nota: 'Sin asesores' }];
     var keysVend = Object.keys(filasVend[0]);
-    var wsVend = {};
+    var wsVend = XLSX.utils.json_to_sheet(filasVend);
+    _shiftSheet(wsVend, 2);
     _addTitle(wsVend, 'LuAzul Smart Travel', 'Reporte de Asesores — '+fecha+' '+hora, keysVend.length);
-    XLSX.utils.sheet_add_json(wsVend, filasVend, { origin: 2 });
     _styleHeaders(wsVend, keysVend, 2);
     var moneyVend = [keysVend.indexOf('Recaudación USD')];
     _styleRows(wsVend, filasVend, 3, moneyVend, -1, 1);
@@ -3576,9 +3598,9 @@ function exportarExcel(tipo){
     var filasReg = rs.map(_filaRegion);
     if(!filasReg.length) filasReg = [{ Nota: 'Sin regiones' }];
     var keysReg = Object.keys(filasReg[0]);
-    var wsReg = {};
+    var wsReg = XLSX.utils.json_to_sheet(filasReg);
+    _shiftSheet(wsReg, 2);
     _addTitle(wsReg, 'LuAzul Smart Travel', 'Reporte de Regiones — '+fecha+' '+hora, keysReg.length);
-    XLSX.utils.sheet_add_json(wsReg, filasReg, { origin: 2 });
     _styleHeaders(wsReg, keysReg, 2);
     var moneyReg = [keysReg.indexOf('Recaudación')];
     _styleRows(wsReg, filasReg, 3, moneyReg, -1, 1);
