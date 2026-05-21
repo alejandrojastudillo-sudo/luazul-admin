@@ -5,7 +5,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- CEO v6 — Destinos únicos (1 fila por destino) · Sin paquetes · Dedup client-side · 2026-05-20 -->
+<!-- CEO v4.1 — FIX-DEFINITIVO: comprobantes visibles + nombre en contratos + vencimiento robusto · 2026-05-20 -->
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="manifest" href="manifest_ceo.json">
   <meta name="theme-color" content="#0B3D91">
@@ -93,8 +93,6 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
 
 /* MISC */
 .msel{padding:8px 12px;background:rgba(255,255,255,.05);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-family:'Mulish',sans-serif;font-size:.82rem;}
-option{background:#0d1b2a;color:#e8eeff;padding:6px 8px;}
-optgroup{background:#0a1128;color:#a78bfa;font-weight:700;}
 .sbox{display:flex;align-items:center;gap:8px;padding:8px 13px;background:rgba(255,255,255,.04);border:1px solid var(--border2);border-radius:10px;color:var(--muted);}
 .sbox input{background:none;border:none;color:var(--text);font-family:'Mulish',sans-serif;font-size:.85rem;min-width:140px;}
 .sbox input:focus{outline:none;}
@@ -189,7 +187,7 @@ optgroup{background:#0a1128;color:#a78bfa;font-weight:700;}
 .cat-kpi{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;}
 .cat-kpi .cat-kpi-v{font-family:'Syne',sans-serif;font-size:1.3rem;font-weight:800;}
 .cat-kpi .cat-kpi-l{font-size:.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-top:2px;}
-@media(max-width:900px){.cat-table-head,.cat-table-row{grid-template-columns:1fr!important;gap:4px;}.cat-table-head{display:none;}.cat-table-row{padding:14px;}.cat-ppm{margin-top:2px;}}
+@media(max-width:900px){.cat-table-head,.cat-table-row{grid-template-columns:1fr;gap:4px;}.cat-table-head{display:none;}.cat-table-row{padding:14px;}.cat-ppm{margin-top:2px;}}
 .ref-badge{padding:3px 10px;border-radius:20px;font-size:.7rem;font-weight:700;}
 .ref-badge.confirmado{background:var(--green-bg);color:var(--green);border:1px solid var(--green-bd);}
 .ref-badge.pendiente{background:var(--gold-bg);color:var(--gold);border:1px solid var(--gold-bd);}
@@ -267,8 +265,9 @@ optgroup{background:#0a1128;color:#a78bfa;font-weight:700;}
       <div class="tab" onclick="showTab('auditoria')" id="tab-auditoria" style="color:#fca5a5;">👁️ Auditoría</div>
       <div class="tab" onclick="showTab('vouchers')" id="tab-vouchers" style="color:#fbbf24;">🎟️ Vouchers</div>
       <div class="tab" onclick="showTab('divisas')" id="tab-divisas" style="color:#22d3ee;">💱 Divisas</div>
-      <div class="tab" onclick="showTab('simulador')" id="tab-simulador" style="color:#a78bfa;">📊 Simulador y Destinos</div>
+      <div class="tab" onclick="showTab('simulador')" id="tab-simulador" style="color:#a78bfa;">📊 Simulador</div>
       <div class="tab" onclick="showTab('tickets')" id="tab-tickets" style="color:#fb923c;">🎫 Tickets</div>
+      <div class="tab" onclick="showTab('catalogo')" id="tab-catalogo" style="color:#fbbf24;">🏷️ Catálogo</div>
     </div>
 
     <!-- ══ OVERVIEW ══ -->
@@ -341,10 +340,8 @@ optgroup{background:#0a1128;color:#a78bfa;font-weight:700;}
             <option value="">Todos</option>
             <option value="pendiente">Pendientes</option>
             <option value="aprobado">Aprobados</option>
-            <option value="rechazado">Rechazados</option>
           </select>
           <button class="addbtn" onclick="showTab('pagos_aprobacion')" style="background:linear-gradient(135deg,#2563eb,#1d4ed8);">👁 Ir a Aprobación CEO</button>
-          <button class="addbtn" onclick="refreshPagosCache().then(function(){renderPagos();showToast('✅ Pagos refrescados');}).catch(function(e){showToast('❌ Error: '+e.message);})" style="background:linear-gradient(135deg,#059669,#10b981);">🔄 Refrescar</button>
         </div>
       </div>
       <div id="pagosBody"></div>
@@ -556,38 +553,36 @@ optgroup{background:#0a1128;color:#a78bfa;font-weight:700;}
       </div>
     </div>
 
-    <!-- ══ SIMULADOR Y CATÁLOGO (estilo Divisas — destinos simples) ══ -->
+    <!-- ═══ SIMULADOR DE CUOTAS ═══ -->
     <div class="tabpg" id="tabpg-simulador">
       <div class="sec-head">
-        <h2>📊 Simulador y Catálogo</h2>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;">
-          <button class="addbtn" onclick="openSimuladorCeo()" style="background:linear-gradient(135deg,#059669,#10b981);">🧮 Calculadora rápida</button>
-          <button class="addbtn" onclick="openSimuladorConfig()" style="background:linear-gradient(135deg,#7c3aed,#a78bfa);">⚙️ % Menores y Grupos</button>
-          <button class="addbtn" onclick="openAddDestino()">🌍 Nuevo destino</button>
+        <h2>📊 Simulador de Cuotas</h2>
+        <button class="addbtn" onclick="showTab('catalogo')" style="background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.25);color:#fbbf24;">🏷️ Gestionar precios</button>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px;margin-bottom:24px;">
+        <div>
+          <div class="ml">Destino</div>
+          <select id="simDestino" class="msel" style="width:100%;" onchange="simOnDestinoChange()">
+            <option value="">Cargando destinos...</option>
+          </select>
+        </div>
+        <div>
+          <div class="ml">Paquete</div>
+          <select id="simPaquete" class="msel" style="width:100%;" onchange="simCalcular()">
+            <option value="">Seleccione destino primero</option>
+          </select>
+        </div>
+        <div>
+          <div class="ml">Cuotas</div>
+          <select id="simCuotas" class="msel" style="width:100%;" onchange="simCalcular()">
+            <option value="6">6 cuotas</option>
+            <option value="10">10 cuotas</option>
+            <option value="12" selected>12 cuotas</option>
+            <option value="18">18 cuotas</option>
+          </select>
         </div>
       </div>
-      <!-- Global config summary -->
-      <div id="simConfigSummary" style="padding:10px 16px;background:rgba(251,191,36,.06);border:1px solid rgba(251,191,36,.15);border-radius:10px;margin-bottom:16px;font-size:.78rem;color:var(--muted);display:flex;gap:20px;flex-wrap:wrap;align-items:center;">
-        <span>👶 Menores: <strong id="simCfgMenores" style="color:#fbbf24;">cargando...</strong></span>
-        <span>👥 Grupos: <strong id="simCfgGrupos" style="color:#a78bfa;">cargando...</strong></span>
-        <span style="margin-left:auto;cursor:pointer;color:var(--cyan);" onclick="openSimuladorConfig()">⚙️ Editar porcentajes</span>
-      </div>
-      <div id="catKpis" class="cat-kpi-row"></div>
-      <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;align-items:center;">
-        <select id="catFiltroEstado" onchange="renderCatalogo()" class="msel" style="width:auto;">
-          <option value="">Todos los estados</option>
-          <option value="true">✅ Activos</option>
-          <option value="false">❌ Inactivos</option>
-        </select>
-        <input type="text" id="catBusqueda" placeholder="🔍 Buscar destino..." oninput="renderCatalogo()" class="medit" style="width:220px;">
-        <div style="margin-left:auto;font-size:.75rem;color:var(--muted);"><span id="catCount">0</span> destinos</div>
-      </div>
-      <div class="cat-table-wrap">
-        <div class="cat-table-head" style="grid-template-columns:35% 20% 15% 15% 15%;">
-          <div>Destino</div><div>USD adulto/noche</div><div>Max.ocup.</div><div>Estado</div><div>Acciones</div>
-        </div>
-        <div id="catalogoBody"></div>
-      </div>
+      <div id="simResultado" style="min-height:200px;"></div>
     </div>
 
     <!-- ═══ TICKETS ═══ -->
@@ -625,6 +620,36 @@ optgroup{background:#0a1128;color:#a78bfa;font-weight:700;}
     </div>
     </div>
 
+
+    <!-- ══ CATÁLOGO DE PRECIOS Y SIMULADOR (CRUD PROFESIONAL) ══ -->
+    <div class="tabpg" id="tabpg-catalogo">
+      <div class="sec-head">
+        <h2>🏷️ Catálogo de Precios y Paquetes</h2>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="addbtn" onclick="openAddDestino()">🌍 Nuevo destino</button>
+          <button class="addbtn" onclick="openAddPaquete()">➕ Nuevo paquete</button>
+        </div>
+      </div>
+      <div id="catKpis" class="cat-kpi-row"></div>
+      <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;align-items:center;">
+        <select id="catFiltroDestino" onchange="renderCatalogo()" class="msel" style="width:auto;min-width:160px;">
+          <option value="">Todos los destinos</option>
+        </select>
+        <select id="catFiltroEstado" onchange="renderCatalogo()" class="msel" style="width:auto;">
+          <option value="">Todos los estados</option>
+          <option value="true">✅ Activos</option>
+          <option value="false">❌ Inactivos</option>
+        </select>
+        <input type="text" id="catBusqueda" placeholder="🔍 Buscar paquete..." oninput="renderCatalogo()" class="medit" style="width:220px;">
+        <div style="margin-left:auto;font-size:.75rem;color:var(--muted);"><span id="catCount">0</span> paquetes</div>
+      </div>
+      <div class="cat-table-wrap">
+        <div class="cat-table-head">
+          <div>Destino</div><div>Paquete</div><div>Pers.</div><div>Noches</div><div>Precio USD</div><div>USD/pers/mes</div><div>Orden</div><div>Estado</div><div>Acciones</div>
+        </div>
+        <div id="catalogoBody"></div>
+      </div>
+    </div>
 
     <!-- ══ PREMIOS POR REFERIDOS ══ -->
     <div class="tabpg" id="tabpg-premios_referidos">
@@ -1145,25 +1170,9 @@ function cLogin(){
         .from('staff_profiles')
         .select('id, user_id, role_id, nombre')
         .eq('user_id', result.data.user.id)
-        .maybeSingle()
+        .single()
         .then(function(profRes) {
-          // FIX-RLS: Si error 401/RLS en staff_profiles, confiar en email allowlist
-          if (profRes.error) {
-            console.warn('[login] staff_profiles no accesible (RLS), conf\u00eda en email allowlist:', profRes.error.message);
-            var meta = result.data.user.user_metadata || {};
-            var nombre = meta.nombre || meta.full_name || email.split('@')[0];
-            _ceoUid = String(result.data.user.id);
-            try { sessionStorage.setItem('luazul_ceo','1'); sessionStorage.setItem('luazul_ceo_nombre', nombre); } catch(e){}
-            var lw = document.getElementById('loginWrap');
-            var ap = document.getElementById('app');
-            if (lw) lw.style.display = 'none';
-            if (ap) ap.style.display = 'block';
-            onDone();
-            initApp();
-            setTimeout(iniciarNotificacionesCeo, 2000);
-            return;
-          }
-          if (!profRes.data) {
+          if (profRes.error || !profRes.data) {
             return sbClient.auth.signOut().then(function(){
               throw new Error('Perfil CEO no encontrado. Contact\u00e1 al administrador.');
             });
@@ -1203,10 +1212,7 @@ function cLogout(){
     var p=document.getElementById('cPass'); if(p) p.value='';
   }
   if (sbClient) {
-    sbClient.auth.signOut().then(doLogout).catch(function(e){
-      // FIX-LOGOUT: 403 en logout es esperado si auth config no coincide — no rompe
-      doLogout();
-    });
+    sbClient.auth.signOut().then(doLogout).catch(doLogout);
   } else {
     doLogout();
   }
@@ -1268,12 +1274,9 @@ document.addEventListener('DOMContentLoaded', function(){
         var email = session.user.email.toLowerCase();
         if (CEO_ALLOWED_EMAILS.indexOf(email) !== -1) {
           // Re-verificar role_id=1 en staff_profiles (previene acceso si rol fue degradado)
-          sbClient.from('staff_profiles').select('role_id').eq('user_id', session.user.id).maybeSingle()
+          sbClient.from('staff_profiles').select('role_id').eq('user_id', session.user.id).single()
             .then(function(profRes) {
-              // FIX-RLS: Si error 401/RLS, confiar en el email permitido (CEO_ALLOWED_EMAILS ya pasó)
-              if (profRes.error) {
-                console.warn('[auth] staff_profiles no accesible (RLS), confía en email CEO:', profRes.error.message);
-              } else if (profRes.data && String(profRes.data.role_id) !== '1') {
+              if (profRes.error || !profRes.data || String(profRes.data.role_id) !== '1') {
                 sbClient.auth.signOut();
                 try { sessionStorage.removeItem('luazul_ceo'); } catch(e){}
                 return;
@@ -1335,7 +1338,7 @@ function limpiarCuotasFantasma(){
       aEliminar.push(p.id);
     }
   }
-  if (!aEliminar.length) return Promise.resolve();
+  if (!aEliminar.length) return;
   console.log('[limpiarCuotasFantasma] Eliminando ' + aEliminar.length + ' cuotas pendientes huérfanas...');
   // Borrar en lotes de 100
   var batches = [];
@@ -1360,19 +1363,12 @@ function initApp(){
   cargarDatosSupabase().then(function(){
     renderAll();
     populateAllFilters();
-    var cleanPromise = limpiarCuotasFantasma();
-    if (cleanPromise && typeof cleanPromise.then === 'function') {
-      cleanPromise.then(function(){
-        return refreshPagosCache();
-      }).then(function(){
-        renderAll();
-      }).catch(function(e){
-        console.warn('[initApp] Error en limpieza/cache:', e);
-        renderAll();
-      });
-    }
-  }).catch(function(e){
-    console.error('[initApp] Error cargando datos:', e);
+    limpiarCuotasFantasma().then(function(){
+      // Refrescar cache después de limpiar
+      return refreshPagosCache();
+    }).then(function(){
+      renderAll();
+    });
   });
 }
 
@@ -1578,9 +1574,9 @@ function showTab(id){
   if(id==='vouchers')         renderVoucherClientes();
   // ── Checkpoint v3.2: DIVISAS, SIMULADOR, TICKETS ──
   if(id==='divisas')          renderDivisas();
-  if(id==='simulador')        { renderCatalogo(); loadSimConfig(); }
-  if(id==='catalogo')          showTab('simulador');
+  if(id==='simulador')        simLoadDestinos();
   if(id==='tickets')          cargarTickets();
+  if(id==='catalogo')          renderCatalogo();
   if(id==='premios_referidos') renderPremiosReferidos();
   if(id==='auditoria')         renderAuditoria();
 }
@@ -2050,13 +2046,11 @@ function renderVendDash(){
 
 // ── PAGOS ─────────────────────────────────────────────
 function renderPagos(){
-  // ── FIX-PAGOS-V2: Mostrar TODOS los pagos (aprobados, pendientes debidos, rechazados) ──
+  // ── Filtro: solo la siguiente cuota debida por cliente ──
   var clientes = _cacheClientes||[];
   var pays = (_cachePagos||[]).filter(function(n){
     // Aprobados: siempre mostrar (historial completo)
     if(n.estado==='aprobado') return true;
-    // Rechazados: también mostrar para control
-    if(n.estado==='rechazado') return true;
     // Pendientes: solo la siguiente cuota debida (cuotas_pagadas + 1)
     if(n.estado==='pendiente'){
       var c = clientes.find(function(x){ return String(x.id)===String(n.cliente_id); });
@@ -2069,7 +2063,6 @@ function renderPagos(){
   var ef=(document.getElementById('pagoEstFilt')||{}).value||'';
   if(ef==='pendiente') pays=pays.filter(function(n){ return n.estado==='pendiente'; });
   if(ef==='aprobado')  pays=pays.filter(function(n){ return n.estado==='aprobado'; });
-  if(ef==='rechazado') pays=pays.filter(function(n){ return n.estado==='rechazado'; });
 
   // ── KPI: pendientes = siguiente cuota debida ──
   var pendMes=(_cachePagos||[]).filter(function(n){
@@ -2096,7 +2089,6 @@ function renderPagos(){
     +'</div>'
     +pays.map(function(n){
       var aprobado = n.estado==='aprobado';
-      var rechazado = n.estado==='rechazado';
       var ts = n.created_at ? new Date(n.created_at).getTime() : Date.now();
       // ── Resolver nombres desde cache en vez de columna raw ──
       var cl = (_cacheClientes||[]).find(function(x){ return String(x.id)===String(n.cliente_id); });
@@ -2106,7 +2098,7 @@ function renderPagos(){
         var vnd = (_cacheVendedores||[]).find(function(x){ return String(x.user_id)===String(cl.vid) || String(x.id)===String(cl.vid); });
         if(vnd) nombreAsesor = vnd.nombre;
       }
-      // FIX COMP-VIEW: Boton ver comprobante para TODOS los pagos (aprobados, pendientes, rechazados)
+      // FIX COMP-VIEW: Boton ver comprobante para TODOS los pagos (aprobados y pendientes)
       var compUrl = n.comprobante_url || '';
       var compBtn = '';
       if (compUrl) {
@@ -2115,20 +2107,17 @@ function renderPagos(){
         compBtn = '<span style="font-size:.58rem;color:var(--muted);">\u2014 Sin comp.</span>';
       }
       var actionBtn = '';
-      if (!aprobado && !rechazado) {
+      if (!aprobado) {
         actionBtn = '<button onclick="showTab(\'pagos_aprobacion\')" style="padding:3px 7px;background:var(--blue-bg);border:1px solid var(--blue-bd);color:#93c5fd;border-radius:5px;font-size:.62rem;font-weight:700;cursor:pointer;" title="Ir a Aprobaci\u00f3n CEO">\uD83D\uDC41 Aprobar</button>';
       }
-      var estadoStyle = aprobado ? 'background:var(--green-bg);color:var(--green);' : rechazado ? 'background:var(--red-bg);color:var(--red);' : 'background:var(--gold-bg);color:var(--gold);';
-      var estadoLabel = aprobado ? 'OK' : rechazado ? 'Rech.' : 'Pend.';
-      var estadoIcon = aprobado ? '\u2705' : rechazado ? '\u274C' : '\u23F3';
       return '<div class="trow-ceo" style="grid-template-columns:30px 2fr 1.2fr 80px 80px 100px 80px 130px;">'
-        +'<span style="font-size:1rem;">'+estadoIcon+'</span>'
+        +'<span style="font-size:1rem;">'+(aprobado?'\u2705':'\u23F3')+'</span>'
         +'<div><div style="font-size:.84rem;font-weight:600;">'+nombreCli+'</div></div>'
         +'<div style="font-size:.76rem;color:var(--muted);">'+nombreAsesor+'</div>'
         +'<div style="text-align:center;">#'+n.numero_cuota+'</div>'
-        +'<div style="font-weight:700;color:'+(aprobado?'var(--green)':rechazado?'var(--red)':'var(--gold)')+';">USD '+n.monto_usd+'</div>'
+        +'<div style="font-weight:700;color:'+(aprobado?'var(--green)':'var(--gold)')+';">USD '+n.monto_usd+'</div>'
         +'<div style="font-size:.7rem;color:var(--muted);">'+fmtTs(ts)+'</div>'
-        +'<div><span style="font-size:.68rem;font-weight:700;padding:2px 7px;border-radius:6px;'+estadoStyle+'">'+estadoLabel+'</span></div>'
+        +'<div><span style="font-size:.68rem;font-weight:700;padding:2px 7px;border-radius:6px;'+(aprobado?'background:var(--green-bg);color:var(--green);':'background:var(--gold-bg);color:var(--gold);')+'">'+(aprobado?'OK':'Pend.')+'</span></div>'
         +'<div style="display:flex;flex-direction:column;gap:3px;">'
         +compBtn + actionBtn
         +'</div></div>';
@@ -2197,6 +2186,14 @@ function aprobarTodos(){
   }).catch(function(e) {
     console.error('aprobarTodos error:', e);
     showToast('❌ Error: ' + (e.message || ''));
+    // FIX-SYNC: Refrescar caché para corregir desincronización
+    refreshPagosCache().then(function(){
+      renderOverview();
+      renderPagosAprobacion();
+      renderPagos();
+      renderClientes();
+      renderMora();
+    });
   });
 }
 
@@ -2204,23 +2201,41 @@ function aprobarTodos(){
 // Reutilizada por aprobarPago() y aprobarTodos() para evitar duplicación.
 function _approveSinglePago(pago){
   var cuotaKey = pago.numero_cuota || 1;
-  var _pagoId = String(pago.id);
   var _clientId = String(pago.cliente_id);
   var _ceoUidNow = _ceoUid || '';
   // FIX MORA-L-04: Pre-lookup client estado before the chain
   var _clientEstado = ((_cacheClientes||[]).find(function(x){ return String(x.id)===_clientId; }) || {}).estado || '';
   var _esCuota1 = Number(cuotaKey) === 1;
-  // FIX 406 + FIX-SYNC: .select() para verificar fila actualizada, sin .single() para evitar 406
-  return sbClient.from('pagos').update({
-    estado: 'aprobado'
-  }).eq('id', _pagoId).select().then(function(res) {
-    if (res.error) throw res.error;
-    // FIX-SYNC: Verificar que la fila fue efectivamente actualizada
-    if(!res.data || res.data.length === 0){
-      console.error('[_approveSinglePago] WARNING: UPDATE no afectó ninguna fila. pago_id=' + _pagoId + ' — posible RLS block o ID incorrecto');
-    }
-    var idx = (_cachePagos||[]).findIndex(function(x){ return String(x.id) === _pagoId; });
-    if (idx >= 0) _cachePagos[idx].estado = 'aprobado';
+
+  // FIX-SYNC v2: Consultar el pago DIRECTO desde Supabase antes de actualizar.
+  return sbClient.from('pagos')
+    .select('id')
+    .eq('cliente_id', _clientId)
+    .eq('numero_cuota', Number(cuotaKey))
+    .eq('estado', 'pendiente')
+    .limit(1)
+    .then(function(qRes){
+      if(qRes.error) throw qRes.error;
+      if(!qRes.data || qRes.data.length === 0){
+        throw new Error('No se encontró pago pendiente para cuota ' + cuotaKey + ' del cliente ' + _clientId);
+      }
+      var _pagoId = String(qRes.data[0].id);
+      // Actualizar usando el ID real de BD
+      return sbClient.from('pagos').update({
+        estado: 'aprobado', aprobado_por: _ceoUidNow || 'CEO'
+      }).eq('id', _pagoId).select();
+    })
+    .then(function(res) {
+      if(res.error) throw res.error;
+      if(!res.data || res.data.length === 0){
+        throw new Error('No se pudo actualizar el pago en la BD (caché desactualizada).');
+      }
+      var _pagoId = String(res.data[0].id);
+      var idx = (_cachePagos||[]).findIndex(function(x){ return String(x.id) === _pagoId; });
+      if (idx >= 0) {
+        _cachePagos[idx].estado = 'aprobado';
+        _cachePagos[idx].aprobado_por = _ceoUidNow || 'CEO';
+      }
     var c = (_cacheClientes||[]).find(function(x){ return String(x.id) === _clientId; });
     var cuotaNum = Number(cuotaKey);
     var cuotasAct = Number(c ? (c.cuotas_pagadas || 0) : 0);
@@ -3115,17 +3130,19 @@ function closeModalOut(e){if(e.target===document.getElementById('modal'))closeMo
 // ── FIX COMP-VIEW: Modal para ver comprobante de pago ──
 function verComprobanteModal(url, titulo) {
   if (!url) { showToast('Sin comprobante adjunto'); return; }
-  document.getElementById('mbox').innerHTML =
-    '<div class="mhead"><h2>' + (titulo || 'Comprobante de pago') + '</h2><p></p></div>'
-    + '<div class="mbody">'
-    + '<div style="text-align:center;padding:10px;">'
+  var modal = document.getElementById('modal');
+  modal.querySelector('.mhead h2').textContent = titulo || 'Comprobante de pago';
+  modal.querySelector('.mhead p').textContent = '';
+  modal.querySelector('.mbody').innerHTML =
+    '<div style="text-align:center;padding:10px;">'
     + '<img src="' + url + '" style="max-width:100%;max-height:70vh;border-radius:10px;object-fit:contain;" onerror="this.outerHTML=\'<div style=padding:40px;color:#f87171;>Error al cargar la imagen del comprobante</div>\'"/>'
     + '</div>'
     + '<div style="text-align:center;margin-top:14px;">'
     + '<a href="' + url + '" target="_blank" style="display:inline-flex;align-items:center;gap:6px;padding:9px 20px;background:linear-gradient(135deg,#7c3aed,#a78bfa);border-radius:10px;font-size:.82rem;font-weight:700;color:white;text-decoration:none;">\uD83D\uDD0D Abrir en nueva pesta\u00f1a</a>'
-    + '</div></div>'
-    + '<div class="mact"><button class="mbtn ghost" onclick="closeModal()">Cerrar</button></div>';
-  document.getElementById('modal').classList.add('open');
+    + '</div>';
+  modal.querySelector('.mact').innerHTML =
+    '<button class="mbtn ghost" onclick="closeModal()">Cerrar</button>';
+  modal.classList.add('open');
 }
 
 
@@ -4016,36 +4033,63 @@ function aprobarPago(clientId, cuotaKey, dbKey){
   // ── Checkpoint v3.1 v3.3: IDs son UUID (strings) — sin parseInt() ────
   // clientId = UUID string del cliente
   // cuotaKey = string del número de cuota
-  var pago = (_cachePagos||[]).find(function(p){
-    return String(p.cliente_id) === String(clientId)
-        && String(p.numero_cuota) === String(cuotaKey)
-        && p.estado === 'pendiente';
-  });
-  if(!pago){ showToast('⚠️ Pago no encontrado en el cache'); return; }
-
-  var _pagoId    = String(pago.id);
   var _clientId  = String(clientId);
   var _ceoUidNow = _ceoUid || '';
   var _clientEstado = ((_cacheClientes||[]).find(function(x){ return String(x.id)===_clientId; }) || {}).estado || '';
   var _moraResuelta = false;
   var _esCuota1    = Number(cuotaKey) === 1;
 
-  // PASO 1 — Aprobar el pago en tabla `pagos`
-  // FIX 406: Sin .select().single() — evita error de coercion si RLS bloquea o no retorna fila
-  // FIX-SYNC: Agregar .select() para verificar si realmente se actualizó la fila
+  // FIX-SYNC v2: Consultar el pago DIRECTO desde Supabase antes de actualizar.
+  // Esto elimina el problema de caché stale donde el ID en caché no coincide con la BD.
   sbClient.from('pagos')
-    .update({ estado: 'aprobado' })
-    .eq('id', _pagoId)
-    .select()
-    .then(function(res){
-      if(res.error) throw res.error;
-      // FIX-SYNC: Verificar que la fila fue efectivamente actualizada
-      if(!res.data || res.data.length === 0){
-        console.error('[aprobarPago] WARNING: UPDATE no afectó ninguna fila. pago_id=' + _pagoId + ' — posible RLS block o ID incorrecto');
+    .select('*')
+    .eq('cliente_id', _clientId)
+    .eq('numero_cuota', Number(cuotaKey))
+    .eq('estado', 'pendiente')
+    .limit(1)
+    .then(function(qRes){
+      if(qRes.error) throw qRes.error;
+      if(!qRes.data || qRes.data.length === 0){
+        // Verificar si el pago ya fue aprobado/rechazado
+        return sbClient.from('pagos')
+          .select('estado,aprobado_por')
+          .eq('cliente_id', _clientId)
+          .eq('numero_cuota', Number(cuotaKey))
+          .limit(1)
+          .then(function(checkRes){
+            if(checkRes.data && checkRes.data.length > 0){
+              var existing = checkRes.data[0];
+              throw new Error('La cuota ' + cuotaKey + ' ya fue ' + (existing.estado || 'procesada') + '. Recargá los datos.');
+            }
+            throw new Error('No existe un pago pendiente para la cuota ' + cuotaKey + ' de este cliente.');
+          });
       }
-      // Actualizar caché local manualmente (sin depender del response)
+      var realPago = qRes.data[0];
+      var _pagoId = String(realPago.id);
+      console.log('[aprobarPago] Pago verificado desde BD: id=' + _pagoId + ' cuota=' + cuotaKey);
+
+      // PASO 1 — Aprobar el pago en tabla `pagos` usando el ID real de BD
+      return sbClient.from('pagos')
+        .update({ estado: 'aprobado', aprobado_por: _ceoUidNow || 'CEO' })
+        .eq('id', _pagoId)
+        .select();
+    })
+    .then(function(res){
+      if(!res) return; // Si ya se lanzó error en el paso anterior
+      if(res.error) throw res.error;
+      if(!res.data || res.data.length === 0){
+        throw new Error('No se pudo actualizar el pago en la BD. Verificá los permisos RLS.');
+      }
+      // Actualizar caché local usando el ID real
+      var _pagoId = String(res.data[0].id);
       var idx = (_cachePagos||[]).findIndex(function(x){ return String(x.id) === _pagoId; });
-      if(idx >= 0) _cachePagos[idx].estado = 'aprobado';
+      if(idx >= 0){
+        _cachePagos[idx].estado = 'aprobado';
+        _cachePagos[idx].aprobado_por = _ceoUidNow || 'CEO';
+      } else {
+        // Si no estaba en caché, agregarlo
+        _cachePagos.unshift(res.data[0]);
+      }
 
       // PASO 2 — Actualizar cuotas_pagadas y estado del cliente (IDs como string)
       var c = (_cacheClientes||[]).find(function(x){ return String(x.id) === _clientId; });
@@ -4133,7 +4177,17 @@ function aprobarPago(clientId, cuotaKey, dbKey){
       toastMsg += ' \u00b7 Cuota ' + cuotaKey;
       showToast(toastMsg);
     })
-    .catch(function(e){ showToast('\u274C Error al aprobar: ' + (e.message||'')); });
+    .catch(function(e){
+      showToast('\u274C Error al aprobar: ' + (e.message||''));
+      // FIX-SYNC: Refrescar caché desde BD para corregir cualquier desincronización
+      refreshPagosCache().then(function(){
+        renderOverview();
+        renderPagosAprobacion();
+        renderPagos();
+        renderClientes();
+        renderMora();
+      });
+    });
 }
 
 // ── Variables para el modal de rechazo ──
@@ -4229,30 +4283,49 @@ function confirmarRechazo(){
 
   if(!_rechazoPago){ cerrarModalRechazo(); return; }
 
-  // Usar el id (UUID) del cache local — misma estrategia que aprobarPago()
-  var _pagoId = String(_rechazoPago.id);
   var _clientId = String(_rechazoPago.cliente_id || _rechazoClientId);
   var _cuotaNum = parseInt(_rechazoPago.numero_cuota || _rechazoCuotaKey);
   var esCuota1 = _cuotaNum === 1;
   // Formato: CEO_rechazado|Motivo aquí
   var aprobadoPor = 'CEO_rechazado|' + motivo;
 
-  console.log('[rechazarPago] Usando id=' + _pagoId + ' cliente_id=' + _clientId + ' cuota=' + _cuotaNum);
-
   // Deshabilitar botón mientras procesa
   var btnConfirm = document.querySelector('#rechazoModal button[onclick="confirmarRechazo()"]');
   if(btnConfirm){ btnConfirm.disabled = true; btnConfirm.textContent = '⏳ Procesando...'; }
 
-  // PASO 1 — Rechazar el pago usando id (UUID) — FIX 406: sin .select().single()
+  // FIX-SYNC v2: Consultar el pago DIRECTO desde Supabase antes de rechazar.
   sbClient.from('pagos')
-    .update({ estado: 'rechazado' })
-    .eq('id', _pagoId)
+    .select('id')
+    .eq('cliente_id', _clientId)
+    .eq('numero_cuota', _cuotaNum)
+    .eq('estado', 'pendiente')
+    .limit(1)
+    .then(function(qRes){
+      if(qRes.error) throw qRes.error;
+      if(!qRes.data || qRes.data.length === 0){
+        throw new Error('No se encontró pago pendiente para la cuota ' + _cuotaNum + '. Recargá los datos.');
+      }
+      var _pagoId = String(qRes.data[0].id);
+      console.log('[rechazarPago] Pago verificado desde BD: id=' + _pagoId);
+
+      // PASO 1 — Rechazar el pago usando el ID real de BD
+      return sbClient.from('pagos')
+        .update({ estado: 'rechazado', aprobado_por: aprobadoPor })
+        .eq('id', _pagoId)
+        .select();
+    })
     .then(function(res){
+      if(!res) return;
       if(res.error) throw res.error;
+      if(!res.data || res.data.length === 0){
+        throw new Error('No se pudo rechazar el pago en la BD.');
+      }
+      var _pagoId = String(res.data[0].id);
       // Actualizar cache local
       var cacheIdx = (_cachePagos||[]).findIndex(function(x){ return String(x.id) === _pagoId; });
       if(cacheIdx >= 0){
         _cachePagos[cacheIdx].estado = 'rechazado';
+        _cachePagos[cacheIdx].aprobado_por = aprobadoPor;
       }
       // PASO 2 — Si es cuota 1, también rechazar el contrato asociado
       if(esCuota1){
@@ -4295,6 +4368,13 @@ function confirmarRechazo(){
       console.error('[rechazarPago] Error:', e);
       showToast('❌ Error al rechazar: ' + (e.message || ''));
       if(btnConfirm){ btnConfirm.disabled = false; btnConfirm.textContent = '❌ Confirmar Rechazo'; }
+      // FIX-SYNC: Refrescar caché para corregir desincronización
+      refreshPagosCache().then(function(){
+        renderOverview();
+        renderPagosAprobacion();
+        renderPagos();
+        renderClientes();
+      });
     });
 }
 
@@ -4330,42 +4410,20 @@ function renderContratosPendientes(){
         return;
       }
 
-      // FIX CONTRATO-NOMBRE V2: Detectar IDs de clientes sin nombre en cache y consultar BD
-      var missingClientIds = [];
+      var html = '<div style="display:flex;flex-direction:column;gap:14px;">';
       rows.forEach(function(ct){
+        var contenido = {};
+        try { contenido = JSON.parse(ct.contenido_json || '{}'); } catch(e){}
+        // FIX CONTRATO-NOMBRE: Buscar nombre real del cliente en cache PRIMERO
         var clData = clCache.find(function(x){ return String(x.id) === String(ct.cliente_id); });
-        if(!clData) missingClientIds.push(String(ct.cliente_id));
-      });
-
-      // Si faltan clientes, fetch directo de BD
-      var fetchMissing = missingClientIds.length === 0 ? Promise.resolve([]) :
-        sbClient.from('clientes').select('id,nombre,destino,paquete,cuotas_total,cuotas_pagadas,total_usd,vendedor_id')
-          .in('id', missingClientIds).then(function(r){
-            if(r.error) return [];
-            return r.data || [];
-          }).catch(function(){ return []; });
-
-      return fetchMissing.then(function(fetchedClients){
-        // Merge fetched clients into cache temporal
-        var allClients = clCache.concat(fetchedClients.filter(function(fc){
-          return !clCache.find(function(x){ return String(x.id) === String(fc.id); });
-        }));
-
-        var html = '<div style="display:flex;flex-direction:column;gap:14px;">';
-        rows.forEach(function(ct){
-          var contenido = {};
-          try { contenido = JSON.parse(ct.contenido_json || '{}'); } catch(e){}
-          // FIX CONTRATO-NOMBRE: Buscar nombre real del cliente en cache PRIMERO
-          var clData = allClients.find(function(x){ return String(x.id) === String(ct.cliente_id); });
-          var clienteNombre = clData ? clData.nombre : (contenido.cliente_nombre || contenido.nombre || ct.cliente_id || '\u2014');
-          var destino       = clData ? (clData.destino || contenido.destino || '\u2014') : (contenido.destino || '\u2014');
-          var totalUsd      = clData && clData.total_usd ? 'USD ' + Number(clData.total_usd).toLocaleString('es-AR') : (contenido.total_usd ? 'USD ' + Number(contenido.total_usd).toLocaleString('es-AR') : '\u2014');
-          var cuotasInfo    = clData ? (clData.cuotas_total || contenido.cuotas_total || '\u2014') : (contenido.cuotas_total || '\u2014');
-          var cuotasLabel   = clData ? (clData.cuotas_pagadas + '/' + cuotasInfo + ' cuotas') : (cuotasInfo + ' cuotas');
-          // FIX CONTRATO-NOMBRE: Buscar nombre real del vendedor
-          var vid = clData ? (clData.vendedor_id || ct.vendedor_id) : ct.vendedor_id;
-          var vendData = vCache.find(function(x){ return String(x.id) === String(vid) || String(x.user_id) === String(vid); });
-          var vendedor      = vendData ? vendData.nombre : (contenido.vendedor_nombre || '\u2014');
+        var clienteNombre = clData ? clData.nombre : (contenido.cliente_nombre || contenido.nombre || ct.cliente_id || '\u2014');
+        var destino       = clData ? (clData.destino || contenido.destino || '\u2014') : (contenido.destino || '\u2014');
+        var totalUsd      = clData && clData.total_usd ? 'USD ' + Number(clData.total_usd).toLocaleString('es-AR') : (contenido.total_usd ? 'USD ' + Number(contenido.total_usd).toLocaleString('es-AR') : '\u2014');
+        var cuotasInfo    = clData ? (clData.cuotas_total || contenido.cuotas_total || '\u2014') : (contenido.cuotas_total || '\u2014');
+        var cuotasLabel   = clData ? (clData.cuotas_pagadas + '/' + cuotasInfo + ' cuotas') : (cuotasInfo + ' cuotas');
+        // FIX CONTRATO-NOMBRE: Buscar nombre real del vendedor
+        var vendData = vCache.find(function(x){ return String(x.id) === String(ct.vendedor_id) || String(x.user_id) === String(ct.vendedor_id); });
+        var vendedor      = vendData ? vendData.nombre : (contenido.vendedor_nombre || '\u2014');
         var fechaCreado   = new Date(ct.created_at).toLocaleDateString('es-AR');
         var estadoColor   = ct.estado === 'pendiente' ? '#fb923c' : ct.estado === 'revisado' ? '#fbbf24' : '#93c5fd';
         var estadoBg      = ct.estado === 'pendiente' ? 'rgba(251,146,60,.1)' : ct.estado === 'revisado' ? 'rgba(251,191,36,.1)' : 'rgba(59,130,246,.1)';
@@ -4413,7 +4471,6 @@ function renderContratosPendientes(){
       });
       html += '</div>';
       el.innerHTML = html;
-      }); // cierra fetchMissing.then
     })
     .catch(function(e){
       el.innerHTML = '<div style="padding:30px;color:#f87171;text-align:center;">\u274C Error al cargar contratos: ' + (e.message||'') + '</div>';
@@ -6029,194 +6086,91 @@ function actualizarCotizaciones() {
 }
 
 // ════════════════════════════════════════════════════════════════
-// 📊 SIMULADOR — Price per adult/night + minors + group discounts
+// 📊 SIMULADOR DE CUOTAS — Installment Simulator
 // ════════════════════════════════════════════════════════════════
 
 var _simCatalogo = [];
 
-// ── Global config cache ──
-var _simConfig = { menor_0_4_pct: 0, menor_5_11_pct: 50, menor_12_17_pct: 80, grupo_4_5_pct: 5, grupo_6_7_pct: 8, grupo_8_mas_pct: 10 };
+function simLoadDestinos() {
+  var sel = document.getElementById('simDestino');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">Cargando destinos...</option>';
+  document.getElementById('simPaquete').innerHTML = '<option value="">Seleccione destino primero</option>';
+  document.getElementById('simResultado').innerHTML = '';
 
-async function loadSimConfig() {
-  if (!sbClient) return;
-  try {
-    var r = await sbClient.from('configuracion_simulador').select('*').eq('id', 1).maybeSingle();
-    if (r.data) {
-      _simConfig = r.data;
-      var elM = document.getElementById('simCfgMenores');
-      var elG = document.getElementById('simCfgGrupos');
-      if (elM) elM.innerHTML = '0-4: <b>' + _simConfig.menor_0_4_pct + '%</b> · 5-11: <b>' + _simConfig.menor_5_11_pct + '%</b> · 12-17: <b>' + _simConfig.menor_12_17_pct + '%</b>';
-      if (elG) elG.innerHTML = '4-5: <b>' + _simConfig.grupo_4_5_pct + '%</b> · 6-7: <b>' + _simConfig.grupo_6_7_pct + '%</b> · 8+: <b>' + _simConfig.grupo_8_mas_pct + '%</b>';
-    }
-  } catch(e) {}
-}
-
-function openSimuladorConfig() {
-  var h = '<div class="mhead"><div><h2>⚙️ Porcentajes Globales</h2><p>Se aplican a TODOS los destinos automáticamente</p></div><button class="mclose" onclick="closeModal()">✕</button></div>'
-    + '<div class="mbody">'
-    // Menores
-    + '<div style="margin-bottom:16px;">'
-    + '<div style="font-size:.72rem;font-weight:700;color:#fbbf24;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;">👶 Descuento por menor de edad (% del precio adulto)</div>'
-    + '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">'
-    + '<div class="mitem"><div class="ml">Bebé 0-4 años</div><input id="cfgM1" type="number" class="medit" value="' + _simConfig.menor_0_4_pct + '" min="0" max="100"></div>'
-    + '<div class="mitem"><div class="ml">Niño 5-11 años</div><input id="cfgM2" type="number" class="medit" value="' + _simConfig.menor_5_11_pct + '" min="0" max="100"></div>'
-    + '<div class="mitem"><div class="ml">Adolescente 12-17</div><input id="cfgM3" type="number" class="medit" value="' + _simConfig.menor_12_17_pct + '" min="0" max="100"></div>'
-    + '</div></div>'
-    // Grupos
-    + '<div style="margin-bottom:16px;">'
-    + '<div style="font-size:.72rem;font-weight:700;color:#a78bfa;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;">👥 Descuento por grupo grande (% sobre total adultos)</div>'
-    + '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">'
-    + '<div class="mitem"><div class="ml">4-5 adultos</div><input id="cfgG1" type="number" class="medit" value="' + _simConfig.grupo_4_5_pct + '" min="0" max="50"></div>'
-    + '<div class="mitem"><div class="ml">6-7 adultos</div><input id="cfgG2" type="number" class="medit" value="' + _simConfig.grupo_6_7_pct + '" min="0" max="50"></div>'
-    + '<div class="mitem"><div class="ml">8+ adultos</div><input id="cfgG3" type="number" class="medit" value="' + _simConfig.grupo_8_mas_pct + '" min="0" max="50"></div>'
-    + '</div></div>'
-    + '</div>'
-    + '<div class="mact"><button class="mbtn gold" onclick="saveSimConfig()">💾 Guardar porcentajes</button><button class="mbtn ghost" onclick="closeModal()">Cancelar</button></div>';
-  document.getElementById('mbox').innerHTML = h;
-  document.getElementById('modal').classList.add('open');
-}
-
-async function saveSimConfig() {
-  var u = {
-    menor_0_4_pct: parseInt(document.getElementById('cfgM1').value) || 0,
-    menor_5_11_pct: parseInt(document.getElementById('cfgM2').value) || 0,
-    menor_12_17_pct: parseInt(document.getElementById('cfgM3').value) || 0,
-    grupo_4_5_pct: parseInt(document.getElementById('cfgG1').value) || 0,
-    grupo_6_7_pct: parseInt(document.getElementById('cfgG2').value) || 0,
-    grupo_8_mas_pct: parseInt(document.getElementById('cfgG3').value) || 0,
-    updated_at: new Date().toISOString()
-  };
-  if (u.menor_0_4_pct < 0 || u.menor_0_4_pct > 100) { showToast('⚠️ Porcentajes deben ser 0-100'); return; }
-  try {
-    var r = await sbClient.from('configuracion_simulador').upsert(u, { onConflict: 'id' });
-    if (r.error) throw r.error;
-    _simConfig = u;
-    showToast('✅ Porcentajes actualizados');
-    closeModal();
-    loadSimConfig();
-  } catch(e) { showToast('❌ ' + e.message); }
-}
-
-/* ── Abrir modal calculadora rápida ── */
-function openSimuladorCeo() {
-  if (!sbClient) { showToast('Sin conexión a BD'); return; }
-
-  var h = '<div class="mhead"><div><h2>🧮 Calculadora Rápida</h2><p>Precio total basado en destino, noches, adultos y menores</p></div><button class="mclose" onclick="closeModal()">✕</button></div>'
-    + '<div class="mbody">'
-    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;">'
-    + '<div class="mitem"><div class="ml">Destino</div><select id="simCeoDest" class="msel" onchange="simCeoDestChanged()"><option value="">Cargando destinos...</option></select></div>'
-    + '<div class="mitem"><div class="ml">Precio adulto/noche</div><div id="simCeoPrecio" style="padding:13px 16px;background:rgba(255,255,255,.03);border:1px solid var(--border2);border-radius:8px;color:var(--muted);font-size:.95rem;">—</div></div>'
-    + '</div>'
-    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;">'
-    + '<div class="mitem"><div class="ml">Noches</div><input id="simCeoNoches" type="number" class="medit" value="7" min="1" max="30" oninput="simCeoCalc()"></div>'
-    + '<div class="mitem"><div class="ml">Adultos</div><input id="simCeoAdultos" type="number" class="medit" value="2" min="1" max="20" oninput="simCeoCalc()"></div>'
-    + '</div>'
-    // Menores
-    + '<div style="margin-bottom:14px;padding:12px;background:rgba(251,191,36,.06);border:1px solid rgba(251,191,36,.15);border-radius:10px;">'
-    + '<div style="font-size:.72rem;font-weight:700;color:#fbbf24;margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px;">👶 Menores de edad</div>'
-    + '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">'
-    + '<div class="mitem" style="margin:0;"><div class="ml" style="font-size:.62rem;">Bebés 0-4 (' + _simConfig.menor_0_4_pct + '%)</div><input id="simCeoM1" type="number" class="medit" value="0" min="0" oninput="simCeoCalc()"></div>'
-    + '<div class="mitem" style="margin:0;"><div class="ml" style="font-size:.62rem;">Niños 5-11 (' + _simConfig.menor_5_11_pct + '%)</div><input id="simCeoM2" type="number" class="medit" value="0" min="0" oninput="simCeoCalc()"></div>'
-    + '<div class="mitem" style="margin:0;"><div class="ml" style="font-size:.62rem;">Adolescentes 12-17 (' + _simConfig.menor_12_17_pct + '%)</div><input id="simCeoM3" type="number" class="medit" value="0" min="0" oninput="simCeoCalc()"></div>'
-    + '</div></div>'
-    // Resultado
-    + '<div style="background:rgba(245,158,11,.08);border:1px solid var(--gold-bd);border-radius:12px;padding:18px;text-align:center;margin-bottom:14px;">'
-    + '<div style="font-size:.65rem;font-weight:700;text-transform:uppercase;color:var(--gold);letter-spacing:.5px;margin-bottom:6px;">TOTAL A PAGAR</div>'
-    + '<div id="simCeoTotal" style="font-family:Syne,sans-serif;font-size:2rem;font-weight:900;color:var(--gold);">—</div>'
-    + '</div>'
-    + '<div id="simCeoDetalle" style="padding:12px 16px;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:10px;font-size:.78rem;color:var(--muted);text-align:center;">Elegí un destino para ver la cotización</div>'
-    + '</div>'
-    + '<div class="mact"><button class="mbtn ghost" onclick="closeModal()">Cerrar</button></div>';
-
-  document.getElementById('mbox').innerHTML = h;
-  document.getElementById('modal').classList.add('open');
-
-  // Load unique destinations with price
-  sbClient.from('catalogo_precios').select('id, nombre_destino, slug, precio_adulto_noche, max_ocupacion, activo').order('nombre_destino').then(function(res) {
-    if (res.error) { document.getElementById('simCeoDest').innerHTML = '<option value="">Error al cargar</option>'; return; }
+  sbClient.from('catalogo_precios').select('id, nombre_destino, paquete, personas, noches, precio_usd').eq('activo', true).order('nombre_destino', { ascending: true }).order('orden', { ascending: true }).then(function(res) {
+    if (res.error) { sel.innerHTML = '<option value="">Error al cargar</option>'; return; }
     _simCatalogo = res.data || [];
-    var activos = _simCatalogo.filter(function(p) { return p.activo; });
-    // Get unique destinations (first record per destination)
+    var destinos = [];
     var seen = {};
-    var dests = [];
-    activos.forEach(function(p) { if (!seen[p.nombre_destino]) { seen[p.nombre_destino] = true; dests.push(p); } });
-    var opts = '<option value="">— Elegí destino —</option>';
-    dests.forEach(function(d) { opts += '<option value="' + esc(d.nombre_destino) + '" data-pan="' + (d.precio_adulto_noche || 0) + '" data-mo="' + (d.max_ocupacion || 0) + '">' + esc(d.nombre_destino) + ' — USD ' + (d.precio_adulto_noche || 0) + '/noche</option>'; });
-    document.getElementById('simCeoDest').innerHTML = opts;
+    _simCatalogo.forEach(function(p) {
+      if (!seen[p.nombre_destino]) { seen[p.nombre_destino] = true; destinos.push(p.nombre_destino); }
+    });
+    sel.innerHTML = '<option value="">— Seleccione destino —</option>' + destinos.map(function(d) {
+      return '<option value="' + d + '">' + d + '</option>';
+    }).join('');
   });
 }
 
-function simCeoDestChanged() {
-  var sel = document.getElementById('simCeoDest');
-  var opt = sel ? sel.options[sel.selectedIndex] : null;
-  var elPrecio = document.getElementById('simCeoPrecio');
-  if (opt && opt.dataset.pan) {
-    elPrecio.innerHTML = '<strong style="color:var(--gold);font-size:1.1rem;">USD ' + parseFloat(opt.dataset.pan).toLocaleString('es-AR') + '</strong><span style="font-size:.72rem;color:var(--muted);"> /adulto/noche</span>'
-      + (opt.dataset.mo ? '<br><span style="font-size:.68rem;">Max. ocupación: ' + opt.dataset.mo + ' personas</span>' : '');
-  } else {
-    elPrecio.innerHTML = '—';
-  }
-  simCeoCalc();
-}
-
-function simCeoCalc() {
-  var sel = document.getElementById('simCeoDest');
-  var opt = sel ? sel.options[sel.selectedIndex] : null;
-  var elTotal = document.getElementById('simCeoTotal');
-  var elDet = document.getElementById('simCeoDetalle');
-
-  if (!opt || !opt.dataset.pan) {
-    if (elTotal) elTotal.textContent = '—';
-    if (elDet) elDet.innerHTML = 'Elegí un destino para ver la cotización';
+function simOnDestinoChange() {
+  var dest = document.getElementById('simDestino').value;
+  var sel = document.getElementById('simPaquete');
+  if (!dest) {
+    sel.innerHTML = '<option value="">Seleccione destino primero</option>';
+    document.getElementById('simResultado').innerHTML = '';
     return;
   }
-
-  var precioAdultoNoche = parseFloat(opt.dataset.pan) || 0;
-  var noches = parseInt((document.getElementById('simCeoNoches') || {}).value) || 7;
-  var adultos = parseInt((document.getElementById('simCeoAdultos') || {}).value) || 1;
-  var m1 = parseInt((document.getElementById('simCeoM1') || {}).value) || 0;
-  var m2 = parseInt((document.getElementById('simCeoM2') || {}).value) || 0;
-  var m3 = parseInt((document.getElementById('simCeoM3') || {}).value) || 0;
-
-  // Group discount
-  var grupoPct = 0;
-  if (adultos >= 8) grupoPct = _simConfig.grupo_8_mas_pct || 0;
-  else if (adultos >= 6) grupoPct = _simConfig.grupo_6_7_pct || 0;
-  else if (adultos >= 4) grupoPct = _simConfig.grupo_4_5_pct || 0;
-
-  // Adults total (with group discount)
-  var adultosTotal = precioAdultoNoche * adultos * noches;
-  var adultosDescuento = Math.round(adultosTotal * grupoPct / 100);
-  var adultosFinal = adultosTotal - adultosDescuento;
-
-  // Minors total
-  var menoresFinal = 0;
-  menoresFinal += precioAdultoNoche * noches * m1 * (_simConfig.menor_0_4_pct || 0) / 100;
-  menoresFinal += precioAdultoNoche * noches * m2 * (_simConfig.menor_5_11_pct || 0) / 100;
-  menoresFinal += precioAdultoNoche * noches * m3 * (_simConfig.menor_12_17_pct || 0) / 100;
-  menoresFinal = Math.round(menoresFinal);
-
-  var total = adultosFinal + menoresFinal;
-
-  if (elTotal) elTotal.textContent = 'USD ' + total.toLocaleString('es-AR');
-
-  if (elDet) {
-    var html = '<strong>' + adultos + ' adultos</strong> × USD ' + precioAdultoNoche + ' × ' + noches + ' noches = USD ' + adultosTotal.toLocaleString('es-AR');
-    if (grupoPct > 0) html += ' <span style="color:var(--green);">(-' + grupoPct + '% grupo = -USD ' + adultosDescuento.toLocaleString('es-AR') + ')</span>';
-    html += ' → <strong>USD ' + adultosFinal.toLocaleString('es-AR') + '</strong>';
-    var totalMenores = m1 + m2 + m3;
-    if (totalMenores > 0) {
-      html += '<br><strong>' + totalMenores + ' menor' + (totalMenores > 1 ? 'es' : '') + '</strong>';
-      if (m1 > 0) html += ' · ' + m1 + ' bebé' + (m1 > 1 ? 's' : '') + ' (' + _simConfig.menor_0_4_pct + '%)';
-      if (m2 > 0) html += ' · ' + m2 + ' niño' + (m2 > 1 ? 's' : '') + ' (' + _simConfig.menor_5_11_pct + '%)';
-      if (m3 > 0) html += ' · ' + m3 + ' adol.' + (m3 > 1 ? 'es' : '') + ' (' + _simConfig.menor_12_17_pct + '%)';
-      html += ' = <strong>USD ' + menoresFinal.toLocaleString('es-AR') + '</strong>';
-    }
-    html += '<br><strong style="color:var(--gold);font-size:.9rem;">TOTAL: USD ' + total.toLocaleString('es-AR') + '</strong>';
-    elDet.innerHTML = html;
-  }
+  var paquetes = _simCatalogo.filter(function(p) { return p.nombre_destino === dest; });
+  sel.innerHTML = '<option value="">— Seleccione paquete —</option>' + paquetes.map(function(p) {
+    return '<option value="' + p.id + '">' + p.paquete + ' (' + p.personas + ' pers. · ' + p.noches + ' noches)</option>';
+  }).join('');
+  document.getElementById('simResultado').innerHTML = '';
 }
 
+function simCalcular() {
+  var pkgId = document.getElementById('simPaquete').value;
+  var cuotas = parseInt(document.getElementById('simCuotas').value) || 12;
+  var resEl = document.getElementById('simResultado');
+
+  if (!pkgId) { resEl.innerHTML = '<div style="text-align:center;padding:50px;color:var(--muted);"><div style="font-size:3rem;margin-bottom:12px;">📊</div><p>Seleccione un destino y un paquete para simular cuotas.</p></div>'; return; }
+
+  var pkg = _simCatalogo.find(function(p) { return String(p.id) === String(pkgId); });
+  if (!pkg) { resEl.innerHTML = ''; return; }
+
+  var total = pkg.precio_usd;
+  var cuotaMensual = total / cuotas;
+  var costoDia = pkg.noches > 0 ? total / pkg.noches : 0;
+
+  var cuotasArr = [6, 10, 12, 18];
+  var cuotasHtml = cuotasArr.map(function(c) {
+    var cm = total / c;
+    var isActive = c === cuotas;
+    return '<div onclick="document.getElementById(\'simCuotas\').value=' + c + ';simCalcular();" style="padding:14px;border-radius:12px;background:' + (isActive ? 'var(--purple-bg)' : 'var(--card)') + ';border:1px solid ' + (isActive ? 'var(--purple-bd)' : 'var(--border)') + ';cursor:pointer;text-align:center;transition:all .15s;' + (isActive ? 'box-shadow:0 0 20px rgba(167,139,250,.15);' : '') + '">'
+      + '<div style="font-size:.65rem;color:var(--muted);margin-bottom:4px;">' + c + ' cuotas</div>'
+      + '<div style="font-family:Syne,sans-serif;font-size:1.1rem;font-weight:800;color:' + (isActive ? 'var(--purple)' : 'var(--text)') + ';">USD ' + Math.round(cm).toLocaleString('es-AR') + '</div>'
+      + '<div style="font-size:.6rem;color:var(--muted);">/mes</div>'
+      + '</div>';
+  }).join('');
+
+  resEl.innerHTML =
+    '<div class="twrap" style="max-width:900px;">'
+    + '<div style="padding:24px;background:rgba(255,255,255,.02);border-bottom:1px solid var(--border);">'
+    + '<div style="font-family:Syne,sans-serif;font-size:1.2rem;font-weight:800;margin-bottom:4px;">' + pkg.nombre_destino + '</div>'
+    + '<div style="font-size:.78rem;color:var(--muted);">' + pkg.paquete + ' · ' + pkg.personas + ' personas · ' + pkg.noches + ' noches</div>'
+    + '</div>'
+    + '<div style="padding:24px;">'
+    + '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px;">'
+    + '<div class="kpi"><span>💰</span><div class="kpi-v" style="color:var(--gold);">' + Math.round(total).toLocaleString('es-AR') + '</div><div class="kpi-l">Total USD</div></div>'
+    + '<div class="kpi"><span>📅</span><div class="kpi-v" style="color:var(--purple);">' + cuotas + '</div><div class="kpi-l">Cuotas</div></div>'
+    + '<div class="kpi"><span>💳</span><div class="kpi-v" style="color:var(--blue);">' + Math.round(cuotaMensual).toLocaleString('es-AR') + '</div><div class="kpi-l">USD / mes</div></div>'
+    + '<div class="kpi"><span>🏨</span><div class="kpi-v" style="color:var(--green);">' + Math.round(costoDia).toLocaleString('es-AR') + '</div><div class="kpi-l">USD / día</div></div>'
+    + '</div>'
+    + '<div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:10px;">Comparativa de cuotas</div>'
+    + '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;">'
+    + cuotasHtml
+    + '</div>'
+    + '</div></div>';
+}
 
 // ════════════════════════════════════════════════════════════════
 // ════════════════════════════════════════════════════════════════
@@ -6242,7 +6196,7 @@ function cargarTickets() {
   var prioridadFiltro = (document.getElementById('ticketFiltroPrioridad') || {}).value || 'todos';
   var search = ((document.getElementById('ticketSearch') || {}).value || '').toLowerCase();
   var query = sbClient.from('notificaciones')
-    .select('*')
+    .select('*, cliente:clientes(nombre, email)')
     .in('tipo', ['incidencia', 'soporte', 'mejora', 'falla_tecnica', 'error_datos', 'otro'])
     .order('created_at', { ascending: false }).limit(200);
   if (estadoFiltro !== 'todos') query = query.eq('estado', estadoFiltro);
@@ -6250,19 +6204,11 @@ function cargarTickets() {
   query.then(function(res) {
     if (res.error) throw res.error;
     var tickets = res.data || [];
-    // Resolver nombre de cliente desde cache cuando sea posible
-    tickets = tickets.map(function(t) {
-      if (t.cliente_id && !t.cliente_nombre_resuelto) {
-        var cl = (_cacheClientes || []).find(function(x){ return String(x.id) === String(t.cliente_id); });
-        t.cliente_nombre_resuelto = cl ? cl.nombre : '';
-      }
-      return t;
-    });
     if (search) {
       tickets = tickets.filter(function(t) {
         var num = (t.numero_ticket || '').toLowerCase();
         var asunto = (t.mensaje || '').toLowerCase();
-        var cliente = (t.cliente_nombre_resuelto || '').toLowerCase();
+        var cliente = (t.cliente && t.cliente.nombre) ? t.cliente.nombre.toLowerCase() : '';
         return num.indexOf(search) !== -1 || asunto.indexOf(search) !== -1 || cliente.indexOf(search) !== -1;
       });
     }
@@ -6282,7 +6228,7 @@ function renderListaTickets(tickets) {
     var estadoClase = estadoTexto === 'abierto' ? 'bdg atraso' : estadoTexto === 'en_progreso' ? 'bdg atraso_gestion' : estadoTexto === 'resuelto' ? 'bdg completo' : 'bdg baja';
     var prioridadTexto = t.prioridad || 'media';
     var prioridadColor = prioridadTexto === 'urgente' ? '#ef4444' : prioridadTexto === 'alta' ? '#f97316' : prioridadTexto === 'media' ? '#eab308' : '#22c55e';
-    var clienteNombre = t.cliente_nombre_resuelto || (t.cliente_id ? 'ID: ' + t.cliente_id : '—');
+    var clienteNombre = t.cliente ? t.cliente.nombre : (t.cliente_id ? 'ID: ' + t.cliente_id : '—');
     var vendedorNombre = t.vendedor_nombre || (t.vendedor_id ? 'ID: ' + t.vendedor_id : '—');
     var diasInactivos = calcularDiasInactivos(t.updated_at || t.created_at);
     var highlight = (diasInactivos > 7 && estadoTexto !== 'cerrado') ? '⚠️ ' : '';
@@ -6422,7 +6368,7 @@ function verTicket(ticketId) {
 function renderDetalleTicket(ticket, comentarios) {
   var eO = '<option value="abierto"' + (ticket.estado==='abierto'?' selected':'') + '>Abierto</option><option value="en_progreso"' + (ticket.estado==='en_progreso'?' selected':'') + '>En progreso</option><option value="resuelto"' + (ticket.estado==='resuelto'?' selected':'') + '>Resuelto</option><option value="cerrado"' + (ticket.estado==='cerrado'?' selected':'') + '>Cerrado</option>';
   var pO = '<option value="baja"' + (ticket.prioridad==='baja'?' selected':'') + '>Baja</option><option value="media"' + (ticket.prioridad==='media'?' selected':'') + '>Media</option><option value="alta"' + (ticket.prioridad==='alta'?' selected':'') + '>Alta</option><option value="urgente"' + (ticket.prioridad==='urgente'?' selected':'') + '>Urgente</option>';
-  var cN = ticket.cliente_nombre_resuelto || (ticket.cliente_id ? 'ID:'+ticket.cliente_id : '—');
+  var cN = ticket.cliente ? ticket.cliente.nombre : (ticket.cliente_id ? 'ID:'+ticket.cliente_id : '—');
   var vN = ticket.vendedor_nombre || (ticket.vendedor_id ? 'ID:'+ticket.vendedor_id : '—');
   var adjH = '';
   if (ticket.adjuntos && ticket.adjuntos.length) {
@@ -6514,50 +6460,64 @@ var _catCache = [];
 async function renderCatalogo() {
   var body = document.getElementById('catalogoBody');
   if (!body) return;
-  body.innerHTML = '<div class="cat-empty">Cargando destinos...</div>';
+  body.innerHTML = '<div class="cat-empty">Cargando catálogo...</div>';
   try {
     var r = await sbClient.from('catalogo_precios').select('*').order('nombre_destino', { ascending: true }).order('orden', { ascending: true });
     if (r.error) throw r.error;
     _catCache = r.data || [];
-    // ── DEDUPLICACIÓN: una sola fila por destino (si quedan duplicados en BD) ──
-    var _seen = {};
-    var _deduped = [];
-    for (var di = 0; di < _catCache.length; di++) {
-      var dName = _catCache[di].nombre_destino;
-      if (!_seen[dName]) { _seen[dName] = true; _deduped.push(_catCache[di]); }
+    // Populate destino filter
+    var fDest = document.getElementById('catFiltroDestino');
+    if (fDest && fDest.options.length <= 1) {
+      var dests = [];
+      var seen = {};
+      _catCache.forEach(function(p) { if (!seen[p.nombre_destino]) { seen[p.nombre_destino] = true; dests.push(p.nombre_destino); } });
+      dests.forEach(function(d) { var o = document.createElement('option'); o.value = d; o.textContent = d; fDest.appendChild(o); });
     }
-    _catCache = _deduped;
     // Apply filters
+    var fDestVal = (document.getElementById('catFiltroDestino') || {}).value || '';
     var fEstVal = (document.getElementById('catFiltroEstado') || {}).value || '';
     var fBusq = ((document.getElementById('catBusqueda') || {}).value || '').toLowerCase();
     var filtered = _catCache.filter(function(p) {
+      if (fDestVal && p.nombre_destino !== fDestVal) return false;
       if (fEstVal !== '' && String(p.activo) !== fEstVal) return false;
-      if (fBusq && (p.nombre_destino || '').toLowerCase().indexOf(fBusq) === -1) return false;
+      if (fBusq && (p.paquete || '').toLowerCase().indexOf(fBusq) === -1 && (p.nombre_destino || '').toLowerCase().indexOf(fBusq) === -1) return false;
       return true;
     });
     document.getElementById('catCount').textContent = filtered.length;
     // KPIs
-    var activos = filtered.filter(function(p) { return p.activo; });
-    var minPan = activos.length ? Math.min.apply(null, activos.map(function(p) { return p.precio_adulto_noche || 0; })) : 0;
-    var maxPan = activos.length ? Math.max.apply(null, activos.map(function(p) { return p.precio_adulto_noche || 0; })) : 0;
-    var kpiHtml = '<div class="cat-kpi"><div class="cat-kpi-v" style="color:var(--gold);">' + activos.length + '</div><div class="cat-kpi-l">Destinos activos</div></div>'
-      + '<div class="cat-kpi"><div class="cat-kpi-v" style="color:var(--cyan,#06b6d4);">USD ' + Math.round(minPan) + '</div><div class="cat-kpi-l">Mín. adulto/noche</div></div>'
-      + '<div class="cat-kpi"><div class="cat-kpi-v" style="color:var(--purple);">USD ' + Math.round(maxPan) + '</div><div class="cat-kpi-l">Máx. adulto/noche</div></div>'
-      + '<div class="cat-kpi"><div class="cat-kpi-v" style="color:var(--green);">' + _simConfig.menor_0_4_pct + '% / ' + _simConfig.menor_5_11_pct + '% / ' + _simConfig.menor_12_17_pct + '%</div><div class="cat-kpi-l">Desc. menores</div></div>';
+    var activos = _catCache.filter(function(p) { return p.activo; });
+    var destinosUnicos = []; var seenD = {};
+    activos.forEach(function(p) { if (!seenD[p.nombre_destino]) { seenD[p.nombre_destino] = true; destinosUnicos.push(p.nombre_destino); } });
+    var minPrecio = activos.length ? Math.min.apply(null, activos.map(function(p) { return p.precio_usd / p.personas; })) : 0;
+    var kpiHtml = '<div class="cat-kpi"><div class="cat-kpi-v" style="color:var(--gold);">' + _catCache.length + '</div><div class="cat-kpi-l">Total paquetes</div></div>'
+      + '<div class="cat-kpi"><div class="cat-kpi-v" style="color:var(--green);">' + activos.length + '</div><div class="cat-kpi-l">Activos</div></div>'
+      + '<div class="cat-kpi"><div class="cat-kpi-v" style="color:var(--purple);">' + destinosUnicos.length + '</div><div class="cat-kpi-l">Destinos</div></div>'
+      + '<div class="cat-kpi"><div class="cat-kpi-v" style="color:var(--cyan,#06b6d4);">USD ' + Math.round(minPrecio) + '</div><div class="cat-kpi-l">Mínimo por persona</div></div>';
     document.getElementById('catKpis').innerHTML = kpiHtml;
-    if (!filtered.length) { body.innerHTML = '<div class="cat-empty">📦 No se encontraron destinos</div>'; return; }
-    // Render — one row per destination, NO grouping
+    if (!filtered.length) { body.innerHTML = '<div class="cat-empty">📦 No se encontraron paquetes</div>'; return; }
+    // Render grouped by destination
     var html = '';
+    var lastDest = '';
     for (var i = 0; i < filtered.length; i++) {
       var p = filtered[i];
-      var pan = p.precio_adulto_noche || 0;
-      html += '<div class="cat-table-row' + (p.activo ? '' : ' inactive') + '" style="grid-template-columns:35% 20% 15% 15% 15%;">'
-        + '<div style="font-weight:700;font-size:.88rem;">' + esc(p.nombre_destino) + '</div>'
-        + '<div style="font-weight:800;color:var(--gold);font-size:1rem;">USD ' + pan.toLocaleString('es-AR') + '</div>'
-        + '<div style="color:var(--cyan);font-weight:700;">' + (p.max_ocupacion || '—') + ' pers.</div>'
+      if (p.nombre_destino !== lastDest) {
+        lastDest = p.nombre_destino;
+        var destCount = filtered.filter(function(x) { return x.nombre_destino === lastDest; }).length;
+        html += '<div class="cat-dest-group">' + esc(lastDest) + '<span>' + destCount + ' paquete' + (destCount > 1 ? 's' : '') + ' · slug: ' + esc(p.slug) + '</span></div>';
+      }
+      var ppm10 = p.personas > 0 ? Math.round((p.precio_usd / 10) / p.personas) : 0;
+      html += '<div class="cat-table-row' + (p.activo ? '' : ' inactive') + '">'
+        + '<div style="font-weight:700;font-size:.78rem;">' + esc(p.nombre_destino) + '</div>'
+        + '<div>' + esc(p.paquete) + '</div>'
+        + '<div>' + p.personas + '</div>'
+        + '<div>' + p.noches + '</div>'
+        + '<div style="font-weight:800;color:var(--gold);">USD ' + p.precio_usd.toLocaleString('es-AR') + '</div>'
+        + '<div class="cat-ppm">USD ' + ppm10 + '<span style="font-size:.62rem;color:var(--muted);"> /10c</span></div>'
+        + '<div style="color:var(--muted);">' + (p.orden || 0) + '</div>'
         + '<div><span class="cat-status ' + (p.activo ? 'active' : 'inactive') + '" onclick="toggleCatalogoActivo(' + p.id + ')">' + (p.activo ? '● Activo' : '○ Inactivo') + '</span></div>'
         + '<div style="display:flex;gap:4px;">'
         + '<button class="cat-act-btn edit" onclick="openEditCatalogo(' + p.id + ')" title="Editar">✏️</button>'
+        + '<button class="cat-act-btn dup" onclick="duplicateCatalogo(' + p.id + ')" title="Duplicar">📋</button>'
         + '<button class="cat-act-btn del" onclick="deleteCatalogo(' + p.id + ')" title="Desactivar">🗑</button>'
         + '</div></div>';
     }
@@ -6570,12 +6530,14 @@ function _catSlugify(text) {
 }
 
 function openAddDestino() {
-  var h = '<div class="mhead"><div><h2>🌍 Nuevo Destino</h2><p>Cargá el precio por adulto por noche — el paquete lo arma el cliente</p></div><button class="mclose" onclick="closeModal()">✕</button></div>'
+  var h = '<div class="mhead"><div><h2>🌍 Nuevo Destino</h2><p>Se creará el destino con un paquete base que podrás editar</p></div><button class="mclose" onclick="closeModal()">✕</button></div>'
     + '<div class="mbody" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
     + '<div class="mitem"><div class="ml">Nombre del destino *</div><input id="newDestNombre" class="medit" placeholder="Ej: Búzios" oninput="document.getElementById(\'newDestSlug\').value=_catSlugify(this.value)"></div>'
     + '<div class="mitem"><div class="ml">Slug (URL) *</div><input id="newDestSlug" class="medit" placeholder="Ej: buzios"></div>'
-    + '<div class="mitem"><div class="ml">Precio adulto/noche USD *</div><input id="newDestPrecio" type="number" class="medit" placeholder="Ej: 250" min="1"></div>'
-    + '<div class="mitem"><div class="ml">Max. ocupación</div><select id="newDestMaxOcup" class="msel"><option value="2">2</option><option value="3">3</option><option value="4" selected>4</option><option value="5">5</option><option value="6">6</option><option value="8">8</option><option value="10">10</option></select></div>'
+    + '<div class="mitem"><div class="ml">Paquete base *</div><input id="newDestPaquete" class="medit" placeholder="Ej: Escapada en Pareja" value="Paquete Base"></div>'
+    + '<div class="mitem"><div class="ml">Personas *</div><input id="newDestPersonas" type="number" class="medit" value="2" min="1"></div>'
+    + '<div class="mitem"><div class="ml">Noches</div><input id="newDestNoches" type="number" class="medit" value="7" min="1"></div>'
+    + '<div class="mitem"><div class="ml">Precio USD *</div><input id="newDestPrecio" type="number" class="medit" placeholder="Ej: 3500" min="1"></div>'
     + '</div>'
     + '<div class="mact"><button class="mbtn gold" onclick="saveAddDestino()">💾 Crear destino</button><button class="mbtn ghost" onclick="closeModal()">Cancelar</button></div>';
   document.getElementById('mbox').innerHTML = h;
@@ -6585,64 +6547,112 @@ function openAddDestino() {
 async function saveAddDestino() {
   var nombre = document.getElementById('newDestNombre').value.trim();
   var slug = document.getElementById('newDestSlug').value.trim();
+  var paquete = document.getElementById('newDestPaquete').value.trim();
+  var personas = parseInt(document.getElementById('newDestPersonas').value, 10);
+  var noches = parseInt(document.getElementById('newDestNoches').value, 10) || 7;
   var precio = parseFloat(document.getElementById('newDestPrecio').value);
-  if (!nombre || !slug || !precio) { showToast('⚠️ Completá nombre, slug y precio'); return; }
-  // Check duplicados: nombre_destino ya existe?
-  var dupNombre = _catCache.find(function(c) { return c.nombre_destino.toLowerCase() === nombre.toLowerCase(); });
-  if (dupNombre) { showToast('⚠️ Ya existe un destino llamado "' + dupNombre.nombre_destino + '"'); return; }
-  // Check slug duplicado
-  var dupSlug = _catCache.find(function(c) { return c.slug.toLowerCase() === slug.toLowerCase(); });
-  if (dupSlug) { showToast('⚠️ Ya existe un destino con slug "' + dupSlug.slug + '"'); return; }
-  var d = {
-    nombre_destino: nombre,
-    slug: slug,
-    precio_adulto_noche: precio,
-    activo: true, orden: 0,
-    max_ocupacion: parseInt((document.getElementById('newDestMaxOcup') || {}).value, 10) || 4
-  };
+  if (!nombre || !slug || !paquete || !personas || !precio) { showToast('⚠️ Completá todos los campos obligatorios'); return; }
+  var d = { nombre_destino: nombre, slug: slug, paquete: paquete, personas: personas, noches: noches, precio_usd: precio, orden: 0, activo: true };
   var btn = document.querySelector('#modal .mbtn.gold'); if (btn) btn.disabled = true;
-  try { var r = await sbClient.from('catalogo_precios').insert([d]); if (r.error) throw r.error; showToast('✅ Destino "' + nombre + '" creado — USD ' + precio + '/noche'); closeModal(); renderCatalogo(); }
+  try { var r = await sbClient.from('catalogo_precios').insert([d]); if (r.error) throw r.error; showToast('✅ Destino "' + nombre + '" creado con paquete base'); closeModal(); renderCatalogo(); }
   catch (e) { showToast('❌ ' + e.message); } finally { if (btn) btn.disabled = false; }
 }
 
+function openAddPaquete(defaultSlug) {
+  // Build destination options from cache
+  var destOpts = '';
+  var seen = {};
+  _catCache.forEach(function(p) { if (!seen[p.slug]) { seen[p.slug] = true; destOpts += '<option value="' + esc(p.slug) + '"' + (defaultSlug && p.slug === defaultSlug ? ' selected' : '') + '>' + esc(p.nombre_destino) + ' (' + esc(p.slug) + ')</option>'; } });
+  if (!destOpts) { showToast('⚠️ Primero creá un destino'); return; }
+  var h = '<div class="mhead"><div><h2>➕ Nuevo Paquete</h2></div><button class="mclose" onclick="closeModal()">✕</button></div>'
+    + '<div class="mbody" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
+    + '<div class="mitem"><div class="ml">Destino *</div><select id="catPkgDest" class="msel">' + destOpts + '</select></div>'
+    + '<div class="mitem"><div class="ml">Nombre del paquete *</div><input id="catPkgNombre" class="medit" placeholder="Ej: Escapada en Pareja"></div>'
+    + '<div class="mitem"><div class="ml">Personas *</div><input id="catPkgPersonas" type="number" class="medit" value="2" min="1"></div>'
+    + '<div class="mitem"><div class="ml">Noches</div><input id="catPkgNoches" type="number" class="medit" value="7" min="1"></div>'
+    + '<div class="mitem"><div class="ml">Precio total USD *</div><input id="catPkgPrecio" type="number" class="medit" placeholder="Ej: 3500" min="1"></div>'
+    + '<div class="mitem"><div class="ml">Orden</div><input id="catPkgOrden" type="number" class="medit" value="0"></div>'
+    + '</div>'
+    + '<div id="catPkgPreview" style="margin:12px 24px;padding:12px;background:rgba(0,0,0,.2);border-radius:10px;font-size:.78rem;color:var(--muted);text-align:center;">Ingresá los datos para ver la estimación</div>'
+    + '<div class="mact"><button class="mbtn gold" onclick="saveAddPaquete()">💾 Guardar paquete</button><button class="mbtn ghost" onclick="closeModal()">Cancelar</button></div>';
+  document.getElementById('mbox').innerHTML = h;
+  document.getElementById('modal').classList.add('open');
+  // Add live preview
+  ['catPkgPersonas','catPkgPrecio','catPkgNoches'].forEach(function(id) {
+    var el = document.getElementById(id); if (el) el.addEventListener('input', _catPkgPreview);
+  });
+}
 
+function _catPkgPreview() {
+  var pers = parseInt((document.getElementById('catPkgPersonas') || {}).value, 10) || 0;
+  var prec = parseFloat((document.getElementById('catPkgPrecio') || {}).value) || 0;
+  var noch = parseInt((document.getElementById('catPkgNoches') || {}).value, 10) || 0;
+  var el = document.getElementById('catPkgPreview'); if (!el) return;
+  if (!pers || !prec) { el.innerHTML = 'Ingresá los datos para ver la estimación'; return; }
+  var ppm10 = Math.round((prec / 10) / pers);
+  var ppd = noch > 0 ? Math.round(prec / noch / pers) : 0;
+  el.innerHTML = 'USD ' + ppm10 + '/persona/mes (10 cuotas) · USD ' + ppd + '/persona/día (' + noch + ' noches)';
+}
+
+async function saveAddPaquete() {
+  var slug = document.getElementById('catPkgDest').value;
+  var paquete = document.getElementById('catPkgNombre').value.trim();
+  var personas = parseInt(document.getElementById('catPkgPersonas').value, 10);
+  var noches = parseInt(document.getElementById('catPkgNoches').value, 10) || 7;
+  var precio = parseFloat(document.getElementById('catPkgPrecio').value);
+  var orden = parseInt(document.getElementById('catPkgOrden').value, 10) || 0;
+  if (!slug || !paquete || !personas || !precio) { showToast('⚠️ Completá los campos obligatorios'); return; }
+  // Get destino name from cache
+  var destObj = _catCache.find(function(p) { return p.slug === slug; });
+  var nombreDestino = destObj ? destObj.nombre_destino : slug;
+  var d = { nombre_destino: nombreDestino, slug: slug, paquete: paquete, personas: personas, noches: noches, precio_usd: precio, orden: orden, activo: true };
+  var btn = document.querySelector('#modal .mbtn.gold'); if (btn) btn.disabled = true;
+  try { var r = await sbClient.from('catalogo_precios').insert([d]); if (r.error) throw r.error; showToast('✅ Paquete "' + paquete + '" agregado'); closeModal(); renderCatalogo(); }
+  catch (e) { showToast('❌ ' + e.message); } finally { if (btn) btn.disabled = false; }
+}
 
 async function openEditCatalogo(id) {
-  var r = await sbClient.from('catalogo_precios').select('*').eq('id', id).maybeSingle();
-  if (r.error || !r.data) { showToast('❌ Destino no encontrado'); return; }
+  var r = await sbClient.from('catalogo_precios').select('*').eq('id', id).single();
+  if (r.error) { showToast('❌ Error al cargar'); return; }
   var d = r.data;
-  var pan = d.precio_adulto_noche || 0;
-  var h = '<div class="mhead"><div><h2>✏️ Editar Destino</h2><p style="font-size:.72rem;color:var(--muted);">ID: ' + d.id + '</p></div><button class="mclose" onclick="closeModal()">✕</button></div>'
+  var h = '<div class="mhead"><div><h2>✏️ Editar Paquete</h2><p style="font-size:.72rem;color:var(--muted);">ID: ' + d.id + '</p></div><button class="mclose" onclick="closeModal()">✕</button></div>'
     + '<div class="mbody" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
     + '<div class="mitem"><div class="ml">Destino</div><input id="eCatDest" class="medit" value="' + esc(d.nombre_destino) + '"></div>'
     + '<div class="mitem"><div class="ml">Slug (URL)</div><input id="eCatSlug" class="medit" value="' + esc(d.slug) + '"></div>'
-    + '<div class="mitem"><div class="ml">Precio adulto/noche USD</div><input id="eCatPre" type="number" class="medit" value="' + pan + '" min="1"></div>'
-    + '<div class="mitem"><div class="ml">Max. ocupación</div><select id="eCatMaxOcup" class="msel"><option value="2"' + ((d.max_ocupacion || 4) == 2 ? ' selected' : '') + '>2</option><option value="3"' + ((d.max_ocupacion || 4) == 3 ? ' selected' : '') + '>3</option><option value="4"' + ((d.max_ocupacion || 4) == 4 ? ' selected' : '') + '>4</option><option value="5"' + ((d.max_ocupacion || 4) == 5 ? ' selected' : '') + '>5</option><option value="6"' + ((d.max_ocupacion || 4) == 6 ? ' selected' : '') + '>6</option><option value="8"' + ((d.max_ocupacion || 4) == 8 ? ' selected' : '') + '>8</option><option value="10"' + ((d.max_ocupacion || 4) == 10 ? ' selected' : '') + '>10</option></select></div>'
-    + '<div class="mitem" style="grid-column:span 2;"><div class="ml">Estado</div><select id="eCatAct" class="msel"><option value="true"' + (d.activo ? ' selected' : '') + '>✅ Activo</option><option value="false"' + (!d.activo ? ' selected' : '') + '>❌ Inactivo</option></select></div>'
+    + '<div class="mitem"><div class="ml">Paquete</div><input id="eCatPaq" class="medit" value="' + esc(d.paquete) + '"></div>'
+    + '<div class="mitem"><div class="ml">Personas</div><input id="eCatPer" type="number" class="medit" value="' + d.personas + '" min="1"></div>'
+    + '<div class="mitem"><div class="ml">Noches</div><input id="eCatNoc" type="number" class="medit" value="' + d.noches + '" min="1"></div>'
+    + '<div class="mitem"><div class="ml">Precio USD</div><input id="eCatPre" type="number" class="medit" value="' + d.precio_usd + '" min="1"></div>'
+    + '<div class="mitem"><div class="ml">Orden</div><input id="eCatOrd" type="number" class="medit" value="' + (d.orden || 0) + '"></div>'
+    + '<div class="mitem"><div class="ml">Estado</div><select id="eCatAct" class="msel"><option value="true"' + (d.activo ? ' selected' : '') + '>✅ Activo</option><option value="false"' + (!d.activo ? ' selected' : '') + '>❌ Inactivo</option></select></div>'
     + '</div>'
+    + '<div id="eCatPreview" style="margin:12px 24px;padding:12px;background:rgba(0,0,0,.2);border-radius:10px;font-size:.78rem;color:var(--muted);text-align:center;">USD ' + Math.round((d.precio_usd / 10) / d.personas) + '/persona/mes (10 cuotas)</div>'
     + '<div class="mact"><button class="mbtn gold" onclick="saveEditCatalogo(' + d.id + ')">💾 Guardar cambios</button><button class="mbtn ghost" onclick="closeModal()">Cancelar</button></div>';
   document.getElementById('mbox').innerHTML = h;
   document.getElementById('modal').classList.add('open');
+  ['eCatPer','eCatPre','eCatNoc'].forEach(function(id) {
+    var el = document.getElementById(id); if (el) el.addEventListener('input', function() {
+      var p = parseInt(document.getElementById('eCatPer').value,10)||1;
+      var pr = parseFloat(document.getElementById('eCatPre').value)||0;
+      document.getElementById('eCatPreview').innerHTML = 'USD ' + Math.round((pr/10)/p) + '/persona/mes (10 cuotas)';
+    });
+  });
 }
 
 async function saveEditCatalogo(id) {
-  var precio = parseFloat(document.getElementById('eCatPre').value) || 0;
   var u = {
     nombre_destino: document.getElementById('eCatDest').value.trim(),
     slug: document.getElementById('eCatSlug').value.trim().toLowerCase(),
-    precio_adulto_noche: precio,
-    activo: document.getElementById('eCatAct').value === 'true',
-    max_ocupacion: parseInt((document.getElementById('eCatMaxOcup') || {}).value, 10) || 4
+    paquete: document.getElementById('eCatPaq').value.trim(),
+    personas: parseInt(document.getElementById('eCatPer').value, 10),
+    noches: parseInt(document.getElementById('eCatNoc').value, 10) || 7,
+    precio_usd: parseFloat(document.getElementById('eCatPre').value),
+    orden: parseInt(document.getElementById('eCatOrd').value, 10) || 0,
+    activo: document.getElementById('eCatAct').value === 'true'
   };
-  // Check slug duplicado (excluyendo el registro actual)
-  var dupSlug = _catCache.find(function(c) { return c.id !== id && c.slug.toLowerCase() === u.slug.toLowerCase(); });
-  if (dupSlug) { showToast('⚠️ Slug "' + u.slug + '" ya usado por "' + dupSlug.nombre_destino + '"'); return; }
-  // Check nombre duplicado (excluyendo el registro actual)
-  var dupNombre = _catCache.find(function(c) { return c.id !== id && c.nombre_destino.toLowerCase() === u.nombre_destino.toLowerCase(); });
-  if (dupNombre) { showToast('⚠️ Ya existe "' + dupNombre.nombre_destino + '"'); return; }
-  if (!u.nombre_destino || !precio) { showToast('⚠️ Completá campos obligatorios'); return; }
+  if (!u.nombre_destino || !u.paquete || !u.personas || !u.precio_usd) { showToast('⚠️ Completá campos obligatorios'); return; }
   var btn = document.querySelector('#modal .mbtn.gold'); if (btn) btn.disabled = true;
-  try { var r = await sbClient.from('catalogo_precios').update(u).eq('id', id); if (r.error) throw r.error; showToast('✅ Destino actualizado'); closeModal(); renderCatalogo(); }
+  try { var r = await sbClient.from('catalogo_precios').update(u).eq('id', id); if (r.error) throw r.error; showToast('✅ Paquete actualizado'); closeModal(); renderCatalogo(); }
   catch (e) { showToast('❌ ' + e.message); } finally { if (btn) btn.disabled = false; }
 }
 
@@ -6655,12 +6665,39 @@ async function toggleCatalogoActivo(id) {
 }
 
 async function deleteCatalogo(id) {
-  if (!confirm('⚠️ ¿Desactivar este destino? Podés reactivarlo después.')) return;
-  try { var r = await sbClient.from('catalogo_precios').update({ activo: false }).eq('id', id); if (r.error) throw r.error; showToast('✅ Destino desactivado'); renderCatalogo(); }
+  if (!confirm('⚠️ ¿Desactivar este paquete? Podés reactivarlo después.')) return;
+  try { var r = await sbClient.from('catalogo_precios').update({ activo: false }).eq('id', id); if (r.error) throw r.error; showToast('✅ Paquete desactivado'); renderCatalogo(); }
   catch (e) { showToast('❌ ' + e.message); }
 }
 
+async function duplicateCatalogo(id) {
+  var item = _catCache.find(function(p) { return p.id === id; });
+  if (!item) return;
+  var h = '<div class="mhead"><div><h2>📋 Duplicar Paquete</h2><p style="font-size:.72rem;color:var(--muted);">Clonar: ' + esc(item.paquete) + ' (' + item.personas + ' pers.)</p></div><button class="mclose" onclick="closeModal()">✕</button></div>'
+    + '<div class="mbody" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
+    + '<div class="mitem"><div class="ml">Nombre del nuevo paquete *</div><input id="dupNombre" class="medit" value="' + esc(item.paquete) + ' (copia)"></div>'
+    + '<div class="mitem"><div class="ml">Personas *</div><input id="dupPersonas" type="number" class="medit" value="' + item.personas + '" min="1"></div>'
+    + '<div class="mitem"><div class="ml">Precio USD *</div><input id="dupPrecio" type="number" class="medit" value="' + item.precio_usd + '"></div>'
+    + '<div class="mitem"><div class="ml">Noches</div><input id="dupNoches" type="number" class="medit" value="' + item.noches + '"></div>'
+    + '</div>'
+    + '<div class="mact"><button class="mbtn gold" onclick="saveDuplicate(' + id + ')">💾 Crear copia</button><button class="mbtn ghost" onclick="closeModal()">Cancelar</button></div>';
+  document.getElementById('mbox').innerHTML = h;
+  document.getElementById('modal').classList.add('open');
+}
 
+async function saveDuplicate(srcId) {
+  var src = _catCache.find(function(p) { return p.id === srcId; });
+  if (!src) return;
+  var nombre = document.getElementById('dupNombre').value.trim();
+  var personas = parseInt(document.getElementById('dupPersonas').value, 10);
+  var precio = parseFloat(document.getElementById('dupPrecio').value);
+  var noches = parseInt(document.getElementById('dupNoches').value, 10) || 7;
+  if (!nombre || !personas || !precio) { showToast('⚠️ Completá campos obligatorios'); return; }
+  var d = { nombre_destino: src.nombre_destino, slug: src.slug, paquete: nombre, personas: personas, noches: noches, precio_usd: precio, orden: (src.orden || 0) + 1, activo: true };
+  var btn = document.querySelector('#modal .mbtn.gold'); if (btn) btn.disabled = true;
+  try { var r = await sbClient.from('catalogo_precios').insert([d]); if (r.error) throw r.error; showToast('✅ Paquete duplicado'); closeModal(); renderCatalogo(); }
+  catch (e) { showToast('❌ ' + e.message); } finally { if (btn) btn.disabled = false; }
+}
 
 
 // ══════════════════════════════════════════════════════
