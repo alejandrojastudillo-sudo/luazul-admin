@@ -3591,8 +3591,52 @@ function renderPagoComisiones(){
       + '</div>';
   }
 
+  // ── RAMA JERÁRQUICA: Vendedor > Jefe > Gerente ──
+  function getRamaJerarquica(v) {
+    var jefes = _cacheSalesLeaders || [];
+    var gerentes = _cacheGerentes || [];
+    var regiones = _cacheRegiones || [];
+    var partes = [];
+    // El vendedor
+    partes.push({nombre: v.nombre, tipo: 'Vendedor'});
+    // Buscar su jefe (manager_id)
+    var jefe = jefes.find(function(j) { return String(j.id) === String(v.manager_id); });
+    if (jefe) {
+      partes.push({nombre: jefe.nombre, tipo: 'Jefe'});
+      // Buscar gerente del jefe (manager_id del jefe)
+      var ger = gerentes.find(function(g) { return String(g.id) === String(jefe.manager_id); });
+      if (ger) {
+        partes.push({nombre: ger.nombre, tipo: 'Gerente'});
+      }
+    } else {
+      // Si no tiene jefe, buscar si reporta directo a un gerente
+      var gerDir = gerentes.find(function(g) { return String(g.id) === String(v.manager_id); });
+      if (gerDir) partes.push({nombre: gerDir.nombre, tipo: 'Gerente'});
+    }
+    // Agregar región
+    var reg = regiones.find(function(r) { return String(r.id) === String(v.rid); });
+    var regStr = reg ? (reg.bandera ? reg.bandera + ' ' : '') + reg.nombre : '';
+    return { partes: partes, region: regStr };
+  }
+
+  function buildRamaHtml(rama) {
+    var html = '<div style="margin-top:6px;display:flex;align-items:center;gap:4px;flex-wrap:wrap;">';
+    rama.partes.forEach(function(p, i) {
+      var colores = { 'Vendedor': '#a78bfa', 'Jefe': '#f59e0b', 'Gerente': '#4ade80' };
+      var col = colores[p.tipo] || 'rgba(180,200,240,.5)';
+      if (i > 0) html += '<span style="color:rgba(180,200,240,.3);font-size:.7rem;">›</span>';
+      html += '<span style="font-size:.68rem;font-weight:700;color:' + col + ';">' + p.tipo + '. ' + esc(p.nombre) + '</span>';
+    });
+    if (rama.region) {
+      html += '<span style="margin-left:4px;font-size:.65rem;color:rgba(180,200,240,.4);">(' + esc(rama.region) + ')</span>';
+    }
+    html += '</div>';
+    return html;
+  }
+
   function buildCardVendedor(v){
     var cm   = calcComision(v, cs);
+    var rama = getRamaJerarquica(v);
     var comps = v.comprobantes || [];
     var totalPagado = comps.reduce(function(s,x){ return s+(parseFloat(x.monto)||0); },0);
     var pendiente   = Math.max(0, cm.neta - totalPagado);
@@ -3614,6 +3658,7 @@ function renderPagoComisiones(){
       + '<div style="width:44px;height:44px;border-radius:11px;background:rgba(167,139,250,.1);border:1px solid rgba(167,139,250,.25);display:flex;align-items:center;justify-content:center;font-size:1.2rem;flex-shrink:0;">🧑‍💼</div>'
       + '<div style="flex:1;min-width:120px;">'
         + '<div style="font-weight:800;font-size:.98rem;">'+v.nombre+'</div>'
+        + buildRamaHtml(rama)
         + '<div style="font-size:.7rem;color:rgba(180,200,240,.5);margin-top:2px;">'+(v.email||'')+(v.cbu?' · <span style="font-family:monospace;color:#a78bfa;">'+v.cbu+'</span>':'')+'</div>'
       + '</div>'
       + estadoBadge(pendiente)
@@ -3713,7 +3758,8 @@ function renderPagoComisiones(){
         +'<div style="width:44px;height:44px;border-radius:11px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.25);display:flex;align-items:center;justify-content:center;font-size:1.2rem;flex-shrink:0;">🎯</div>'
         +'<div style="flex:1;min-width:120px;">'
         +'<div style="font-weight:800;font-size:.98rem;">'+esc(jefe.nombre)+'</div>'
-        +'<div style="font-size:.7rem;color:rgba(180,200,240,.5);margin-top:2px;">'+esc(jefe.email||'')+' · '+(rJ?rJ.bandera+' '+rJ.nombre:'—')+' · Equipo: '+cmJ.equipoSize+' vendedores</div>'
+        + buildRamaHtml(getRamaJerarquica(jefe))
+        +'<div style="font-size:.7rem;color:rgba(180,200,240,.5);margin-top:2px;">'+esc(jefe.email||'')+' · Equipo: '+cmJ.equipoSize+' vendedores</div>'
         +'</div>'
         +estadoBadge(pendJ)
         +'</div>'
