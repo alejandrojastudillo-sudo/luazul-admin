@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es" style="color-scheme:dark;">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -318,6 +318,8 @@ function _lzMapClient(c) {
     telefono: c.telefono || '', documento: c.documento || '', domicilio: c.domicilio || '',
     estado: c.estado || 'activo', destino: c.destino || '', paquete: c.paquete || '',
     fecha_viaje: c.fecha_viaje || '', noches: c.noches || null, personas: c.personas || null,
+    adultos: parseInt(c.adultos) || null, menores_0_4: parseInt(c.menores_0_4) || 0,
+    menores_5_11: parseInt(c.menores_5_11) || 0, menores_12_17: parseInt(c.menores_12_17) || 0,
     monto_cuota: parseFloat(c.monto_cuota) || 0, cuotas_total: parseInt(c.cuotas_total) || 10,
     cuotas_pagadas: parseInt(c.cuotas_pagadas) || 0, total_usd: parseFloat(c.total_usd) || 0,
     fechaAlta: c.fecha_alta ? c.fecha_alta.slice(0, 10) : '', notas: c.notas || '',
@@ -639,7 +641,7 @@ function _sbLoad() { return loadClients(); }
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
           <select class="msel" id="pagoVFilt" onchange="renderPagos()" style="width:auto;padding:7px 11px;"><option value="">Todos los asesores</option></select>
           <select class="msel" id="pagoEstFilt" onchange="renderPagos()" style="width:auto;padding:7px 11px;"><option value="">Todos</option><option value="pendiente">Pendientes de aprobación</option><option value="aprobado">Aprobados</option></select>
-          <button class="addbtn" onclick="aprobarTodos()" style="background:linear-gradient(135deg,#059669,#10b981);font-size:.78rem;padding:8px 14px;">✅ Aprobar todos pendientes</button>
+          <!-- Solo el CEO aprueba pagos -->
         </div>
       </div>
       <div id="pagosBody"></div>
@@ -762,11 +764,7 @@ async function _sbUpdateVendor(vid, data) {
   if (result.error) throw result.error;
 }
 
-async function _sbApprovePayment(pagoId) {
-  var result = await sbClient.from('pagos').update({ estado: 'aprobado' }).eq('id', pagoId);
-  if (result.error) throw result.error;
-  return true;
-}
+// _sbApprovePayment — REMOVIDO. Solo el CEO aprueba pagos.
 
 //  COMMISSION ENGINE (Reglas de negocio)
 // ══════════════════════════════════════════════════════
@@ -978,79 +976,53 @@ function renderMisComisionesGerente() {
     if (c.fechaAlta) { var d = new Date(c.fechaAlta + 'T00:00:00'); return d.getFullYear() + '-' + d.getMonth(); }
     return '';
   }
-  // FIX-COM-GTE: Base correcta es 5% (no 20%) sobre 1ª cuota de cada cliente de la región
-  var pctBase = 0.05;
+  var pctBase = 0.20;
   var pctBonus = yo ? parseFloat(yo.com_pct || 0) / 100 : 0;
   var mn = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
-
-  // FIX-COM-GTE: Filtrar clientes por región del gerente (solo los de sus vendedores)
-  var misRegiones = window._gerenteRegionIds || [];
-  var vendedoresRegion = (_memCache[VK] || []).filter(function(v) {
-    return misRegiones.length > 0 ? misRegiones.indexOf(String(v.region_id)) !== -1 : String(v.region_id) === String((yo || {}).region_id);
-  });
-  var vendedoresIds = vendedoresRegion.map(function(v) { return v.user_id; });
-  var regionClientes = clientes.filter(function(c) {
-    return vendedoresIds.some(function(vid) { return String(vid) === String(c.vid); });
-  });
-
   var byMonth = {};
-  regionClientes.forEach(function(c) {
+  clientes.forEach(function(c) {
     var k = getMonth(c);
     if (!k) return;
     if (!byMonth[k]) byMonth[k] = [];
     byMonth[k].push(c);
   });
-  var totalBase = 0, totalBonus = 0, totalPen = 0, meses = [];
+  var totalBase = 0, totalBonus = 0, meses = [];
   Object.keys(byMonth).sort().forEach(function(key) {
     var grupo = byMonth[key];
-    // FIX-COM-GTE: Solo contar clientes vendidos (no bajas con 0 cuotas)
-    var vendidos = grupo.filter(function(c) { return !(c.estado === 'baja' && (parseInt(c.cuotas_pagadas) || 0) === 0); });
-    var activos = vendidos.filter(function(c) { return c.estado !== 'baja'; });
-    // FIX-COM-GTE: Penalización por bajas tempranas (≤3 cuotas pagadas)
-    var bajasP3 = vendidos.filter(function(c) { return c.estado === 'baja' && (parseInt(c.cuotas_pagadas) || 0) <= 3; });
-    // Base: 5% de 1ª cuota por cada cliente activo
+    var activos = grupo.filter(function(c) { return c.estado !== 'baja'; });
     var base = activos.reduce(function(s, c) { return s + (parseFloat(c.monto_cuota) || 0) * pctBase; }, 0);
-    // Bonus sobre 2ª cuota, solo clientes con ≥2 cuotas pagadas (premio regional)
     var bonus = 0;
     if (pctBonus > 0) {
-      var elegiblesBonus = vendidos.filter(function(c) { return (parseInt(c.cuotas_pagadas) || 0) >= 2; });
-      bonus = elegiblesBonus.reduce(function(s, c) { return s + (parseFloat(c.monto_cuota) || 0) * pctBonus; }, 0);
+      bonus = activos.filter(function(c) { return (parseInt(c.cuotas_pagadas) || 0) >= 2; })
+        .reduce(function(s, c) { return s + (parseFloat(c.monto_cuota) || 0) * pctBonus; }, 0);
     }
-    // FIX-COM-GTE: Penalización solo sobre base (5% de 1ª cuota) por bajas tempranas
-    var pen = bajasP3.reduce(function(s, c) { return s + (parseFloat(c.monto_cuota) || 0) * pctBase; }, 0);
     totalBase += base;
     totalBonus += bonus;
-    totalPen += pen;
     var parts = key.split('-');
     var now = new Date();
     meses.push({
       label: mn[parseInt(parts[1])] + ' ' + parts[0],
       ventas: activos.length,
-      bajasP3: bajasP3.length,
       base: Math.round(base * 100) / 100,
       bonus: Math.round(bonus * 100) / 100,
-      pen: Math.round(pen * 100) / 100,
-      neta: Math.round(Math.max(0, base + bonus - pen) * 100) / 100,
+      neta: Math.round((base + bonus) * 100) / 100,
       esCur: key === (now.getFullYear() + '-' + now.getMonth())
     });
   });
-  var totalNeta = Math.round(Math.max(0, (totalBase + totalBonus) - totalPen) * 100) / 100;
+  var totalNeta = Math.round((totalBase + totalBonus) * 100) / 100;
   var comps = [];
   if (yo && yo.comprobantes_json) { try { comps = typeof yo.comprobantes_json === 'string' ? JSON.parse(yo.comprobantes_json) : yo.comprobantes_json; } catch(e) { comps = []; } }
   else if (yo && Array.isArray(yo.comprobantes)) { comps = yo.comprobantes; }
   var totalPagado = comps.reduce(function(s, x) { return s + (parseFloat(x.monto) || 0); }, 0);
   var pendiente = Math.max(0, totalNeta - totalPagado);
   var cbuVal = yo ? (yo.cbu || '') : '';
-  var kpisHtml = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:10px;margin-bottom:20px;">'
+  var kpisHtml = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px;margin-bottom:20px;">'
     + '<div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:12px;padding:12px;text-align:center;">'
-      + '<div style="font-size:.6rem;color:var(--muted);margin-bottom:3px;">BASE 5% (1ª cuota)</div>'
+      + '<div style="font-size:.6rem;color:var(--muted);margin-bottom:3px;">BASE 20%</div>'
       + '<div style="font-family:Syne,sans-serif;font-size:1.1rem;font-weight:800;color:#f59e0b;">' + fmtM(totalBase) + '</div></div>'
     + '<div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:12px;padding:12px;text-align:center;">'
       + '<div style="font-size:.6rem;color:var(--muted);margin-bottom:3px;">BONUS ' + (yo && yo.com_pct > 0 ? yo.com_pct + '%' : '—') + '</div>'
       + '<div style="font-family:Syne,sans-serif;font-size:1.1rem;font-weight:800;color:#a78bfa;">' + fmtM(totalBonus) + '</div></div>'
-    + '<div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:12px;padding:12px;text-align:center;">'
-      + '<div style="font-size:.6rem;color:var(--muted);margin-bottom:3px;">PENALIZACIÓN</div>'
-      + '<div style="font-family:Syne,sans-serif;font-size:1.1rem;font-weight:800;color:' + (totalPen > 0 ? '#f87171' : 'rgba(255,255,255,.2)') + ';">' + (totalPen > 0 ? '-' + fmtM(totalPen) : '—') + '</div></div>'
     + '<div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:12px;padding:12px;text-align:center;">'
       + '<div style="font-size:.6rem;color:var(--muted);margin-bottom:3px;">TOTAL GENERADO</div>'
       + '<div style="font-family:Syne,sans-serif;font-size:1.1rem;font-weight:800;color:#4ade80;">' + fmtM(totalNeta) + '</div></div>'
@@ -1071,14 +1043,13 @@ function renderMisComisionesGerente() {
     ? '<table style="width:100%;border-collapse:collapse;font-size:.75rem;">'
       + '<thead><tr style="font-size:.6rem;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--border);">'
       + '<th style="padding:5px 8px;text-align:left;">Mes</th><th style="padding:5px 8px;text-align:center;">Ventas</th>'
-      + '<th style="padding:5px 8px;text-align:right;">Base 5%</th><th style="padding:5px 8px;text-align:right;">Bonus</th><th style="padding:5px 8px;text-align:right;">Penal.</th><th style="padding:5px 8px;text-align:right;">Total</th></td></thead><tbody>'
+      + '<th style="padding:5px 8px;text-align:right;">Base</th><th style="padding:5px 8px;text-align:right;">Bonus</th><th style="padding:5px 8px;text-align:right;">Total</th></td></thead><tbody>'
       + meses.map(function(m) {
           return '<tr style="border-bottom:1px solid var(--border);' + (m.esCur ? 'font-weight:800;' : '') + '">'
             + '<td style="padding:5px 8px;">' + (m.esCur ? '★ ' : '') + m.label + '</td>'
             + '<td style="padding:5px 8px;text-align:center;">' + m.ventas + '</td>'
             + '<td style="padding:5px 8px;text-align:right;color:#f59e0b;">' + fmtM(m.base) + '</td>'
             + '<td style="padding:5px 8px;text-align:right;color:#a78bfa;">' + fmtM(m.bonus) + '</td>'
-            + '<td style="padding:5px 8px;text-align:right;color:' + (m.pen > 0 ? '#f87171' : 'rgba(255,255,255,.2)') + ';">' + (m.pen > 0 ? '-' + fmtM(m.pen) : '—') + '</td>'
             + '<td style="padding:5px 8px;text-align:right;font-weight:700;color:#4ade80;">' + fmtM(m.neta) + '</td>'
           + '</tr>';
         }).join('')
@@ -1234,7 +1205,7 @@ function renderOverview() {
   var allStaff = (_memCache[VK] || []).concat(window._cacheSalesLeaders || []);
   var ns = (_memCache[NK] || []) || [];
   var unread = ns.filter(function(n) { return !n.leida; }).length;
-  var pending = ns.filter(function(n) { return n.tipo === 'payment' && !n.aprobada; }).length;
+  var pending = 0; // Solo el CEO aprueba pagos
   var rec = cs.reduce(function(s, c) { return s + (parseInt(c.cuotas_pagadas) || 0) * (parseFloat(c.monto_cuota) || 0); }, 0);
   var totalJefes = (window._cacheSalesLeaders || []).length;
   document.getElementById('oStats').innerHTML = [
@@ -1246,7 +1217,7 @@ function renderOverview() {
     { i: '🏁', v: cs.filter(function(c) { return c.estado === 'completo'; }).length, l: 'Completos', c: 'var(--blue)' },
     { i: '💵', v: 'USD ' + rec.toLocaleString(), l: 'Total recaudado', c: 'var(--gold)' },
     { i: '🔔', v: unread, l: 'Alertas sin leer', c: unread > 0 ? 'var(--red)' : '' },
-    { i: '💳', v: pending, l: 'Pagos por aprobar', c: pending > 0 ? 'var(--gold)' : '' }
+    { i: '💳', v: ns.filter(function(n){return n.tipo==='payment';}).length, l: 'Pagos recibidos', c: 'var(--gold)' }
   ].map(function(s) {
     return '<div class="stat"><span style="font-size:1.3rem;">' + s.i + '</span><div class="sval"' + (s.c ? ' style="color:' + s.c + '"' : '') + '>' + s.v + '</div><div class="slbl">' + s.l + '</div></div>';
   }).join('');
@@ -1513,7 +1484,8 @@ function openVendorDetail(vid) {
       return '<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);cursor:pointer;" onclick="openClientDetail(' + c.id + ')">'
         + '<div class="sem ' + c._s + '"></div>'
         + '<div style="flex:1;min-width:0;"><div style="font-weight:600;font-size:.85rem;">' + esc(c.nombre) + '</div>'
-        + '<div style="font-size:.7rem;color:var(--muted);">' + c.destino + ' · ' + c.paquete + '</div></div>'
+        + '<div style="font-size:.7rem;color:var(--muted);">' + c.destino + ' · ' + c.paquete + '</div>'
+        + '<div style="font-size:.65rem;color:rgba(180,200,240,.45);margin-top:1px;">' + (c.adultos || '?') + ' adultos' + (parseInt(c.menores_0_4) > 0 ? ' · ' + c.menores_0_4 + ' m(0-4)' : '') + (parseInt(c.menores_5_11) > 0 ? ' · ' + c.menores_5_11 + ' m(5-11)' : '') + (parseInt(c.menores_12_17) > 0 ? ' · ' + c.menores_12_17 + ' m(12-17)' : '') + (c.noches ? ' · ' + c.noches + ' noches' : '') + '</div></div>'
         + '<div style="width:75px;text-align:right;"><div style="font-size:.75rem;font-weight:700;color:' + sc(c._s) + ';">' + c._pct + '%</div>'
         + '<div class="pbar"><div class="pfill" style="width:' + c._pct + '%;background:' + sc(c._s) + ';"></div></div></div>'
         + '<span class="bdg ' + c.estado + '">' + c.estado + '</span>'
@@ -1935,7 +1907,7 @@ function openClientDetail(id) {
       <div class="mgrid" style="grid-template-columns:1fr 1fr; gap:10px; margin-bottom:20px;">
         <div class="mi"><div class="ml">🏖️ Destino</div><div class="mv">${c.destino || '—'}</div></div>
         <div class="mi"><div class="ml">📦 Paquete</div><div class="mv">${c.paquete || '—'}</div></div>
-        <div class="mi"><div class="ml">👥 Personas</div><div class="mv">${c.personas || '—'} · ${c.noches || '—'} noches</div></div>
+        <div class="mi"><div class="ml">👥 Viajeros</div><div class="mv">${c.adultos || '?'} adultos${parseInt(c.menores_0_4) > 0 ? ', ' + c.menores_0_4 + ' menores (0-4)' : ''}${parseInt(c.menores_5_11) > 0 ? ', ' + c.menores_5_11 + ' (5-11)' : ''}${parseInt(c.menores_12_17) > 0 ? ', ' + c.menores_12_17 + ' (12-17)' : ''} · ${c.noches || '—'} noches</div></div>
         <div class="mi"><div class="ml">📅 Fecha viaje</div><div class="mv">${c.fecha_viaje || 'Por confirmar'} · ${diasStr}</div></div>
         <div class="mi"><div class="ml">💰 Total plan</div><div class="mv">USD ${c.total_usd || '—'}</div></div>
         <div class="mi"><div class="ml">💵 Cuota mensual</div><div class="mv">USD ${c.monto_cuota || '—'}</div></div>
@@ -1954,22 +1926,17 @@ function openClientDetail(id) {
           <div><label style="font-size:.68rem;color:var(--muted);display:block;margin-bottom:4px;">Documento</label><input class="edit-input" id="efDoc" value="${esc(c.documento || '')}"></div>
           <div><label style="font-size:.68rem;color:var(--muted);display:block;margin-bottom:4px;">Teléfono</label><div class="lz-phone-wrap">${lzBuildPhoneSelect('prefix_efTel', lzDetectPrefix(c.telefono||''))}<input class="edit-input" id="efTel" value="${esc(c.telefono || '')}"></div></div>
           <div><label style="font-size:.68rem;color:var(--muted);display:block;margin-bottom:4px;">Destino</label>
-            <select class="edit-input" id="efDest">
-              <option value="Cabo Frío, Brasil" ${c.destino === 'Cabo Frío, Brasil' ? 'selected' : ''}>🏖️ Cabo Frío</option>
-              <option value="Arraial do Cabo, Brasil" ${c.destino === 'Arraial do Cabo, Brasil' ? 'selected' : ''}>🌊 Arraial do Cabo</option>
-              <option value="Búzios, Brasil" ${c.destino === 'Búzios, Brasil' ? 'selected' : ''}>⛵ Búzios</option>
-              <option value="Río de Janeiro – Copacabana, Brasil" ${c.destino === 'Río de Janeiro – Copacabana, Brasil' ? 'selected' : ''}>🏙️ Río de Janeiro</option>
-            </select>
+            <input class="edit-input" value="${esc(c.destino || '—')}" readonly style="opacity:.7;cursor:default;background:rgba(100,160,255,.08);" />
           </div>
-          <div><label style="font-size:.68rem;color:var(--muted);display:block;margin-bottom:4px;">Paquete</label>
-            <select class="edit-input" id="efPkg">
-              <option value="Escapada en Pareja" ${c.paquete === 'Escapada en Pareja' ? 'selected' : ''}>Escapada en Pareja</option>
-              <option value="Paquete 4 Amigos" ${c.paquete === 'Paquete 4 Amigos' ? 'selected' : ''}>Paquete 4 Amigos</option>
-              <option value="Paquete 6 Amigos" ${c.paquete === 'Paquete 6 Amigos' ? 'selected' : ''}>Paquete 6 Amigos</option>
-            </select>
+          <div><label style="font-size:.68rem;color:var(--muted);display:block;margin-bottom:4px;">Paquete <span style="font-size:.6rem;opacity:.6;">(auto)</span></label>
+            <input class="edit-input" id="efPkg" value="${esc(c.paquete || '—')}" readonly style="opacity:.7;cursor:default;background:rgba(100,160,255,.08);" />
           </div>
+          <div><label style="font-size:.68rem;color:var(--muted);display:block;margin-bottom:4px;">Adultos</label><input class="edit-input" value="${c.adultos || '—'}" readonly style="opacity:.7;cursor:default;background:rgba(100,160,255,.08);" /></div>
+          <div><label style="font-size:.68rem;color:var(--muted);display:block;margin-bottom:4px;">Menores (0-4)</label><input class="edit-input" value="${c.menores_0_4 || 0}" readonly style="opacity:.7;cursor:default;background:rgba(100,160,255,.08);" /></div>
+          <div><label style="font-size:.68rem;color:var(--muted);display:block;margin-bottom:4px;">Menores (5-11)</label><input class="edit-input" value="${c.menores_5_11 || 0}" readonly style="opacity:.7;cursor:default;background:rgba(100,160,255,.08);" /></div>
+          <div><label style="font-size:.68rem;color:var(--muted);display:block;margin-bottom:4px;">Menores (12-17)</label><input class="edit-input" value="${c.menores_12_17 || 0}" readonly style="opacity:.7;cursor:default;background:rgba(100,160,255,.08);" /></div>
+          <div><label style="font-size:.68rem;color:var(--muted);display:block;margin-bottom:4px;">Noches</label><input class="edit-input" value="${c.noches || '—'}" readonly style="opacity:.7;cursor:default;background:rgba(100,160,255,.08);" /></div>
           <div><label style="font-size:.68rem;color:var(--muted);display:block;margin-bottom:4px;">Fecha de viaje</label><input class="edit-input" id="efFecha" type="date" value="${c.fecha_viaje || ''}"></div>
-          <div><label style="font-size:.68rem;color:var(--muted);display:block;margin-bottom:4px;">Noches</label><input class="edit-input" id="efNoches" type="number" value="${c.noches || ''}"></div>
           <div><label style="font-size:.68rem;color:var(--muted);display:block;margin-bottom:4px;">Personas</label><input class="edit-input" id="efPersonas" type="number" value="${c.personas || ''}"></div>
           <div><label style="font-size:.68rem;color:var(--muted);display:block;margin-bottom:4px;">Estado</label><select class="edit-input" id="efEstado">${estadoOptions}</select></div>
           <div><label style="font-size:.68rem;color:var(--muted);display:block;margin-bottom:4px;">Vendedor</label><select class="edit-input" id="efVendedor">${vOptions}</select></div>
@@ -2071,10 +2038,10 @@ function updateClientFullGerente(clientId) {
     email:       document.getElementById('efEmail').value.trim().toLowerCase(),
     documento:   document.getElementById('efDoc').value.trim() || null,
     telefono:    document.getElementById('efTel').value.trim() || null,
-    destino:     document.getElementById('efDest').value,
-    paquete:     document.getElementById('efPkg').value,
+    // destino: READ-ONLY — no se puede modificar desde este panel
+    // paquete: auto-generated — not sent on update
+    // noches, adultos, menores_*: read-only in gerente panel
     fecha_viaje: document.getElementById('efFecha').value || null,
-    noches:      parseInt(document.getElementById('efNoches').value, 10) || null,
     personas:    parseInt(document.getElementById('efPersonas').value, 10) || null,
     estado:      document.getElementById('efEstado').value,
     seller_id:   document.getElementById('efVendedor').value ? parseInt(document.getElementById('efVendedor').value, 10) : null
@@ -2168,9 +2135,8 @@ function renderNotifs() {
     var comp = '';
     if (n.comp) { comp = '<img src="' + n.comp + '" class="cthumb" onclick="viewComp(' + JSON.stringify(n.id) + ')" title="Ver comprobante"/>'; }
     var acts = '';
-    if (isPay && !n.aprobada) {
-      acts = '<button class="nbtn ok" onclick="approvePayment(' + JSON.stringify(n.id) + ')">\u2705 Aprobar</button>'
-        + '<button class="nbtn sm" onclick="viewComp(' + JSON.stringify(n.id) + ')">\uD83D\uDD0D Ver</button>'
+    if (isPay) {
+      acts = '<button class="nbtn sm" onclick="viewComp(' + JSON.stringify(n.id) + ')">\uD83D\uDD0D Ver</button>'
         + '<button class="nbtn sm" onclick="mkRead(' + JSON.stringify(n.id) + ')">\uD83D\uDC41\uFE0F Le\xedda</button>';
     } else if (isG) {
       acts = '<button class="nbtn sm" onclick="mkReadG(' + JSON.stringify(n.id) + ')">\uD83D\uDC41\uFE0F Marcar le\xedda</button>';
@@ -2199,12 +2165,7 @@ function refreshBadge() {
   else { b.style.display = 'none'; tb.style.display = 'none'; }
 }
 
-function approvePayment(nid) {
-  _sbApprovePayment(nid).then(function(ok) {
-    if (!ok) { showToast('❌ Error al aprobar el pago'); return; }
-    return _sbLoad().then(function() { renderAll(); showToast('✅ Pago aprobado en Supabase'); });
-  });
-}
+// approvePayment — REMOVIDO. Solo el CEO aprueba pagos.
 
 function mkRead(nid) {
   var ns = (_memCache[NK] || []).map(function(n) { if (String(n.id) === String(nid)) n.leida = true; return n; });
@@ -2683,40 +2644,14 @@ function viewPagoComp(nid) {
     + '<div style="margin-top:12px;font-size:.78rem;color:var(--muted);">Asesor: ' + n.vendedor + ' · ' + fmtTs(n.ts) + (n.aprobada ? ' · ✅ Aprobado' + (n.aprobadoPor ? ' por ' + n.aprobadoPor : '') : ' · ⏳ Pendiente') + '</div>'
     + '</div>'
     + '<div class="mact">'
-    + (!n.aprobada ? '<button class="mbtn gold" onclick="aprobarPago(\'' + n.id + '\');closeModal()">✅ Aprobar pago</button>' : '')
     + '<button class="mbtn ghost" onclick="closeModal()">Cerrar</button>'
     + '</div>';
   document.getElementById('modal').classList.add('open');
 }
 
-function aprobarPago(nid) {
-  _sbApprovePayment(nid).then(function(ok) {
-    if (!ok) { showToast('❌ Error al aprobar el pago'); return; }
-    return _sbLoad().then(function() { renderAll(); renderPagos(); refreshNotifBadge(); showToast('✅ Pago aprobado en Supabase'); });
-  });
-}
+// aprobarPago — REMOVIDO. Solo el CEO aprueba pagos.
 
-// ══════════════════════════════════════════════════════
-//  APROBAR TODOS (versión optimizada con Promise.all)
-// ══════════════════════════════════════════════════════
-async function aprobarTodos() {
-  var ns = _memCache[NK] || [];
-  var pendientes = ns.filter(function(n) { return n.tipo === 'payment' && !n.aprobada && n.id; });
-  if (!pendientes.length) { showToast('✅ No hay pagos pendientes'); return; }
-  showToast('⏳ Aprobando ' + pendientes.length + ' pagos...');
-  var count = 0;
-  for (var i = 0; i < pendientes.length; i++) {
-    try {
-      await _sbApprovePayment(pendientes[i].id);
-      count++;
-    } catch(e) { console.warn(e); }
-  }
-  await _sbLoad();
-  renderAll();
-  renderPagos();
-  refreshNotifBadge();
-  showToast('✅ ' + count + ' pagos aprobados');
-}
+// aprobarTodos — REMOVIDO. Solo el CEO aprueba pagos.
 
 // ══════════════════════════════════════════════════════
 //  GESTIÓN DE MORA — Tab 5
