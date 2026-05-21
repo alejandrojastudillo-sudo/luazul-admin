@@ -238,6 +238,7 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
       <button class="tbbtn" onclick="showToast('🔗 Panel Gerente — abrir en tu servidor')">👔 Panel Gerente</button>
       <button class="tbbtn" onclick="showToast('🔗 Panel Asesor — abrir en tu servidor')">🧑‍💼 Panel Asesor</button>
       <button class="tbbtn" onclick="showToast('🔗 Panel Cliente — abrir en tu servidor')">👤 Panel Cliente</button>
+      <button class="tbbtn" onclick="diagnosticarDatos()">🔍 Diagnóstico</button>
       <button class="tbbtn danger" onclick="cLogout()">Salir</button>
     </div>
   </div>
@@ -3354,7 +3355,85 @@ function showToast(msg, tipo){
   t.style.color=txtColor;
   t.classList.add('show');
   if(_toastT)clearTimeout(_toastT);
-  _toastT=setTimeout(function(){t.classList.remove('show');t.style.borderColor='';t.style.color='';},3000);
+  _toastT=setTimeout(function(){t.classList.remove('show');t.style.borderColor='';t.style.color='';},5000);
+}
+
+// ════════════════════════════════════════════════════════
+// DIAGNÓSTICO CEO — Verificar visibilidad de datos
+// ════════════════════════════════════════════════════════
+function diagnosticarDatos() {
+  showToast('🔍 Ejecutando diagnóstico...', 'warn');
+  var cacheClientes = (_cacheClientes||[]).length;
+  var cachePagos = (_cachePagos||[]).length;
+  var pendientesCache = (_cachePagos||[]).filter(function(p){ return p.estado === 'pendiente'; }).length;
+
+  console.log('═══ DIAGNÓSTICO CEO ═══');
+  console.log('Clientes en caché:', cacheClientes);
+  console.log('Pagos en caché:', cachePagos);
+  console.log('Pagos pendientes en caché:', pendientesCache);
+  console.log('Pagos pendientes (getPendingPayments):', getPendingPayments().length);
+
+  // Consultar directamente a Supabase para comparar
+  Promise.all([
+    sbClient.from('clientes').select('id,nombre,estado,seller_id', { count: 'exact', head: true }),
+    sbClient.from('pagos').select('id,estado,cliente_id', { count: 'exact', head: true }),
+    sbClient.from('pagos').select('id,estado,cliente_id,numero_cuota').eq('estado', 'pendiente'),
+    sbClient.from('clientes').select('id,nombre,estado,seller_id,region_id').ilike('nombre', '%leonel%')
+  ]).then(function(results){
+    var cliCountRes = results[0];
+    var pagoCountRes = results[1];
+    var pendBD = results[2];
+    var leonelBD = results[3];
+
+    var totalClientesBD = cliCountRes.count || 0;
+    var totalPagosBD = pagoCountRes.count || 0;
+    var pagosPendBD = (pendBD.data || []).length;
+    var leonelFound = (leonelBD.data || []).length;
+
+    console.log('--- COMPARACIÓN CACHÉ vs BD ---');
+    console.log('Clientes en BD (total):', totalClientesBD, '| En caché:', cacheClientes);
+    console.log('Pagos en BD (total):', totalPagosBD, '| En caché:', cachePagos);
+    console.log('Pagos pendientes BD:', pagosPendBD, '| En caché:', pendientesCache);
+
+    if(totalClientesBD !== cacheClientes){
+      console.warn('⚠️ DISCREPANCIA: Hay ' + (totalClientesBD - cacheClientes) + ' clientes en BD que NO están en caché. Posible problema de RLS.');
+    }
+    if(totalPagosBD !== cachePagos){
+      console.warn('⚠️ DISCREPANCIA: Hay ' + (totalPagosBD - cachePagos) + ' pagos en BD que NO están en caché. Posible problema de RLS.');
+    }
+
+    console.log('--- LEONEL ---');
+    if(leonelFound > 0){
+      console.log('✅ Leonel encontrado en BD:', leonelBD.data);
+    } else {
+      console.error('❌ Leonel NO encontrado en BD para el CEO. Verificar RLS de la tabla clientes.');
+    }
+
+    // Verificar pagos pendientes que no matchean con ningún cliente
+    var pendSinCliente = (pendBD.data || []).filter(function(p){
+      return !(_cacheClientes||[]).find(function(c){ return String(c.id) === String(p.cliente_id); });
+    });
+    if(pendSinCliente.length > 0){
+      console.warn('⚠️ Hay ' + pendSinCliente.length + ' pagos pendientes cuyo cliente_id NO existe en caché:');
+      console.warn(pendSinCliente);
+    } else if(pendientesCache === 0 && pagosPendBD > 0){
+      console.warn('⚠️ Hay ' + pagosPendBD + ' pagos pendientes en BD pero no se muestran en el panel. Revisar getPendingPayments() y coincidencia cuotas_pagadas.');
+    }
+
+    // Toast con resumen
+    var msg = '🔍 Caché: ' + cacheClientes + ' clientes, ' + cachePagos + ' pagos | BD: ' + totalClientesBD + ' clientes, ' + totalPagosBD + ' pagos';
+    if(totalClientesBD !== cacheClientes || totalPagosBD !== cachePagos){
+      msg += ' | ⚠️ HAY DISCREPANCIA — ver consola (F12)';
+      showToast(msg, 'error');
+    } else {
+      msg += ' | ✅ Sincronizado';
+      showToast(msg);
+    }
+    console.log('═══ FIN DIAGNÓSTICO ═══');
+  }).catch(function(e){
+    console.error('[DIAGNÓSTICO] Error:', e);
+    showToast('❌ Error en diagnóstico: ' + e.message, 'error');
+  });
 }
 
 // ════════════════════════════════════════════════════════
@@ -3782,6 +3861,49 @@ async function renderPagosAprobacion() {
 
   // ── Get clients with pending payments ──
   var pending = getPendingPayments();
+
+  // FIX-SYNC v2: Si getPendingPayments no encuentra nada, verificar directamente en BD
+  // Esto cubre el caso donde la caché está desactualizada o hay clientes invisibles por RLS
+  if (pending.length === 0) {
+    try {
+      var bdPendRes = await sbClient.from('pagos')
+        .select('id,estado,cliente_id,numero_cuota,monto_usd,comprobante_url')
+        .eq('estado', 'pendiente')
+        .order('created_at', {ascending: false})
+        .limit(20);
+      if(!bdPendRes.error && bdPendRes.data && bdPendRes.data.length > 0){
+        // Hay pagos pendientes en BD que no aparecen en getPendingPayments()
+        console.warn('[FIX-SYNC] Se encontraron ' + bdPendRes.data.length + ' pagos pendientes en BD que no se muestran. Verificando causa...');
+        var bdPend = bdPendRes.data;
+        var sinCliente = bdPend.filter(function(p){
+          return !(_cacheClientes||[]).find(function(c){ return String(c.id) === String(p.cliente_id); });
+        });
+        if(sinCliente.length > 0){
+          // Hay pagos cuyo cliente NO está en la caché → intentar cargar esos clientes
+          var missingClientIds = sinCliente.map(function(p){ return p.cliente_id; });
+          console.warn('[FIX-SYNC] ' + sinCliente.length + ' pagos tienen clientes faltantes. IDs:', missingClientIds);
+          var cliRes = await sbClient.from('clientes')
+            .select('id,user_id,seller_id,nombre,email,telefono,documento,estado,destino,paquete,fecha_viaje,monto_cuota,cuotas_total,cuotas_pagadas,total_usd,fecha_alta,notas,region_id')
+            .in('id', missingClientIds);
+          if(!cliRes.error && cliRes.data && cliRes.data.length > 0){
+            cliRes.data.forEach(function(c){
+              var mapped = mapCliente(c);
+              _cacheClientes.push(mapped);
+              console.log('[FIX-SYNC] Cliente recuperado y agregado a caché:', mapped.nombre);
+            });
+            // Re-evaluar getPendingPayments con la caché actualizada
+            pending = getPendingPayments();
+          }
+        }
+        if(pending.length === 0 && sinCliente.length === 0){
+          // Los clientes existen pero no coinciden con cuotas_pagadas + 1
+          console.warn('[FIX-SYNC] Todos los clientes existen en caché pero getPendingPayments() devuelve vacío. Posible problema de cuotas_pagadas desincronizado.');
+        }
+      }
+    } catch(e){
+      console.warn('[FIX-SYNC] Error en verificación BD:', e.message);
+    }
+  }
 
   if (pending.length === 0) {
     container.innerHTML = '<div style="text-align:center;padding:50px;background:rgba(5,18,55,.5);border:1px solid rgba(100,160,255,.15);border-radius:18px;">'
