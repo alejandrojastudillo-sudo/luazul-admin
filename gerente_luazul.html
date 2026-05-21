@@ -417,25 +417,26 @@ const LZ_LOAD = {
     if (staffRes.error) throw staffRes.error;
     var staff = (staffRes.data || []).map(_lzMapStaff);
 
-    // FIX-COM-GERENTE: Cargar clientes por región O por vendedor del staff (igual lógica que CEO)
-    // Esto resuelve la inconsistencia donde el CEO cuenta clientes que el gerente no veía
-    var cliQuery = sbClient.from('clientes').select('*');
+    // FIX-COM-GERENTE: Cargar clientes por región Y por vendedor del staff (merge sin duplicados)
+    // Igual lógica que CEO: si un vendedor pertenece al gerente, todos sus clientes cuentan
     var staffUserIds = staff.map(function(s) { return String(s.user_id); }).filter(Boolean);
-    var orParts = [];
-    if (rIds.length) orParts.push('region_id.in.(' + rIds.join(',') + ')');
-    if (staffUserIds.length) orParts.push('seller_id.in.(' + staffUserIds.join(',') + ')');
-    if (orParts.length) {
-      cliQuery = cliQuery.or(orParts.join(','));
-      console.log('[loadData] cliQuery usando OR — regiones + seller_ids:', rIds.length, '|', staffUserIds.length);
-    } else {
-      cliQuery = cliQuery.eq('id', -1);
-      console.warn('[loadData] Sin regiones ni staff — no se cargan clientes');
-    }
+    var cliPromises = [];
+    if (rIds.length) cliPromises.push(sbClient.from('clientes').select('*').in('region_id', rIds));
+    if (staffUserIds.length) cliPromises.push(sbClient.from('clientes').select('*').in('seller_id', staffUserIds));
+    console.log('[loadData] consultas paralelas — regiones:', rIds.length, '| seller_ids:', staffUserIds.length);
+
+    var cliResults = await Promise.all(cliPromises);
+    var seenCli = {};
+    var allCliRaw = [];
+    cliResults.forEach(function(res) {
+      if (res.data) res.data.forEach(function(c) {
+        if (!seenCli[c.id]) { seenCli[c.id] = true; allCliRaw.push(c); }
+      });
+    });
+    console.log('[loadData] clientes mergeados (sin duplicados):', allCliRaw.length);
 
     // ── RONDA 2: clientes ──
-    var cliRes = await cliQuery.order('nombre');
-    if (cliRes.error) throw cliRes.error;
-    var clientes  = (cliRes.data || []).map(_lzMapClient);
+    var clientes  = allCliRaw.map(_lzMapClient);
     var clientIds = clientes.map(function(c) { return c.id; });
 
     // ── RONDA 3: pagos + notificaciones en paralelo ──
