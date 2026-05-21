@@ -1340,7 +1340,7 @@ function limpiarCuotasFantasma(){
       aEliminar.push(p.id);
     }
   }
-  if (!aEliminar.length) return;
+  if (!aEliminar.length) return Promise.resolve();
   console.log('[limpiarCuotasFantasma] Eliminando ' + aEliminar.length + ' cuotas pendientes huérfanas...');
   // Borrar en lotes de 100
   var batches = [];
