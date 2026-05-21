@@ -7,7 +7,8 @@
 <meta http-equiv="Expires" content="0">
 <!-- CEO v4.1 — FIX-DEFINITIVO: comprobantes visibles + nombre en contratos + vencimiento robusto · 2026-05-20 -->
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="manifest" href="manifest_ceo.json">
+  <!-- manifest solo funciona en HTTP/HTTPS, no file:// -->
+  <!-- <link rel="manifest" href="manifest_ceo.json"> -->
   <meta name="theme-color" content="#0B3D91">
 <title>Luazul Smart Travel · CEO v4</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Mulish:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -752,7 +753,7 @@ function cargarDatosSupabase(){
       _cacheSalesLeaders=(jRes.data||[]).map(function(r){
         return{id:r.id,user_id:r.user_id,rid:r.region_id||'',
           nombre:(r.nombre||'')+(r.apellido?' '+r.apellido:''),
-          email:r.badge||'',activo:r.activo!==false,
+          email:r.email||(r.badge||''),badge:r.badge||'',activo:r.activo!==false,
           manager_id:r.manager_id||null,role_id:r.role_id||null,
           com_pct:r.com_pct||0,
           fechaAlta:r.fecha_alta?r.fecha_alta.slice(0,10):'',
@@ -782,7 +783,7 @@ function cargarDatosSupabase(){
 function mapGerente(r){
   return{id:r.id,user_id:r.user_id,rid:r.region_id||'',
     nombre:(r.nombre||'')+(r.apellido?' '+r.apellido:''),
-    email:r.badge||'',activo:r.activo!==false,ciudad:r.ciudad||'',
+    email:r.email||(r.badge||''),badge:r.badge||'',activo:r.activo!==false,ciudad:r.ciudad||'',
     telefono1:r.telefono1||'',telefono2:r.telefono2||'',
     domicilio:r.domicilio||'',cbu:r.cbu||'',pct_bonus:r.com_pct||0,
     comprobantes:_parseJSON(r.comprobantes_json,[]),_raw:r};
@@ -790,7 +791,7 @@ function mapGerente(r){
 function mapVendedor(r){
   return{id:r.id,user_id:r.user_id,rid:r.region_id||'',
     nombre:(r.nombre||'')+(r.apellido?' '+r.apellido:''),
-    email:r.badge||'',activo:r.activo!==false,
+    email:r.email||(r.badge||''),badge:r.badge||'',activo:r.activo!==false,
     manager_id:r.manager_id||null,role_id:r.role_id||null,com_pct:r.com_pct||0,
     fechaAlta:r.fecha_alta?r.fecha_alta.slice(0,10):'',
     ciudad:r.ciudad||'',telefono1:r.telefono1||'',telefono2:r.telefono2||'',
