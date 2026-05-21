@@ -3381,6 +3381,7 @@ function _addTitle(ws, titulo, subtitulo, numCols){
   ws['!rows'] = [{hpt:36},{hpt:20}];
   for(var ci=0; ci<numCols; ci++){ _mkCell(0,ci,ci===0?titulo:'',ws,ci===0?_stTitle:null); _mkCell(1,ci,ci===0?subtitulo:'',ws,ci===0?_stSub:null); }
   ws['!merges'] = [{s:{r:0,c:0},e:{r:0,c:numCols-1}},{s:{r:1,c:0},e:{r:1,c:numCols-1}}];
+  ws['!ref'] = XLSX.utils.encode_range({s:{r:0,c:0},e:{r:1,c:numCols-1}});
 }
 
 function _styleHeaders(ws, keys, row){
@@ -3493,12 +3494,16 @@ function exportarExcel(tipo){
     var filasCli = cs.map(_filaCliente);
     if(!filasCli.length) filasCli = [{ Nota: 'Sin clientes con ese filtro' }];
     var keysCli = Object.keys(filasCli[0]);
-    var wsCli = XLSX.utils.json_to_sheet(filasCli);
+    var wsCli = {};
     _addTitle(wsCli, 'LuAzul Smart Travel', 'Reporte de Clientes — '+fecha+' '+hora+(ef?' · Estado: '+ef:'')+(rf?' · Por región':''), keysCli.length);
+    XLSX.utils.sheet_add_json(wsCli, filasCli, { origin: 2 });
     _styleHeaders(wsCli, keysCli, 2);
     var moneyColsCli = [keysCli.indexOf('Total USD'), keysCli.indexOf('Monto Cuota'), keysCli.indexOf('Total Cobrado'), keysCli.indexOf('Saldo Pendiente')];
     _styleRows(wsCli, filasCli, 3, moneyColsCli, keysCli.indexOf('Estado'), 1);
     _autoAncho(wsCli, filasCli);
+    // Frozen panes: fijar filas 0-2 (titulo + subtitulo + headers)
+    wsCli['!freeze'] = { xSplit:0, ySplit:3, topLeftCell:{r:3,c:0} };
+    wsCli['!autofilter'] = { ref: XLSX.utils.encode_range({s:{r:2,c:0},e:{r:2+filasCli.length,c:keysCli.length-1}}) };
     XLSX.utils.book_append_sheet(wb, wsCli, 'Clientes');
     // Fila de totales
     var lastRow = 3 + filasCli.length;
@@ -3535,12 +3540,15 @@ function exportarExcel(tipo){
     var filasVend = vs.map(_filaAsesor);
     if(!filasVend.length) filasVend = [{ Nota: 'Sin asesores' }];
     var keysVend = Object.keys(filasVend[0]);
-    var wsVend = XLSX.utils.json_to_sheet(filasVend);
+    var wsVend = {};
     _addTitle(wsVend, 'LuAzul Smart Travel', 'Reporte de Asesores — '+fecha+' '+hora, keysVend.length);
+    XLSX.utils.sheet_add_json(wsVend, filasVend, { origin: 2 });
     _styleHeaders(wsVend, keysVend, 2);
     var moneyVend = [keysVend.indexOf('Recaudación USD')];
     _styleRows(wsVend, filasVend, 3, moneyVend, -1, 1);
     _autoAncho(wsVend, filasVend);
+    wsVend['!freeze'] = { xSplit:0, ySplit:3, topLeftCell:{r:3,c:0} };
+    wsVend['!autofilter'] = { ref: XLSX.utils.encode_range({s:{r:2,c:0},e:{r:2+filasVend.length,c:keysVend.length-1}}) };
     XLSX.utils.book_append_sheet(wb, wsVend, 'Asesores');
     // Fila de totales
     var lastRV = 3 + filasVend.length;
@@ -3568,12 +3576,15 @@ function exportarExcel(tipo){
     var filasReg = rs.map(_filaRegion);
     if(!filasReg.length) filasReg = [{ Nota: 'Sin regiones' }];
     var keysReg = Object.keys(filasReg[0]);
-    var wsReg = XLSX.utils.json_to_sheet(filasReg);
+    var wsReg = {};
     _addTitle(wsReg, 'LuAzul Smart Travel', 'Reporte de Regiones — '+fecha+' '+hora, keysReg.length);
+    XLSX.utils.sheet_add_json(wsReg, filasReg, { origin: 2 });
     _styleHeaders(wsReg, keysReg, 2);
     var moneyReg = [keysReg.indexOf('Recaudación')];
     _styleRows(wsReg, filasReg, 3, moneyReg, -1, 1);
     _autoAncho(wsReg, filasReg);
+    wsReg['!freeze'] = { xSplit:0, ySplit:3, topLeftCell:{r:3,c:0} };
+    wsReg['!autofilter'] = { ref: XLSX.utils.encode_range({s:{r:2,c:0},e:{r:2+filasReg.length,c:keysReg.length-1}}) };
     XLSX.utils.book_append_sheet(wb, wsReg, 'Regiones');
 
     // Hoja de resumen ejecutivo (construida celda por celda)
