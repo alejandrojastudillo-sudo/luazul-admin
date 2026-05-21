@@ -3468,6 +3468,50 @@ function filtrarComisiones(){
 }
 
 // ── PAGO DE COMISIONES (CEO — vista centralizada) ─────
+  // ── RAMA JERÁRQUICA: Vendedor > Jefe > Gerente ──
+  function getRamaJerarquica(v) {
+    var jefes = _cacheSalesLeaders || [];
+    var gerentes = _cacheGerentes || [];
+    var regiones = _cacheRegiones || [];
+    var partes = [];
+    // El vendedor
+    partes.push({nombre: v.nombre, tipo: 'Vendedor'});
+    // Buscar su jefe (manager_id)
+    var jefe = jefes.find(function(j) { return String(j.id) === String(v.manager_id); });
+    if (jefe) {
+      partes.push({nombre: jefe.nombre, tipo: 'Jefe'});
+      // Buscar gerente del jefe (manager_id del jefe)
+      var ger = gerentes.find(function(g) { return String(g.id) === String(jefe.manager_id); });
+      if (ger) {
+        partes.push({nombre: ger.nombre, tipo: 'Gerente'});
+      }
+    } else {
+      // Si no tiene jefe, buscar si reporta directo a un gerente
+      var gerDir = gerentes.find(function(g) { return String(g.id) === String(v.manager_id); });
+      if (gerDir) partes.push({nombre: gerDir.nombre, tipo: 'Gerente'});
+    }
+    // Agregar región
+    var reg = regiones.find(function(r) { return String(r.id) === String(v.rid); });
+    var regStr = reg ? (reg.bandera ? reg.bandera + ' ' : '') + reg.nombre : '';
+    return { partes: partes, region: regStr };
+  }
+
+  function buildRamaHtml(rama) {
+    var html = '<div style="margin-top:6px;display:flex;align-items:center;gap:4px;flex-wrap:wrap;">';
+    rama.partes.forEach(function(p, i) {
+      var colores = { 'Vendedor': '#a78bfa', 'Jefe': '#f59e0b', 'Gerente': '#4ade80' };
+      var col = colores[p.tipo] || 'rgba(180,200,240,.5)';
+      if (i > 0) html += '<span style="color:rgba(180,200,240,.3);font-size:.7rem;">›</span>';
+      html += '<span style="font-size:.68rem;font-weight:700;color:' + col + ';">' + p.tipo + '. ' + esc(p.nombre) + '</span>';
+    });
+    if (rama.region) {
+      html += '<span style="margin-left:4px;font-size:.65rem;color:rgba(180,200,240,.4);">(' + esc(rama.region) + ')</span>';
+    }
+    html += '</div>';
+    return html;
+  }
+
+
 function renderPagoComisiones(){
   var el = document.getElementById('pagoComisionesList');
   if(!el) return;
@@ -3592,49 +3636,6 @@ function renderPagoComisiones(){
       + '<button onclick="adjuntarCompCentral(\'gerente\',\''+g.user_id+'\')" style="width:100%;padding:9px;background:linear-gradient(135deg,#b45309,#f59e0b);color:#000;border:none;border-radius:8px;font-weight:700;font-size:.8rem;cursor:pointer;">📎 Registrar pago</button>'
       + '</div>'
       + '</div>';
-  }
-
-  // ── RAMA JERÁRQUICA: Vendedor > Jefe > Gerente ──
-  function getRamaJerarquica(v) {
-    var jefes = _cacheSalesLeaders || [];
-    var gerentes = _cacheGerentes || [];
-    var regiones = _cacheRegiones || [];
-    var partes = [];
-    // El vendedor
-    partes.push({nombre: v.nombre, tipo: 'Vendedor'});
-    // Buscar su jefe (manager_id)
-    var jefe = jefes.find(function(j) { return String(j.id) === String(v.manager_id); });
-    if (jefe) {
-      partes.push({nombre: jefe.nombre, tipo: 'Jefe'});
-      // Buscar gerente del jefe (manager_id del jefe)
-      var ger = gerentes.find(function(g) { return String(g.id) === String(jefe.manager_id); });
-      if (ger) {
-        partes.push({nombre: ger.nombre, tipo: 'Gerente'});
-      }
-    } else {
-      // Si no tiene jefe, buscar si reporta directo a un gerente
-      var gerDir = gerentes.find(function(g) { return String(g.id) === String(v.manager_id); });
-      if (gerDir) partes.push({nombre: gerDir.nombre, tipo: 'Gerente'});
-    }
-    // Agregar región
-    var reg = regiones.find(function(r) { return String(r.id) === String(v.rid); });
-    var regStr = reg ? (reg.bandera ? reg.bandera + ' ' : '') + reg.nombre : '';
-    return { partes: partes, region: regStr };
-  }
-
-  function buildRamaHtml(rama) {
-    var html = '<div style="margin-top:6px;display:flex;align-items:center;gap:4px;flex-wrap:wrap;">';
-    rama.partes.forEach(function(p, i) {
-      var colores = { 'Vendedor': '#a78bfa', 'Jefe': '#f59e0b', 'Gerente': '#4ade80' };
-      var col = colores[p.tipo] || 'rgba(180,200,240,.5)';
-      if (i > 0) html += '<span style="color:rgba(180,200,240,.3);font-size:.7rem;">›</span>';
-      html += '<span style="font-size:.68rem;font-weight:700;color:' + col + ';">' + p.tipo + '. ' + esc(p.nombre) + '</span>';
-    });
-    if (rama.region) {
-      html += '<span style="margin-left:4px;font-size:.65rem;color:rgba(180,200,240,.4);">(' + esc(rama.region) + ')</span>';
-    }
-    html += '</div>';
-    return html;
   }
 
   function buildCardVendedor(v){
