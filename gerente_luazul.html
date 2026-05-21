@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="manifest" href="manifest_gerente.json">
   <meta name="theme-color" content="#0B3D91">
-<title>Luazul Smart Travel · Gerencia Regional</title>
+<title>Luazul Smart Travel · Gerencia Regional v3.6</title>
 <!-- Mirror-Clean v1.0 — Auditoría 2026-04 · Correcciones integradas (versión completa) -->
   <script>
   // ── Limpiar Service Worker caché cruzada (staff_login.html lo registraba) ──
@@ -376,12 +376,13 @@ const LZ_LOAD = {
     if (regRes.error) throw regRes.error;
 
     var regiones = regRes.data || [];
-    var rIds     = (grRes.data || []).map(function(r) { return r.region_id; });
+    // FIX-COM-TIPO: Convertir region_id a String para coincidir con String(v.rid)
+    var rIds     = (grRes.data || []).map(function(r) { return String(r.region_id); });
     console.log('[loadData] gerente_regiones → rIds:', rIds, '| profile.id:', profile.id, '| profile.region_id:', profile.region_id);
 
     // ── Fallback: si gerente_regiones vacío, usar region_id del propio perfil ──
     if (!rIds.length && profile.region_id) {
-      rIds = [profile.region_id];
+      rIds = [String(profile.region_id)];
       console.warn('⚠️ gerente_regiones vacío — usando region_id del perfil:', profile.region_id);
     }
 
@@ -4225,7 +4226,7 @@ window.crearNuevoCanal = crearNuevoCanal;
     var slRegionIds = window._gerenteRegionIds && window._gerenteRegionIds.length > 0
       ? window._gerenteRegionIds
       : (window._gerenteProfile && window._gerenteProfile.region_id
-        ? [parseInt(window._gerenteProfile.region_id, 10)] : []);
+        ? [String(window._gerenteProfile.region_id)] : []);
 
     if (slRegionIds.length === 0) {
       showToast('❌ El gerente no tiene región asignada. Asigná una región antes de crear jefes.');
@@ -4296,7 +4297,7 @@ async function poblarVendedoresRegion() {
   if (!gerenteUserId) return;
   // Obtener regiones del gerente
   var { data: gerReg } = await sbClient.from('gerente_regiones').select('region_id').eq('gerente_id', gerenteUserId);
-  var regionIds = (gerReg || []).map(function(r) { return r.region_id; });
+  var regionIds = (gerReg || []).map(function(r) { return String(r.region_id); });
   if (!regionIds.length) {
     var select = document.getElementById('filtroVendedorPR');
     if (select) select.innerHTML = '<option value="">Sin vendedores</option>';
@@ -4327,7 +4328,7 @@ async function cargarProspectosRegionGerente() {
 
   // Obtener regiones del gerente
   var { data: gerReg } = await sbClient.from('gerente_regiones').select('region_id').eq('gerente_id', gerenteUserId);
-  var regionIds = (gerReg || []).map(function(r) { return r.region_id; });
+  var regionIds = (gerReg || []).map(function(r) { return String(r.region_id); });
   if (!regionIds.length) {
     container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted);">No tienes regiones asignadas</div>';
     return;
