@@ -3499,14 +3499,17 @@ function exportarExcel(tipo){
     showToast('⚠️ Librería Excel no cargada. Verificá la conexión a internet.');
     return;
   }
-
+  try {
+  console.log('[EXPORT] Inicio exportarExcel tipo='+tipo);
   var fecha = new Date().toLocaleDateString('es-AR').replace(/\//g,'-');
   var hora  = new Date().toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
   var wb = XLSX.utils.book_new();
+  console.log('[EXPORT] Workbook creado');
 
   // ── HOJA DE CLIENTES ──
   if(tipo === 'clientes' || tipo === 'completo'){
     var cs = cli();
+    console.log('[EXPORT] cli() devolvió', cs.length, 'clientes');
     var ef = (document.getElementById('bkp-estado-filt')||{}).value || '';
     var rf = (document.getElementById('bkp-region-filt')||{}).value || '';
     if(tipo === 'clientes'){
@@ -3514,19 +3517,21 @@ function exportarExcel(tipo){
       if(rf) cs = cs.filter(function(c){ return String(c.rid) === String(rf); });
     }
     var filasCli = cs.map(_filaCliente);
+    console.log('[EXPORT] _filaCliente generó', filasCli.length, 'filas');
     if(!filasCli.length) filasCli = [{ Nota: 'Sin clientes con ese filtro' }];
     var keysCli = Object.keys(filasCli[0]);
+    console.log('[EXPORT] keysCli:', keysCli.join(', '));
     var wsCli = XLSX.utils.json_to_sheet(filasCli);
+    console.log('[EXPORT] json_to_sheet OK, celdas:', Object.keys(wsCli).filter(function(k){return k[0]!=='!'}).length);
     _shiftSheet(wsCli, 2);
+    console.log('[EXPORT] _shiftSheet OK, celdas:', Object.keys(wsCli).filter(function(k){return k[0]!=='!'}).length, '!ref:', wsCli['!ref']);
     _addTitle(wsCli, 'LuAzul Smart Travel', 'Reporte de Clientes — '+fecha+' '+hora+(ef?' · Estado: '+ef:'')+(rf?' · Por región':''), keysCli.length);
     _styleHeaders(wsCli, keysCli, 2);
     var moneyColsCli = [keysCli.indexOf('Total USD'), keysCli.indexOf('Monto Cuota'), keysCli.indexOf('Total Cobrado'), keysCli.indexOf('Saldo Pendiente')];
     _styleRows(wsCli, filasCli, 3, moneyColsCli, keysCli.indexOf('Estado'), 1);
     _autoAncho(wsCli, filasCli);
-    // Frozen panes: fijar filas 0-2 (titulo + subtitulo + headers)
-    wsCli['!freeze'] = { xSplit:0, ySplit:3, topLeftCell:{r:3,c:0} };
-    wsCli['!autofilter'] = { ref: XLSX.utils.encode_range({s:{r:2,c:0},e:{r:2+filasCli.length,c:keysCli.length-1}}) };
     XLSX.utils.book_append_sheet(wb, wsCli, 'Clientes');
+    console.log('[EXPORT] Hoja Clientes agregada al workbook. Total hojas:', wb.SheetNames.length);
     // Fila de totales
     var lastRow = 3 + filasCli.length;
     var totCell = XLSX.utils.encode_cell({r:lastRow,c:0});
@@ -3559,7 +3564,9 @@ function exportarExcel(tipo){
   // ── HOJA DE ASESORES ──
   if(tipo === 'asesores' || tipo === 'completo'){
     var vs = vend();
+    console.log('[EXPORT] vend() devolvió', vs.length, 'asesores');
     var filasVend = vs.map(_filaAsesor);
+    console.log('[EXPORT] _filaAsesor generó', filasVend.length, 'filas');
     if(!filasVend.length) filasVend = [{ Nota: 'Sin asesores' }];
     var keysVend = Object.keys(filasVend[0]);
     var wsVend = XLSX.utils.json_to_sheet(filasVend);
@@ -3572,6 +3579,7 @@ function exportarExcel(tipo){
     wsVend['!freeze'] = { xSplit:0, ySplit:3, topLeftCell:{r:3,c:0} };
     wsVend['!autofilter'] = { ref: XLSX.utils.encode_range({s:{r:2,c:0},e:{r:2+filasVend.length,c:keysVend.length-1}}) };
     XLSX.utils.book_append_sheet(wb, wsVend, 'Asesores');
+    console.log('[EXPORT] Hoja Asesores agregada. Total hojas:', wb.SheetNames.length);
     // Fila de totales
     var lastRV = 3 + filasVend.length;
     var totVCell = XLSX.utils.encode_cell({r:lastRV,c:0});
@@ -3608,17 +3616,25 @@ function exportarExcel(tipo){
     wsReg['!freeze'] = { xSplit:0, ySplit:3, topLeftCell:{r:3,c:0} };
     wsReg['!autofilter'] = { ref: XLSX.utils.encode_range({s:{r:2,c:0},e:{r:2+filasReg.length,c:keysReg.length-1}}) };
     XLSX.utils.book_append_sheet(wb, wsReg, 'Regiones');
+    console.log('[EXPORT] Hoja Regiones agregada. Total hojas:', wb.SheetNames.length);
 
     // Hoja de resumen ejecutivo (construida celda por celda)
     var wsRes = _addResumen(filasCli, filasVend, filasReg, fecha, hora);
     XLSX.utils.book_append_sheet(wb, wsRes, 'Resumen');
+    console.log('[EXPORT] Hoja Resumen agregada. Total hojas:', wb.SheetNames.length);
     // Mover resumen al principio
     wb.SheetNames = ['Resumen','Clientes','Asesores','Regiones'];
+    console.log('[EXPORT] Orden hojas:', wb.SheetNames);
 
     var nombre = 'LuAzul_ReporteCompleto_'+fecha+'.xlsx';
     XLSX.writeFile(wb, nombre);
+    console.log('[EXPORT] Archivo escrito:', nombre);
     showToast('✅ Reporte completo descargado: 4 hojas con estilos');
     _registrarHistorial('📊 Reporte Completo', filasCli.length + filasVend.length + filasReg.length, nombre);
+  }
+  } catch(err) {
+    console.error('[EXPORT] ERROR:', err.message, err.stack);
+    showToast('❌ Error al exportar: ' + err.message);
   }
 }
 // ── FIN BACKUP EXCEL ────────────────────────────────────────────────────────
