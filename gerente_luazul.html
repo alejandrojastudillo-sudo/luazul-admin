@@ -977,7 +977,7 @@ function renderMisComisionesGerente() {
     if (c.fechaAlta) { var d = new Date(c.fechaAlta + 'T00:00:00'); return d.getFullYear() + '-' + d.getMonth(); }
     return '';
   }
-  var pctBase = 0.20;
+  var pctBase = 0.05; // 5% comisión gerente
   var pctBonus = yo ? parseFloat(yo.com_pct || 0) / 100 : 0;
   var mn = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
   var byMonth = {};
@@ -1019,7 +1019,7 @@ function renderMisComisionesGerente() {
   var cbuVal = yo ? (yo.cbu || '') : '';
   var kpisHtml = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px;margin-bottom:20px;">'
     + '<div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:12px;padding:12px;text-align:center;">'
-      + '<div style="font-size:.6rem;color:var(--muted);margin-bottom:3px;">BASE 20%</div>'
+      + '<div style="font-size:.6rem;color:var(--muted);margin-bottom:3px;">BASE 5%</div>'
       + '<div style="font-family:Syne,sans-serif;font-size:1.1rem;font-weight:800;color:#f59e0b;">' + fmtM(totalBase) + '</div></div>'
     + '<div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:12px;padding:12px;text-align:center;">'
       + '<div style="font-size:.6rem;color:var(--muted);margin-bottom:3px;">BONUS ' + (yo && yo.com_pct > 0 ? yo.com_pct + '%' : '—') + '</div>'
