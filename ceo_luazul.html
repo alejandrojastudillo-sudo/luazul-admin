@@ -414,6 +414,46 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
       </div>
     </div>
 
+    <!-- ══ BACKUP EXCEL ══ -->
+    <div class="tabpg" id="tabpg-backup">
+      <div class="sec-head">
+        <h2>📥 Backup Excel</h2>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+          <select class="msel" id="bkp-estado-filt" onchange="updateBackupCount()">
+            <option value="">Todos los estados</option>
+            <option value="activo">Activo</option>
+            <option value="atraso">En atraso</option>
+            <option value="completo">Completo</option>
+            <option value="baja">Baja</option>
+          </select>
+          <select class="msel" id="bkp-region-filt" onchange="updateBackupCount()">
+            <option value="">Todas las regiones</option>
+          </select>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:22px;">
+        <div style="background:var(--surface);border:1px solid var(--purple-bd);border-radius:14px;padding:20px;text-align:center;">
+          <div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--purple);margin-bottom:10px;">📋 Exportar Clientes</div>
+          <div id="bkp-count-all" style="font-size:.82rem;color:var(--muted);margin-bottom:14px;">Cargando...</div>
+          <button onclick="exportarExcel('clientes')" class="addbtn" style="width:100%;justify-content:center;">📥 Clientes filtrados</button>
+        </div>
+        <div style="background:var(--surface);border:1px solid var(--gold-bd);border-radius:14px;padding:20px;text-align:center;">
+          <div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--gold);margin-bottom:10px;">🧑‍💼 Exportar Asesores</div>
+          <div id="bkp-count-vend" style="font-size:.82rem;color:var(--muted);margin-bottom:14px;">Cargando...</div>
+          <button onclick="exportarExcel('asesores')" class="addbtn" style="width:100%;justify-content:center;background:linear-gradient(135deg,#b45309,#f59e0b);">📥 Asesores</button>
+        </div>
+        <div style="background:var(--surface);border:1px solid rgba(34,211,238,.3);border-radius:14px;padding:20px;text-align:center;">
+          <div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#22d3ee;margin-bottom:10px;">📊 Reporte Completo</div>
+          <div id="bkp-count-full" style="font-size:.82rem;color:var(--muted);margin-bottom:14px;">Cargando...</div>
+          <button onclick="exportarExcel('completo')" class="addbtn" style="width:100%;justify-content:center;background:linear-gradient(135deg,#0891b2,#22d3ee);">📥 Todo en un Excel</button>
+        </div>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px;">
+        <div style="font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:8px;">📋 Últimas descargas</div>
+        <div id="bkp-historial" style="font-size:.8rem;color:var(--muted);">Sin descargas aún</div>
+      </div>
+    </div>
+
     <!-- ══ CONTRASEÑAS ══ -->
     <div class="tabpg" id="tabpg-passwords">
       <div class="sec-head"><h2>🔑 Gestión de Contraseñas</h2></div>
