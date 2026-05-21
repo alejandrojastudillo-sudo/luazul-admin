@@ -3404,6 +3404,12 @@ function _addTitle(ws, titulo, subtitulo, numCols){
   var merges = ws['!merges'] || [];
   merges.push({s:{r:0,c:0},e:{r:0,c:numCols-1}},{s:{r:1,c:0},e:{r:1,c:numCols-1}});
   ws['!merges'] = merges;
+  // Expandir !ref para incluir filas 0-1 (titulo y subtitulo)
+  if(ws['!ref']){
+    var rng = XLSX.utils.decode_range(ws['!ref']);
+    rng.s.r = 0;
+    ws['!ref'] = XLSX.utils.encode_range(rng);
+  }
 }
 
 function _styleHeaders(ws, keys, row){
@@ -3576,8 +3582,6 @@ function exportarExcel(tipo){
     var moneyVend = [keysVend.indexOf('Recaudación USD')];
     _styleRows(wsVend, filasVend, 3, moneyVend, -1, 1);
     _autoAncho(wsVend, filasVend);
-    wsVend['!freeze'] = { xSplit:0, ySplit:3, topLeftCell:{r:3,c:0} };
-    wsVend['!autofilter'] = { ref: XLSX.utils.encode_range({s:{r:2,c:0},e:{r:2+filasVend.length,c:keysVend.length-1}}) };
     XLSX.utils.book_append_sheet(wb, wsVend, 'Asesores');
     console.log('[EXPORT] Hoja Asesores agregada. Total hojas:', wb.SheetNames.length);
     // Fila de totales
@@ -3613,8 +3617,6 @@ function exportarExcel(tipo){
     var moneyReg = [keysReg.indexOf('Recaudación')];
     _styleRows(wsReg, filasReg, 3, moneyReg, -1, 1);
     _autoAncho(wsReg, filasReg);
-    wsReg['!freeze'] = { xSplit:0, ySplit:3, topLeftCell:{r:3,c:0} };
-    wsReg['!autofilter'] = { ref: XLSX.utils.encode_range({s:{r:2,c:0},e:{r:2+filasReg.length,c:keysReg.length-1}}) };
     XLSX.utils.book_append_sheet(wb, wsReg, 'Regiones');
     console.log('[EXPORT] Hoja Regiones agregada. Total hojas:', wb.SheetNames.length);
 
