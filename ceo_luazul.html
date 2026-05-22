@@ -446,7 +446,34 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
         <span id="bkp-lib-msg" style="color:#86efac;">Verificando librería Excel...</span>
       </div>
 
-      <!-- Tarjetas de exportación -->
+      <!-- ═══ BACKUP COMPLETO (DATOS CRUDOS) — Tarjeta destacada ═══ -->
+      <div style="background:linear-gradient(135deg,rgba(139,92,246,.06),rgba(34,211,238,.06));border:2px solid rgba(139,92,246,.3);border-radius:18px;padding:24px 28px;margin-bottom:22px;position:relative;overflow:hidden;">
+        <div style="position:absolute;top:-30px;right:-30px;width:120px;height:120px;border-radius:50%;background:rgba(139,92,246,.06);"></div>
+        <div style="position:absolute;bottom:-20px;left:-20px;width:80px;height:80px;border-radius:50%;background:rgba(34,211,238,.05);"></div>
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px;">
+          <div style="flex:1;min-width:240px;">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+              <div style="width:44px;height:44px;border-radius:12px;background:linear-gradient(135deg,#7c3aed,#0891b2);display:flex;align-items:center;justify-content:center;font-size:1.3rem;">💾</div>
+              <div>
+                <div style="font-size:.88rem;font-weight:800;text-transform:uppercase;letter-spacing:.8px;background:linear-gradient(135deg,#a78bfa,#22d3ee);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">Backup Completo (Datos Crudos)</div>
+                <div style="font-size:.68rem;color:var(--muted);margin-top:2px;">Para reconstruir la empresa desde cero</div>
+              </div>
+            </div>
+            <div style="font-size:.75rem;color:var(--muted);line-height:1.6;">
+              Exporta <strong style="color:var(--text);">TODAS las tablas</strong> con datos crudos: Clientes, Pagos, Asesores, Jefes, Gerentes y Regiones.
+              Incluye IDs originales, relaciones y un Resumen Ejecutivo. Si perdés la base de datos, con este archivo podés reconstruir todo.
+            </div>
+          </div>
+          <div style="flex-shrink:0;">
+            <button id="btn-export-backup-full" onclick="exportarBackupCompleto()" style="padding:14px 28px;border-radius:14px;background:linear-gradient(135deg,#7c3aed,#0891b2);border:none;color:white;font-family:'Mulish',sans-serif;font-size:.85rem;font-weight:800;cursor:pointer;display:flex;align-items:center;gap:8px;transition:opacity .2s,transform .2s;box-shadow:0 4px 20px rgba(124,58,237,.25);" onmouseenter="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 30px rgba(124,58,237,.35)'" onmouseleave="this.style.transform='';this.style.boxShadow='0 4px 20px rgba(124,58,237,.25)'">
+              <span>💾</span> Descargar Backup Completo
+            </button>
+          </div>
+        </div>
+      </div>
+      <!-- ═══ FIN BACKUP COMPLETO ═══ -->
+
+      <!-- Tarjetas de exportación (Reportes ejecutivos) -->
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;margin-bottom:22px;">
 
         <!-- Clientes -->
@@ -501,11 +528,15 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
 
       <!-- Info sobre el Excel generado -->
       <div style="background:rgba(34,211,238,.04);border:1px solid rgba(34,211,238,.1);border-radius:14px;padding:16px 20px;margin-bottom:18px;">
-        <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#22d3ee;margin-bottom:10px;">📋 Contenido del Reporte Completo</div>
+        <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#22d3ee;margin-bottom:10px;">📋 Contenido de las Exportaciones</div>
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;">
           <div style="display:flex;align-items:flex-start;gap:8px;font-size:.78rem;color:var(--muted);">
+            <span style="background:linear-gradient(135deg,#7c3aed,#0891b2);color:white;font-size:.65rem;font-weight:800;padding:2px 6px;border-radius:4px;">FULL</span>
+            <div><strong style="color:var(--text);">Backup Completo</strong><br>7 hojas con datos crudos + Resumen</div>
+          </div>
+          <div style="display:flex;align-items:flex-start;gap:8px;font-size:.78rem;color:var(--muted);">
             <span style="color:#a78bfa;font-size:.9rem;line-height:1.3;">①</span>
-            <div><strong style="color:var(--text);">Resumen Ejecutivo</strong><br>KPIs, totales y fecha</div>
+            <div><strong style="color:var(--text);">Resumen Ejecutivo</strong><br>KPIs, totales y distribución</div>
           </div>
           <div style="display:flex;align-items:flex-start;gap:8px;font-size:.78rem;color:var(--muted);">
             <span style="color:#a78bfa;font-size:.9rem;line-height:1.3;">②</span>
@@ -3960,6 +3991,137 @@ async function exportarExcel(tipo){
     _setExportBtnLoading('completo', false);
     console.log('[Export v7] OK —', nomFull);
   }
+}
+// ══════════════════════════════════════════════════════════════════════════════
+//  BACKUP COMPLETO — DATOS CRUDOS DE TODAS LAS TABLAS
+//  Con esto podés reconstruir la empresa entera desde cero.
+//  Incluye: Clientes (crudos), Pagos, Asesores, Jefes, Gerentes, Regiones, + Resumen
+// ══════════════════════════════════════════════════════════════════════════════
+function _buildRawSheet(data, headerLabel){
+  // Convierte un array de objetos al estilo crudo (sin procesar), incluyendo todos los campos
+  if(!data || !data.length) return { _empty: true };
+  // Limpiar campos internos (_raw, comprobantes que son arrays)
+  var filas = data.map(function(item){
+    var clean = {};
+    Object.keys(item).forEach(function(k){
+      if(k === '_raw' || k === '_pct' || k === '_s' || k === '_nudges') return;
+      var val = item[k];
+      if(typeof val === 'function') return;
+      if(Array.isArray(val)){
+        // Si es un array de objetos (ej: comprobantes), convertir a JSON string
+        clean[k] = JSON.stringify(val);
+      } else {
+        clean[k] = val;
+      }
+    });
+    return clean;
+  });
+  var keys = Object.keys(filas[0]);
+  var ws = XLSX.utils.json_to_sheet(filas);
+  // Headers con estilo
+  keys.forEach(function(k, ci){
+    var addr = XLSX.utils.encode_cell({r:0, c:ci});
+    if(ws[addr]) ws[addr].s = _stH1;
+  });
+  // Filas alternadas
+  filas.forEach(function(fila, ri){
+    var isAlt = ri%2===1;
+    keys.forEach(function(k, ci){
+      var addr = XLSX.utils.encode_cell({r:ri+1, c:ci});
+      if(ws[addr]) ws[addr].s = isAlt ? _stAlt : _stCell;
+    });
+  });
+  // Anchos
+  ws['!cols'] = keys.map(function(k){ return {wch: Math.min(Math.max(String(k).length + 2, 12), 40)}; });
+  ws['!rows'] = [{hpx:28}];
+  return ws;
+}
+
+async function exportarBackupCompleto(){
+  if(typeof XLSX==='undefined'){ showToast('⚠️ Librería Excel no cargada.'); _checkXlsxLib(); return; }
+
+  var btn = document.getElementById('btn-export-backup-full');
+  if(btn){ btn.disabled=true; btn.style.opacity='.6'; btn.innerHTML='<span>⏳</span> Generando backup...'; }
+
+  // Asegurar datos cargados
+  if(!(_cacheClientes||[]).length || !(_cacheVendedores||[]).length || !(_cachePagos||[]).length){
+    showToast('⏳ Cargando TODOS los datos para backup completo...');
+    try{ await cargarDatosSupabase(); }catch(e){ console.error('[BackupFull]',e); showToast('❌ Error cargando datos'); if(btn){btn.disabled=false;btn.style.opacity='1';btn.innerHTML='<span>💾</span> Descargar Backup Completo';} return; }
+  }
+
+  var fecha=new Date().toLocaleDateString('es-AR').replace(/\//g,'-');
+  var hora=new Date().toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
+  var wb=XLSX.utils.book_new();
+
+  var cs=cli(), vs=vend(), gs=ger(), js=_cacheSalesLeaders||[], rs=reg(), ps=_cachePagos||[];
+
+  console.log('[BackupFull] Clientes:',cs.length,'| Pagos:',ps.length,'| Asesores:',vs.length,'| Jefes:',js.length,'| Gerentes:',gs.length,'| Regiones:',rs.length);
+
+  // ── 1. CLIENTES CRUDOS (tabular, sin procesar) ──
+  var wsCliRaw = _buildRawSheet(cs, 'Clientes (crudos)');
+  if(wsCliRaw._empty){
+    wsCliRaw = XLSX.utils.json_to_sheet([{ 'Nota':'Sin clientes' }]);
+  }
+  delete wsCliRaw._empty;
+  XLSX.utils.book_append_sheet(wb, wsCliRaw, '1-Clientes');
+
+  // ── 2. PAGOS CRUDOS ──
+  var wsPagosRaw = _buildRawSheet(ps, 'Pagos (crudos)');
+  if(wsPagosRaw._empty){
+    wsPagosRaw = XLSX.utils.json_to_sheet([{ 'Nota':'Sin pagos' }]);
+  }
+  delete wsPagosRaw._empty;
+  XLSX.utils.book_append_sheet(wb, wsPagosRaw, '2-Pagos');
+
+  // ── 3. ASESORES CRUDOS ──
+  var wsAsesRaw = _buildRawSheet(vs, 'Asesores (crudos)');
+  if(wsAsesRaw._empty){
+    wsAsesRaw = XLSX.utils.json_to_sheet([{ 'Nota':'Sin asesores' }]);
+  }
+  delete wsAsesRaw._empty;
+  XLSX.utils.book_append_sheet(wb, wsAsesRaw, '3-Asesores');
+
+  // ── 4. JEFES DE VENTAS CRUDOS ──
+  var wsJefesRaw = _buildRawSheet(js, 'Jefes (crudos)');
+  if(wsJefesRaw._empty){
+    wsJefesRaw = XLSX.utils.json_to_sheet([{ 'Nota':'Sin jefes de ventas' }]);
+  }
+  delete wsJefesRaw._empty;
+  XLSX.utils.book_append_sheet(wb, wsJefesRaw, '4-JefesVentas');
+
+  // ── 5. GERENTES CRUDOS ──
+  var wsGerRaw = _buildRawSheet(gs, 'Gerentes (crudos)');
+  if(wsGerRaw._empty){
+    wsGerRaw = XLSX.utils.json_to_sheet([{ 'Nota':'Sin gerentes' }]);
+  }
+  delete wsGerRaw._empty;
+  XLSX.utils.book_append_sheet(wb, wsGerRaw, '5-Gerentes');
+
+  // ── 6. REGIONES CRUDOS ──
+  var wsRegRaw = _buildRawSheet(rs, 'Regiones (crudos)');
+  if(wsRegRaw._empty){
+    wsRegRaw = XLSX.utils.json_to_sheet([{ 'Nota':'Sin regiones' }]);
+  }
+  delete wsRegRaw._empty;
+  XLSX.utils.book_append_sheet(wb, wsRegRaw, '6-Regiones');
+
+  // ── 7. RESUMEN EJECUTIVO (para lectura rápida) ──
+  var filasPuraCli = cs.map(_filaClienteV2);
+  var wsRes = _buildResumenSheet(filasPuraCli.length, filasPuraCli, vs, rs, fecha, hora);
+  XLSX.utils.book_append_sheet(wb, wsRes, '7-Resumen');
+
+  // Ordenar hojas: Resumen primero, luego las crudas
+  wb.SheetNames = ['7-Resumen','1-Clientes','2-Pagos','3-Asesores','4-JefesVentas','5-Gerentes','6-Regiones'];
+
+  var nom = 'LuAzul_BACKUP_COMPLETO_'+fecha+'.xlsx';
+  XLSX.writeFile(wb, nom);
+
+  var totalFilas = cs.length + ps.length + vs.length + js.length + gs.length + rs.length;
+  showToast('💾 Backup completo descargado: '+totalFilas+' registros en 7 hojas');
+  _registrarHistorial('💾 Backup Completo', totalFilas, nom);
+  console.log('[BackupFull] OK —', nom, '—', totalFilas, 'filas totales');
+
+  if(btn){ btn.disabled=false; btn.style.opacity='1'; btn.innerHTML='<span>💾</span> Descargar Backup Completo'; }
 }
 // ── FIN BACKUP EXCEL ────────────────────────────────────────────────────────
 
