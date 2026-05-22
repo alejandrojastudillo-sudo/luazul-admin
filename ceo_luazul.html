@@ -3568,6 +3568,16 @@ function _buildResumenSheet(nCli, filasCli, vs, rs, fecha, hora){
 // ══════════════════════════════════════════════════════════════════════════════
 //  FILA CLIENTE — DATOS COMPLETOS Y ENRIQUECIDOS
 // ══════════════════════════════════════════════════════════════════════════════
+function _resolveAsesor(c){
+  var v = vby(c.vid);
+  if(v && v.nombre && v.nombre !== 'Sin asignar') return v;
+  var allStaff = [].concat(_cacheVendedores||[], _cacheSalesLeaders||[], _cacheGerentes||[]);
+  var vid = String(c.vid||'');
+  if(vid){ for(var i=0;i<allStaff.length;i++){ var s=allStaff[i]; if(String(s.id)===vid||String(s.user_id)===vid) return s; } }
+  if(c.rid){ for(var j=0;j<allStaff.length;j++){ if(String(allStaff[j].rid)===String(c.rid)&&allStaff[j].nombre) return allStaff[j]; } }
+  if(c._raw&&c._raw.vendedor_nombre) return {nombre:c._raw.vendedor_nombre,email:c._raw.vendedor_email||''};
+  return v;
+}
 function _filaClienteV2(c){
   var v = _resolveAsesor(c), r = rby(c.rid);
   var totalPkg = (parseFloat(c.total_usd)||0) || ((parseFloat(c.monto_cuota)||0) * (parseInt(c.cuotas_total)||10));
