@@ -416,42 +416,121 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
 
     <!-- ══ BACKUP EXCEL ══ -->
     <div class="tabpg" id="tabpg-backup">
-      <div class="sec-head">
-        <h2>📥 Backup Excel</h2>
+
+      <!-- Header con título y filtros -->
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:20px;">
+        <div>
+          <h2 style="font-family:'Syne',sans-serif;font-size:1.1rem;font-weight:800;display:flex;align-items:center;gap:8px;">
+            <span style="background:linear-gradient(135deg,#0891b2,#22d3ee);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">📥 Backup &amp; Exportación Excel</span>
+          </h2>
+          <div style="font-size:.72rem;color:var(--muted);margin-top:3px;">Compatible con Microsoft Excel y LibreOffice · Estilos profesionales · Datos en tiempo real</div>
+        </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
           <select class="msel" id="bkp-estado-filt" onchange="updateBackupCount()">
             <option value="">Todos los estados</option>
-            <option value="activo">Activo</option>
-            <option value="atraso">En atraso</option>
-            <option value="completo">Completo</option>
-            <option value="baja">Baja</option>
+            <option value="activo">✅ Activo</option>
+            <option value="atraso">🚨 En atraso</option>
+            <option value="completo">💙 Completo</option>
+            <option value="baja">⬇️ Baja</option>
           </select>
           <select class="msel" id="bkp-region-filt" onchange="updateBackupCount()">
             <option value="">Todas las regiones</option>
           </select>
+          <button onclick="updateBackupCount()" style="padding:8px 14px;border-radius:8px;background:rgba(34,211,238,.1);border:1px solid rgba(34,211,238,.25);color:#22d3ee;font-family:'Mulish',sans-serif;font-size:.78rem;font-weight:700;cursor:pointer;">🔄 Actualizar</button>
         </div>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:22px;">
-        <div style="background:var(--surface);border:1px solid var(--purple-bd);border-radius:14px;padding:20px;text-align:center;">
-          <div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--purple);margin-bottom:10px;">📋 Exportar Clientes</div>
-          <div id="bkp-count-all" style="font-size:.82rem;color:var(--muted);margin-bottom:14px;">Cargando...</div>
-          <button onclick="exportarExcel('clientes')" class="addbtn" style="width:100%;justify-content:center;">📥 Clientes filtrados</button>
+
+      <!-- Banner de estado de librería -->
+      <div id="bkp-lib-status" style="background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.2);border-radius:12px;padding:10px 16px;margin-bottom:18px;display:flex;align-items:center;gap:10px;font-size:.75rem;">
+        <span id="bkp-lib-dot" style="width:8px;height:8px;border-radius:50%;background:#22c55e;flex-shrink:0;box-shadow:0 0 6px #22c55e;"></span>
+        <span id="bkp-lib-msg" style="color:#86efac;">Verificando librería Excel...</span>
+      </div>
+
+      <!-- Tarjetas de exportación -->
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;margin-bottom:22px;">
+
+        <!-- Clientes -->
+        <div style="background:var(--surface);border:1px solid var(--purple-bd);border-radius:18px;padding:24px;position:relative;overflow:hidden;transition:transform .2s,box-shadow .2s;" onmouseenter="this.style.transform='translateY(-3px)';this.style.boxShadow='0 16px 40px rgba(167,139,250,.15)'" onmouseleave="this.style.transform='';this.style.boxShadow=''">
+          <div style="position:absolute;top:-20px;right:-20px;width:80px;height:80px;border-radius:50%;background:rgba(167,139,250,.08);"></div>
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+            <div style="width:40px;height:40px;border-radius:12px;background:var(--purple-bg);border:1px solid var(--purple-bd);display:flex;align-items:center;justify-content:center;font-size:1.1rem;">👥</div>
+            <div>
+              <div style="font-size:.78rem;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--purple);">Clientes</div>
+              <div style="font-size:.65rem;color:var(--muted);">Con filtros activos</div>
+            </div>
+          </div>
+          <div id="bkp-count-all" style="font-size:.8rem;color:var(--muted);margin-bottom:16px;min-height:20px;line-height:1.5;">Cargando...</div>
+          <button id="btn-export-clientes" onclick="exportarExcel('clientes')" style="width:100%;padding:11px;border-radius:11px;background:linear-gradient(135deg,#7c3aed,#a78bfa);border:none;color:white;font-family:'Mulish',sans-serif;font-size:.82rem;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px;transition:opacity .2s;">
+            <span>⬇️</span> Descargar Clientes.xlsx
+          </button>
         </div>
-        <div style="background:var(--surface);border:1px solid var(--gold-bd);border-radius:14px;padding:20px;text-align:center;">
-          <div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--gold);margin-bottom:10px;">🧑‍💼 Exportar Asesores</div>
-          <div id="bkp-count-vend" style="font-size:.82rem;color:var(--muted);margin-bottom:14px;">Cargando...</div>
-          <button onclick="exportarExcel('asesores')" class="addbtn" style="width:100%;justify-content:center;background:linear-gradient(135deg,#b45309,#f59e0b);">📥 Asesores</button>
+
+        <!-- Asesores -->
+        <div style="background:var(--surface);border:1px solid var(--gold-bd);border-radius:18px;padding:24px;position:relative;overflow:hidden;transition:transform .2s,box-shadow .2s;" onmouseenter="this.style.transform='translateY(-3px)';this.style.boxShadow='0 16px 40px rgba(245,158,11,.15)'" onmouseleave="this.style.transform='';this.style.boxShadow=''">
+          <div style="position:absolute;top:-20px;right:-20px;width:80px;height:80px;border-radius:50%;background:rgba(245,158,11,.06);"></div>
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+            <div style="width:40px;height:40px;border-radius:12px;background:var(--gold-bg);border:1px solid var(--gold-bd);display:flex;align-items:center;justify-content:center;font-size:1.1rem;">🧑‍💼</div>
+            <div>
+              <div style="font-size:.78rem;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--gold);">Asesores</div>
+              <div style="font-size:.65rem;color:var(--muted);">Todo el equipo</div>
+            </div>
+          </div>
+          <div id="bkp-count-vend" style="font-size:.8rem;color:var(--muted);margin-bottom:16px;min-height:20px;line-height:1.5;">Cargando...</div>
+          <button id="btn-export-asesores" onclick="exportarExcel('asesores')" style="width:100%;padding:11px;border-radius:11px;background:linear-gradient(135deg,#b45309,#f59e0b);border:none;color:#1a0800;font-family:'Mulish',sans-serif;font-size:.82rem;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px;transition:opacity .2s;">
+            <span>⬇️</span> Descargar Asesores.xlsx
+          </button>
         </div>
-        <div style="background:var(--surface);border:1px solid rgba(34,211,238,.3);border-radius:14px;padding:20px;text-align:center;">
-          <div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#22d3ee;margin-bottom:10px;">📊 Reporte Completo</div>
-          <div id="bkp-count-full" style="font-size:.82rem;color:var(--muted);margin-bottom:14px;">Cargando...</div>
-          <button onclick="exportarExcel('completo')" class="addbtn" style="width:100%;justify-content:center;background:linear-gradient(135deg,#0891b2,#22d3ee);">📥 Todo en un Excel</button>
+
+        <!-- Reporte Completo -->
+        <div style="background:var(--surface);border:1px solid rgba(34,211,238,.3);border-radius:18px;padding:24px;position:relative;overflow:hidden;transition:transform .2s,box-shadow .2s;" onmouseenter="this.style.transform='translateY(-3px)';this.style.boxShadow='0 16px 40px rgba(34,211,238,.12)'" onmouseleave="this.style.transform='';this.style.boxShadow=''">
+          <div style="position:absolute;top:-20px;right:-20px;width:80px;height:80px;border-radius:50%;background:rgba(34,211,238,.05);"></div>
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+            <div style="width:40px;height:40px;border-radius:12px;background:rgba(34,211,238,.1);border:1px solid rgba(34,211,238,.25);display:flex;align-items:center;justify-content:center;font-size:1.1rem;">📊</div>
+            <div>
+              <div style="font-size:.78rem;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:#22d3ee;">Reporte Completo</div>
+              <div style="font-size:.65rem;color:var(--muted);">4 hojas · Resumen ejecutivo</div>
+            </div>
+          </div>
+          <div id="bkp-count-full" style="font-size:.8rem;color:var(--muted);margin-bottom:16px;min-height:20px;line-height:1.5;">Cargando...</div>
+          <button id="btn-export-completo" onclick="exportarExcel('completo')" style="width:100%;padding:11px;border-radius:11px;background:linear-gradient(135deg,#0891b2,#22d3ee);border:none;color:#001a20;font-family:'Mulish',sans-serif;font-size:.82rem;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px;transition:opacity .2s;">
+            <span>⬇️</span> Descargar ReporteCompleto.xlsx
+          </button>
+        </div>
+
+      </div>
+
+      <!-- Info sobre el Excel generado -->
+      <div style="background:rgba(34,211,238,.04);border:1px solid rgba(34,211,238,.1);border-radius:14px;padding:16px 20px;margin-bottom:18px;">
+        <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#22d3ee;margin-bottom:10px;">📋 Contenido del Reporte Completo</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;">
+          <div style="display:flex;align-items:flex-start;gap:8px;font-size:.78rem;color:var(--muted);">
+            <span style="color:#a78bfa;font-size:.9rem;line-height:1.3;">①</span>
+            <div><strong style="color:var(--text);">Resumen Ejecutivo</strong><br>KPIs, totales y fecha</div>
+          </div>
+          <div style="display:flex;align-items:flex-start;gap:8px;font-size:.78rem;color:var(--muted);">
+            <span style="color:#a78bfa;font-size:.9rem;line-height:1.3;">②</span>
+            <div><strong style="color:var(--text);">Clientes</strong><br>Estado, cuotas, saldo, asesor</div>
+          </div>
+          <div style="display:flex;align-items:flex-start;gap:8px;font-size:.78rem;color:var(--muted);">
+            <span style="color:#a78bfa;font-size:.9rem;line-height:1.3;">③</span>
+            <div><strong style="color:var(--text);">Asesores</strong><br>Equipo y recaudación</div>
+          </div>
+          <div style="display:flex;align-items:flex-start;gap:8px;font-size:.78rem;color:var(--muted);">
+            <span style="color:#a78bfa;font-size:.9rem;line-height:1.3;">④</span>
+            <div><strong style="color:var(--text);">Regiones</strong><br>Performance por gerente</div>
+          </div>
         </div>
       </div>
-      <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px;">
-        <div style="font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:8px;">📋 Últimas descargas</div>
-        <div id="bkp-historial" style="font-size:.8rem;color:var(--muted);">Sin descargas aún</div>
+
+      <!-- Historial de descargas -->
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:18px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+          <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);">🕒 Historial de descargas</div>
+          <button onclick="bkpHistorial=[];document.getElementById('bkp-historial').innerHTML='<div style=\'text-align:center;padding:16px;color:var(--muted);font-size:.78rem;\'>Sin descargas aún</div>';" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:.72rem;">Limpiar</button>
+        </div>
+        <div id="bkp-historial"><div style="text-align:center;padding:16px;color:var(--muted);font-size:.78rem;">Sin descargas aún en esta sesión</div></div>
       </div>
+
     </div>
 
     <!-- ══ CONTRASEÑAS ══ -->
@@ -3199,43 +3278,97 @@ function verComprobanteModal(url, titulo) {
 }
 
 
-// ── BACKUP & EXPORTACIÓN EXCEL ────────────────────────────────────────────
+// ── BACKUP & EXPORTACIÓN EXCEL v6 ─────────────────────────────────────────
 var bkpHistorial = [];
 
+// Verifica si la librería XLSX está disponible y actualiza el banner
+function _checkXlsxLib(){
+  var dot = document.getElementById('bkp-lib-dot');
+  var msg = document.getElementById('bkp-lib-msg');
+  var banner = document.getElementById('bkp-lib-status');
+  if(!dot || !msg || !banner) return;
+  if(typeof XLSX !== 'undefined'){
+    dot.style.background = '#22c55e'; dot.style.boxShadow = '0 0 6px #22c55e';
+    msg.style.color = '#86efac';
+    msg.textContent = '✅ Librería Excel lista · xlsx-js-style v1.2 cargada correctamente';
+    banner.style.background = 'rgba(34,197,94,.08)'; banner.style.borderColor = 'rgba(34,197,94,.2)';
+  } else {
+    dot.style.background = '#ef4444'; dot.style.boxShadow = '0 0 6px #ef4444';
+    msg.style.color = '#fca5a5';
+    msg.textContent = '⚠️ Librería Excel no disponible. Verificá tu conexión a internet y recargá la página.';
+    banner.style.background = 'rgba(239,68,68,.08)'; banner.style.borderColor = 'rgba(239,68,68,.2)';
+    // Intentar carga dinámica de respaldo
+    _cargarXlsxDinamico();
+  }
+}
+
+// Carga dinámica de la librería como fallback
+function _cargarXlsxDinamico(){
+  var urls = [
+    'https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js',
+    'https://unpkg.com/xlsx-js-style@1.2.0/dist/xlsx.bundle.js'
+  ];
+  var dot = document.getElementById('bkp-lib-dot');
+  var msg = document.getElementById('bkp-lib-msg');
+  if(dot) { dot.style.background='#f59e0b'; dot.style.boxShadow='0 0 6px #f59e0b'; }
+  if(msg) msg.textContent = '⏳ Intentando cargar librería Excel...';
+  var idx = 0;
+  function tryNext(){
+    if(idx >= urls.length){ if(msg) msg.textContent='❌ No se pudo cargar la librería. Verificá tu conexión.'; return; }
+    var s = document.createElement('script');
+    s.src = urls[idx++];
+    s.onload = function(){ setTimeout(function(){ _checkXlsxLib(); }, 200); };
+    s.onerror = tryNext;
+    document.head.appendChild(s);
+  }
+  tryNext();
+}
+
 function initBackupTab(){
-  // Rellenar select de regiones
+  // Rellenar select de regiones (evitar duplicados)
   var rs = reg();
   var sel = document.getElementById('bkp-region-filt');
-  if(sel && rs.length){
+  if(sel && rs.length && sel.options.length <= 1){
     rs.forEach(function(r){
       var o = document.createElement('option');
       o.value = r.id;
-      o.textContent = r.bandera + ' ' + r.nombre;
+      o.textContent = (r.bandera||'') + ' ' + r.nombre;
       sel.appendChild(o);
     });
   }
   updateBackupCount();
+  setTimeout(_checkXlsxLib, 300);
 }
 
 function updateBackupCount(){
   var cs = cli();
   var ef = (document.getElementById('bkp-estado-filt')||{}).value || '';
   var rf = (document.getElementById('bkp-region-filt')||{}).value || '';
-  if(ef) cs = cs.filter(function(c){ return c.estado === ef; });
-  if(rf) cs = cs.filter(function(c){ return String(c.rid) === String(rf); });
+  var csFiltrados = cs;
+  if(ef) csFiltrados = csFiltrados.filter(function(c){ return c.estado === ef; });
+  if(rf) csFiltrados = csFiltrados.filter(function(c){ return String(c.rid) === String(rf); });
 
   var vs = vend();
   var rs = reg();
-  var total = cli().length;
+  var total = cs.length;
+  var activos = csFiltrados.filter(function(c){return c.estado==='activo';}).length;
+  var atraso  = csFiltrados.filter(function(c){return c.estado==='atraso'||c.estado==='atraso_gestion';}).length;
 
   var el1 = document.getElementById('bkp-count-all');
-  if(el1) el1.innerHTML = '📋 <strong>' + cs.length + '</strong> de ' + total + ' clientes | Activos: ' + cs.filter(function(c){return c.estado==='activo';}).length + ' | Atraso: ' + cs.filter(function(c){return c.estado==='atraso'||c.estado==='atraso_gestion';}).length;
+  if(el1) el1.innerHTML =
+    '<span style="color:var(--purple);font-weight:700;">' + csFiltrados.length + '</span> de ' + total + ' clientes'
+    + '<br><span style="font-size:.72rem;">✅ ' + activos + ' activos &nbsp;·&nbsp; 🚨 ' + atraso + ' en atraso</span>';
 
   var el2 = document.getElementById('bkp-count-vend');
-  if(el2) el2.innerHTML = '🧑‍💼 <strong>' + vs.length + '</strong> asesores en <strong>' + rs.length + '</strong> regiones';
+  if(el2) el2.innerHTML =
+    '<span style="color:var(--gold);font-weight:700;">' + vs.length + '</span> asesores'
+    + '<br><span style="font-size:.72rem;">en <strong>' + rs.length + '</strong> región' + (rs.length!==1?'es':'') + '</span>';
 
   var el3 = document.getElementById('bkp-count-full');
-  if(el3) el3.innerHTML = '📊 <strong>' + total + '</strong> clientes · <strong>' + vs.length + '</strong> asesores · <strong>' + rs.length + '</strong> regiones';
+  if(el3) el3.innerHTML =
+    '<span style="color:#22d3ee;font-weight:700;">' + total + '</span> clientes · '
+    + '<span style="color:#22d3ee;font-weight:700;">' + vs.length + '</span> asesores'
+    + '<br><span style="font-size:.72rem;">4 hojas + resumen ejecutivo</span>';
 }
 
 // ── Resolver asesor de forma robusta: busca por id, user_id, y también en cache de jefes/gerentes ──
@@ -3346,16 +3479,22 @@ function _autoAncho(ws, filas){
 }
 
 function _registrarHistorial(tipo, cantidad, nombre){
-  var ts = new Date().toLocaleTimeString('es-AR');
+  var ts = new Date().toLocaleString('es-AR', {hour:'2-digit',minute:'2-digit',day:'2-digit',month:'2-digit'});
   bkpHistorial.unshift({ ts: ts, tipo: tipo, cantidad: cantidad, nombre: nombre });
   if(bkpHistorial.length > 8) bkpHistorial.pop();
   var el = document.getElementById('bkp-historial'); if(!el) return;
-  el.innerHTML = bkpHistorial.map(function(h){
-    return '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);">'
-      + '<span style="font-size:.75rem;color:var(--muted);white-space:nowrap;">' + h.ts + '</span>'
-      + '<span style="flex:1;font-weight:600;">' + h.tipo + '</span>'
-      + '<span style="color:var(--green);font-weight:700;">' + h.cantidad + ' filas</span>'
-      + '<span style="font-size:.72rem;color:var(--muted);">' + h.nombre + '</span>'
+  el.innerHTML = bkpHistorial.map(function(h, i){
+    var borderStyle = i < bkpHistorial.length-1 ? 'border-bottom:1px solid var(--border);' : '';
+    return '<div style="display:flex;align-items:center;gap:10px;padding:10px 0;' + borderStyle + '">'
+      + '<div style="width:36px;height:36px;border-radius:9px;background:rgba(34,211,238,.1);border:1px solid rgba(34,211,238,.2);display:flex;align-items:center;justify-content:center;font-size:.9rem;flex-shrink:0;">' + (h.tipo.split(' ')[0]||'📥') + '</div>'
+      + '<div style="flex:1;min-width:0;">'
+        + '<div style="font-weight:700;font-size:.8rem;color:var(--text);">' + h.tipo + '</div>'
+        + '<div style="font-size:.68rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + h.nombre + '</div>'
+      + '</div>'
+      + '<div style="text-align:right;flex-shrink:0;">'
+        + '<div style="color:var(--green);font-weight:700;font-size:.82rem;">' + h.cantidad + ' filas</div>'
+        + '<div style="font-size:.68rem;color:var(--muted);">' + h.ts + '</div>'
+      + '</div>'
       + '</div>';
   }).join('');
 }
@@ -3492,11 +3631,31 @@ function _buildResumen(nCli, filasCli, nVend, nReg, fecha, hora){
   ];
 }
 
+function _setExportBtnLoading(tipo, loading){
+  var ids = tipo === 'clientes' ? ['btn-export-clientes']
+           : tipo === 'asesores' ? ['btn-export-asesores']
+           : ['btn-export-clientes','btn-export-asesores','btn-export-completo'];
+  ids.forEach(function(id){
+    var btn = document.getElementById(id); if(!btn) return;
+    btn.disabled = loading;
+    btn.style.opacity = loading ? '.6' : '1';
+    if(loading && tipo !== 'completo') btn.innerHTML = '<span>⏳</span> Generando...';
+    else if(!loading){
+      if(id==='btn-export-clientes') btn.innerHTML = '<span>⬇️</span> Descargar Clientes.xlsx';
+      else if(id==='btn-export-asesores') btn.innerHTML = '<span>⬇️</span> Descargar Asesores.xlsx';
+      else btn.innerHTML = '<span>⬇️</span> Descargar ReporteCompleto.xlsx';
+    }
+  });
+}
+
 async function exportarExcel(tipo){
   if(typeof XLSX === 'undefined'){
     showToast('⚠️ Librería Excel no cargada. Verificá la conexión a internet.');
+    _checkXlsxLib();
     return;
   }
+
+  _setExportBtnLoading(tipo, true);
 
   // ── Asegurar que el caché esté cargado ──
   var clientesCache = _cacheClientes || [];
@@ -3510,15 +3669,17 @@ async function exportarExcel(tipo){
     }
   }
 
-  // Verificar datos reales después de cargar
   var cs = cli();
   var vs = vend();
   var rs = reg();
-  console.log('[Export] Datos listos — Clientes:', cs.length, '| Asesores:', vs.length, '| Regiones:', rs.length);
+  console.log('[Export] Datos — Clientes:', cs.length, '| Asesores:', vs.length, '| Regiones:', rs.length);
 
   var fecha = new Date().toLocaleDateString('es-AR').replace(/\//g,'-');
   var hora  = new Date().toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
   var wb = XLSX.utils.book_new();
+
+  // ── Variables de scope elevado (necesarias en bloque 'completo') ──
+  var filasCli_pure = [], nCli = 0;
 
   // ── HOJA DE CLIENTES ──
   if(tipo === 'clientes' || tipo === 'completo'){
@@ -3529,10 +3690,11 @@ async function exportarExcel(tipo){
       if(ef) csFiltrados = cs.filter(function(c){ return c.estado === ef; });
       if(rf) csFiltrados = csFiltrados.filter(function(c){ return String(c.rid) === String(rf); });
     }
-    var filasCli = csFiltrados.map(_filaCliente);
+    filasCli_pure = csFiltrados.map(_filaCliente); // sin totales — para _buildResumen
+    nCli = filasCli_pure.length;
+    var filasCli = filasCli_pure.slice(); // copia para agregar totales
     if(!filasCli.length) filasCli = [{ 'Nota': 'Sin clientes con ese filtro' }];
     var keysCli = Object.keys(filasCli[0]);
-    var nCli = filasCli.length;
     filasCli.push(_addTotalesRow(filasCli, keysCli));
     var wsCli = XLSX.utils.json_to_sheet(filasCli);
     _autoAncho(wsCli, filasCli);
@@ -3542,10 +3704,11 @@ async function exportarExcel(tipo){
     console.log('[Export] Hoja Clientes:', nCli, 'filas + totales');
 
     if(tipo === 'clientes'){
-      var nombre = 'LuAzul_Clientes_'+fecha+(ef?'_'+ef:'')+(rf?'_reg':'')+'.xlsx';
-      XLSX.writeFile(wb, nombre);
+      var nombreCli = 'LuAzul_Clientes_'+fecha+(ef?'_'+ef:'')+(rf?'_reg':'')+'.xlsx';
+      XLSX.writeFile(wb, nombreCli);
       showToast('✅ Excel descargado: '+nCli+' clientes');
-      _registrarHistorial('👥 Clientes', nCli, nombre);
+      _registrarHistorial('👥 Clientes', nCli, nombreCli);
+      _setExportBtnLoading('clientes', false);
       return;
     }
   }
@@ -3565,10 +3728,11 @@ async function exportarExcel(tipo){
     console.log('[Export] Hoja Asesores:', nVend, 'filas + totales');
 
     if(tipo === 'asesores'){
-      var nombre = 'LuAzul_Asesores_'+fecha+'.xlsx';
-      XLSX.writeFile(wb, nombre);
+      var nombreVend = 'LuAzul_Asesores_'+fecha+'.xlsx';
+      XLSX.writeFile(wb, nombreVend);
       showToast('✅ Excel descargado: '+nVend+' asesores');
-      _registrarHistorial('🧑‍💼 Asesores', nVend, nombre);
+      _registrarHistorial('🧑‍💼 Asesores', nVend, nombreVend);
+      _setExportBtnLoading('asesores', false);
       return;
     }
   }
@@ -3586,19 +3750,20 @@ async function exportarExcel(tipo){
     _applySheetStyles(wsReg, keysReg, filasReg, { moneyCols: moneyReg, estadoCol: -1, totStyle: _stTotB });
     XLSX.utils.book_append_sheet(wb, wsReg, 'Regiones');
 
-    // Hoja de resumen ejecutivo
-    var resumenData = _buildResumen(nCli, filasCli.slice(0, nCli), nVend, nReg, fecha, hora);
+    // Hoja de resumen ejecutivo — usa filasCli_pure (SIN la fila de totales)
+    var resumenData = _buildResumen(nCli, filasCli_pure, nVend, nReg, fecha, hora);
     var wsRes = XLSX.utils.json_to_sheet(resumenData);
     _autoAncho(wsRes, resumenData);
     XLSX.utils.book_append_sheet(wb, wsRes, 'Resumen');
     // Mover resumen al principio
     wb.SheetNames = ['Resumen','Clientes','Asesores','Regiones'];
 
-    var nombre = 'LuAzul_ReporteCompleto_'+fecha+'.xlsx';
-    XLSX.writeFile(wb, nombre);
+    var nombreFull = 'LuAzul_ReporteCompleto_'+fecha+'.xlsx';
+    XLSX.writeFile(wb, nombreFull);
     showToast('✅ Reporte completo: '+nCli+' clientes, '+nVend+' asesores, '+nReg+' regiones');
-    _registrarHistorial('📊 Reporte Completo', nCli + nVend + nReg, nombre);
-    console.log('[Export] Reporte completo generado —', nombre);
+    _registrarHistorial('📊 Reporte Completo', nCli + nVend + nReg, nombreFull);
+    _setExportBtnLoading('completo', false);
+    console.log('[Export] Reporte completo —', nombreFull);
   }
 }
 // ── FIN BACKUP EXCEL ────────────────────────────────────────────────────────
