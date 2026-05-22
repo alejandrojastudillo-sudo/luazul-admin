@@ -4000,16 +4000,23 @@ async function exportarExcel(tipo){
 function _buildRawSheet(data, headerLabel){
   // Convierte un array de objetos al estilo crudo (sin procesar), incluyendo todos los campos
   if(!data || !data.length) return { _empty: true };
+  // Límite máximo de caracteres por celda en formato XLSX (el real es 32767, usamos 30000 de margen)
+  var MAX_CELL = 30000;
   // Limpiar campos internos (_raw, comprobantes que son arrays)
   var filas = data.map(function(item){
     var clean = {};
     Object.keys(item).forEach(function(k){
-      if(k === '_raw' || k === '_pct' || k === '_s' || k === '_nudges') return;
+      // Excluir campos internos del cache (no son datos reales de la tabla)
+      if(k.startsWith('_') || k === 'score') return;
       var val = item[k];
       if(typeof val === 'function') return;
       if(Array.isArray(val)){
-        // Si es un array de objetos (ej: comprobantes), convertir a JSON string
-        clean[k] = JSON.stringify(val);
+        // Si es un array de objetos (ej: comprobantes), convertir a JSON string truncado
+        var jsonStr = JSON.stringify(val);
+        clean[k] = jsonStr.length > MAX_CELL ? jsonStr.substring(0, MAX_CELL) + '...[TRUNCADO]' : jsonStr;
+      } else if(typeof val === 'string' && val.length > MAX_CELL){
+        // Truncar strings muy largos (ej: base64 de imágenes, textos enormes)
+        clean[k] = val.substring(0, MAX_CELL) + '...[TRUNCADO]';
       } else {
         clean[k] = val;
       }
