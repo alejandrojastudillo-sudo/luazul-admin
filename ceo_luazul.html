@@ -3360,12 +3360,66 @@ function _registrarHistorial(tipo, cantidad, nombre){
   }).join('');
 }
 
-// ── EXPORTACIÓN EXCEL (Compatible OpenOffice) ──
-// Usa json_to_sheet directo sin _shiftSheet ni estilos de celda
-// que rompen la compatibilidad con OpenOffice.
+// ── EXPORTACIÓN EXCEL v5 — Compatible OpenOffice ──
+// Patrón: json_to_sheet → aplicar estilos sobre celdas existentes → book_append_sheet
+// SIN _shiftSheet, SIN !freeze, SIN !autofilter (rompen OpenOffice)
+
+// ── Estilos (xlsx-js-style soporta estos objetos) ──
+var _bdThin  = { top:{style:"thin",color:{rgb:"CCCCCC"}}, bottom:{style:"thin",color:{rgb:"CCCCCC"}}, left:{style:"thin",color:{rgb:"CCCCCC"}}, right:{style:"thin",color:{rgb:"CCCCCC"}}};
+var _stHead  = { font:{bold:true,sz:10,color:{rgb:"FFFFFF"}}, fill:{fgColor:{rgb:"0B3D91"}}, alignment:{horizontal:"center",vertical:"center",wrapText:true}, border:_bdThin};
+var _stHead2 = { font:{bold:true,sz:10,color:{rgb:"FFFFFF"}}, fill:{fgColor:{rgb:"1E5FAA"}}, alignment:{horizontal:"center",vertical:"center",wrapText:true}, border:_bdThin};
+var _stCell  = { font:{sz:10,color:{rgb:"333333"}}, alignment:{vertical:"center"}, border:_bdThin};
+var _stAlt   = { font:{sz:10,color:{rgb:"333333"}}, fill:{fgColor:{rgb:"EBF1FA"}}, alignment:{vertical:"center"}, border:_bdThin};
+var _stGreen = { font:{bold:true,sz:10,color:{rgb:"16A34A"}}, fill:{fgColor:{rgb:"DCFCE7"}}, alignment:{vertical:"center"}, border:_bdThin};
+var _stRed   = { font:{bold:true,sz:10,color:{rgb:"DC2626"}}, fill:{fgColor:{rgb:"FEE2E2"}}, alignment:{vertical:"center"}, border:_bdThin};
+var _stGray  = { font:{sz:10,color:{rgb:"999999"},italic:true}, fill:{fgColor:{rgb:"F5F5F5"}}, alignment:{vertical:"center"}, border:_bdThin};
+var _stMoney = { font:{bold:true,sz:10,color:{rgb:"16A34A"}}, alignment:{vertical:"center"}, border:_bdThin};
+var _stMoneyA= { font:{bold:true,sz:10,color:{rgb:"16A34A"}}, fill:{fgColor:{rgb:"EBF1FA"}}, alignment:{vertical:"center"}, border:_bdThin};
+var _stTotB  = { font:{bold:true,sz:11,color:{rgb:"FFFFFF"}}, fill:{fgColor:{rgb:"0B3D91"}}, alignment:{horizontal:"center",vertical:"center"}, border:_bdThin};
+var _stTotG  = { font:{bold:true,sz:11,color:{rgb:"FFFFFF"}}, fill:{fgColor:{rgb:"B45309"}}, alignment:{horizontal:"center",vertical:"center"}, border:_bdThin};
+
+// Aplica estilos a celdas ya creadas por json_to_sheet (sin shift, sin merges, sin freeze)
+function _applySheetStyles(ws, keys, dataRows, opts){
+  var moneyCols = (opts||{}).moneyCols || [];
+  var estadoCol = (opts||{}).estadoCol >= 0 ? (opts||{}).estadoCol : -1;
+  var totStyle  = (opts||{}).totStyle || _stTotB;
+  // Headers en fila 0
+  keys.forEach(function(k, ci){
+    var cell = XLSX.utils.encode_cell({r:0, c:ci});
+    if(ws[cell]) ws[cell].s = ci%2===0 ? _stHead : _stHead2;
+  });
+  // Data rows desde fila 1
+  dataRows.forEach(function(fila, ri){
+    var row = 1 + ri;
+    var isTot = (fila[keys[0]]||'') === 'TOTALES';
+    if(isTot){
+      keys.forEach(function(k, ci){
+        var cell = XLSX.utils.encode_cell({r:row, c:ci});
+        if(ws[cell]) ws[cell].s = totStyle;
+      });
+      return;
+    }
+    var isAlt = ri%2===1;
+    keys.forEach(function(k, ci){
+      var cell = XLSX.utils.encode_cell({r:row, c:ci});
+      if(!ws[cell]) return;
+      var val = String(fila[k]||'').toLowerCase();
+      if(estadoCol>=0 && ci===estadoCol){
+        if(val==='activo') ws[cell].s = _stGreen;
+        else if(val==='atraso'||val==='atraso_gestion') ws[cell].s = _stRed;
+        else if(val==='baja') ws[cell].s = _stGray;
+        else ws[cell].s = isAlt ? _stAlt : _stCell;
+      } else if(moneyCols.indexOf(ci)!==-1 && typeof fila[k]==='number'){
+        ws[cell].s = isAlt ? _stMoneyA : _stMoney;
+        ws[cell].z = '#,##0.00';
+      } else {
+        ws[cell].s = isAlt ? _stAlt : _stCell;
+      }
+    });
+  });
+}
 
 function _addTotalesRow(filas, keysCli){
-  // Agrega una fila de TOTALES al final del array de filas
   var moneyCols = ['Total USD','Monto Cuota','Total Cobrado','Saldo Pendiente'];
   var intCols   = ['Cuotas Total','Cuotas Pagas','Cuotas Pend.'];
   var tot = {};
@@ -3415,100 +3469,125 @@ function _addTotalesRegiones(filas, keysReg){
   return tot;
 }
 
-function _buildResumen(filasCli, filasVend, filasReg, fecha, hora){
-  var activos = (filasCli||[]).filter(function(c){return (c['Estado']||'').toLowerCase()==='activo';}).length;
-  var atraso  = (filasCli||[]).filter(function(c){var e=(c['Estado']||'').toLowerCase();return e==='atraso'||e==='atraso_gestion';}).length;
-  var completos = (filasCli||[]).filter(function(c){return (c['Estado']||'').toLowerCase()==='completo';}).length;
-  var totalRec  = (filasCli||[]).reduce(function(s,c){return s+(parseFloat(c['Total Cobrado'])||0);},0);
-  var totalPend = (filasCli||[]).reduce(function(s,c){return s+(parseFloat(c['Saldo Pendiente'])||0);},0);
+function _buildResumen(nCli, filasCli, nVend, nReg, fecha, hora){
+  var activos = filasCli.filter(function(c){return (c['Estado']||'').toLowerCase()==='activo';}).length;
+  var atraso  = filasCli.filter(function(c){var e=(c['Estado']||'').toLowerCase();return e==='atraso'||e==='atraso_gestion';}).length;
+  var completos = filasCli.filter(function(c){return (c['Estado']||'').toLowerCase()==='completo';}).length;
+  var totalRec  = filasCli.reduce(function(s,c){return s+(parseFloat(c['Total Cobrado'])||0);},0);
+  var totalPend = filasCli.reduce(function(s,c){return s+(parseFloat(c['Saldo Pendiente'])||0);},0);
   return [
     { 'Indicador': 'LuAzul Smart Travel — Resumen Ejecutivo', 'Valor': '' },
     { 'Indicador': 'Fecha Reporte', 'Valor': fecha + ' ' + hora },
     { 'Indicador': '', 'Valor': '' },
-    { 'Indicador': 'Total Clientes', 'Valor': (filasCli||[]).length },
+    { 'Indicador': 'Total Clientes', 'Valor': nCli },
     { 'Indicador': 'Activos', 'Valor': activos },
     { 'Indicador': 'En Atraso', 'Valor': atraso },
     { 'Indicador': 'Completos', 'Valor': completos },
     { 'Indicador': '', 'Valor': '' },
-    { 'Indicador': 'Recaudación Total (USD)', 'Valor': Math.round(totalRec*100)/100 },
+    { 'Indicador': 'Recaudacion Total (USD)', 'Valor': Math.round(totalRec*100)/100 },
     { 'Indicador': 'Saldo Pendiente (USD)', 'Valor': Math.round(totalPend*100)/100 },
     { 'Indicador': '', 'Valor': '' },
-    { 'Indicador': 'Asesores', 'Valor': (filasVend||[]).length },
-    { 'Indicador': 'Regiones', 'Valor': (filasReg||[]).length }
+    { 'Indicador': 'Asesores', 'Valor': nVend },
+    { 'Indicador': 'Regiones', 'Valor': nReg }
   ];
 }
 
-function exportarExcel(tipo){
+async function exportarExcel(tipo){
   if(typeof XLSX === 'undefined'){
     showToast('⚠️ Librería Excel no cargada. Verificá la conexión a internet.');
     return;
   }
 
+  // ── Asegurar que el caché esté cargado ──
+  var clientesCache = _cacheClientes || [];
+  var vendedoresCache = _cacheVendedores || [];
+  if(!clientesCache.length || !vendedoresCache.length){
+    showToast('⏳ Cargando datos para exportar...');
+    try {
+      await cargarDatosSupabase();
+    } catch(e){
+      console.error('[Export] Error cargando datos:', e);
+    }
+  }
+
+  // Verificar datos reales después de cargar
+  var cs = cli();
+  var vs = vend();
+  var rs = reg();
+  console.log('[Export] Datos listos — Clientes:', cs.length, '| Asesores:', vs.length, '| Regiones:', rs.length);
+
   var fecha = new Date().toLocaleDateString('es-AR').replace(/\//g,'-');
   var hora  = new Date().toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
   var wb = XLSX.utils.book_new();
-  var filasCli, filasVend, filasReg;
 
   // ── HOJA DE CLIENTES ──
   if(tipo === 'clientes' || tipo === 'completo'){
-    var cs = cli();
     var ef = (document.getElementById('bkp-estado-filt')||{}).value || '';
     var rf = (document.getElementById('bkp-region-filt')||{}).value || '';
+    var csFiltrados = cs;
     if(tipo === 'clientes'){
-      if(ef) cs = cs.filter(function(c){ return c.estado === ef; });
-      if(rf) cs = cs.filter(function(c){ return String(c.rid) === String(rf); });
+      if(ef) csFiltrados = cs.filter(function(c){ return c.estado === ef; });
+      if(rf) csFiltrados = csFiltrados.filter(function(c){ return String(c.rid) === String(rf); });
     }
-    filasCli = cs.map(_filaCliente);
+    var filasCli = csFiltrados.map(_filaCliente);
     if(!filasCli.length) filasCli = [{ 'Nota': 'Sin clientes con ese filtro' }];
     var keysCli = Object.keys(filasCli[0]);
-    // Agregar fila de totales
+    var nCli = filasCli.length;
     filasCli.push(_addTotalesRow(filasCli, keysCli));
     var wsCli = XLSX.utils.json_to_sheet(filasCli);
     _autoAncho(wsCli, filasCli);
+    var moneyColsCli = [keysCli.indexOf('Total USD'), keysCli.indexOf('Monto Cuota'), keysCli.indexOf('Total Cobrado'), keysCli.indexOf('Saldo Pendiente')];
+    _applySheetStyles(wsCli, keysCli, filasCli, { moneyCols: moneyColsCli, estadoCol: keysCli.indexOf('Estado'), totStyle: _stTotB });
     XLSX.utils.book_append_sheet(wb, wsCli, 'Clientes');
+    console.log('[Export] Hoja Clientes:', nCli, 'filas + totales');
 
     if(tipo === 'clientes'){
       var nombre = 'LuAzul_Clientes_'+fecha+(ef?'_'+ef:'')+(rf?'_reg':'')+'.xlsx';
       XLSX.writeFile(wb, nombre);
-      showToast('✅ Excel descargado: '+(filasCli.length-1)+' clientes');
-      _registrarHistorial('👥 Clientes', filasCli.length-1, nombre);
+      showToast('✅ Excel descargado: '+nCli+' clientes');
+      _registrarHistorial('👥 Clientes', nCli, nombre);
       return;
     }
   }
 
   // ── HOJA DE ASESORES ──
   if(tipo === 'asesores' || tipo === 'completo'){
-    var vs = vend();
-    filasVend = vs.map(_filaAsesor);
+    var filasVend = vs.map(_filaAsesor);
     if(!filasVend.length) filasVend = [{ 'Nota': 'Sin asesores' }];
     var keysVend = Object.keys(filasVend[0]);
+    var nVend = filasVend.length;
     filasVend.push(_addTotalesAsesores(filasVend, keysVend));
     var wsVend = XLSX.utils.json_to_sheet(filasVend);
     _autoAncho(wsVend, filasVend);
+    var moneyVend = [keysVend.indexOf('Recaudación USD')];
+    _applySheetStyles(wsVend, keysVend, filasVend, { moneyCols: moneyVend, estadoCol: -1, totStyle: _stTotG });
     XLSX.utils.book_append_sheet(wb, wsVend, 'Asesores');
+    console.log('[Export] Hoja Asesores:', nVend, 'filas + totales');
 
     if(tipo === 'asesores'){
       var nombre = 'LuAzul_Asesores_'+fecha+'.xlsx';
       XLSX.writeFile(wb, nombre);
-      showToast('✅ Excel descargado: '+(filasVend.length-1)+' asesores');
-      _registrarHistorial('🧑‍💼 Asesores', filasVend.length-1, nombre);
+      showToast('✅ Excel descargado: '+nVend+' asesores');
+      _registrarHistorial('🧑‍💼 Asesores', nVend, nombre);
       return;
     }
   }
 
   // ── REPORTE COMPLETO ──
   if(tipo === 'completo'){
-    var rs = reg();
-    filasReg = rs.map(_filaRegion);
+    var filasReg = rs.map(_filaRegion);
     if(!filasReg.length) filasReg = [{ 'Nota': 'Sin regiones' }];
     var keysReg = Object.keys(filasReg[0]);
+    var nReg = filasReg.length;
     filasReg.push(_addTotalesRegiones(filasReg, keysReg));
     var wsReg = XLSX.utils.json_to_sheet(filasReg);
     _autoAncho(wsReg, filasReg);
+    var moneyReg = [keysReg.indexOf('Recaudación')];
+    _applySheetStyles(wsReg, keysReg, filasReg, { moneyCols: moneyReg, estadoCol: -1, totStyle: _stTotB });
     XLSX.utils.book_append_sheet(wb, wsReg, 'Regiones');
 
     // Hoja de resumen ejecutivo
-    var resumenData = _buildResumen(filasCli, filasVend, filasReg, fecha, hora);
+    var resumenData = _buildResumen(nCli, filasCli.slice(0, nCli), nVend, nReg, fecha, hora);
     var wsRes = XLSX.utils.json_to_sheet(resumenData);
     _autoAncho(wsRes, resumenData);
     XLSX.utils.book_append_sheet(wb, wsRes, 'Resumen');
@@ -3517,8 +3596,9 @@ function exportarExcel(tipo){
 
     var nombre = 'LuAzul_ReporteCompleto_'+fecha+'.xlsx';
     XLSX.writeFile(wb, nombre);
-    showToast('✅ Reporte completo descargado: 4 hojas');
-    _registrarHistorial('📊 Reporte Completo', (filasCli.length-1) + (filasVend.length-1) + (filasReg.length-1), nombre);
+    showToast('✅ Reporte completo: '+nCli+' clientes, '+nVend+' asesores, '+nReg+' regiones');
+    _registrarHistorial('📊 Reporte Completo', nCli + nVend + nReg, nombre);
+    console.log('[Export] Reporte completo generado —', nombre);
   }
 }
 // ── FIN BACKUP EXCEL ────────────────────────────────────────────────────────
