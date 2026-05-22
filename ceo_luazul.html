@@ -3278,10 +3278,10 @@ function verComprobanteModal(url, titulo) {
 }
 
 
-// ── BACKUP & EXPORTACIÓN EXCEL v6 ─────────────────────────────────────────
+// ── BACKUP & EXPORTACIÓN EXCEL v7 — DISEÑO MODERNO ─────────────────────────
 var bkpHistorial = [];
 
-// Verifica si la librería XLSX está disponible y actualiza el banner
+// ── UTILIDADES DE LIBRERÍA ──
 function _checkXlsxLib(){
   var dot = document.getElementById('bkp-lib-dot');
   var msg = document.getElementById('bkp-lib-msg');
@@ -3297,12 +3297,9 @@ function _checkXlsxLib(){
     msg.style.color = '#fca5a5';
     msg.textContent = '⚠️ Librería Excel no disponible. Verificá tu conexión a internet y recargá la página.';
     banner.style.background = 'rgba(239,68,68,.08)'; banner.style.borderColor = 'rgba(239,68,68,.2)';
-    // Intentar carga dinámica de respaldo
     _cargarXlsxDinamico();
   }
 }
-
-// Carga dinámica de la librería como fallback
 function _cargarXlsxDinamico(){
   var urls = [
     'https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js',
@@ -3310,29 +3307,25 @@ function _cargarXlsxDinamico(){
   ];
   var dot = document.getElementById('bkp-lib-dot');
   var msg = document.getElementById('bkp-lib-msg');
-  if(dot) { dot.style.background='#f59e0b'; dot.style.boxShadow='0 0 6px #f59e0b'; }
+  if(dot){ dot.style.background='#f59e0b'; dot.style.boxShadow='0 0 6px #f59e0b'; }
   if(msg) msg.textContent = '⏳ Intentando cargar librería Excel...';
   var idx = 0;
   function tryNext(){
     if(idx >= urls.length){ if(msg) msg.textContent='❌ No se pudo cargar la librería. Verificá tu conexión.'; return; }
     var s = document.createElement('script');
-    s.src = urls[idx++];
-    s.onload = function(){ setTimeout(function(){ _checkXlsxLib(); }, 200); };
-    s.onerror = tryNext;
+    s.src = urls[idx++]; s.onload = function(){ setTimeout(_checkXlsxLib, 200); }; s.onerror = tryNext;
     document.head.appendChild(s);
   }
   tryNext();
 }
 
 function initBackupTab(){
-  // Rellenar select de regiones (evitar duplicados)
   var rs = reg();
   var sel = document.getElementById('bkp-region-filt');
   if(sel && rs.length && sel.options.length <= 1){
     rs.forEach(function(r){
       var o = document.createElement('option');
-      o.value = r.id;
-      o.textContent = (r.bandera||'') + ' ' + r.nombre;
+      o.value = r.id; o.textContent = (r.bandera||'') + ' ' + r.nombre;
       sel.appendChild(o);
     });
   }
@@ -3344,429 +3337,622 @@ function updateBackupCount(){
   var cs = cli();
   var ef = (document.getElementById('bkp-estado-filt')||{}).value || '';
   var rf = (document.getElementById('bkp-region-filt')||{}).value || '';
-  var csFiltrados = cs;
-  if(ef) csFiltrados = csFiltrados.filter(function(c){ return c.estado === ef; });
-  if(rf) csFiltrados = csFiltrados.filter(function(c){ return String(c.rid) === String(rf); });
-
-  var vs = vend();
-  var rs = reg();
-  var total = cs.length;
-  var activos = csFiltrados.filter(function(c){return c.estado==='activo';}).length;
-  var atraso  = csFiltrados.filter(function(c){return c.estado==='atraso'||c.estado==='atraso_gestion';}).length;
-
+  var csFilt = cs;
+  if(ef) csFilt = csFilt.filter(function(c){ return c.estado === ef; });
+  if(rf) csFilt = csFilt.filter(function(c){ return String(c.rid) === String(rf); });
+  var vs = vend(); var rs = reg(); var total = cs.length;
+  var activos = csFilt.filter(function(c){return c.estado==='activo';}).length;
+  var atraso  = csFilt.filter(function(c){return c.estado==='atraso'||c.estado==='atraso_gestion';}).length;
   var el1 = document.getElementById('bkp-count-all');
-  if(el1) el1.innerHTML =
-    '<span style="color:var(--purple);font-weight:700;">' + csFiltrados.length + '</span> de ' + total + ' clientes'
-    + '<br><span style="font-size:.72rem;">✅ ' + activos + ' activos &nbsp;·&nbsp; 🚨 ' + atraso + ' en atraso</span>';
-
+  if(el1) el1.innerHTML = '<span style="color:var(--purple);font-weight:700;">' + csFilt.length + '</span> de ' + total + ' clientes<br><span style="font-size:.72rem;">✅ '+activos+' activos &nbsp;·&nbsp; 🚨 '+atraso+' en atraso</span>';
   var el2 = document.getElementById('bkp-count-vend');
-  if(el2) el2.innerHTML =
-    '<span style="color:var(--gold);font-weight:700;">' + vs.length + '</span> asesores'
-    + '<br><span style="font-size:.72rem;">en <strong>' + rs.length + '</strong> región' + (rs.length!==1?'es':'') + '</span>';
-
+  if(el2) el2.innerHTML = '<span style="color:var(--gold);font-weight:700;">'+vs.length+'</span> asesores<br><span style="font-size:.72rem;">en <strong>'+rs.length+'</strong> región'+(rs.length!==1?'es':'')+'</span>';
   var el3 = document.getElementById('bkp-count-full');
-  if(el3) el3.innerHTML =
-    '<span style="color:#22d3ee;font-weight:700;">' + total + '</span> clientes · '
-    + '<span style="color:#22d3ee;font-weight:700;">' + vs.length + '</span> asesores'
-    + '<br><span style="font-size:.72rem;">4 hojas + resumen ejecutivo</span>';
+  if(el3) el3.innerHTML = '<span style="color:#22d3ee;font-weight:700;">'+total+'</span> clientes · <span style="color:#22d3ee;font-weight:700;">'+vs.length+'</span> asesores<br><span style="font-size:.72rem;">4 hojas + resumen ejecutivo</span>';
 }
 
-// ── Resolver asesor de forma robusta: busca por id, user_id, y también en cache de jefes/gerentes ──
-function _resolveAsesor(c){
-  // 1) Búsqueda estándar por vid (seller_id)
-  var v = vby(c.vid);
-  if(v && v.nombre && v.nombre !== 'Sin asignar') return v;
-  // 2) Búsqueda directa en todos los caches de personal
-  var allStaff = [].concat(_cacheVendedores||[], _cacheSalesLeaders||[], _cacheGerentes||[]);
-  var vid = String(c.vid||'');
-  if(vid){
-    for(var i=0; i<allStaff.length; i++){
-      var s = allStaff[i];
-      if(String(s.id)===vid || String(s.user_id)===vid) return s;
-    }
-  }
-  // 3) Fallback: buscar por region como última opción
-  if(c.rid){
-    for(var j=0; j<allStaff.length; j++){
-      if(String(allStaff[j].rid)===String(c.rid) && allStaff[j].nombre) return allStaff[j];
-    }
-  }
-  // 4) Si el _raw del cliente tiene vendedor_nombre (de pagos), usarlo
-  if(c._raw && c._raw.vendedor_nombre){
-    return { nombre: c._raw.vendedor_nombre, email: c._raw.vendedor_email || '' };
-  }
-  return v; // devuelve el default de vby
+function _setExportBtnLoading(tipo, loading){
+  var map = { clientes:'btn-export-clientes', asesores:'btn-export-asesores', completo:'btn-export-completo' };
+  var ids = tipo === 'completo' ? Object.values(map) : [map[tipo]];
+  var labels = { 'btn-export-clientes':'<span>⬇️</span> Descargar Clientes.xlsx', 'btn-export-asesores':'<span>⬇️</span> Descargar Asesores.xlsx', 'btn-export-completo':'<span>⬇️</span> Descargar ReporteCompleto.xlsx' };
+  ids.forEach(function(id){
+    var btn = document.getElementById(id); if(!btn) return;
+    btn.disabled = loading; btn.style.opacity = loading?'.6':'1';
+    btn.innerHTML = loading ? '<span>⏳</span> Generando...' : (labels[id]||'⬇️ Descargar');
+  });
 }
 
-function _filaCliente(c){
+// ══════════════════════════════════════════════════════════════════════════════
+//  PALETA DE ESTILOS — DISEÑO MODERNO
+// ══════════════════════════════════════════════════════════════════════════════
+
+// Borders
+var _bd = { top:{style:"thin",color:{rgb:"D0D7E8"}}, bottom:{style:"thin",color:{rgb:"D0D7E8"}}, left:{style:"thin",color:{rgb:"D0D7E8"}}, right:{style:"thin",color:{rgb:"D0D7E8"}} };
+var _bdMed = { top:{style:"medium",color:{rgb:"1E3A6E"}}, bottom:{style:"medium",color:{rgb:"1E3A6E"}}, left:{style:"medium",color:{rgb:"1E3A6E"}}, right:{style:"medium",color:{rgb:"1E3A6E"}} };
+
+// Encabezados principales (azul marino oscuro)
+var _stH1 = { font:{bold:true,sz:11,color:{rgb:"FFFFFF"},name:"Arial"}, fill:{fgColor:{rgb:"0B2D6B"}}, alignment:{horizontal:"center",vertical:"center",wrapText:true}, border:_bdMed };
+// Encabezado alternado (azul medio)
+var _stH2 = { font:{bold:true,sz:11,color:{rgb:"FFFFFF"},name:"Arial"}, fill:{fgColor:{rgb:"1A4B9A"}}, alignment:{horizontal:"center",vertical:"center",wrapText:true}, border:_bdMed };
+// Sub-encabezado sección (cian oscuro)
+var _stHSec = { font:{bold:true,sz:10,color:{rgb:"FFFFFF"},name:"Arial"}, fill:{fgColor:{rgb:"0E7490"}}, alignment:{horizontal:"left",vertical:"center"}, border:_bd };
+
+// Celdas de datos normales
+var _stCell  = { font:{sz:10,color:{rgb:"1E293B"},name:"Arial"}, alignment:{vertical:"center"}, border:_bd };
+var _stAlt   = { font:{sz:10,color:{rgb:"1E293B"},name:"Arial"}, fill:{fgColor:{rgb:"EEF2FA"}}, alignment:{vertical:"center"}, border:_bd };
+// Celdas numéricas / money
+var _stNum   = { font:{sz:10,color:{rgb:"1E3A6E"},name:"Arial"}, alignment:{horizontal:"right",vertical:"center"}, border:_bd };
+var _stNumAlt= { font:{sz:10,color:{rgb:"1E3A6E"},name:"Arial"}, fill:{fgColor:{rgb:"EEF2FA"}}, alignment:{horizontal:"right",vertical:"center"}, border:_bd };
+var _stMoney = { font:{bold:true,sz:10,color:{rgb:"065F46"},name:"Arial"}, alignment:{horizontal:"right",vertical:"center"}, border:_bd, z:'#,##0.00' };
+var _stMoneyAlt={ font:{bold:true,sz:10,color:{rgb:"065F46"},name:"Arial"}, fill:{fgColor:{rgb:"EEF2FA"}}, alignment:{horizontal:"right",vertical:"center"}, border:_bd, z:'#,##0.00' };
+var _stMoneyRed={ font:{bold:true,sz:10,color:{rgb:"991B1B"},name:"Arial"}, alignment:{horizontal:"right",vertical:"center"}, border:_bd, z:'#,##0.00' };
+var _stMoneyRedAlt={ font:{bold:true,sz:10,color:{rgb:"991B1B"},name:"Arial"}, fill:{fgColor:{rgb:"EEF2FA"}}, alignment:{horizontal:"right",vertical:"center"}, border:_bd, z:'#,##0.00' };
+
+// Estados con color
+var _stEstActivo  = { font:{bold:true,sz:10,color:{rgb:"065F46"},name:"Arial"}, fill:{fgColor:{rgb:"DCFCE7"}}, alignment:{horizontal:"center",vertical:"center"}, border:_bd };
+var _stEstAtraso  = { font:{bold:true,sz:10,color:{rgb:"991B1B"},name:"Arial"}, fill:{fgColor:{rgb:"FEE2E2"}}, alignment:{horizontal:"center",vertical:"center"}, border:_bd };
+var _stEstCompleto= { font:{bold:true,sz:10,color:{rgb:"1E3A8A"},name:"Arial"}, fill:{fgColor:{rgb:"DBEAFE"}}, alignment:{horizontal:"center",vertical:"center"}, border:_bd };
+var _stEstBaja    = { font:{sz:10,color:{rgb:"6B7280"},name:"Arial"}, fill:{fgColor:{rgb:"F3F4F6"}}, alignment:{horizontal:"center",vertical:"center"}, border:_bd };
+
+// Fila de totales
+var _stTot = { font:{bold:true,sz:11,color:{rgb:"FFFFFF"},name:"Arial"}, fill:{fgColor:{rgb:"0B2D6B"}}, alignment:{horizontal:"center",vertical:"center"}, border:_bdMed };
+var _stTotGold = { font:{bold:true,sz:11,color:{rgb:"FFFFFF"},name:"Arial"}, fill:{fgColor:{rgb:"92400E"}}, alignment:{horizontal:"center",vertical:"center"}, border:_bdMed };
+var _stTotCyan = { font:{bold:true,sz:11,color:{rgb:"FFFFFF"},name:"Arial"}, fill:{fgColor:{rgb:"0E7490"}}, alignment:{horizontal:"center",vertical:"center"}, border:_bdMed };
+
+// Título de hoja / portada
+var _stTitle  = { font:{bold:true,sz:16,color:{rgb:"0B2D6B"},name:"Arial"}, alignment:{horizontal:"left",vertical:"center"} };
+var _stSubtitle={ font:{sz:10,color:{rgb:"64748B"},name:"Arial"}, alignment:{horizontal:"left",vertical:"center"} };
+var _stKpiLbl = { font:{bold:true,sz:9,color:{rgb:"64748B"},name:"Arial"}, fill:{fgColor:{rgb:"F8FAFC"}}, alignment:{horizontal:"left",vertical:"center"}, border:_bd };
+var _stKpiVal = { font:{bold:true,sz:14,color:{rgb:"0B2D6B"},name:"Arial"}, fill:{fgColor:{rgb:"EEF2FA"}}, alignment:{horizontal:"center",vertical:"center"}, border:_bdMed };
+var _stKpiValGreen = { font:{bold:true,sz:13,color:{rgb:"065F46"},name:"Arial"}, fill:{fgColor:{rgb:"DCFCE7"}}, alignment:{horizontal:"center",vertical:"center"}, border:_bdMed };
+var _stKpiValRed   = { font:{bold:true,sz:13,color:{rgb:"991B1B"},name:"Arial"}, fill:{fgColor:{rgb:"FEE2E2"}}, alignment:{horizontal:"center",vertical:"center"}, border:_bdMed };
+var _stKpiValGold  = { font:{bold:true,sz:13,color:{rgb:"92400E"},name:"Arial"}, fill:{fgColor:{rgb:"FEF3C7"}}, alignment:{horizontal:"center",vertical:"center"}, border:_bdMed };
+var _stSepRow = { fill:{fgColor:{rgb:"CBD5E1"}} };
+
+// Progreso texto helper
+function _progressBar(pct){
+  pct = Math.max(0, Math.min(100, pct||0));
+  var filled = Math.round(pct/10); var empty = 10 - filled;
+  return '█'.repeat(filled) + '░'.repeat(empty) + ' ' + pct + '%';
+}
+
+function _estadoLabel(estado){
+  var m = { activo:'✅ Activo', atraso:'🚨 Atraso', atraso_gestion:'🚨 Atraso', completo:'💙 Completo', baja:'⬇️ Baja' };
+  return m[estado] || estado || '—';
+}
+
+// ── HELPER: escribir celda segura ──
+function _sc(ws, addr, val, style){
+  if(!ws[addr]) ws[addr] = { t: typeof val === 'number' ? 'n' : 's', v: val == null ? '' : val };
+  else { ws[addr].v = val == null ? '' : val; ws[addr].t = typeof val === 'number' ? 'n' : 's'; }
+  if(style) ws[addr].s = style;
+  // Actualizar rango
+  if(!ws['!ref']){ ws['!ref'] = addr + ':' + addr; return; }
+  var rng = XLSX.utils.decode_range(ws['!ref']);
+  var c = XLSX.utils.decode_cell(addr);
+  if(c.r < rng.s.r) rng.s.r = c.r; if(c.r > rng.e.r) rng.e.r = c.r;
+  if(c.c < rng.s.c) rng.s.c = c.c; if(c.c > rng.e.c) rng.e.c = c.c;
+  ws['!ref'] = XLSX.utils.encode_range(rng);
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  HOJA: RESUMEN EJECUTIVO (diseño tipo dashboard)
+// ══════════════════════════════════════════════════════════════════════════════
+function _buildResumenSheet(nCli, filasCli, vs, rs, fecha, hora){
+  var wb_ws = {};
+  wb_ws['!ref'] = 'A1:J50';
+
+  var activos   = filasCli.filter(function(c){return (c['Estado']||'').toLowerCase()==='activo';}).length;
+  var atraso    = filasCli.filter(function(c){var e=(c['Estado']||'').toLowerCase();return e==='atraso'||e==='atraso_gestion';}).length;
+  var completos = filasCli.filter(function(c){return (c['Estado']||'').toLowerCase()==='completo';}).length;
+  var bajas     = filasCli.filter(function(c){return (c['Estado']||'').toLowerCase()==='baja';}).length;
+  var totalRec  = filasCli.reduce(function(s,c){return s+(parseFloat(c['Total Cobrado'])||0);},0);
+  var totalPend = filasCli.reduce(function(s,c){return s+(parseFloat(c['Saldo Pendiente'])||0);},0);
+  var totalPkg  = filasCli.reduce(function(s,c){return s+(parseFloat(c['Total USD'])||0);},0);
+  var nVend = vs.length; var nReg = rs.length;
+
+  // Título
+  _sc(wb_ws,'A1','LUAZUL SMART TRAVEL — REPORTE EJECUTIVO CEO',{font:{bold:true,sz:18,color:{rgb:"0B2D6B"},name:"Arial"},alignment:{horizontal:"left",vertical:"center"}});
+  _sc(wb_ws,'A2','Generado: '+fecha+' '+hora+'  ·  Panel CEO v4.1  ·  Datos en tiempo real',_stSubtitle);
+  _sc(wb_ws,'A3','',{fill:{fgColor:{rgb:"0B2D6B"}}});
+
+  // ── Bloque KPI Clientes ──
+  _sc(wb_ws,'A5','CARTERA DE CLIENTES',{font:{bold:true,sz:10,color:{rgb:"FFFFFF"},name:"Arial"},fill:{fgColor:{rgb:"0B2D6B"}},alignment:{horizontal:"center",vertical:"center"},border:_bd});
+  _sc(wb_ws,'B5','',{fill:{fgColor:{rgb:"0B2D6B"}},border:_bd});
+  _sc(wb_ws,'C5','ESTADOS',{font:{bold:true,sz:10,color:{rgb:"FFFFFF"},name:"Arial"},fill:{fgColor:{rgb:"0E7490"}},alignment:{horizontal:"center",vertical:"center"},border:_bd});
+  _sc(wb_ws,'D5','',{fill:{fgColor:{rgb:"0E7490"}},border:_bd});
+  _sc(wb_ws,'E5','FINANCIERO',{font:{bold:true,sz:10,color:{rgb:"FFFFFF"},name:"Arial"},fill:{fgColor:{rgb:"065F46"}},alignment:{horizontal:"center",vertical:"center"},border:_bd});
+  _sc(wb_ws,'F5','',{fill:{fgColor:{rgb:"065F46"}},border:_bd});
+  _sc(wb_ws,'G5','EQUIPO',{font:{bold:true,sz:10,color:{rgb:"FFFFFF"},name:"Arial"},fill:{fgColor:{rgb:"92400E"}},alignment:{horizontal:"center",vertical:"center"},border:_bd});
+  _sc(wb_ws,'H5','',{fill:{fgColor:{rgb:"92400E"}},border:_bd});
+
+  // Labels KPI fila 6
+  _sc(wb_ws,'A6','Total Clientes',_stKpiLbl); _sc(wb_ws,'B6','',_stKpiLbl);
+  _sc(wb_ws,'C6','✅ Activos',_stKpiLbl); _sc(wb_ws,'D6','',_stKpiLbl);
+  _sc(wb_ws,'E6','Recaudado USD',_stKpiLbl); _sc(wb_ws,'F6','',_stKpiLbl);
+  _sc(wb_ws,'G6','Asesores',_stKpiLbl); _sc(wb_ws,'H6','',_stKpiLbl);
+
+  // Valores KPI fila 7 (grandes)
+  _sc(wb_ws,'A7',nCli,_stKpiVal); _sc(wb_ws,'B7','',_stKpiVal);
+  _sc(wb_ws,'C7',activos,_stKpiValGreen); _sc(wb_ws,'D7','',_stKpiValGreen);
+  _sc(wb_ws,'E7',Math.round(totalRec*100)/100,_stKpiValGreen); _sc(wb_ws,'F7','',_stKpiValGreen);
+  _sc(wb_ws,'G7',nVend,_stKpiValGold); _sc(wb_ws,'H7','',_stKpiValGold);
+
+  // Labels KPI fila 8
+  _sc(wb_ws,'A8','Regiones activas',_stKpiLbl); _sc(wb_ws,'B8','',_stKpiLbl);
+  _sc(wb_ws,'C8','🚨 En Atraso',_stKpiLbl); _sc(wb_ws,'D8','',_stKpiLbl);
+  _sc(wb_ws,'E8','Saldo Pendiente USD',_stKpiLbl); _sc(wb_ws,'F8','',_stKpiLbl);
+  _sc(wb_ws,'G8','Regiones',_stKpiLbl); _sc(wb_ws,'H8','',_stKpiLbl);
+
+  // Valores KPI fila 9
+  _sc(wb_ws,'A9',nReg,_stKpiVal); _sc(wb_ws,'B9','',_stKpiVal);
+  _sc(wb_ws,'C9',atraso,_stKpiValRed); _sc(wb_ws,'D9','',_stKpiValRed);
+  _sc(wb_ws,'E9',Math.round(totalPend*100)/100,_stKpiValRed); _sc(wb_ws,'F9','',_stKpiValRed);
+  _sc(wb_ws,'G9',nReg,_stKpiVal); _sc(wb_ws,'H9','',_stKpiVal);
+
+  // Labels KPI fila 10
+  _sc(wb_ws,'A10','',_stKpiLbl); _sc(wb_ws,'B10','',_stKpiLbl);
+  _sc(wb_ws,'C10','💙 Completos',_stKpiLbl); _sc(wb_ws,'D10','',_stKpiLbl);
+  _sc(wb_ws,'E10','Total Paquetes USD',_stKpiLbl); _sc(wb_ws,'F10','',_stKpiLbl);
+  _sc(wb_ws,'G10','% Cobranza Global',_stKpiLbl); _sc(wb_ws,'H10','',_stKpiLbl);
+
+  var pctCobranza = totalPkg > 0 ? Math.round(totalRec/totalPkg*100) : 0;
+  _sc(wb_ws,'A11','',_stKpiVal); _sc(wb_ws,'B11','',_stKpiVal);
+  _sc(wb_ws,'C11',completos,_stKpiValGreen); _sc(wb_ws,'D11','',_stKpiValGreen);
+  _sc(wb_ws,'E11',Math.round(totalPkg*100)/100,_stKpiVal); _sc(wb_ws,'F11','',_stKpiVal);
+  _sc(wb_ws,'G11',_progressBar(pctCobranza),_stKpiValGreen); _sc(wb_ws,'H11','',_stKpiValGreen);
+
+  // Labels KPI fila 12
+  _sc(wb_ws,'A12','',_stKpiLbl); _sc(wb_ws,'B12','',_stKpiLbl);
+  _sc(wb_ws,'C12','⬇️ Bajas',_stKpiLbl); _sc(wb_ws,'D12','',_stKpiLbl);
+  _sc(wb_ws,'E12','Ticket Prom. USD',_stKpiLbl); _sc(wb_ws,'F12','',_stKpiLbl);
+  _sc(wb_ws,'G12','Estado general',_stKpiLbl); _sc(wb_ws,'H12','',_stKpiLbl);
+
+  var ticketProm = nCli > 0 ? Math.round(totalPkg/nCli*100)/100 : 0;
+  var estadoGral = pctCobranza>=75?'🟢 EXCELENTE':pctCobranza>=50?'🟡 EN CURSO':pctCobranza>=25?'🟠 ATENCIÓN':'🔴 CRÍTICO';
+  _sc(wb_ws,'A13','',_stKpiVal); _sc(wb_ws,'B13','',_stKpiVal);
+  _sc(wb_ws,'C13',bajas,_stKpiValRed); _sc(wb_ws,'D13','',_stKpiValRed);
+  _sc(wb_ws,'E13',ticketProm,_stKpiVal); _sc(wb_ws,'F13','',_stKpiVal);
+  _sc(wb_ws,'G13',estadoGral,_stKpiValGreen); _sc(wb_ws,'H13','',_stKpiValGreen);
+
+  // ── Tabla de detalle por estado ──
+  _sc(wb_ws,'A15','DISTRIBUCIÓN POR ESTADO',{font:{bold:true,sz:11,color:{rgb:"FFFFFF"},name:"Arial"},fill:{fgColor:{rgb:"0B2D6B"}},alignment:{horizontal:"left",vertical:"center"},border:_bdMed});
+  var stHeaders15 = ['Estado','Clientes','%','Monto Total USD','Cobrado USD','Pendiente USD'];
+  var hCols = ['A','B','C','D','E','F'];
+  stHeaders15.forEach(function(h,i){ _sc(wb_ws,hCols[i]+'16',h,_stH1); });
+
+  var estadosData = [
+    { e:'activo', label:'✅ Activo' },
+    { e:'atraso', label:'🚨 En Atraso' },
+    { e:'atraso_gestion', label:'🚨 Atraso Gestión' },
+    { e:'completo', label:'💙 Completo' },
+    { e:'baja', label:'⬇️ Baja' }
+  ];
+  var rowE = 17;
+  estadosData.forEach(function(es, ei){
+    var grupo = filasCli.filter(function(c){return (c['Estado']||'').toLowerCase()===es.e;});
+    if(!grupo.length) return;
+    var pct = nCli>0 ? Math.round(grupo.length/nCli*1000)/10 : 0;
+    var montoT = grupo.reduce(function(s,c){return s+(parseFloat(c['Total USD'])||0);},0);
+    var cobT = grupo.reduce(function(s,c){return s+(parseFloat(c['Total Cobrado'])||0);},0);
+    var pendT = grupo.reduce(function(s,c){return s+(parseFloat(c['Saldo Pendiente'])||0);},0);
+    var isAlt = ei%2===1;
+    var baseS = isAlt ? _stAlt : _stCell;
+    var monS = isAlt ? _stMoneyAlt : _stMoney;
+    _sc(wb_ws,'A'+rowE, es.label, es.e==='activo'?_stEstActivo:es.e.startsWith('atraso')?_stEstAtraso:es.e==='completo'?_stEstCompleto:_stEstBaja);
+    _sc(wb_ws,'B'+rowE, grupo.length, isAlt?_stNumAlt:_stNum);
+    _sc(wb_ws,'C'+rowE, pct+'%', baseS);
+    _sc(wb_ws,'D'+rowE, Math.round(montoT*100)/100, monS);
+    _sc(wb_ws,'E'+rowE, Math.round(cobT*100)/100, monS);
+    _sc(wb_ws,'F'+rowE, Math.round(pendT*100)/100, pendT>0?_stMoneyRed:monS);
+    rowE++;
+  });
+  // Fila total
+  _sc(wb_ws,'A'+rowE,'TOTAL',_stTot); _sc(wb_ws,'B'+rowE,nCli,_stTot);
+  _sc(wb_ws,'C'+rowE,'100%',_stTot);
+  _sc(wb_ws,'D'+rowE,Math.round(totalPkg*100)/100,_stTot);
+  _sc(wb_ws,'E'+rowE,Math.round(totalRec*100)/100,_stTot);
+  _sc(wb_ws,'F'+rowE,Math.round(totalPend*100)/100,_stTot);
+
+  // Anchos de columna
+  wb_ws['!cols'] = [
+    {wch:22},{wch:12},{wch:10},{wch:18},{wch:18},{wch:18},{wch:20},{wch:12},{wch:16},{wch:16}
+  ];
+  // Alturas de filas (para las KPI)
+  wb_ws['!rows'] = [];
+  for(var ri=0;ri<50;ri++) wb_ws['!rows'].push({hpx:ri===0?30:ri>=5&&ri<=13?26:ri===2?4:20});
+
+  return wb_ws;
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  FILA CLIENTE — DATOS COMPLETOS Y ENRIQUECIDOS
+// ══════════════════════════════════════════════════════════════════════════════
+function _filaClienteV2(c){
   var v = _resolveAsesor(c), r = rby(c.rid);
   var totalPkg = (parseFloat(c.total_usd)||0) || ((parseFloat(c.monto_cuota)||0) * (parseInt(c.cuotas_total)||10));
   var totalPagado = (parseInt(c.cuotas_pagadas)||0) * (parseFloat(c.monto_cuota)||0);
   var saldo = totalPkg - totalPagado;
-  var asesorNombre = (v && v.nombre && v.nombre !== 'Sin asignar') ? v.nombre : '';
-  var asesorEmail  = (v && v.email) ? v.email : '';
+  var cuotasTotal = parseInt(c.cuotas_total)||0;
+  var cuotasPagas = parseInt(c.cuotas_pagadas)||0;
+  var cuotasPend  = cuotasTotal - cuotasPagas;
+  var pct = cuotasTotal>0 ? Math.round(cuotasPagas/cuotasTotal*100) : 0;
   return {
-    'ID':             c.id || '',
-    'Nombre':         c.nombre || '',
-    'Email':          c.email || '',
-    'Teléfono':       c.telefono || c.tel || '',
-    'Paquete/Plan':   c.paquete || '',
-    'Destino':        c.destino || '',
-    'Fecha Viaje':    c.fecha_viaje || '',
-    'Total USD':      totalPkg,
-    'Monto Cuota':    parseFloat(c.monto_cuota)||0,
-    'Cuotas Total':   parseInt(c.cuotas_total)||0,
-    'Cuotas Pagas':   parseInt(c.cuotas_pagadas)||0,
-    'Cuotas Pend.':   (parseInt(c.cuotas_total)||0) - (parseInt(c.cuotas_pagadas)||0),
-    'Total Cobrado':  totalPagado,
-    'Saldo Pendiente':saldo,
-    'Estado':         c.estado || '',
-    'Asesor':         asesorNombre,
-    'Email Asesor':   asesorEmail,
-    'Región':         r.nombre || '',
-    'Bandera':        r.bandera || '',
-    'Fecha Alta':     c.fecha_alta || c.createdAt || '',
-    'Notas':          c.notas || ''
+    'ID':               c.id || '',
+    'Nombre':           c.nombre || '',
+    'Email':            c.email || '',
+    'Teléfono':         c.telefono || c.tel || '',
+    'DNI/Doc.':         c.documento || '',
+    'Paquete/Plan':     c.paquete || '',
+    'Destino':          c.destino || '',
+    'Fecha Viaje':      c.fecha_viaje || '',
+    'Fecha Alta':       c.fechaAlta || c.fecha_alta || '',
+    'Estado':           _estadoLabel(c.estado),
+    'Estado Raw':       c.estado || '',
+    'Progreso':         _progressBar(pct),
+    'Cuotas Total':     cuotasTotal,
+    'Cuotas Pagas':     cuotasPagas,
+    'Cuotas Pend.':     cuotasPend,
+    'Monto Cuota USD':  parseFloat(c.monto_cuota)||0,
+    'Total Paquete USD':totalPkg,
+    'Total Cobrado USD':totalPagado,
+    'Saldo Pendiente USD':saldo,
+    'Asesor':           (v && v.nombre && v.nombre!=='Sin asignar') ? v.nombre : '—',
+    'Email Asesor':     (v && v.email) ? v.email : '',
+    'Región':           r.nombre || '',
+    'Notas':            c.notas || ''
   };
 }
 
-function _filaAsesor(v){
-  var r = rby(v.rid);
-  var vc = cli().filter(function(c){ return c.vid === v.id; });
-  var rec = vc.reduce(function(s,c){ return s + (parseInt(c.cuotas_pagadas)||0)*(parseFloat(c.monto_cuota)||0); }, 0);
-  return {
-    'ID':             v.id || '',
-    'Nombre':         v.nombre || '',
-    'Email':          v.email || '',
-    'Teléfono Princ.':v.telefono1 || '',
-    'Teléfono Ref.':  v.telefono2 || '',
-    'Región':         r.nombre || '',
-    'Bandera':        r.bandera || '',
-    'Clientes Activos':vc.filter(function(c){return c.estado!=='baja';}).length,
-    'Total Clientes': vc.length,
-    'Recaudación USD':rec
-  };
-}
+// ══════════════════════════════════════════════════════════════════════════════
+//  HOJA CLIENTES — DISEÑO MODERNO
+// ══════════════════════════════════════════════════════════════════════════════
+function _buildClientesSheet(csFiltrados, fecha){
+  var filas = csFiltrados.map(_filaClienteV2);
+  if(!filas.length) filas = [{ 'Nota':'Sin clientes con ese filtro', 'ID':'','Nombre':'','Email':'','Teléfono':'','DNI/Doc.':'','Paquete/Plan':'','Destino':'','Fecha Viaje':'','Fecha Alta':'','Estado':'','Estado Raw':'','Progreso':'','Cuotas Total':0,'Cuotas Pagas':0,'Cuotas Pend.':0,'Monto Cuota USD':0,'Total Paquete USD':0,'Total Cobrado USD':0,'Saldo Pendiente USD':0,'Asesor':'','Email Asesor':'','Región':'','Notas':'' }];
 
-function _filaRegion(r){
-  var rc = cli().filter(function(c){ return c.rid === r.id; });
-  var g  = gby(r.gid||r.gerente_id);
-  var rec = rc.reduce(function(s,c){ return s + (parseInt(c.cuotas_pagadas)||0)*(parseFloat(c.monto_cuota)||0); }, 0);
-  return {
-    'ID':           r.id || '',
-    'Región':       r.nombre || '',
-    'Bandera':      r.bandera || '',
-    'Gerente':      g.nombre || '',
-    'Email Gerente':g.email || '',
-    'Clientes':     rc.length,
-    'En Atraso':    rc.filter(function(c){return c.estado==='atraso'||c.estado==='atraso_gestion';}).length,
-    'Completados':  rc.filter(function(c){return c.estado==='completo';}).length,
-    'Recaudación':  rec
-  };
-}
+  var keys = Object.keys(filas[0]);
+  var estadoRawIdx = keys.indexOf('Estado Raw');
+  var progresoIdx  = keys.indexOf('Progreso');
+  var estadoIdx    = keys.indexOf('Estado');
+  var moneyKeys = ['Monto Cuota USD','Total Paquete USD','Total Cobrado USD','Saldo Pendiente USD'];
+  var numKeys   = ['Cuotas Total','Cuotas Pagas','Cuotas Pend.'];
 
-function _autoAncho(ws, filas){
-  if(!filas || !filas.length) return;
-  var cols = Object.keys(filas[0]);
-  ws['!cols'] = cols.map(function(col){
-    var maxLen = col.length;
-    filas.forEach(function(fila){
-      var val = String(fila[col]||'');
-      if(val.length > maxLen) maxLen = val.length;
-    });
-    return { wch: Math.min(maxLen + 2, 45) };
+  var wsData = filas.slice(); // copia sin totales para encabezado
+
+  // Fila de totales
+  var totRow = {};
+  keys.forEach(function(k){
+    if(moneyKeys.indexOf(k)!==-1) totRow[k] = Math.round(filas.reduce(function(s,f){return s+(parseFloat(f[k])||0);},0)*100)/100;
+    else if(numKeys.indexOf(k)!==-1) totRow[k] = filas.reduce(function(s,f){return s+(parseInt(f[k])||0);},0);
+    else if(k===keys[0]) totRow[k] = 'TOTALES';
+    else totRow[k] = '';
   });
-}
+  wsData.push(totRow);
 
-function _registrarHistorial(tipo, cantidad, nombre){
-  var ts = new Date().toLocaleString('es-AR', {hour:'2-digit',minute:'2-digit',day:'2-digit',month:'2-digit'});
-  bkpHistorial.unshift({ ts: ts, tipo: tipo, cantidad: cantidad, nombre: nombre });
-  if(bkpHistorial.length > 8) bkpHistorial.pop();
-  var el = document.getElementById('bkp-historial'); if(!el) return;
-  el.innerHTML = bkpHistorial.map(function(h, i){
-    var borderStyle = i < bkpHistorial.length-1 ? 'border-bottom:1px solid var(--border);' : '';
-    return '<div style="display:flex;align-items:center;gap:10px;padding:10px 0;' + borderStyle + '">'
-      + '<div style="width:36px;height:36px;border-radius:9px;background:rgba(34,211,238,.1);border:1px solid rgba(34,211,238,.2);display:flex;align-items:center;justify-content:center;font-size:.9rem;flex-shrink:0;">' + (h.tipo.split(' ')[0]||'📥') + '</div>'
-      + '<div style="flex:1;min-width:0;">'
-        + '<div style="font-weight:700;font-size:.8rem;color:var(--text);">' + h.tipo + '</div>'
-        + '<div style="font-size:.68rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + h.nombre + '</div>'
-      + '</div>'
-      + '<div style="text-align:right;flex-shrink:0;">'
-        + '<div style="color:var(--green);font-weight:700;font-size:.82rem;">' + h.cantidad + ' filas</div>'
-        + '<div style="font-size:.68rem;color:var(--muted);">' + h.ts + '</div>'
-      + '</div>'
-      + '</div>';
-  }).join('');
-}
+  var ws = XLSX.utils.json_to_sheet(wsData);
 
-// ── EXPORTACIÓN EXCEL v5 — Compatible OpenOffice ──
-// Patrón: json_to_sheet → aplicar estilos sobre celdas existentes → book_append_sheet
-// SIN _shiftSheet, SIN !freeze, SIN !autofilter (rompen OpenOffice)
-
-// ── Estilos (xlsx-js-style soporta estos objetos) ──
-var _bdThin  = { top:{style:"thin",color:{rgb:"CCCCCC"}}, bottom:{style:"thin",color:{rgb:"CCCCCC"}}, left:{style:"thin",color:{rgb:"CCCCCC"}}, right:{style:"thin",color:{rgb:"CCCCCC"}}};
-var _stHead  = { font:{bold:true,sz:10,color:{rgb:"FFFFFF"}}, fill:{fgColor:{rgb:"0B3D91"}}, alignment:{horizontal:"center",vertical:"center",wrapText:true}, border:_bdThin};
-var _stHead2 = { font:{bold:true,sz:10,color:{rgb:"FFFFFF"}}, fill:{fgColor:{rgb:"1E5FAA"}}, alignment:{horizontal:"center",vertical:"center",wrapText:true}, border:_bdThin};
-var _stCell  = { font:{sz:10,color:{rgb:"333333"}}, alignment:{vertical:"center"}, border:_bdThin};
-var _stAlt   = { font:{sz:10,color:{rgb:"333333"}}, fill:{fgColor:{rgb:"EBF1FA"}}, alignment:{vertical:"center"}, border:_bdThin};
-var _stGreen = { font:{bold:true,sz:10,color:{rgb:"16A34A"}}, fill:{fgColor:{rgb:"DCFCE7"}}, alignment:{vertical:"center"}, border:_bdThin};
-var _stRed   = { font:{bold:true,sz:10,color:{rgb:"DC2626"}}, fill:{fgColor:{rgb:"FEE2E2"}}, alignment:{vertical:"center"}, border:_bdThin};
-var _stGray  = { font:{sz:10,color:{rgb:"999999"},italic:true}, fill:{fgColor:{rgb:"F5F5F5"}}, alignment:{vertical:"center"}, border:_bdThin};
-var _stMoney = { font:{bold:true,sz:10,color:{rgb:"16A34A"}}, alignment:{vertical:"center"}, border:_bdThin};
-var _stMoneyA= { font:{bold:true,sz:10,color:{rgb:"16A34A"}}, fill:{fgColor:{rgb:"EBF1FA"}}, alignment:{vertical:"center"}, border:_bdThin};
-var _stTotB  = { font:{bold:true,sz:11,color:{rgb:"FFFFFF"}}, fill:{fgColor:{rgb:"0B3D91"}}, alignment:{horizontal:"center",vertical:"center"}, border:_bdThin};
-var _stTotG  = { font:{bold:true,sz:11,color:{rgb:"FFFFFF"}}, fill:{fgColor:{rgb:"B45309"}}, alignment:{horizontal:"center",vertical:"center"}, border:_bdThin};
-
-// Aplica estilos a celdas ya creadas por json_to_sheet (sin shift, sin merges, sin freeze)
-function _applySheetStyles(ws, keys, dataRows, opts){
-  var moneyCols = (opts||{}).moneyCols || [];
-  var estadoCol = (opts||{}).estadoCol >= 0 ? (opts||{}).estadoCol : -1;
-  var totStyle  = (opts||{}).totStyle || _stTotB;
-  // Headers en fila 0
+  // Estilos de encabezados
   keys.forEach(function(k, ci){
-    var cell = XLSX.utils.encode_cell({r:0, c:ci});
-    if(ws[cell]) ws[cell].s = ci%2===0 ? _stHead : _stHead2;
+    var addr = XLSX.utils.encode_cell({r:0, c:ci});
+    if(!ws[addr]) return;
+    ws[addr].s = ci%2===0 ? _stH1 : _stH2;
   });
-  // Data rows desde fila 1
-  dataRows.forEach(function(fila, ri){
+
+  // Estilos de datos
+  wsData.forEach(function(fila, ri){
     var row = 1 + ri;
-    var isTot = (fila[keys[0]]||'') === 'TOTALES';
+    var isTot = fila[keys[0]] === 'TOTALES';
     if(isTot){
-      keys.forEach(function(k, ci){
-        var cell = XLSX.utils.encode_cell({r:row, c:ci});
-        if(ws[cell]) ws[cell].s = totStyle;
+      keys.forEach(function(k,ci){
+        var addr = XLSX.utils.encode_cell({r:row,c:ci});
+        if(ws[addr]) ws[addr].s = _stTot;
       });
       return;
     }
     var isAlt = ri%2===1;
-    keys.forEach(function(k, ci){
-      var cell = XLSX.utils.encode_cell({r:row, c:ci});
-      if(!ws[cell]) return;
-      var val = String(fila[k]||'').toLowerCase();
-      if(estadoCol>=0 && ci===estadoCol){
-        if(val==='activo') ws[cell].s = _stGreen;
-        else if(val==='atraso'||val==='atraso_gestion') ws[cell].s = _stRed;
-        else if(val==='baja') ws[cell].s = _stGray;
-        else ws[cell].s = isAlt ? _stAlt : _stCell;
-      } else if(moneyCols.indexOf(ci)!==-1 && typeof fila[k]==='number'){
-        ws[cell].s = isAlt ? _stMoneyA : _stMoney;
-        ws[cell].z = '#,##0.00';
-      } else {
-        ws[cell].s = isAlt ? _stAlt : _stCell;
+    var estadoRaw = (fila['Estado Raw']||'').toLowerCase();
+    keys.forEach(function(k,ci){
+      var addr = XLSX.utils.encode_cell({r:row,c:ci});
+      if(!ws[addr]) return;
+      // Ocultar columna Estado Raw visualmente (estilo muted)
+      if(ci === estadoRawIdx){ ws[addr].s = {font:{sz:9,color:{rgb:"CCCCCC"},name:"Arial"},alignment:{horizontal:"center"},border:_bd}; return; }
+      if(ci === estadoIdx){
+        ws[addr].s = estadoRaw==='activo'?_stEstActivo:estadoRaw.startsWith('atraso')?_stEstAtraso:estadoRaw==='completo'?_stEstCompleto:_stEstBaja;
+        return;
       }
+      if(ci === progresoIdx){
+        var pct2 = parseInt((fila[k]||'0').replace(/[^0-9]/g,''))||0;
+        ws[addr].s = pct2>=80?_stEstAtraso:pct2>=50?{font:{bold:true,sz:10,color:{rgb:"92400E"},name:"Arial"},fill:{fgColor:{rgb:"FEF3C7"}},alignment:{vertical:"center"},border:_bd}:_stEstActivo;
+        return;
+      }
+      if(moneyKeys.indexOf(k)!==-1){
+        var mv = parseFloat(fila[k])||0;
+        if(k==='Saldo Pendiente USD' && mv>0) ws[addr].s = isAlt?_stMoneyRedAlt:_stMoneyRed;
+        else ws[addr].s = isAlt?_stMoneyAlt:_stMoney;
+        ws[addr].z = '#,##0.00';
+        return;
+      }
+      if(numKeys.indexOf(k)!==-1){ ws[addr].s = isAlt?_stNumAlt:_stNum; return; }
+      ws[addr].s = isAlt?_stAlt:_stCell;
     });
   });
+
+  // Anchos columnas
+  var colWidths = {
+    'ID':8,'Nombre':22,'Email':26,'Teléfono':14,'DNI/Doc.':12,
+    'Paquete/Plan':20,'Destino':16,'Fecha Viaje':13,'Fecha Alta':13,'Estado':16,'Estado Raw':0,
+    'Progreso':22,'Cuotas Total':12,'Cuotas Pagas':12,'Cuotas Pend.':12,
+    'Monto Cuota USD':15,'Total Paquete USD':16,'Total Cobrado USD':16,'Saldo Pendiente USD':17,
+    'Asesor':20,'Email Asesor':26,'Región':22,'Notas':30
+  };
+  ws['!cols'] = keys.map(function(k){ return {wch: colWidths[k]||14}; });
+  ws['!rows'] = [{hpx:32}]; // encabezado más alto
+  // Freeze primera fila
+  ws['!freeze'] = {xSplit:0, ySplit:1, topLeftCell:'A2', activeCell:'A2', sqref:'A2'};
+
+  return ws;
 }
 
-function _addTotalesRow(filas, keysCli){
-  var moneyCols = ['Total USD','Monto Cuota','Total Cobrado','Saldo Pendiente'];
-  var intCols   = ['Cuotas Total','Cuotas Pagas','Cuotas Pend.'];
-  var tot = {};
-  keysCli.forEach(function(k){
-    if(moneyCols.indexOf(k) !== -1){
-      tot[k] = Math.round(filas.reduce(function(s,f){return s+(parseFloat(f[k])||0);},0)*100)/100;
-    } else if(intCols.indexOf(k) !== -1){
-      tot[k] = filas.reduce(function(s,f){return s+(parseInt(f[k])||0);},0);
-    } else if(k === keysCli[0]){
-      tot[k] = 'TOTALES';
-    } else {
-      tot[k] = '';
-    }
+// ══════════════════════════════════════════════════════════════════════════════
+//  FILA ASESOR — COMPLETO
+// ══════════════════════════════════════════════════════════════════════════════
+function _filaAsesorV2(v, allCli){
+  var r = rby(v.rid);
+  var vc = allCli.filter(function(c){ return String(c.vid)===String(v.user_id)||String(c.vid)===String(v.id); });
+  var activos = vc.filter(function(c){return c.estado!=='baja'&&c.estado!=='completo';}).length;
+  var completos = vc.filter(function(c){return c.estado==='completo';}).length;
+  var atraso = vc.filter(function(c){return c.estado==='atraso'||c.estado==='atraso_gestion';}).length;
+  var rec = vc.reduce(function(s,c){return s+(parseInt(c.cuotas_pagadas)||0)*(parseFloat(c.monto_cuota)||0);},0);
+  var pendiente = vc.reduce(function(s,c){
+    var totalPkg=(parseFloat(c.total_usd)||0)||((parseFloat(c.monto_cuota)||0)*(parseInt(c.cuotas_total)||10));
+    var cobrado=(parseInt(c.cuotas_pagadas)||0)*(parseFloat(c.monto_cuota)||0);
+    return s+(totalPkg-cobrado);
+  },0);
+  var pctCom = v.com_pct || 0;
+  var comision = rec * (pctCom/100);
+  return {
+    'ID':                 v.id || '',
+    'Nombre':             v.nombre || '',
+    'Email':              v.email || '',
+    'Tel. Principal':     v.telefono1 || '',
+    'Tel. Referencia':    v.telefono2 || '',
+    'Ciudad':             v.ciudad || '',
+    'Región':             r.nombre || '',
+    'Bandera':            r.bandera || '',
+    'Fecha Alta':         v.fechaAlta || '',
+    'Estado':             v.activo!==false ? '✅ Activo' : '⬇️ Inactivo',
+    '% Comisión':         pctCom,
+    'Total Clientes':     vc.length,
+    'Activos':            activos,
+    'Completos':          completos,
+    'En Atraso':          atraso,
+    'Bajas':              vc.filter(function(c){return c.estado==='baja';}).length,
+    'Recaudado USD':      Math.round(rec*100)/100,
+    'Pendiente USD':      Math.round(pendiente*100)/100,
+    'Comisión Est. USD':  Math.round(comision*100)/100
+  };
+}
+
+function _buildAsesoresSheet(vs, allCli){
+  var filas = vs.map(function(v){ return _filaAsesorV2(v, allCli); });
+  if(!filas.length) filas = [{'ID':'','Nombre':'Sin asesores','Email':'','Tel. Principal':'','Tel. Referencia':'','Ciudad':'','Región':'','Bandera':'','Fecha Alta':'','Estado':'','% Comisión':0,'Total Clientes':0,'Activos':0,'Completos':0,'En Atraso':0,'Bajas':0,'Recaudado USD':0,'Pendiente USD':0,'Comisión Est. USD':0}];
+  var keys = Object.keys(filas[0]);
+  var moneyKeys = ['Recaudado USD','Pendiente USD','Comisión Est. USD'];
+  var numKeys   = ['Total Clientes','Activos','Completos','En Atraso','Bajas','% Comisión'];
+
+  // Totales
+  var totRow = {};
+  keys.forEach(function(k){
+    if(moneyKeys.indexOf(k)!==-1) totRow[k] = Math.round(filas.reduce(function(s,f){return s+(parseFloat(f[k])||0);},0)*100)/100;
+    else if(numKeys.indexOf(k)!==-1) totRow[k] = filas.reduce(function(s,f){return s+(parseInt(f[k])||0);},0);
+    else if(k===keys[0]) totRow[k] = 'TOTALES';
+    else totRow[k] = '';
   });
-  return tot;
-}
+  var wsData = filas.concat([totRow]);
+  var ws = XLSX.utils.json_to_sheet(wsData);
 
-function _addTotalesAsesores(filas, keysVend){
-  var tot = {};
-  keysVend.forEach(function(k){
-    if(k === 'Recaudación USD'){
-      tot[k] = Math.round(filas.reduce(function(s,f){return s+(parseFloat(f[k])||0);},0)*100)/100;
-    } else if(k === keysVend[0]){
-      tot[k] = 'TOTALES';
-    } else if(k === 'Clientes Activos' || k === 'Total Clientes'){
-      tot[k] = filas.reduce(function(s,f){return s+(parseInt(f[k])||0);},0);
-    } else {
-      tot[k] = '';
-    }
+  keys.forEach(function(k,ci){
+    var addr = XLSX.utils.encode_cell({r:0,c:ci});
+    if(ws[addr]) ws[addr].s = ci%2===0 ? _stH1 : _stH2;
   });
-  return tot;
-}
-
-function _addTotalesRegiones(filas, keysReg){
-  var tot = {};
-  keysReg.forEach(function(k){
-    if(k === 'Recaudación'){
-      tot[k] = Math.round(filas.reduce(function(s,f){return s+(parseFloat(f[k])||0);},0)*100)/100;
-    } else if(k === keysReg[0]){
-      tot[k] = 'TOTALES';
-    } else if(k === 'Clientes' || k === 'En Atraso' || k === 'Completados'){
-      tot[k] = filas.reduce(function(s,f){return s+(parseInt(f[k])||0);},0);
-    } else {
-      tot[k] = '';
-    }
+  wsData.forEach(function(fila,ri){
+    var row=1+ri; var isTot = fila[keys[0]]==='TOTALES'; var isAlt=ri%2===1;
+    keys.forEach(function(k,ci){
+      var addr=XLSX.utils.encode_cell({r:row,c:ci}); if(!ws[addr]) return;
+      if(isTot){ ws[addr].s=_stTotGold; return; }
+      if(k==='Estado'){ ws[addr].s = (fila[k]||'').indexOf('Activo')!==-1?_stEstActivo:_stEstBaja; return; }
+      if(moneyKeys.indexOf(k)!==-1){ ws[addr].s=isAlt?_stMoneyAlt:_stMoney; ws[addr].z='#,##0.00'; return; }
+      if(numKeys.indexOf(k)!==-1){ ws[addr].s=isAlt?_stNumAlt:_stNum; return; }
+      ws[addr].s=isAlt?_stAlt:_stCell;
+    });
   });
-  return tot;
+
+  ws['!cols'] = keys.map(function(k){
+    var w={ID:8,Nombre:22,Email:26,'Tel. Principal':14,'Tel. Referencia':14,Ciudad:14,Región:22,Bandera:8,'Fecha Alta':13,Estado:14,'% Comisión':12,'Total Clientes':13,Activos:10,Completos:11,'En Atraso':11,Bajas:9,'Recaudado USD':16,'Pendiente USD':16,'Comisión Est. USD':17};
+    return {wch:w[k]||14};
+  });
+  ws['!rows']=[{hpx:32}];
+  ws['!freeze']={xSplit:0,ySplit:1,topLeftCell:'A2',activeCell:'A2',sqref:'A2'};
+  return ws;
 }
 
-function _buildResumen(nCli, filasCli, nVend, nReg, fecha, hora){
-  var activos = filasCli.filter(function(c){return (c['Estado']||'').toLowerCase()==='activo';}).length;
-  var atraso  = filasCli.filter(function(c){var e=(c['Estado']||'').toLowerCase();return e==='atraso'||e==='atraso_gestion';}).length;
-  var completos = filasCli.filter(function(c){return (c['Estado']||'').toLowerCase()==='completo';}).length;
-  var totalRec  = filasCli.reduce(function(s,c){return s+(parseFloat(c['Total Cobrado'])||0);},0);
-  var totalPend = filasCli.reduce(function(s,c){return s+(parseFloat(c['Saldo Pendiente'])||0);},0);
-  return [
-    { 'Indicador': 'LuAzul Smart Travel — Resumen Ejecutivo', 'Valor': '' },
-    { 'Indicador': 'Fecha Reporte', 'Valor': fecha + ' ' + hora },
-    { 'Indicador': '', 'Valor': '' },
-    { 'Indicador': 'Total Clientes', 'Valor': nCli },
-    { 'Indicador': 'Activos', 'Valor': activos },
-    { 'Indicador': 'En Atraso', 'Valor': atraso },
-    { 'Indicador': 'Completos', 'Valor': completos },
-    { 'Indicador': '', 'Valor': '' },
-    { 'Indicador': 'Recaudacion Total (USD)', 'Valor': Math.round(totalRec*100)/100 },
-    { 'Indicador': 'Saldo Pendiente (USD)', 'Valor': Math.round(totalPend*100)/100 },
-    { 'Indicador': '', 'Valor': '' },
-    { 'Indicador': 'Asesores', 'Valor': nVend },
-    { 'Indicador': 'Regiones', 'Valor': nReg }
-  ];
+// ══════════════════════════════════════════════════════════════════════════════
+//  HOJA REGIONES
+// ══════════════════════════════════════════════════════════════════════════════
+function _filaRegionV2(r, allCli, allVend){
+  var g = gby(r.gid||r.gerente_id);
+  var rv = allVend.filter(function(v){return String(v.rid)===String(r.id);});
+  var rc = allCli.filter(function(c){return String(c.rid)===String(r.id);});
+  var rec = rc.reduce(function(s,c){return s+(parseInt(c.cuotas_pagadas)||0)*(parseFloat(c.monto_cuota)||0);},0);
+  var pend = rc.reduce(function(s,c){
+    var tp=(parseFloat(c.total_usd)||0)||((parseFloat(c.monto_cuota)||0)*(parseInt(c.cuotas_total)||10));
+    var cb=(parseInt(c.cuotas_pagadas)||0)*(parseFloat(c.monto_cuota)||0);
+    return s+(tp-cb);
+  },0);
+  var activos = rc.filter(function(c){return c.estado==='activo';}).length;
+  var atraso  = rc.filter(function(c){return c.estado==='atraso'||c.estado==='atraso_gestion';}).length;
+  var pctCob  = (rec+pend)>0?Math.round(rec/(rec+pend)*100):0;
+  return {
+    'ID':             r.id||'',
+    'Bandera':        r.bandera||'',
+    'Región':         r.nombre||'',
+    'Gerente':        g.nombre||'—',
+    'Email Gerente':  g.email||'',
+    'Asesores':       rv.length,
+    'Total Clientes': rc.length,
+    '✅ Activos':     activos,
+    '🚨 Atraso':      atraso,
+    '💙 Completos':   rc.filter(function(c){return c.estado==='completo';}).length,
+    '⬇️ Bajas':       rc.filter(function(c){return c.estado==='baja';}).length,
+    'Recaudado USD':  Math.round(rec*100)/100,
+    'Pendiente USD':  Math.round(pend*100)/100,
+    'Cobranza %':     _progressBar(pctCob)
+  };
 }
 
+function _buildRegionesSheet(rs, allCli, allVend){
+  var filas = rs.map(function(r){ return _filaRegionV2(r, allCli, allVend); });
+  if(!filas.length) filas = [{'ID':'','Bandera':'','Región':'Sin regiones','Gerente':'','Email Gerente':'','Asesores':0,'Total Clientes':0,'✅ Activos':0,'🚨 Atraso':0,'💙 Completos':0,'⬇️ Bajas':0,'Recaudado USD':0,'Pendiente USD':0,'Cobranza %':''}];
+  var keys = Object.keys(filas[0]);
+  var moneyKeys=['Recaudado USD','Pendiente USD'];
+  var numKeys=['Asesores','Total Clientes','✅ Activos','🚨 Atraso','💙 Completos','⬇️ Bajas'];
+
+  var totRow={};
+  keys.forEach(function(k){
+    if(moneyKeys.indexOf(k)!==-1) totRow[k]=Math.round(filas.reduce(function(s,f){return s+(parseFloat(f[k])||0);},0)*100)/100;
+    else if(numKeys.indexOf(k)!==-1) totRow[k]=filas.reduce(function(s,f){return s+(parseInt(f[k])||0);},0);
+    else if(k===keys[0]) totRow[k]='TOTALES';
+    else totRow[k]='';
+  });
+  var wsData=filas.concat([totRow]);
+  var ws=XLSX.utils.json_to_sheet(wsData);
+
+  keys.forEach(function(k,ci){
+    var addr=XLSX.utils.encode_cell({r:0,c:ci}); if(ws[addr]) ws[addr].s=ci%2===0?_stH1:_stH2;
+  });
+  wsData.forEach(function(fila,ri){
+    var row=1+ri; var isTot=fila[keys[0]]==='TOTALES'; var isAlt=ri%2===1;
+    keys.forEach(function(k,ci){
+      var addr=XLSX.utils.encode_cell({r:row,c:ci}); if(!ws[addr]) return;
+      if(isTot){ ws[addr].s=_stTotCyan; return; }
+      if(moneyKeys.indexOf(k)!==-1){ ws[addr].s=isAlt?_stMoneyAlt:_stMoney; ws[addr].z='#,##0.00'; return; }
+      if(numKeys.indexOf(k)!==-1){ ws[addr].s=isAlt?_stNumAlt:_stNum; return; }
+      ws[addr].s=isAlt?_stAlt:_stCell;
+    });
+  });
+  ws['!cols']=keys.map(function(k){var w={'ID':6,'Bandera':7,'Región':24,'Gerente':22,'Email Gerente':26,'Asesores':9,'Total Clientes':13,'✅ Activos':10,'🚨 Atraso':10,'💙 Completos':11,'⬇️ Bajas':9,'Recaudado USD':16,'Pendiente USD':16,'Cobranza %':22};return{wch:w[k]||14};});
+  ws['!rows']=[{hpx:32}];
+  ws['!freeze']={xSplit:0,ySplit:1,topLeftCell:'A2',activeCell:'A2',sqref:'A2'};
+  return ws;
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  HISTORIAL
+// ══════════════════════════════════════════════════════════════════════════════
+function _registrarHistorial(tipo, cantidad, nombre){
+  var ts = new Date().toLocaleString('es-AR',{hour:'2-digit',minute:'2-digit',day:'2-digit',month:'2-digit'});
+  bkpHistorial.unshift({ts:ts,tipo:tipo,cantidad:cantidad,nombre:nombre});
+  if(bkpHistorial.length>8) bkpHistorial.pop();
+  var el=document.getElementById('bkp-historial'); if(!el) return;
+  el.innerHTML=bkpHistorial.map(function(h,i){
+    var borderStyle=i<bkpHistorial.length-1?'border-bottom:1px solid var(--border);':'';
+    return '<div style="display:flex;align-items:center;gap:10px;padding:10px 0;'+borderStyle+'">'
+      +'<div style="width:36px;height:36px;border-radius:9px;background:rgba(34,211,238,.1);border:1px solid rgba(34,211,238,.2);display:flex;align-items:center;justify-content:center;font-size:.9rem;flex-shrink:0;">'+(h.tipo.split(' ')[0]||'📥')+'</div>'
+      +'<div style="flex:1;min-width:0;"><div style="font-weight:700;font-size:.8rem;">'+h.tipo+'</div>'
+      +'<div style="font-size:.68rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+h.nombre+'</div></div>'
+      +'<div style="text-align:right;flex-shrink:0;"><div style="color:var(--green);font-weight:700;font-size:.82rem;">'+h.cantidad+' filas</div>'
+      +'<div style="font-size:.68rem;color:var(--muted);">'+h.ts+'</div></div>'
+      +'</div>';
+  }).join('');
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  EXPORTAR EXCEL — ORQUESTADOR PRINCIPAL
+// ══════════════════════════════════════════════════════════════════════════════
 function _setExportBtnLoading(tipo, loading){
-  var ids = tipo === 'clientes' ? ['btn-export-clientes']
-           : tipo === 'asesores' ? ['btn-export-asesores']
-           : ['btn-export-clientes','btn-export-asesores','btn-export-completo'];
-  ids.forEach(function(id){
-    var btn = document.getElementById(id); if(!btn) return;
-    btn.disabled = loading;
-    btn.style.opacity = loading ? '.6' : '1';
-    if(loading && tipo !== 'completo') btn.innerHTML = '<span>⏳</span> Generando...';
-    else if(!loading){
-      if(id==='btn-export-clientes') btn.innerHTML = '<span>⬇️</span> Descargar Clientes.xlsx';
-      else if(id==='btn-export-asesores') btn.innerHTML = '<span>⬇️</span> Descargar Asesores.xlsx';
-      else btn.innerHTML = '<span>⬇️</span> Descargar ReporteCompleto.xlsx';
-    }
-  });
+  var map={clientes:'btn-export-clientes',asesores:'btn-export-asesores',completo:'btn-export-completo'};
+  var ids=tipo==='completo'?Object.values(map):[map[tipo]];
+  var labels={'btn-export-clientes':'<span>⬇️</span> Descargar Clientes.xlsx','btn-export-asesores':'<span>⬇️</span> Descargar Asesores.xlsx','btn-export-completo':'<span>⬇️</span> Descargar ReporteCompleto.xlsx'};
+  ids.forEach(function(id){ var btn=document.getElementById(id); if(!btn) return; btn.disabled=loading; btn.style.opacity=loading?'.6':'1'; btn.innerHTML=loading?'<span>⏳</span> Generando...':(labels[id]||'⬇️ Descargar'); });
 }
 
 async function exportarExcel(tipo){
-  if(typeof XLSX === 'undefined'){
-    showToast('⚠️ Librería Excel no cargada. Verificá la conexión a internet.');
-    _checkXlsxLib();
+  if(typeof XLSX==='undefined'){ showToast('⚠️ Librería Excel no cargada. Verificá tu conexión.'); _checkXlsxLib(); return; }
+  _setExportBtnLoading(tipo, true);
+
+  if(!(_cacheClientes||[]).length || !(_cacheVendedores||[]).length){
+    showToast('⏳ Cargando datos...');
+    try{ await cargarDatosSupabase(); }catch(e){ console.error('[Export]',e); }
+  }
+
+  var cs=cli(), vs=vend(), rs=reg();
+  console.log('[Export v7] Clientes:',cs.length,'| Asesores:',vs.length,'| Regiones:',rs.length);
+
+  var fecha=new Date().toLocaleDateString('es-AR').replace(/\//g,'-');
+  var hora=new Date().toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
+  var wb=XLSX.utils.book_new();
+
+  var ef=(document.getElementById('bkp-estado-filt')||{}).value||'';
+  var rf=(document.getElementById('bkp-region-filt')||{}).value||'';
+  var csFilt=cs;
+  if(tipo==='clientes'||tipo==='completo'){
+    if(tipo==='clientes'){
+      if(ef) csFilt=csFilt.filter(function(c){return c.estado===ef;});
+      if(rf) csFilt=csFilt.filter(function(c){return String(c.rid)===String(rf);});
+    }
+  }
+
+  if(tipo==='clientes'){
+    var wsCli=_buildClientesSheet(csFilt, fecha);
+    XLSX.utils.book_append_sheet(wb, wsCli, 'Clientes');
+    var nomCli='LuAzul_Clientes_'+fecha+(ef?'_'+ef:'')+(rf?'_reg':'')+'.xlsx';
+    XLSX.writeFile(wb, nomCli);
+    showToast('✅ Excel Clientes: '+csFilt.length+' registros');
+    _registrarHistorial('👥 Clientes', csFilt.length, nomCli);
+    _setExportBtnLoading('clientes', false);
     return;
   }
 
-  _setExportBtnLoading(tipo, true);
-
-  // ── Asegurar que el caché esté cargado ──
-  var clientesCache = _cacheClientes || [];
-  var vendedoresCache = _cacheVendedores || [];
-  if(!clientesCache.length || !vendedoresCache.length){
-    showToast('⏳ Cargando datos para exportar...');
-    try {
-      await cargarDatosSupabase();
-    } catch(e){
-      console.error('[Export] Error cargando datos:', e);
-    }
-  }
-
-  var cs = cli();
-  var vs = vend();
-  var rs = reg();
-  console.log('[Export] Datos — Clientes:', cs.length, '| Asesores:', vs.length, '| Regiones:', rs.length);
-
-  var fecha = new Date().toLocaleDateString('es-AR').replace(/\//g,'-');
-  var hora  = new Date().toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
-  var wb = XLSX.utils.book_new();
-
-  // ── Variables de scope elevado (necesarias en bloque 'completo') ──
-  var filasCli_pure = [], nCli = 0;
-
-  // ── HOJA DE CLIENTES ──
-  if(tipo === 'clientes' || tipo === 'completo'){
-    var ef = (document.getElementById('bkp-estado-filt')||{}).value || '';
-    var rf = (document.getElementById('bkp-region-filt')||{}).value || '';
-    var csFiltrados = cs;
-    if(tipo === 'clientes'){
-      if(ef) csFiltrados = cs.filter(function(c){ return c.estado === ef; });
-      if(rf) csFiltrados = csFiltrados.filter(function(c){ return String(c.rid) === String(rf); });
-    }
-    filasCli_pure = csFiltrados.map(_filaCliente); // sin totales — para _buildResumen
-    nCli = filasCli_pure.length;
-    var filasCli = filasCli_pure.slice(); // copia para agregar totales
-    if(!filasCli.length) filasCli = [{ 'Nota': 'Sin clientes con ese filtro' }];
-    var keysCli = Object.keys(filasCli[0]);
-    filasCli.push(_addTotalesRow(filasCli, keysCli));
-    var wsCli = XLSX.utils.json_to_sheet(filasCli);
-    _autoAncho(wsCli, filasCli);
-    var moneyColsCli = [keysCli.indexOf('Total USD'), keysCli.indexOf('Monto Cuota'), keysCli.indexOf('Total Cobrado'), keysCli.indexOf('Saldo Pendiente')];
-    _applySheetStyles(wsCli, keysCli, filasCli, { moneyCols: moneyColsCli, estadoCol: keysCli.indexOf('Estado'), totStyle: _stTotB });
-    XLSX.utils.book_append_sheet(wb, wsCli, 'Clientes');
-    console.log('[Export] Hoja Clientes:', nCli, 'filas + totales');
-
-    if(tipo === 'clientes'){
-      var nombreCli = 'LuAzul_Clientes_'+fecha+(ef?'_'+ef:'')+(rf?'_reg':'')+'.xlsx';
-      XLSX.writeFile(wb, nombreCli);
-      showToast('✅ Excel descargado: '+nCli+' clientes');
-      _registrarHistorial('👥 Clientes', nCli, nombreCli);
-      _setExportBtnLoading('clientes', false);
-      return;
-    }
-  }
-
-  // ── HOJA DE ASESORES ──
-  if(tipo === 'asesores' || tipo === 'completo'){
-    var filasVend = vs.map(_filaAsesor);
-    if(!filasVend.length) filasVend = [{ 'Nota': 'Sin asesores' }];
-    var keysVend = Object.keys(filasVend[0]);
-    var nVend = filasVend.length;
-    filasVend.push(_addTotalesAsesores(filasVend, keysVend));
-    var wsVend = XLSX.utils.json_to_sheet(filasVend);
-    _autoAncho(wsVend, filasVend);
-    var moneyVend = [keysVend.indexOf('Recaudación USD')];
-    _applySheetStyles(wsVend, keysVend, filasVend, { moneyCols: moneyVend, estadoCol: -1, totStyle: _stTotG });
+  if(tipo==='asesores'){
+    var wsVend=_buildAsesoresSheet(vs, cs);
     XLSX.utils.book_append_sheet(wb, wsVend, 'Asesores');
-    console.log('[Export] Hoja Asesores:', nVend, 'filas + totales');
-
-    if(tipo === 'asesores'){
-      var nombreVend = 'LuAzul_Asesores_'+fecha+'.xlsx';
-      XLSX.writeFile(wb, nombreVend);
-      showToast('✅ Excel descargado: '+nVend+' asesores');
-      _registrarHistorial('🧑‍💼 Asesores', nVend, nombreVend);
-      _setExportBtnLoading('asesores', false);
-      return;
-    }
+    var nomVend='LuAzul_Asesores_'+fecha+'.xlsx';
+    XLSX.writeFile(wb, nomVend);
+    showToast('✅ Excel Asesores: '+vs.length+' registros');
+    _registrarHistorial('🧑‍💼 Asesores', vs.length, nomVend);
+    _setExportBtnLoading('asesores', false);
+    return;
   }
 
-  // ── REPORTE COMPLETO ──
-  if(tipo === 'completo'){
-    var filasReg = rs.map(_filaRegion);
-    if(!filasReg.length) filasReg = [{ 'Nota': 'Sin regiones' }];
-    var keysReg = Object.keys(filasReg[0]);
-    var nReg = filasReg.length;
-    filasReg.push(_addTotalesRegiones(filasReg, keysReg));
-    var wsReg = XLSX.utils.json_to_sheet(filasReg);
-    _autoAncho(wsReg, filasReg);
-    var moneyReg = [keysReg.indexOf('Recaudación')];
-    _applySheetStyles(wsReg, keysReg, filasReg, { moneyCols: moneyReg, estadoCol: -1, totStyle: _stTotB });
-    XLSX.utils.book_append_sheet(wb, wsReg, 'Regiones');
+  if(tipo==='completo'){
+    // 1. Resumen (usa todos los clientes sin filtro)
+    var filasPuraCli = cs.map(_filaClienteV2);
+    var wsRes=_buildResumenSheet(filasPuraCli.length, filasPuraCli, vs, rs, fecha, hora);
+    XLSX.utils.book_append_sheet(wb, wsRes, '📊 Resumen');
 
-    // Hoja de resumen ejecutivo — usa filasCli_pure (SIN la fila de totales)
-    var resumenData = _buildResumen(nCli, filasCli_pure, nVend, nReg, fecha, hora);
-    var wsRes = XLSX.utils.json_to_sheet(resumenData);
-    _autoAncho(wsRes, resumenData);
-    XLSX.utils.book_append_sheet(wb, wsRes, 'Resumen');
-    // Mover resumen al principio
-    wb.SheetNames = ['Resumen','Clientes','Asesores','Regiones'];
+    // 2. Clientes
+    var wsCli2=_buildClientesSheet(cs, fecha);
+    XLSX.utils.book_append_sheet(wb, wsCli2, '👥 Clientes');
 
-    var nombreFull = 'LuAzul_ReporteCompleto_'+fecha+'.xlsx';
-    XLSX.writeFile(wb, nombreFull);
-    showToast('✅ Reporte completo: '+nCli+' clientes, '+nVend+' asesores, '+nReg+' regiones');
-    _registrarHistorial('📊 Reporte Completo', nCli + nVend + nReg, nombreFull);
+    // 3. Asesores
+    var wsVend2=_buildAsesoresSheet(vs, cs);
+    XLSX.utils.book_append_sheet(wb, wsVend2, '🧑‍💼 Asesores');
+
+    // 4. Regiones
+    var wsReg=_buildRegionesSheet(rs, cs, vs);
+    XLSX.utils.book_append_sheet(wb, wsReg, '🌎 Regiones');
+
+    var nomFull='LuAzul_ReporteCompleto_'+fecha+'.xlsx';
+    XLSX.writeFile(wb, nomFull);
+    showToast('✅ Reporte completo generado · '+cs.length+' clientes · '+vs.length+' asesores');
+    _registrarHistorial('📊 Reporte Completo', cs.length+vs.length+rs.length, nomFull);
     _setExportBtnLoading('completo', false);
-    console.log('[Export] Reporte completo —', nombreFull);
+    console.log('[Export v7] OK —', nomFull);
   }
 }
 // ── FIN BACKUP EXCEL ────────────────────────────────────────────────────────
+
 
 // ── TOAST ─────────────────────────────────────────────
 var _toastT=null;
