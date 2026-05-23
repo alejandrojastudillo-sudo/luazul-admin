@@ -248,8 +248,9 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;back
 .lz-phone-wrap select:focus{outline:none;border-color:rgba(0,210,255,.4);}
 .lz-phone-wrap input{border-radius:0 8px 8px 0!important;flex:1;}
 </style>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2?v=3.6"></script>
 <script>
+console.log('%c ⚡ jefe_ventas_luazul_v3.6 ', 'background:#0d9488;color:#fff;font-size:14px;padding:4px 8px;border-radius:6px;');
   var SUPABASE_URL = 'https://yunvqgaljopirzvjrntc.supabase.co';
   var SUPABASE_KEY = 'sb_publishable_MqB2thv0uzVUAY2v2jh-uQ_ul6a2LzB';
   var sbClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -447,13 +448,15 @@ async function loadClients() {
     _memCache[DB_KEY] = clientes.map(LZ.enrich);
     _memCache[VK]     = staff.filter(function(s) { return s.role_id === LZ.ROLE_SELLER; });
     var rIds = result.rIds || [];
-    _memCache[NK]     = (notificaciones || []).concat(pagos || []);
+    _memCache[NK]     = notificaciones || [];  // FIX: solo notificaciones, NO mezclar con pagos
+    window._cachePagos = pagos || [];  // FIX: pagos en cache separado (como CEO)
     window._cacheRegiones    = regiones;
     window._gerenteRegionIds = rIds;
     console.log('📦 Datos cargados:', {
       clientes: _memCache[DB_KEY].length,
       staff:    _memCache[VK].length,
-      notificaciones: notificaciones.length
+      notificaciones: (notificaciones || []).length,
+      pagos: (pagos || []).length
     });
     renderAll();
     if (typeof renderPagos === 'function') renderPagos();
@@ -462,7 +465,7 @@ async function loadClients() {
   } catch (err) {
     console.error('❌ Error en loadClients:', err);
     showToast('❌ Error al cargar datos: ' + (err.message || err));
-    _memCache[VK] = []; _memCache[DB_KEY] = []; _memCache[NK] = [];
+    _memCache[VK] = []; _memCache[DB_KEY] = []; _memCache[NK] = []; window._cachePagos = [];
   }
 }
 // Alias backward-compat para llamadas post-acción internas
@@ -521,12 +524,12 @@ function _sbLoad() { return loadClients(); }
       <div class="tab" onclick="showTab('equipo')" id="tab-equipo">🏆 Equipo &amp; Objetivos</div>
       <div class="tab" onclick="showTab('clients')" id="tab-clients">👥 Clientes</div>
       <div class="tab" onclick="showTab('notifs')" id="tab-notifs">🔔 Notificaciones <span id="tabNBadge" style="display:none;background:var(--red);color:white;font-size:.62rem;padding:1px 6px;border-radius:20px;margin-left:3px;">0</span></div>
-      <div class="tab" onclick="showTab('mensual')" id="tab-mensual" style="color:#67e8f9;">📆 Recaudación Mensual</div>
-      <div class="tab" onclick="showTab('miscomisiones')" id="tab-miscomisiones" style="color:#4ade80;">💰 Mis Comisiones</div>
-      <div class="tab" onclick="showTab('tickets')" id="tab-tickets" style="color:#fbbf24;">🎫 Tickets</div>
-      <div class="tab" onclick="showTab('comunicaciones'); renderComunicacionesGerente();" id="tab-comunicaciones" style="color:#67e8f9;">📩 Comunicaciones</div>
-      <div class="tab" onclick="showTab('legajo')" id="tab-legajo" style="color:#a78bfa;">🪪 Mi Legajo</div>
-      <div class="tab" onclick="showTab('prospectos_equipo')" id="tab-prospectos_equipo" style="color:#38bdf8;">📋 Prospectos del equipo</div>
+      <div class="tab" onclick="showTab('mensual')" id="tab-mensual">📆 Recaudación Mensual</div>
+      <div class="tab" onclick="showTab('miscomisiones')" id="tab-miscomisiones">💰 Mis Comisiones</div>
+      <div class="tab" onclick="showTab('tickets')" id="tab-tickets">🎫 Tickets</div>
+      <div class="tab" onclick="showTab('comunicaciones'); renderComunicacionesGerente();" id="tab-comunicaciones">📩 Comunicaciones</div>
+      <div class="tab" onclick="showTab('legajo')" id="tab-legajo">🪪 Mi Legajo</div>
+      <div class="tab" onclick="showTab('prospectos_equipo')" id="tab-prospectos_equipo">📋 Prospectos del equipo</div>
     </div>
     <!-- OVERVIEW -->
     <div class="tabpg active" id="tabpg-overview">
@@ -1132,8 +1135,9 @@ function renderOverview() {
     return s.role_id === ROLE_SELLER && String(s.manager_id) === String(_jefeId);
   });
   var ns = (_memCache[NK] || []) || [];
+  var pagos = window._cachePagos || [];  // FIX: pagos separados de notificaciones
   var unread = ns.filter(function(n) { return !n.leida; }).length;
-  var pending = ns.filter(function(n) { return n.tipo === 'payment' && !n.aprobada; }).length;
+  var pending = pagos.filter(function(p) { return p.estado === 'pendiente'; }).length;
   var rec = cs.reduce(function(s, c) { return s + (parseInt(c.cuotas_pagadas) || 0) * (parseFloat(c.monto_cuota) || 0); }, 0);
   document.getElementById('oStats').innerHTML = [
     { i: '👔', v: vs.filter(function(v) { return v.activo; }).length, l: 'Vendedores activos', c: '' },
@@ -1175,13 +1179,30 @@ function renderOverview() {
       + (cm.faltanBonus > 0 ? '<span style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.2);border-radius:6px;padding:3px 9px;color:var(--gold);">🎯 faltan ' + cm.faltanBonus + ' para 80%</span>' : '')
       + '</div></div>';
   }).join('');
-  var pays = ns.filter(function(n) { return n.tipo === 'payment'; }).sort(function(a, b) { return b.ts - a.ts; }).slice(0, 5);
+  // FIX: Últimos pagos usando cache separado con resolución de nombres
+  var paysRaw = (window._cachePagos || []).slice(0, 10);
+  var clientsMap = {};
+  cs.forEach(function(c) { clientsMap[String(c.id)] = c; });
+  var vendorsMap = {};
+  vs.forEach(function(v) { vendorsMap[String(v.id)] = v; });
+  var pays = paysRaw.map(function(p) {
+    var cl = clientsMap[String(p.cliente_id)] || {};
+    var vn = vendorsMap[String(p.seller_id)] || {};
+    return {
+      id: p.id, cliente: cl.nombre || p.cliente_nombre || '—', cid: p.cliente_id,
+      cuota: p.numero_cuota, monto: p.monto_usd || 0,
+      vendedor: vn.nombre || p.vendedor_nombre || '—',
+      ts: p.created_at ? new Date(p.created_at).getTime() : Date.now(),
+      estado: p.estado, comp: p.comprobante_url, aprobadoPor: p.aprobado_por
+    };
+  }).sort(function(a, b) { return b.ts - a.ts; }).slice(0, 5);
   document.getElementById('lastPays').innerHTML = pays.length ? pays.map(function(n) {
+    var aprobado = n.estado === 'aprobado';
     return '<div style="display:flex;align-items:center;gap:9px;padding:8px 0;border-bottom:1px solid var(--border);">'
-      + '<span style="font-size:1.1rem;">' + (n.aprobada ? '✅' : '⏳') + '</span>'
-      + '<div style="flex:1;"><div style="font-weight:600;font-size:.83rem;">' + n.cliente + '</div>'
+      + '<span style="font-size:1.1rem;">' + (aprobado ? '✅' : '⏳') + '</span>'
+      + '<div style="flex:1;"><div style="font-weight:600;font-size:.83rem;">' + esc(n.cliente) + '</div>'
       + '<div style="font-size:.7rem;color:var(--muted);">Cuota ' + esc(n.cuota) + ' · ' + esc(n.vendedor) + ' · ' + fmtTs(n.ts) + '</div></div>'
-      + '<span style="font-weight:800;color:' + (n.aprobada ? 'var(--green)' : 'var(--gold)') + ';">USD ' + n.monto + '</span>'
+      + '<span style="font-weight:800;color:' + (aprobado ? 'var(--green)' : 'var(--gold)') + ';">USD ' + Number(n.monto).toFixed(2) + '</span>'
       + '</div>';
   }).join('') : '<p style="color:var(--muted);text-align:center;padding:20px;font-size:.85rem;">Sin pagos recientes</p>';
   var urg = cs.filter(function(c) { return (c._pct >= 80 && c.estado === 'activo') || c.estado === 'atraso'; }).sort(function(a, b) { return a._p - b._p; }).slice(0, 8);
@@ -2131,8 +2152,10 @@ function markAllRead() {
   _memCache[NK] = ns;
   if (sbClient) {
     var ids = ns.filter(function(n) { return n.tipo === 'payment'; }).map(function(n) { return n.id; });
-    if (ids.length > 0) {
-      sbClient.from('pagos').update({ leida: true }).in('id', ids).then(function() {}).catch(function(e) { console.warn('markAllRead Supabase:', e); });
+    // FIX: pagos ahora en cache separado — marcar leídas desde _cachePagos si existen
+    var pagoIds = (window._cachePagos || []).map(function(p) { return p.id; });
+    if (pagoIds.length > 0) {
+      sbClient.from('pagos').update({ leida: true }).in('id', pagoIds).then(function() {}).catch(function(e) { console.warn('markAllRead Supabase:', e); });
     }
   }
   renderAll(); showToast('✅ Todas leídas');
@@ -2272,7 +2295,7 @@ function renderVendDash() {
   var atraso = cs.filter(function(c) { return c.estado === 'atraso' || c.estado === 'atraso_gestion'; }).length;
   var completos = cs.filter(function(c) { return c.estado === 'completo'; }).length;
   var bajas = cs.filter(function(c) { return c.estado === 'baja'; }).length;
-  var pendPagos = ns.filter(function(n) { return n.tipo === 'payment' && !n.aprobada; }).length;
+  var pendPagos = (window._cachePagos || []).filter(function(p) { return p.estado === 'pendiente'; }).length;
   var totalPendiente = cs.filter(function(c) { return c.estado === 'activo' || c.estado === 'atraso'; }).reduce(function(s, c) { var tot = parseFloat(c.monto_total) || parseFloat(c.monto_cuota || 0) * 10; var pag = (parseInt(c.cuotas_pagadas) || 0) * (parseFloat(c.monto_cuota) || 0); return s + (tot - pag); }, 0);
   var comisionProyectada = totalPendiente * (cm.tasaActual / 100);
   var scoreVend = 100; // simplified
@@ -2396,20 +2419,35 @@ function populatePagoFiltros() {
 }
 
 function renderPagos() {
-  var ns = (_memCache[NK] || []) || [];
+  var pagosRaw = window._cachePagos || [];
   var vf = document.getElementById('pagoVFilt') ? document.getElementById('pagoVFilt').value : '';
   var ef = document.getElementById('pagoEstFilt') ? document.getElementById('pagoEstFilt').value : '';
-  var pays = ns.filter(function(n) { return n.tipo === 'payment'; });
+  var clientsMap = {};
+  ((_memCache[DB_KEY] || []) || []).forEach(function(c) { clientsMap[String(c.id)] = c; });
+  var vendorsMap = {};
+  (_memCache[VK] || []).forEach(function(v) { vendorsMap[String(v.id)] = v; });
+  // Mapear pagos con nombres resueltos
+  var pays = pagosRaw.map(function(p) {
+    var cl = clientsMap[String(p.cliente_id)] || {};
+    var vn = vendorsMap[String(p.seller_id)] || {};
+    return {
+      id: p.id, cliente: cl.nombre || p.cliente_nombre || '—', cid: p.cliente_id,
+      cuota: p.numero_cuota, monto: p.monto_usd || 0,
+      vendedor: vn.nombre || p.vendedor_nombre || '—', vid: p.seller_id,
+      ts: p.created_at ? new Date(p.created_at).getTime() : Date.now(),
+      estado: p.estado, comp: p.comprobante_url, aprobadoPor: p.aprobado_por
+    };
+  });
   if (vf) pays = pays.filter(function(n) { return n.vid && String(n.vid) === String(vf); });
-  if (ef === 'pendiente') pays = pays.filter(function(n) { return !n.aprobada; });
-  if (ef === 'aprobado') pays = pays.filter(function(n) { return !!n.aprobada; });
+  if (ef === 'pendiente') pays = pays.filter(function(n) { return n.estado === 'pendiente'; });
+  if (ef === 'aprobado') pays = pays.filter(function(n) { return n.estado === 'aprobado'; });
   pays.sort(function(a, b) { return b.ts - a.ts; });
   var el = document.getElementById('pagosBody');
   if (!el) return;
   if (!pays.length) { el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted);">Sin pagos para mostrar</div>'; return; }
-  var totalPend = ns.filter(function(n) { return n.tipo === 'payment' && !n.aprobada; }).length;
-  var totalAprob = ns.filter(function(n) { return n.tipo === 'payment' && n.aprobada; }).length;
-  var totalUSD = pays.filter(function(n) { return n.aprobada; }).reduce(function(s, n) { return s + (parseFloat(n.monto) || 0); }, 0);
+  var totalPend = pagosRaw.filter(function(p) { return p.estado === 'pendiente'; }).length;
+  var totalAprob = pagosRaw.filter(function(p) { return p.estado === 'aprobado'; }).length;
+  var totalUSD = pagosRaw.filter(function(p) { return p.estado === 'aprobado'; }).reduce(function(s, p) { return s + (parseFloat(p.monto_usd) || 0); }, 0);
   el.innerHTML = '<div class="kpi-grid" style="margin-bottom:18px;">'
     + '<div class="kpi"><span>⏳</span><div class="kpi-v" style="color:var(--gold);">' + totalPend + '</div><div class="kpi-l">Pendientes aprobación</div></div>'
     + '<div class="kpi"><span>✅</span><div class="kpi-v" style="color:var(--green);">' + totalAprob + '</div><div class="kpi-l">Aprobados</div></div>'
@@ -2420,13 +2458,13 @@ function renderPagos() {
     + '<div></div><div>Cliente</div><div>Asesor</div><div>Cuota</div><div>Monto</div><div>Fecha</div><div>Estado</div><div>Acciones</div>'
     + '</div>'
     + pays.map(function(n) {
-      var aprobado = n.aprobada;
+      var aprobado = n.estado === 'aprobado';
       return '<div class="pago-row" style="display:grid;grid-template-columns:30px 2fr 1.2fr 80px 80px 100px 80px 100px;gap:8px;align-items:center;">'
         + '<div style="font-size:1.1rem;">' + (aprobado ? '✅' : '⏳') + '</div>'
         + '<div><div style="font-size:.84rem;font-weight:600;">' + esc(n.cliente) + '</div><div style="font-size:.68rem;color:var(--muted);">ID: ' + n.cid + '</div></div>'
         + '<div style="font-size:.78rem;color:var(--muted);">' + esc(n.vendedor) + '</div>'
         + '<div style="font-size:.84rem;text-align:center;">#' + n.cuota + '</div>'
-        + '<div style="font-weight:700;color:' + (aprobado ? 'var(--green)' : 'var(--gold)') + ';">USD ' + n.monto + '</div>'
+        + '<div style="font-weight:700;color:' + (aprobado ? 'var(--green)' : 'var(--gold)') + ';">USD ' + Number(n.monto).toFixed(2) + '</div>'
         + '<div style="font-size:.72rem;color:var(--muted);">' + fmtTs(n.ts) + '</div>'
         + '<div><span style="font-size:.7rem;font-weight:700;padding:3px 8px;border-radius:8px;' + (aprobado ? 'background:var(--green-bg);color:var(--green);border:1px solid var(--green-bd);' : 'background:var(--gold-bg);color:var(--gold);border:1px solid var(--gold-bd);') + '">' + (aprobado ? 'Aprobado' : 'Pendiente') + '</span></div>'
         + '<div style="display:flex;gap:4px;">'
@@ -2438,14 +2476,19 @@ function renderPagos() {
 }
 
 function viewPagoComp(nid) {
-  var ns = (_memCache[NK] || []) || [];
-  var n = ns.find(function(x) { return String(x.id) === String(nid); });
-  if (!n || !n.comp) return;
-  document.getElementById('mbox').innerHTML = '<div class="mhead"><div><h2>🔍 Comprobante</h2><p>' + n.cliente + ' · Cuota ' + n.cuota + ' · USD ' + n.monto + '</p></div>'
+  // FIX: buscar en _cachePagos (separado de notificaciones)
+  var pRaw = (window._cachePagos || []).find(function(x) { return String(x.id) === String(nid); });
+  if (!pRaw || !pRaw.comprobante_url) return;
+  var cl = (_memCache[DB_KEY] || []).find(function(c) { return String(c.id) === String(pRaw.cliente_id); });
+  var vn = (_memCache[VK] || []).find(function(v) { return String(v.id) === String(pRaw.seller_id); });
+  var cliente = (cl && cl.nombre) || pRaw.cliente_nombre || '—';
+  var vendedor = (vn && vn.nombre) || pRaw.vendedor_nombre || '—';
+  var aprobado = pRaw.estado === 'aprobado';
+  document.getElementById('mbox').innerHTML = '<div class="mhead"><div><h2>🔍 Comprobante</h2><p>' + esc(cliente) + ' · Cuota ' + pRaw.numero_cuota + ' · USD ' + (pRaw.monto_usd || 0) + '</p></div>'
     + '<button class="mclose" onclick="closeModal()">✕</button></div>'
     + '<div class="mbody" style="text-align:center;">'
-    + '<img src="' + n.comp + '" style="max-width:100%;max-height:400px;border-radius:10px;border:1px solid var(--border);" />'
-    + '<div style="margin-top:12px;font-size:.78rem;color:var(--muted);">Asesor: ' + n.vendedor + ' · ' + fmtTs(n.ts) + (n.aprobada ? ' · ✅ Aprobado' + (n.aprobadoPor ? ' por ' + n.aprobadoPor : '') : ' · ⏳ Pendiente') + '</div>'
+    + '<img src="' + pRaw.comprobante_url + '" style="max-width:100%;max-height:400px;border-radius:10px;border:1px solid var(--border);" />'
+    + '<div style="margin-top:12px;font-size:.78rem;color:var(--muted);">Asesor: ' + esc(vendedor) + ' · ' + (pRaw.created_at ? new Date(pRaw.created_at).toLocaleDateString('es-AR') : '—') + (aprobado ? ' · ✅ Aprobado' + (pRaw.aprobado_por ? ' por ' + pRaw.aprobado_por : '') : ' · ⏳ Pendiente') + '</div>'
     + '</div>'
     + '<div class="mact">'
     + '<button class="mbtn ghost" onclick="closeModal()">Cerrar</button>'
