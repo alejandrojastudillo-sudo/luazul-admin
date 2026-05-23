@@ -9,9 +9,10 @@
 <meta http-equiv="Expires" content="0">
 <title>Luazul Smart Travel · Asesor de Viajes</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2?v=3.7"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js?v=3.7"></script>
 <script>
+console.log('%c ⚡ admin_luazul_v3.7 ', 'background:#0B3D91;color:#fff;font-size:14px;padding:4px 8px;border-radius:6px;');
 // ==================== crm-core (inline) ====================
 // Versión 1.0 – Unificación de utilidades, mapeadores, carga centralizada
 
@@ -3744,7 +3745,7 @@ async function cargarPresupuestos() {
                         <div style="flex:1;">
                             <div style="font-weight:800;font-size:1rem;">${LZ.esc(p.nombre)} ${LZ.esc(p.apellido || '')}</div>
                             <div style="font-size:.78rem;color:var(--text-muted);">📧 ${LZ.esc(p.email || '—')} · 📱 ${LZ.esc(p.telefono || '—')}</div>
-                            <div style="font-size:.72rem;margin-top:6px;">🏝️ Destino: ${LZ.esc(p.destino_slug || '—')} | 👥 ${p.personas} pers. | 📆 ${p.cuotas} cuotas | 💱 ${p.moneda}</div>
+                            <div style="font-size:.72rem;margin-top:6px;">🏝️ Destino: ${LZ.esc(p.destino_slug || '—')} | 🌙 ${p.noches || 7} noches | 👥 ${p.adultos || p.personas || 2} adultos${p.menores_04 ? ' + ' + p.menores_04 + '×0-4' : ''}${p.menores_511 ? ' + ' + p.menores_511 + '×5-11' : ''}${p.menores_1217 ? ' + ' + p.menores_1217 + '×12-17' : ''} | 📆 ${p.cuotas} cuotas | 💱 ${p.moneda}${p.precio_usd ? ' | 💰 USD ' + Number(p.precio_usd).toLocaleString('es-AR') : ''}</div>
                             <div style="font-size:.72rem;margin-top:4px;">
                                 <span style="color:${estadoColor};">📌 Estado: ${p.estado}</span>
                                 ${p.ultimo_contacto ? `<span style="margin-left:12px;">🕒 Último contacto: ${new Date(p.ultimo_contacto).toLocaleDateString('es-AR')}</span>` : ''}
@@ -3813,7 +3814,15 @@ async function abrirFormPresupuesto(id) {
     let datos = {};
     if (id) {
         const { data } = await sbClient.from('prospectos').select('*').eq('id', id).single();
-        if (data) datos = data;
+        if (data) {
+            datos = data;
+            // Compatibilidad con registros viejos (sin campos nuevos del simulador)
+            if (!datos.adultos && datos.personas) datos.adultos = datos.personas;
+            if (!datos.noches) datos.noches = 7;
+            if (datos.menores_04 === undefined || datos.menores_04 === null) datos.menores_04 = 0;
+            if (datos.menores_511 === undefined || datos.menores_511 === null) datos.menores_511 = 0;
+            if (datos.menores_1217 === undefined || datos.menores_1217 === null) datos.menores_1217 = 0;
+        }
     }
 
     const modalHtml = `
