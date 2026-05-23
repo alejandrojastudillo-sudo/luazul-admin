@@ -4011,9 +4011,27 @@ function _buildRawSheet(data, headerLabel){
       var val = item[k];
       if(typeof val === 'function') return;
       if(Array.isArray(val)){
-        // Si es un array de objetos (ej: comprobantes), convertir a JSON string truncado
-        var jsonStr = JSON.stringify(val);
-        clean[k] = jsonStr.length > MAX_CELL ? jsonStr.substring(0, MAX_CELL) + '...[TRUNCADO]' : jsonStr;
+        // Si es un array de objetos (ej: comprobantes de gerentes), extraer solo datos útiles sin base64
+        if((k === 'comprobantes' || k === 'comprobantes_json') && val.length > 0 && typeof val[0] === 'object'){
+          var limpia = val.map(function(comp){
+            var res = {};
+            // Copiar solo campos de texto/numéricos, excluir data/image/base64
+            Object.keys(comp).forEach(function(ck){
+              if(typeof comp[ck] === 'function') return;
+              var cv = String(comp[ck] || '');
+              // Excluir imágenes base64 (data:image, data:application)
+              if(cv.length > 200 && (cv.indexOf('data:image') === 0 || cv.indexOf('data:application') === 0)) return;
+              if(cv.length > 200 && cv.match(/^[A-Za-z0-9+/=]{200,}$/)) return; // base64 puro
+              res[ck] = comp[ck];
+            });
+            return res;
+          });
+          var jsonStr = JSON.stringify(limpia);
+          clean[k] = jsonStr.length > MAX_CELL ? jsonStr.substring(0, MAX_CELL) + '...[TRUNCADO]' : jsonStr;
+        } else {
+          var jsonStr = JSON.stringify(val);
+          clean[k] = jsonStr.length > MAX_CELL ? jsonStr.substring(0, MAX_CELL) + '...[TRUNCADO]' : jsonStr;
+        }
       } else if(typeof val === 'string' && val.length > MAX_CELL){
         // Truncar strings muy largos (ej: base64 de imágenes, textos enormes)
         clean[k] = val.substring(0, MAX_CELL) + '...[TRUNCADO]';
@@ -4112,21 +4130,40 @@ async function exportarBackupCompleto(){
   delete wsRegRaw._empty;
   XLSX.utils.book_append_sheet(wb, wsRegRaw, '6-Regiones');
 
-  // ── 7. RESUMEN EJECUTIVO (para lectura rápida) ──
+  // ── 7. CONTRATOS (documentación legal) ──
+  var contratosRaw = [];
+  try {
+    showToast('⏳ Cargando contratos...');
+    var ctRes = await sbClient.from('contratos')
+      .select('id,cliente_id,vendedor_id,estado,numero_contrato,fecha_firma,created_at,contrato_url,firma_url,contenido_json')
+      .order('created_at',{ascending:false})
+      .limit(500);
+    if(!ctRes.error && ctRes.data) contratosRaw = ctRes.data;
+    console.log('[BackupFull] Contratos:', contratosRaw.length);
+  } catch(e){ console.warn('[BackupFull] Error cargando contratos:', e); }
+
+  var wsContratosRaw = _buildRawSheet(contratosRaw, 'Contratos (crudos)');
+  if(wsContratosRaw._empty){
+    wsContratosRaw = XLSX.utils.json_to_sheet([{ 'Nota':'Sin contratos' }]);
+  }
+  delete wsContratosRaw._empty;
+  XLSX.utils.book_append_sheet(wb, wsContratosRaw, '7-Contratos');
+
+  // ── 8. RESUMEN EJECUTIVO (para lectura rápida) ──
   var filasPuraCli = cs.map(_filaClienteV2);
   var wsRes = _buildResumenSheet(filasPuraCli.length, filasPuraCli, vs, rs, fecha, hora);
-  XLSX.utils.book_append_sheet(wb, wsRes, '7-Resumen');
+  XLSX.utils.book_append_sheet(wb, wsRes, '8-Resumen');
 
   // Ordenar hojas: Resumen primero, luego las crudas
-  wb.SheetNames = ['7-Resumen','1-Clientes','2-Pagos','3-Asesores','4-JefesVentas','5-Gerentes','6-Regiones'];
+  wb.SheetNames = ['8-Resumen','1-Clientes','2-Pagos','3-Asesores','4-JefesVentas','5-Gerentes','6-Regiones','7-Contratos'];
 
   var nom = 'LuAzul_BACKUP_COMPLETO_'+fecha+'.xlsx';
   XLSX.writeFile(wb, nom);
 
-  var totalFilas = cs.length + ps.length + vs.length + js.length + gs.length + rs.length;
-  showToast('💾 Backup completo descargado: '+totalFilas+' registros en 7 hojas');
+  var totalFilas = cs.length + ps.length + vs.length + js.length + gs.length + rs.length + contratosRaw.length;
+  showToast('💾 Backup completo descargado: '+totalFilas+' registros en 8 hojas');
   _registrarHistorial('💾 Backup Completo', totalFilas, nom);
-  console.log('[BackupFull] OK —', nom, '—', totalFilas, 'filas totales');
+  console.log('[BackupFull] OK —', nom, '—', totalFilas, 'filas totales, incl. contratos');
 
   if(btn){ btn.disabled=false; btn.style.opacity='1'; btn.innerHTML='<span>💾</span> Descargar Backup Completo'; }
 }
