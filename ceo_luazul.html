@@ -5,12 +5,12 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- CEO v5.0 — BACKUP COMPLETO 8 hojas + Contratos + Resumen KPIs + anti-caché · 2026-05-23 -->
+<!-- CEO v5.1 — Catálogo integrado en Simulador + Cuentas de Pago centralizadas · 2026-05-23 -->
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <!-- manifest solo funciona en HTTP/HTTPS, no file:// -->
   <!-- <link rel="manifest" href="manifest_ceo.json"> -->
   <meta name="theme-color" content="#0B3D91">
-<title>Luazul Smart Travel · CEO v5.0</title>
+<title>Luazul Smart Travel · CEO v5.1</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Mulish:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js?v=5.0"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js?v=5.0"></script>
@@ -269,9 +269,9 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
       <div class="tab" onclick="showTab('auditoria')" id="tab-auditoria" style="color:#fca5a5;">👁️ Auditoría</div>
       <div class="tab" onclick="showTab('vouchers')" id="tab-vouchers" style="color:#fbbf24;">🎟️ Vouchers</div>
       <div class="tab" onclick="showTab('divisas')" id="tab-divisas" style="color:#22d3ee;">💱 Divisas</div>
-      <div class="tab" onclick="showTab('simulador')" id="tab-simulador" style="color:#a78bfa;">📊 Simulador</div>
+      <div class="tab" onclick="showTab('simulador')" id="tab-simulador" style="color:#a78bfa;">📊 Simulador &amp; Catálogo</div>
       <div class="tab" onclick="showTab('tickets')" id="tab-tickets" style="color:#fb923c;">🎫 Tickets</div>
-      <div class="tab" onclick="showTab('catalogo')" id="tab-catalogo" style="color:#fbbf24;">🏷️ Catálogo</div>
+      <div class="tab" onclick="showTab('cuentas_pago')" id="tab-cuentas_pago" style="color:#34d399;">🏦 Cuentas de Pago</div>
     </div>
 
     <!-- ══ OVERVIEW ══ -->
@@ -711,7 +711,10 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
     <div class="tabpg" id="tabpg-simulador">
       <div class="sec-head">
         <h2>📊 Simulador de Cuotas</h2>
-        <button class="addbtn" onclick="showTab('catalogo')" style="background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.25);color:#fbbf24;">🏷️ Gestionar precios</button>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="addbtn" onclick="openAddDestino()">🌍 Nuevo destino</button>
+          <button class="addbtn" onclick="openAddPaquete()">➕ Nuevo paquete</button>
+        </div>
       </div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px;margin-bottom:24px;">
         <div>
@@ -737,6 +740,33 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
         </div>
       </div>
       <div id="simResultado" style="min-height:200px;"></div>
+
+      <!-- ── CATÁLOGO DE PRECIOS (integrado) ── -->
+      <div style="margin-top:32px;padding-top:24px;border-top:1px solid var(--border2);">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:16px;">
+          <h2 style="font-size:1rem;font-weight:900;">🏷️ Catálogo de Precios y Paquetes</h2>
+          <button onclick="renderCatalogo()" style="padding:8px 16px;border-radius:9px;background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.25);color:#fbbf24;font-family:inherit;font-size:.78rem;font-weight:700;cursor:pointer;">🔄 Actualizar</button>
+        </div>
+        <div id="catKpis" class="cat-kpi-row"></div>
+        <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;align-items:center;">
+          <select id="catFiltroDestino" onchange="renderCatalogo()" class="msel" style="width:auto;min-width:160px;">
+            <option value="">Todos los destinos</option>
+          </select>
+          <select id="catFiltroEstado" onchange="renderCatalogo()" class="msel" style="width:auto;">
+            <option value="">Todos los estados</option>
+            <option value="true">✅ Activos</option>
+            <option value="false">❌ Inactivos</option>
+          </select>
+          <input type="text" id="catBusqueda" placeholder="🔍 Buscar paquete..." oninput="renderCatalogo()" class="medit" style="width:220px;">
+          <div style="margin-left:auto;font-size:.75rem;color:var(--muted);"><span id="catCount">0</span> paquetes</div>
+        </div>
+        <div class="cat-table-wrap">
+          <div class="cat-table-head">
+            <div>Destino</div><div>Paquete</div><div>Pers.</div><div>Noches</div><div>Precio USD</div><div>USD/pers/mes</div><div>Orden</div><div>Estado</div><div>Acciones</div>
+          </div>
+          <div id="catalogoBody"></div>
+        </div>
+      </div>
     </div>
 
     <!-- ═══ TICKETS ═══ -->
@@ -775,34 +805,44 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
     </div>
 
 
-    <!-- ══ CATÁLOGO DE PRECIOS Y SIMULADOR (CRUD PROFESIONAL) ══ -->
-    <div class="tabpg" id="tabpg-catalogo">
+    <!-- ═══ CUENTAS DE PAGO (centralizadas — solo CEO) ═══ -->
+    <div class="tabpg" id="tabpg-cuentas_pago">
       <div class="sec-head">
-        <h2>🏷️ Catálogo de Precios y Paquetes</h2>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;">
-          <button class="addbtn" onclick="openAddDestino()">🌍 Nuevo destino</button>
-          <button class="addbtn" onclick="openAddPaquete()">➕ Nuevo paquete</button>
+        <h2>🏦 Cuentas de Pago Oficiales</h2>
+        <button onclick="renderCuentasPago()" style="padding:8px 16px;border-radius:9px;background:rgba(52,211,153,.1);border:1px solid rgba(52,211,153,.25);color:#34d399;font-family:inherit;font-size:.78rem;font-weight:700;cursor:pointer;">🔄 Actualizar</button>
+      </div>
+      <div style="background:rgba(52,211,153,.05);border:1px solid rgba(52,211,153,.15);border-radius:14px;padding:18px 20px;margin-bottom:20px;">
+        <p style="font-size:.8rem;color:rgba(200,220,255,.6);margin:0 0 16px 0;">Estas son las cuentas que los clientes ven al hacer click en <strong>"Pagar cuota"</strong>. Solo el CEO puede gestionarlas.</p>
+        <div style="font-size:.7rem;font-weight:700;color:#34d399;text-transform:uppercase;letter-spacing:1px;margin-bottom:14px;">➕ Nueva cuenta oficial</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+          <div><div class="ml">Alias / CVU</div><input id="ceoCtaAlias" class="medit" placeholder="luazul.pagos"></div>
+          <div><div class="ml">CBU / CVU completo</div><input id="ceoCtaCbu" class="medit" placeholder="0000003100012345678901" style="font-family:monospace;"></div>
+          <div><div class="ml">Titular</div><input id="ceoCtaTitular" class="medit" placeholder="LUAZUL SMART TRAVEL"></div>
+          <div><div class="ml">Banco / Billetera</div><input id="ceoCtaBanco" class="medit" placeholder="Mercado Pago / Brubank / Naranja X"></div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+          <div><div class="ml">Tipo de cuenta</div>
+            <select id="ceoCtaTipo" class="msel">
+              <option value="billetera">Billetera virtual (MP, Brubank, etc.)</option>
+              <option value="bancaria">Cuenta bancaria</option>
+              <option value="crypto">Criptomonedas</option>
+              <option value="efectivo">Punto de cobro en efectivo</option>
+            </select>
+          </div>
+          <div><div class="ml">Moneda</div>
+            <select id="ceoCtaMoneda" class="msel">
+              <option value="ARS">Pesos Argentinos (ARS)</option>
+              <option value="USD">Dólares (USD)</option>
+              <option value="USDT">USDT / Stablecoins</option>
+            </select>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button onclick="guardarCuentaPago()" style="padding:10px 24px;background:linear-gradient(135deg,#059669,#10b981);border:none;color:#fff;border-radius:10px;font-weight:700;cursor:pointer;font-size:.85rem;font-family:inherit;">💾 Guardar cuenta</button>
+          <button onclick="limpiarFormCuentaPago()" style="padding:10px 24px;background:rgba(255,255,255,.06);border:1px solid var(--border);color:var(--muted);border-radius:10px;font-weight:600;cursor:pointer;font-size:.85rem;font-family:inherit;">🗑 Limpiar</button>
         </div>
       </div>
-      <div id="catKpis" class="cat-kpi-row"></div>
-      <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;align-items:center;">
-        <select id="catFiltroDestino" onchange="renderCatalogo()" class="msel" style="width:auto;min-width:160px;">
-          <option value="">Todos los destinos</option>
-        </select>
-        <select id="catFiltroEstado" onchange="renderCatalogo()" class="msel" style="width:auto;">
-          <option value="">Todos los estados</option>
-          <option value="true">✅ Activos</option>
-          <option value="false">❌ Inactivos</option>
-        </select>
-        <input type="text" id="catBusqueda" placeholder="🔍 Buscar paquete..." oninput="renderCatalogo()" class="medit" style="width:220px;">
-        <div style="margin-left:auto;font-size:.75rem;color:var(--muted);"><span id="catCount">0</span> paquetes</div>
-      </div>
-      <div class="cat-table-wrap">
-        <div class="cat-table-head">
-          <div>Destino</div><div>Paquete</div><div>Pers.</div><div>Noches</div><div>Precio USD</div><div>USD/pers/mes</div><div>Orden</div><div>Estado</div><div>Acciones</div>
-        </div>
-        <div id="catalogoBody"></div>
-      </div>
+      <div id="cuentasPagoList"></div>
     </div>
 
     <!-- ══ PREMIOS POR REFERIDOS ══ -->
@@ -831,7 +871,7 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
 <div id="toast"></div>
 
 <script>
-console.log('%c✅ CEO LuAzul v5.0 — Backup Completo 8 hojas + Contratos + anti-caché', 'background:#7c3aed;color:white;font-weight:bold;padding:4px 8px;border-radius:4px;');
+console.log('%c✅ CEO LuAzul v5.1 — Catálogo en Simulador + Cuentas de Pago centralizadas', 'background:#7c3aed;color:white;font-weight:bold;padding:4px 8px;border-radius:4px;');
 console.log('%c📅 Desplegado: ' + new Date().toISOString(), 'color:#a78bfa;');
 // ══════════════════════════════════════════════════════
 //  LUAZUL CEO — CAPA DE DATOS: SUPABASE (migración v3)
@@ -1738,9 +1778,9 @@ function showTab(id){
   if(id==='vouchers')         renderVoucherClientes();
   // ── Checkpoint v3.2: DIVISAS, SIMULADOR, TICKETS ──
   if(id==='divisas')          renderDivisas();
-  if(id==='simulador')        simLoadDestinos();
+  if(id==='simulador')        { simLoadDestinos(); renderCatalogo(); }
   if(id==='tickets')          cargarTickets();
-  if(id==='catalogo')          renderCatalogo();
+  if(id==='cuentas_pago')     renderCuentasPago();
   if(id==='premios_referidos') renderPremiosReferidos();
   if(id==='auditoria')         renderAuditoria();
 }
@@ -7696,6 +7736,158 @@ async function saveDuplicate(srcId) {
   var btn = document.querySelector('#modal .mbtn.gold'); if (btn) btn.disabled = true;
   try { var r = await sbClient.from('catalogo_precios').insert([d]); if (r.error) throw r.error; showToast('✅ Paquete duplicado'); closeModal(); renderCatalogo(); }
   catch (e) { showToast('❌ ' + e.message); } finally { if (btn) btn.disabled = false; }
+}
+
+
+// ══════════════════════════════════════════════════════
+//  CUENTAS DE PAGO OFICIALES (solo CEO — centralizadas)
+//  Tabla: cuentas_empresa en Supabase
+// ══════════════════════════════════════════════════════
+
+var _cuentasPagoCache = [];
+
+async function renderCuentasPago() {
+  var container = document.getElementById('cuentasPagoList');
+  if (!container) return;
+  container.innerHTML = '<div style="text-align:center;padding:30px;color:var(--muted);">Cargando cuentas...</div>';
+  try {
+    var r = await sbClient.from('cuentas_empresa').select('*').order('created_at', { ascending: false });
+    if (r.error) {
+      // Si la tabla no existe, mostrar instrucciones
+      if (r.message && r.message.indexOf('does not exist') > -1) {
+        container.innerHTML = '<div style="background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.25);border-radius:14px;padding:24px;text-align:center;">'
+          + '<div style="font-size:1.5rem;margin-bottom:12px;">⚠️</div>'
+          + '<div style="font-weight:700;color:#fbbf24;margin-bottom:8px;">Tabla "cuentas_empresa" no encontrada</div>'
+          + '<p style="font-size:.82rem;color:var(--muted);margin-bottom:16px;">Ejecutá este SQL en Supabase para crearla:</p>'
+          + '<pre style="background:rgba(0,0,0,.3);border-radius:10px;padding:16px;text-align:left;font-size:.72rem;color:#a5f3fc;overflow-x:auto;white-space:pre-wrap;">CREATE TABLE cuentas_empresa (\n  id BIGSERIAL PRIMARY KEY,\n  alias TEXT,\n  cbu TEXT,\n  titular TEXT,\n  banco TEXT,\n  tipo TEXT DEFAULT \'billetera\',\n  moneda TEXT DEFAULT \'ARS\',\n  activa BOOLEAN DEFAULT true,\n  created_at TIMESTAMPTZ DEFAULT now()\n);\n\nALTER TABLE cuentas_empresa ENABLE ROW LEVEL SECURITY;\n\nCREATE POLICY "Solo CEO" ON cuentas_empresa\n  FOR ALL USING (true) WITH CHECK (true);</pre>'
+          + '</div>';
+        return;
+      }
+      throw r.error;
+    }
+    _cuentasPagoCache = r.data || [];
+    if (!_cuentasPagoCache.length) {
+      container.innerHTML = '<div style="text-align:center;padding:30px;color:var(--muted);">No hay cuentas oficiales cargadas. Agregá la primera cuenta arriba.</div>';
+      return;
+    }
+    var tipoLabel = { billetera: '💰 Billetera', bancaria: '🏦 Bancaria', crypto: '₿ Crypto', efectivo: '💵 Efectivo' };
+    var monedaLabel = { ARS: '🇦🇷 ARS', USD: '💵 USD', USDT: '🪙 USDT' };
+    var html = '<div style="display:grid;gap:12px;">';
+    _cuentasPagoCache.forEach(function(c) {
+      var badgeActiva = c.activa
+        ? '<span style="display:inline-block;padding:3px 10px;border-radius:20px;font-size:.68rem;font-weight:700;background:rgba(74,222,128,.12);color:#4ade80;border:1px solid rgba(74,222,128,.3);">✅ Activa</span>'
+        : '<span style="display:inline-block;padding:3px 10px;border-radius:20px;font-size:.68rem;font-weight:700;background:rgba(248,113,113,.12);color:#f87171;border:1px solid rgba(248,113,113,.3);">❌ Inactiva</span>';
+      html += '<div style="background:rgba(52,211,153,.04);border:1px solid rgba(52,211,153,.12);border-radius:14px;padding:18px 20px;display:flex;justify-content:space-between;align-items:flex-start;gap:12px;' + (!c.activa ? 'opacity:.55;' : '') + '">'
+        + '<div style="flex:1;">'
+        + '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">'
+        + '<span style="font-weight:800;font-size:.9rem;color:#34d399;">' + (tipoLabel[c.tipo] || c.tipo) + ' — ' + (monedaLabel[c.moneda] || c.moneda) + '</span>'
+        + badgeActiva
+        + '</div>'
+        + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:.78rem;">'
+        + (c.titular ? '<div><span style="color:var(--muted);">Titular:</span> <strong>' + esc(c.titular) + '</strong></div>' : '')
+        + (c.banco ? '<div><span style="color:var(--muted);">Banco:</span> <strong>' + esc(c.banco) + '</strong></div>' : '')
+        + (c.alias ? '<div><span style="color:var(--muted);">Alias:</span> <span style="font-family:monospace;color:#a5f3fc;">' + esc(c.alias) + '</span></div>' : '')
+        + (c.cbu ? '<div><span style="color:var(--muted);">CBU/CVU:</span> <span style="font-family:monospace;color:#a5f3fc;">' + esc(c.cbu) + '</span></div>' : '')
+        + '</div>'
+        + '</div>'
+        + '<div style="display:flex;flex-direction:column;gap:6px;">'
+        + '<button onclick="editarCuentaPago(' + c.id + ')" style="padding:6px 12px;background:rgba(96,165,250,.12);border:1px solid rgba(96,165,250,.3);color:#93c5fd;border-radius:8px;font-size:.72rem;cursor:pointer;font-family:inherit;font-weight:600;">✏️ Editar</button>'
+        + '<button onclick="toggleCuentaPago(' + c.id + ')" style="padding:6px 12px;background:rgba(251,191,36,.12);border:1px solid rgba(251,191,36,.3);color:#fbbf24;border-radius:8px;font-size:.72rem;cursor:pointer;font-family:inherit;font-weight:600;">' + (c.activa ? '🔴 Desactivar' : '✅ Activar') + '</button>'
+        + '<button onclick="eliminarCuentaPago(' + c.id + ')" style="padding:6px 12px;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);color:#fca5a5;border-radius:8px;font-size:.72rem;cursor:pointer;font-family:inherit;font-weight:600;">🗑 Eliminar</button>'
+        + '</div></div>';
+    });
+    html += '</div>';
+    container.innerHTML = html;
+  } catch (e) {
+    container.innerHTML = '<div style="text-align:center;padding:30px;color:#f87171;">❌ Error: ' + esc(e.message) + '</div>';
+  }
+}
+
+async function guardarCuentaPago(editId) {
+  var alias   = (document.getElementById('ceoCtaAlias') || {}).value || '';
+  var cbu     = (document.getElementById('ceoCtaCbu') || {}).value || '';
+  var titular = (document.getElementById('ceoCtaTitular') || {}).value || '';
+  var banco   = (document.getElementById('ceoCtaBanco') || {}).value || '';
+  var tipo    = (document.getElementById('ceoCtaTipo') || {}).value || 'billetera';
+  var moneda  = (document.getElementById('ceoCtaMoneda') || {}).value || 'ARS';
+
+  alias = typeof alias === 'string' ? alias.trim() : '';
+  cbu = typeof cbu === 'string' ? cbu.trim() : '';
+  titular = typeof titular === 'string' ? titular.trim().toUpperCase() : '';
+  banco = typeof banco === 'string' ? banco.trim().toUpperCase() : '';
+
+  if (!alias && !cbu) { showToast('⚠️ Completá al menos Alias o CBU/CVU'); return; }
+
+  var data = { alias: alias, cbu: cbu, titular: titular, banco: banco, tipo: tipo, moneda: moneda };
+
+  try {
+    var r;
+    if (editId) {
+      r = await sbClient.from('cuentas_empresa').update(data).eq('id', editId);
+    } else {
+      data.activa = true;
+      r = await sbClient.from('cuentas_empresa').insert([data]);
+    }
+    if (r.error) throw r.error;
+    showToast('✅ Cuenta ' + (editId ? 'actualizada' : 'guardada') + ' correctamente');
+    limpiarFormCuentaPago();
+    renderCuentasPago();
+  } catch (e) {
+    showToast('❌ Error: ' + e.message);
+  }
+}
+
+async function editarCuentaPago(id) {
+  var c = _cuentasPagoCache.find(function(x) { return x.id === id; });
+  if (!c) return;
+  document.getElementById('ceoCtaAlias').value = c.alias || '';
+  document.getElementById('ceoCtaCbu').value = c.cbu || '';
+  document.getElementById('ceoCtaTitular').value = c.titular || '';
+  document.getElementById('ceoCtaBanco').value = c.banco || '';
+  document.getElementById('ceoCtaTipo').value = c.tipo || 'billetera';
+  document.getElementById('ceoCtaMoneda').value = c.moneda || 'ARS';
+  // Cambiar el botón temporalmente a "Actualizar"
+  var btns = document.querySelectorAll('#tabpg-cuentas_pago button');
+  btns.forEach(function(b) {
+    if (b.textContent.indexOf('Guardar') > -1) {
+      b.textContent = '✏️ Actualizar cuenta (ID: ' + id + ')';
+      b.setAttribute('onclick', 'guardarCuentaPago(' + id + '); this.textContent="💾 Guardar cuenta"; this.setAttribute("onclick","guardarCuentaPago()");');
+    }
+  });
+  showToast('📝 Editando cuenta ID ' + id + ' — modificá los campos y presioná "Actualizar"');
+}
+
+async function toggleCuentaPago(id) {
+  var c = _cuentasPagoCache.find(function(x) { return x.id === id; });
+  if (!c) return;
+  var newState = !c.activa;
+  try {
+    var r = await sbClient.from('cuentas_empresa').update({ activa: newState }).eq('id', id);
+    if (r.error) throw r.error;
+    showToast(newState ? '✅ Cuenta activada' : '🔴 Cuenta desactivada');
+    renderCuentasPago();
+  } catch (e) { showToast('❌ Error: ' + e.message); }
+}
+
+async function eliminarCuentaPago(id) {
+  if (!confirm('⚠️ ¿Eliminar esta cuenta oficial permanentemente?')) return;
+  try {
+    var r = await sbClient.from('cuentas_empresa').delete().eq('id', id);
+    if (r.error) throw r.error;
+    showToast('🗑 Cuenta eliminada');
+    renderCuentasPago();
+  } catch (e) { showToast('❌ Error: ' + e.message); }
+}
+
+function limpiarFormCuentaPago() {
+  ['ceoCtaAlias','ceoCtaCbu','ceoCtaTitular','ceoCtaBanco'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  var tipoEl = document.getElementById('ceoCtaTipo');
+  if (tipoEl) tipoEl.value = 'billetera';
+  var monEl = document.getElementById('ceoCtaMoneda');
+  if (monEl) monEl.value = 'ARS';
 }
 
 
