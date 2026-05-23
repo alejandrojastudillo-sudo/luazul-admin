@@ -2,10 +2,14 @@
 <html lang="es" style="color-scheme:dark;">
 <head>
 <meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<!-- Jefe de Ventas v3.7 — Fix cuotas reales + pagos agrupados + destino/paquete · 2026-05-24 -->
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="manifest" href="manifest_gerente.json">
   <meta name="theme-color" content="#0B3D91">
-<title>Luazul Smart Travel · Jefe de Ventas</title>
+<title>Luazul Smart Travel · Jefe de Ventas v3.7</title>
 <!-- Mirror-Clean v1.0 — Auditoría 2026-04 · Correcciones integradas (versión completa) -->
   <script>
   // ── Limpiar Service Worker caché cruzada (staff_login.html lo registraba) ──
@@ -248,9 +252,8 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;back
 .lz-phone-wrap select:focus{outline:none;border-color:rgba(0,210,255,.4);}
 .lz-phone-wrap input{border-radius:0 8px 8px 0!important;flex:1;}
 </style>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2?v=3.6"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
-console.log('%c ⚡ jefe_ventas_luazul_v3.6 ', 'background:#0d9488;color:#fff;font-size:14px;padding:4px 8px;border-radius:6px;');
   var SUPABASE_URL = 'https://yunvqgaljopirzvjrntc.supabase.co';
   var SUPABASE_KEY = 'sb_publishable_MqB2thv0uzVUAY2v2jh-uQ_ul6a2LzB';
   var sbClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -448,15 +451,13 @@ async function loadClients() {
     _memCache[DB_KEY] = clientes.map(LZ.enrich);
     _memCache[VK]     = staff.filter(function(s) { return s.role_id === LZ.ROLE_SELLER; });
     var rIds = result.rIds || [];
-    _memCache[NK]     = notificaciones || [];  // FIX: solo notificaciones, NO mezclar con pagos
-    window._cachePagos = pagos || [];  // FIX: pagos en cache separado (como CEO)
+    _memCache[NK]     = (notificaciones || []).concat(pagos || []);
     window._cacheRegiones    = regiones;
     window._gerenteRegionIds = rIds;
     console.log('📦 Datos cargados:', {
       clientes: _memCache[DB_KEY].length,
       staff:    _memCache[VK].length,
-      notificaciones: (notificaciones || []).length,
-      pagos: (pagos || []).length
+      notificaciones: notificaciones.length
     });
     renderAll();
     if (typeof renderPagos === 'function') renderPagos();
@@ -465,7 +466,7 @@ async function loadClients() {
   } catch (err) {
     console.error('❌ Error en loadClients:', err);
     showToast('❌ Error al cargar datos: ' + (err.message || err));
-    _memCache[VK] = []; _memCache[DB_KEY] = []; _memCache[NK] = []; window._cachePagos = [];
+    _memCache[VK] = []; _memCache[DB_KEY] = []; _memCache[NK] = [];
   }
 }
 // Alias backward-compat para llamadas post-acción internas
@@ -524,12 +525,12 @@ function _sbLoad() { return loadClients(); }
       <div class="tab" onclick="showTab('equipo')" id="tab-equipo">🏆 Equipo &amp; Objetivos</div>
       <div class="tab" onclick="showTab('clients')" id="tab-clients">👥 Clientes</div>
       <div class="tab" onclick="showTab('notifs')" id="tab-notifs">🔔 Notificaciones <span id="tabNBadge" style="display:none;background:var(--red);color:white;font-size:.62rem;padding:1px 6px;border-radius:20px;margin-left:3px;">0</span></div>
-      <div class="tab" onclick="showTab('mensual')" id="tab-mensual">📆 Recaudación Mensual</div>
-      <div class="tab" onclick="showTab('miscomisiones')" id="tab-miscomisiones">💰 Mis Comisiones</div>
-      <div class="tab" onclick="showTab('tickets')" id="tab-tickets">🎫 Tickets</div>
-      <div class="tab" onclick="showTab('comunicaciones'); renderComunicacionesGerente();" id="tab-comunicaciones">📩 Comunicaciones</div>
-      <div class="tab" onclick="showTab('legajo')" id="tab-legajo">🪪 Mi Legajo</div>
-      <div class="tab" onclick="showTab('prospectos_equipo')" id="tab-prospectos_equipo">📋 Prospectos del equipo</div>
+      <div class="tab" onclick="showTab('mensual')" id="tab-mensual" style="color:#67e8f9;">📆 Recaudación Mensual</div>
+      <div class="tab" onclick="showTab('miscomisiones')" id="tab-miscomisiones" style="color:#4ade80;">💰 Mis Comisiones</div>
+      <div class="tab" onclick="showTab('tickets')" id="tab-tickets" style="color:#fbbf24;">🎫 Tickets</div>
+      <div class="tab" onclick="showTab('comunicaciones'); renderComunicacionesGerente();" id="tab-comunicaciones" style="color:#67e8f9;">📩 Comunicaciones</div>
+      <div class="tab" onclick="showTab('legajo')" id="tab-legajo" style="color:#a78bfa;">🪪 Mi Legajo</div>
+      <div class="tab" onclick="showTab('prospectos_equipo')" id="tab-prospectos_equipo" style="color:#38bdf8;">📋 Prospectos del equipo</div>
     </div>
     <!-- OVERVIEW -->
     <div class="tabpg active" id="tabpg-overview">
@@ -1135,9 +1136,8 @@ function renderOverview() {
     return s.role_id === ROLE_SELLER && String(s.manager_id) === String(_jefeId);
   });
   var ns = (_memCache[NK] || []) || [];
-  var pagos = window._cachePagos || [];  // FIX: pagos separados de notificaciones
   var unread = ns.filter(function(n) { return !n.leida; }).length;
-  var pending = pagos.filter(function(p) { return p.estado === 'pendiente'; }).length;
+  var pending = ns.filter(function(n) { return n.tipo === 'payment' && !n.aprobada; }).length;
   var rec = cs.reduce(function(s, c) { return s + (parseInt(c.cuotas_pagadas) || 0) * (parseFloat(c.monto_cuota) || 0); }, 0);
   document.getElementById('oStats').innerHTML = [
     { i: '👔', v: vs.filter(function(v) { return v.activo; }).length, l: 'Vendedores activos', c: '' },
@@ -1179,30 +1179,13 @@ function renderOverview() {
       + (cm.faltanBonus > 0 ? '<span style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.2);border-radius:6px;padding:3px 9px;color:var(--gold);">🎯 faltan ' + cm.faltanBonus + ' para 80%</span>' : '')
       + '</div></div>';
   }).join('');
-  // FIX: Últimos pagos usando cache separado con resolución de nombres
-  var paysRaw = (window._cachePagos || []).slice(0, 10);
-  var clientsMap = {};
-  cs.forEach(function(c) { clientsMap[String(c.id)] = c; });
-  var vendorsMap = {};
-  vs.forEach(function(v) { vendorsMap[String(v.id)] = v; });
-  var pays = paysRaw.map(function(p) {
-    var cl = clientsMap[String(p.cliente_id)] || {};
-    var vn = vendorsMap[String(p.seller_id)] || {};
-    return {
-      id: p.id, cliente: cl.nombre || p.cliente_nombre || '—', cid: p.cliente_id,
-      cuota: p.numero_cuota, monto: p.monto_usd || 0,
-      vendedor: vn.nombre || p.vendedor_nombre || '—',
-      ts: p.created_at ? new Date(p.created_at).getTime() : Date.now(),
-      estado: p.estado, comp: p.comprobante_url, aprobadoPor: p.aprobado_por
-    };
-  }).sort(function(a, b) { return b.ts - a.ts; }).slice(0, 5);
+  var pays = ns.filter(function(n) { return n.tipo === 'payment'; }).sort(function(a, b) { return b.ts - a.ts; }).slice(0, 5);
   document.getElementById('lastPays').innerHTML = pays.length ? pays.map(function(n) {
-    var aprobado = n.estado === 'aprobado';
     return '<div style="display:flex;align-items:center;gap:9px;padding:8px 0;border-bottom:1px solid var(--border);">'
-      + '<span style="font-size:1.1rem;">' + (aprobado ? '✅' : '⏳') + '</span>'
-      + '<div style="flex:1;"><div style="font-weight:600;font-size:.83rem;">' + esc(n.cliente) + '</div>'
+      + '<span style="font-size:1.1rem;">' + (n.aprobada ? '✅' : '⏳') + '</span>'
+      + '<div style="flex:1;"><div style="font-weight:600;font-size:.83rem;">' + n.cliente + '</div>'
       + '<div style="font-size:.7rem;color:var(--muted);">Cuota ' + esc(n.cuota) + ' · ' + esc(n.vendedor) + ' · ' + fmtTs(n.ts) + '</div></div>'
-      + '<span style="font-weight:800;color:' + (aprobado ? 'var(--green)' : 'var(--gold)') + ';">USD ' + Number(n.monto).toFixed(2) + '</span>'
+      + '<span style="font-weight:800;color:' + (n.aprobada ? 'var(--green)' : 'var(--gold)') + ';">USD ' + n.monto + '</span>'
       + '</div>';
   }).join('') : '<p style="color:var(--muted);text-align:center;padding:20px;font-size:.85rem;">Sin pagos recientes</p>';
   var urg = cs.filter(function(c) { return (c._pct >= 80 && c.estado === 'activo') || c.estado === 'atraso'; }).sort(function(a, b) { return a._p - b._p; }).slice(0, 8);
@@ -1841,13 +1824,6 @@ function openClientDetail(id) {
   var tot = parseInt(c.cuotas_total) || 10;
   var mnt = parseFloat(c.monto_cuota) || 0;
 
-  // Timeline de cuotas (solo visual)
-  var tl = '';
-  for (var i = 1; i <= tot; i++) {
-    var cls = i <= pag ? 'pagada' : (i === pag + 1 ? 'proxima' : 'futura');
-    tl += '<div style="width:32px;height:32px;border-radius:7px;background:' + (cls === 'pagada' ? 'rgba(34,197,94,.15)' : cls === 'proxima' ? 'rgba(234,179,8,.15)' : 'rgba(255,255,255,.04)') + ';border:1px solid ' + (cls === 'pagada' ? 'rgba(34,197,94,.4)' : cls === 'proxima' ? 'rgba(234,179,8,.4)' : 'var(--border)') + ';display:flex;align-items:center;justify-content:center;font-size:.76rem;font-weight:700;color:' + (cls === 'pagada' ? '#22c55e' : cls === 'proxima' ? '#eab308' : 'var(--muted)') + ';" title="Cuota ' + i + '">' + i + '</div>';
-  }
-
   // Opciones para vendedor (solo asesores del gerente)
   var vOptions = '<option value="">Sin asesor</option>';
   for (var i = 0; i < vs.length; i++) {
@@ -1893,9 +1869,13 @@ function openClientDetail(id) {
         <div class="mi"><div class="ml">✅ Abonado</div><div class="mv" style="color:var(--green);">USD ${abonado.toFixed(0)}</div></div>
         <div class="mi"><div class="ml">⏳ Saldo pendiente</div><div class="mv" style="color:${restante > 0 ? 'var(--yellow)' : 'var(--green)'};">USD ${restante.toFixed(0)}</div></div>
       </div>
-      <!-- Línea de cuotas -->
-      <div style="font-size:.67rem;color:var(--gold);font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">📊 Línea de cuotas</div>
-      <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:20px;">${tl}</div>
+      <!-- Línea de cuotas con datos reales de pagos -->
+      <div id="cuotaTimelineContainer">
+        <div style="font-size:.67rem;color:var(--gold);font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">📊 Línea de cuotas</div>
+        <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:20px;">
+          <div style="text-align:center;padding:20px;color:var(--muted);font-size:.82rem;">⏳ Cargando cuotas...</div>
+        </div>
+      </div>
       <!-- Sección de edición de datos (incluye estado y vendedor) -->
       <div style="margin-top:16px;padding:16px;background:rgba(6,182,212,.04);border:1px solid rgba(6,182,212,.15);border-radius:12px;">
         <div style="font-size:.72rem;font-weight:700;text-transform:uppercase;color:#06b6d4;margin-bottom:12px;">✏️ Editar datos del cliente</div>
@@ -1926,7 +1906,6 @@ function openClientDetail(id) {
         <button class="m-btn green" onclick="waMensajeGerente('${c.id}')">💬 WhatsApp</button>
         <button class="m-btn ghost" onclick="waRecordatorioGerente('${c.id}')">📲 Recordatorio</button>
         <button class="m-btn ghost" onclick="verComprobantesGerente('${c.id}')">📎 Ver pagos</button>
-        <!-- FIX-BR2: Botón "Registrar pago" eliminado — solo el Panel Cliente envía comprobantes -->
         <button class="m-btn ghost" onclick="abrirCargaReferidoGerente('${c.id}')" style="color:#fbbf24;">🎁 Referido</button>
         <button class="m-btn ghost" onclick="closeModal()">Cerrar</button>
       </div>
@@ -1934,6 +1913,67 @@ function openClientDetail(id) {
   `;
   document.getElementById('mbox').innerHTML = modalHtml;
   document.getElementById('modal').classList.add('open');
+
+  // ── Cargar cuotas reales desde pagos (como CEO) ──
+  sbClient.from('pagos').select('*').eq('cliente_id', parseInt(id)).order('numero_cuota')
+    .then(function(res) {
+      var allPagos = res.data || [];
+      var pagoMap = {};
+      allPagos.forEach(function(p) {
+        var num = parseInt(p.numero_cuota);
+        if (num && num >= 1 && num <= tot) pagoMap[num] = p;
+      });
+
+      // Vencimiento helper
+      function calcVenc(fechaAlta, numCuota) {
+        if (!fechaAlta) return null;
+        var base = new Date(fechaAlta + 'T00:00:00');
+        if (isNaN(base)) return null;
+        base.setDate(base.getDate() + (numCuota - 1) * 30);
+        return base;
+      }
+      function fmtFecha(d) {
+        if (!d || isNaN(d)) return '\u2014';
+        return d.toLocaleDateString('es-AR');
+      }
+
+      var hoy = new Date(); hoy.setHours(0,0,0,0);
+      var tl = '';
+      for (var i = 1; i <= tot; i++) {
+        var pago = pagoMap[i];
+        var bg, bd, tc, icon, label;
+        if (pago && pago.estado === 'aprobado') {
+          bg = 'rgba(34,197,94,.15)'; bd = 'rgba(34,197,94,.4)'; tc = '#22c55e';
+          icon = '\u2705'; label = 'Aprobada';
+        } else if (pago && pago.estado === 'pendiente') {
+          bg = 'rgba(251,146,60,.15)'; bd = 'rgba(251,146,60,.4)'; tc = '#fb923c';
+          icon = '\u23F3'; label = 'Pendiente';
+        } else if (pago && pago.estado === 'rechazado') {
+          bg = 'rgba(239,68,68,.1)'; bd = 'rgba(239,68,68,.3)'; tc = '#f87171';
+          icon = '\u274C'; label = 'Rechazada';
+        } else if (i <= pag) {
+          bg = 'rgba(34,197,94,.1)'; bd = 'rgba(34,197,94,.3)'; tc = '#22c55e';
+          icon = '\u2713'; label = 'Pagada';
+        } else {
+          bg = 'rgba(255,255,255,.04)'; bd = 'var(--border)'; tc = 'var(--muted)';
+          icon = '\u2B1C'; label = 'Futura';
+        }
+        var venc = calcVenc(c.fechaAlta || c.fecha_alta, i);
+        var vencStr = venc ? fmtFecha(venc) : '';
+        var vencEOD = venc ? new Date(venc) : null; if(vencEOD) vencEOD.setHours(23,59,59,999);
+        var vencStyle = vencEOD && hoy > vencEOD ? 'color:#f87171;font-weight:700;' : 'color:rgba(180,200,240,.35);';
+        tl += '<div style="background:' + bg + ';border:1px solid ' + bd + ';border-radius:7px;padding:6px 8px;min-width:58px;text-align:center;" title="Cuota ' + i + ' \u2014 ' + label + (vencStr ? ' \u2014 Vence: ' + vencStr : '') + '">'
+          + '<div style="font-size:.78rem;font-weight:800;color:' + tc + ';">' + icon + ' ' + i + '</div>'
+          + '<div style="font-size:.52rem;color:' + tc + ';margin-top:2px;text-transform:uppercase;letter-spacing:.05em;">' + label + '</div>'
+          + (venc ? '<div style="font-size:.52rem;' + vencStyle + 'margin-top:2px;">' + vencStr + '</div>' : '')
+          + '</div>';
+      }
+      var container = document.getElementById('cuotaTimelineContainer');
+      if (container) {
+        container.innerHTML = '<div style="font-size:.67rem;color:var(--gold);font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">📊 Línea de cuotas (' + pag + '/' + tot + ' pagadas)</div><div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:20px;">' + tl + '</div>';
+      }
+    })
+    .catch(function(err) { console.warn('[openClientDetail] Error cargando pagos:', err); });
 }
 
 // Normalización de números de teléfono (igual que el asesor)
@@ -1978,7 +2018,8 @@ function verComprobantesGerente(clientId) {
   var cs = _memCache[DB_KEY] || [];
   var c = cs.find(function(x) { return x.id == clientId; });
   if (!c) return;
-  document.getElementById('mbox').innerHTML = '<div class="mhead"><div><h2>📎 Comprobantes · ' + esc(c.nombre) + '</h2></div><button class="mclose" onclick="closeModal()">✕</button></div><div class="mbody"><p style="text-align:center;padding:20px;color:var(--muted);">⏳ Cargando...</p></div>';
+  var destPkg = (c.destino || '') + (c.paquete ? ' · ' + c.paquete : '');
+  document.getElementById('mbox').innerHTML = '<div class="mhead"><div><h2>📎 Comprobantes · ' + esc(c.nombre) + '</h2>' + (destPkg ? '<p style="font-size:.75rem;color:rgba(6,182,212,.8);margin-top:3px;">\uD83C\uDFD6\uFE0F ' + esc(destPkg) + '</p>' : '') + '</div><button class="mclose" onclick="closeModal()">✕</button></div><div class="mbody"><p style="text-align:center;padding:20px;color:var(--muted);">⏳ Cargando...</p></div>';
   document.getElementById('modal').classList.add('open');
   sbClient.from('pagos').select('*').eq('cliente_id', parseInt(clientId)).order('numero_cuota')
     .then(function(r) {
@@ -2152,10 +2193,8 @@ function markAllRead() {
   _memCache[NK] = ns;
   if (sbClient) {
     var ids = ns.filter(function(n) { return n.tipo === 'payment'; }).map(function(n) { return n.id; });
-    // FIX: pagos ahora en cache separado — marcar leídas desde _cachePagos si existen
-    var pagoIds = (window._cachePagos || []).map(function(p) { return p.id; });
-    if (pagoIds.length > 0) {
-      sbClient.from('pagos').update({ leida: true }).in('id', pagoIds).then(function() {}).catch(function(e) { console.warn('markAllRead Supabase:', e); });
+    if (ids.length > 0) {
+      sbClient.from('pagos').update({ leida: true }).in('id', ids).then(function() {}).catch(function(e) { console.warn('markAllRead Supabase:', e); });
     }
   }
   renderAll(); showToast('✅ Todas leídas');
@@ -2295,7 +2334,7 @@ function renderVendDash() {
   var atraso = cs.filter(function(c) { return c.estado === 'atraso' || c.estado === 'atraso_gestion'; }).length;
   var completos = cs.filter(function(c) { return c.estado === 'completo'; }).length;
   var bajas = cs.filter(function(c) { return c.estado === 'baja'; }).length;
-  var pendPagos = (window._cachePagos || []).filter(function(p) { return p.estado === 'pendiente'; }).length;
+  var pendPagos = ns.filter(function(n) { return n.tipo === 'payment' && !n.aprobada; }).length;
   var totalPendiente = cs.filter(function(c) { return c.estado === 'activo' || c.estado === 'atraso'; }).reduce(function(s, c) { var tot = parseFloat(c.monto_total) || parseFloat(c.monto_cuota || 0) * 10; var pag = (parseInt(c.cuotas_pagadas) || 0) * (parseFloat(c.monto_cuota) || 0); return s + (tot - pag); }, 0);
   var comisionProyectada = totalPendiente * (cm.tasaActual / 100);
   var scoreVend = 100; // simplified
@@ -2419,76 +2458,218 @@ function populatePagoFiltros() {
 }
 
 function renderPagos() {
-  var pagosRaw = window._cachePagos || [];
+  var ns = (_memCache[NK] || []) || [];
+  var clientes = (_memCache[DB_KEY] || []) || [];
   var vf = document.getElementById('pagoVFilt') ? document.getElementById('pagoVFilt').value : '';
   var ef = document.getElementById('pagoEstFilt') ? document.getElementById('pagoEstFilt').value : '';
-  var clientsMap = {};
-  ((_memCache[DB_KEY] || []) || []).forEach(function(c) { clientsMap[String(c.id)] = c; });
-  var vendorsMap = {};
-  (_memCache[VK] || []).forEach(function(v) { vendorsMap[String(v.id)] = v; });
-  // Mapear pagos con nombres resueltos
-  var pays = pagosRaw.map(function(p) {
-    var cl = clientsMap[String(p.cliente_id)] || {};
-    var vn = vendorsMap[String(p.seller_id)] || {};
-    return {
-      id: p.id, cliente: cl.nombre || p.cliente_nombre || '—', cid: p.cliente_id,
-      cuota: p.numero_cuota, monto: p.monto_usd || 0,
-      vendedor: vn.nombre || p.vendedor_nombre || '—', vid: p.seller_id,
-      ts: p.created_at ? new Date(p.created_at).getTime() : Date.now(),
-      estado: p.estado, comp: p.comprobante_url, aprobadoPor: p.aprobado_por
-    };
+
+  // FIX-JEFE-CUOTAS: Solo mostrar aprobados (historial) + siguiente cuota pendiente por cliente
+  var allPays = ns.filter(function(n) {
+    if (n.tipo !== 'payment') return false;
+    // Aprobados: siempre mostrar (historial completo)
+    if (n.aprobada) return true;
+    // Pendientes: solo la SIGUIENTE cuota debida (cuotas_pagadas + 1)
+    var cli = clientes.find(function(x) { return String(x.id) === String(n.cid); });
+    if (!cli) return false;
+    var siguienteCuota = (parseInt(cli.cuotas_pagadas) || 0) + 1;
+    return parseInt(n.cuota) === siguienteCuota;
   });
-  if (vf) pays = pays.filter(function(n) { return n.vid && String(n.vid) === String(vf); });
-  if (ef === 'pendiente') pays = pays.filter(function(n) { return n.estado === 'pendiente'; });
-  if (ef === 'aprobado') pays = pays.filter(function(n) { return n.estado === 'aprobado'; });
-  pays.sort(function(a, b) { return b.ts - a.ts; });
+  if (vf) allPays = allPays.filter(function(n) { return n.vid && String(n.vid) === String(vf); });
+  if (ef === 'pendiente') allPays = allPays.filter(function(n) { return !n.aprobada; });
+  if (ef === 'aprobado') allPays = allPays.filter(function(n) { return !!n.aprobada; });
+
+  // ── Utility: calcular vencimiento ──
+  function calcVenc(fechaAlta, numCuota) {
+    if (!fechaAlta) return null;
+    var base = new Date(fechaAlta + 'T00:00:00');
+    if (isNaN(base)) return null;
+    base.setDate(base.getDate() + (numCuota - 1) * 30);
+    return base;
+  }
+  function fmtFecha(d) {
+    if (!d || isNaN(d)) return '\u2014';
+    return d.toLocaleDateString('es-AR');
+  }
+
+  // KPIs
+  var totalPend = allPays.filter(function(n) { return !n.aprobada; }).length;
+  var totalAprob = allPays.filter(function(n) { return n.aprobada; }).length;
+  var totalUSD = allPays.filter(function(n) { return n.aprobada; }).reduce(function(s, n) { return s + (parseFloat(n.monto) || 0); }, 0);
+
   var el = document.getElementById('pagosBody');
   if (!el) return;
-  if (!pays.length) { el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted);">Sin pagos para mostrar</div>'; return; }
-  var totalPend = pagosRaw.filter(function(p) { return p.estado === 'pendiente'; }).length;
-  var totalAprob = pagosRaw.filter(function(p) { return p.estado === 'aprobado'; }).length;
-  var totalUSD = pagosRaw.filter(function(p) { return p.estado === 'aprobado'; }).reduce(function(s, p) { return s + (parseFloat(p.monto_usd) || 0); }, 0);
-  el.innerHTML = '<div class="kpi-grid" style="margin-bottom:18px;">'
-    + '<div class="kpi"><span>⏳</span><div class="kpi-v" style="color:var(--gold);">' + totalPend + '</div><div class="kpi-l">Pendientes aprobación</div></div>'
-    + '<div class="kpi"><span>✅</span><div class="kpi-v" style="color:var(--green);">' + totalAprob + '</div><div class="kpi-l">Aprobados</div></div>'
-    + '<div class="kpi"><span>💵</span><div class="kpi-v" style="color:var(--gold);font-size:1.3rem;">' + totalUSD.toLocaleString('es-AR') + '</div><div class="kpi-l">USD confirmados</div></div>'
-    + '</div>'
-    + '<div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;overflow:hidden;">'
-    + '<div style="padding:10px 16px;background:rgba(255,255,255,.02);border-bottom:1px solid var(--border);display:grid;grid-template-columns:30px 2fr 1.2fr 80px 80px 100px 80px 100px;gap:8px;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);">'
-    + '<div></div><div>Cliente</div><div>Asesor</div><div>Cuota</div><div>Monto</div><div>Fecha</div><div>Estado</div><div>Acciones</div>'
-    + '</div>'
-    + pays.map(function(n) {
-      var aprobado = n.estado === 'aprobado';
-      return '<div class="pago-row" style="display:grid;grid-template-columns:30px 2fr 1.2fr 80px 80px 100px 80px 100px;gap:8px;align-items:center;">'
-        + '<div style="font-size:1.1rem;">' + (aprobado ? '✅' : '⏳') + '</div>'
-        + '<div><div style="font-size:.84rem;font-weight:600;">' + esc(n.cliente) + '</div><div style="font-size:.68rem;color:var(--muted);">ID: ' + n.cid + '</div></div>'
-        + '<div style="font-size:.78rem;color:var(--muted);">' + esc(n.vendedor) + '</div>'
-        + '<div style="font-size:.84rem;text-align:center;">#' + n.cuota + '</div>'
-        + '<div style="font-weight:700;color:' + (aprobado ? 'var(--green)' : 'var(--gold)') + ';">USD ' + Number(n.monto).toFixed(2) + '</div>'
-        + '<div style="font-size:.72rem;color:var(--muted);">' + fmtTs(n.ts) + '</div>'
-        + '<div><span style="font-size:.7rem;font-weight:700;padding:3px 8px;border-radius:8px;' + (aprobado ? 'background:var(--green-bg);color:var(--green);border:1px solid var(--green-bd);' : 'background:var(--gold-bg);color:var(--gold);border:1px solid var(--gold-bd);') + '">' + (aprobado ? 'Aprobado' : 'Pendiente') + '</span></div>'
-        + '<div style="display:flex;gap:4px;">'
-        + (n.comp ? '<button onclick="viewPagoComp(\'' + n.id + '\')" style="padding:4px 7px;background:var(--blue-bg);border:1px solid var(--blue-bd);color:#93c5fd;border-radius:6px;font-size:.68rem;cursor:pointer;" title="Ver comprobante">🔍</button>' : '')
-        + (aprobado ? '<span style="font-size:.62rem;color:var(--muted);padding:4px;">' + (n.aprobadoPor ? 'Por: ' + n.aprobadoPor : 'Gerencia') + '</span>' : '')
-        + '</div></div>';
-    }).join('')
+
+  // ── Group payments by client ──
+  var byClient = {};
+  allPays.forEach(function(n) {
+    var cid = String(n.cid || '');
+    if (!cid) return;
+    if (!byClient[cid]) byClient[cid] = { payments: [], latest: n };
+    byClient[cid].payments.push(n);
+    if (n.ts > byClient[cid].latest.ts) byClient[cid].latest = n;
+  });
+
+  // Sort clients by most recent payment activity
+  var clientIds = Object.keys(byClient).sort(function(a, b) {
+    return byClient[b].latest.ts - byClient[a].latest.ts;
+  });
+
+  if (!clientIds.length) {
+    el.innerHTML = '<div class="kpi-grid" style="margin-bottom:18px;">'
+      + '<div class="kpi"><span>\u23F3</span><div class="kpi-v" style="color:var(--gold);">' + totalPend + '</div><div class="kpi-l">Pendientes</div></div>'
+      + '<div class="kpi"><span>\u2705</span><div class="kpi-v" style="color:var(--green);">' + totalAprob + '</div><div class="kpi-l">Aprobados</div></div>'
+      + '<div class="kpi"><span>\uD83D\uDCB5</span><div class="kpi-v" style="color:var(--gold);font-size:1.3rem;">' + totalUSD.toLocaleString('es-AR') + '</div><div class="kpi-l">USD confirmados</div></div>'
+      + '</div>'
+      + '<div style="text-align:center;padding:40px;color:var(--muted);">Sin pagos para mostrar</div>';
+    return;
+  }
+
+  var html = '<div class="kpi-grid" style="margin-bottom:18px;">'
+    + '<div class="kpi"><span>\u23F3</span><div class="kpi-v" style="color:var(--gold);">' + totalPend + '</div><div class="kpi-l">Pendientes aprobaci\u00f3n</div></div>'
+    + '<div class="kpi"><span>\u2705</span><div class="kpi-v" style="color:var(--green);">' + totalAprob + '</div><div class="kpi-l">Aprobados</div></div>'
+    + '<div class="kpi"><span>\uD83D\uDCB5</span><div class="kpi-v" style="color:var(--gold);font-size:1.3rem;">' + totalUSD.toLocaleString('es-AR') + '</div><div class="kpi-l">USD confirmados</div></div>'
     + '</div>';
+
+  // ── Render each client card ──
+  clientIds.forEach(function(cid) {
+    var group = byClient[cid];
+    var pays = group.payments.sort(function(a, b) { return (parseInt(a.cuota) || 0) - (parseInt(b.cuota) || 0); });
+    var first = pays[0];
+    var clientName = first.cliente || 'Sin nombre';
+    var vendedorName = first.vendedor || '\u2014';
+
+    // Find client data for destino, paquete, cuotas, etc.
+    var cli = null;
+    for (var ci = 0; ci < clientes.length; ci++) {
+      if (String(clientes[ci].id) === cid) { cli = clientes[ci]; break; }
+    }
+    var tot = cli ? (parseInt(cli.cuotas_total) || 10) : 10;
+    var pagadas = cli ? (parseInt(cli.cuotas_pagadas) || 0) : 0;
+    var fechaAlta = cli ? cli.fechaAlta : '';
+    var montoCuota = cli ? (parseFloat(cli.monto_cuota) || 0) : 0;
+    var destino = cli ? (cli.destino || '') : '';
+    var paquete = cli ? (cli.paquete || '') : '';
+
+    // Build pago map
+    var pagoMap = {};
+    pays.forEach(function(p) { pagoMap[parseInt(p.cuota) || 1] = p; });
+
+    // Count pending for this client
+    var clientPend = pays.filter(function(p) { return !p.aprobada; }).length;
+    var clientAprob = pays.filter(function(p) { return p.aprobada; }).length;
+
+    // Vencimiento for next pending cuota
+    var nextPend = pays.find(function(p) { return !p.aprobada; });
+    var nextCuotaNum = nextPend ? parseInt(nextPend.cuota) : (pagadas + 1);
+    var venc = calcVenc(fechaAlta, nextCuotaNum);
+    var hoyG = new Date(); hoyG.setHours(0,0,0,0);
+    var vencEOD = venc ? new Date(venc) : null; if(vencEOD) vencEOD.setHours(23,59,59,999);
+    var estaVencida = vencEOD && hoyG > vencEOD;
+
+    // ── Client card ──
+    html += '<div style="background:var(--surface);border:1px solid ' + (estaVencida ? 'rgba(248,113,113,.3)' : 'var(--border)') + ';border-radius:14px;padding:18px;margin-bottom:14px;">';
+
+    // Header with destino/paquete
+    html += '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px;">'
+      + '<div>'
+      + '<div style="font-weight:700;font-size:.92rem;">' + esc(clientName) + '</div>'
+      + '<div style="font-size:.7rem;color:var(--muted);">Asesor: ' + esc(vendedorName) + '</div>'
+      + (destino || paquete ? '<div style="font-size:.7rem;color:rgba(6,182,212,.8);margin-top:2px;">\uD83C\uDFD6\uFE0F ' + esc(destino) + (paquete ? ' \u00b7 ' + esc(paquete) : '') + '</div>' : '')
+      + '</div>'
+      + '<div style="display:flex;gap:6px;">'
+      + '<span style="font-size:.68rem;font-weight:700;padding:2px 9px;border-radius:20px;background:' + (clientPend > 0 ? 'var(--gold-bg);color:var(--gold);border:1px solid var(--gold-bd)' : 'var(--green-bg);color:var(--green);border:1px solid var(--green-bd)') + ';">' + (clientPend > 0 ? clientPend + ' pend.' : 'Al d\u00eda') + '</span>'
+      + '<span style="font-size:.68rem;font-weight:700;padding:2px 9px;border-radius:20px;background:rgba(34,197,94,.08);color:var(--green);border:1px solid var(--green-bd);">' + clientAprob + ' aprob.</span>'
+      + '</div></div>';
+
+    // Plan info
+    if (montoCuota > 0) {
+      html += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px;">'
+        + '<div style="background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:8px;padding:8px;text-align:center;"><div style="font-size:.6rem;color:var(--muted);text-transform:uppercase;">Cuota</div><div style="font-size:.9rem;font-weight:800;color:#06b6d4;">USD ' + montoCuota.toLocaleString('es-AR') + '</div></div>'
+        + '<div style="background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:8px;padding:8px;text-align:center;"><div style="font-size:.6rem;color:var(--muted);text-transform:uppercase;">Pagadas</div><div style="font-size:.9rem;font-weight:800;color:var(--green);">' + pagadas + '/' + tot + '</div></div>'
+        + '<div style="background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:8px;padding:8px;text-align:center;"><div style="font-size:.6rem;color:var(--muted);text-transform:uppercase;">Saldo</div><div style="font-size:.9rem;font-weight:800;color:' + ((tot - pagadas) * montoCuota > 0 ? 'var(--gold)' : 'var(--green)') + ';">USD ' + ((tot - pagadas) * montoCuota).toLocaleString('es-AR') + '</div></div>'
+        + '</div>';
+    }
+
+    // Vencimiento info
+    if (nextPend && venc) {
+      if (estaVencida) {
+        var diasVenc = Math.ceil((hoyG - venc) / 86400000);
+        html += '<div style="background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.2);border-radius:8px;padding:8px 12px;margin-bottom:12px;font-size:.74rem;color:#fca5a5;">'
+          + '\uD83D\uDD34 <strong>Cuota ' + nextCuotaNum + ' vencida:</strong> ' + fmtFecha(venc) + ' \u2014 hace ' + diasVenc + ' d\u00edas</div>';
+      } else {
+        var diasRest = Math.ceil((vencEOD - hoyG) / 86400000);
+        html += '<div style="background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.2);border-radius:8px;padding:8px 12px;margin-bottom:12px;font-size:.74rem;color:var(--gold);">'
+          + '\uD83D\uDCC5 <strong>Cuota ' + nextCuotaNum + ' vence:</strong> ' + fmtFecha(venc) + ' \u2014 faltan ' + diasRest + ' d\u00edas</div>';
+      }
+    }
+
+    // ── CUOTA TIMELINE ──
+    html += '<div style="font-size:.6rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:8px;">Cuotas: ' + pagadas + '/' + tot + ' pagadas</div>';
+    html += '<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:12px;">';
+    for (var i = 1; i <= tot; i++) {
+      var pago = pagoMap[i];
+      var bg, bd, tc, icon;
+
+      if (pago && pago.aprobada) {
+        bg = 'rgba(34,197,94,.15)'; bd = 'rgba(34,197,94,.4)'; tc = '#22c55e'; icon = '\u2705';
+      } else if (pago && !pago.aprobada) {
+        bg = 'rgba(251,146,60,.15)'; bd = 'rgba(251,146,60,.4)'; tc = '#fb923c'; icon = '\u23F3';
+      } else if (i <= pagadas) {
+        bg = 'rgba(34,197,94,.1)'; bd = 'rgba(34,197,94,.3)'; tc = '#22c55e'; icon = '\u2713';
+      } else {
+        bg = 'rgba(255,255,255,.04)'; bd = 'var(--border)'; tc = 'var(--muted)'; icon = '\u2B1C';
+      }
+
+      var cuotaVenc = calcVenc(fechaAlta, i);
+      var cuotaVencStr = cuotaVenc ? fmtFecha(cuotaVenc) : '';
+      var cuotaVencEOD = cuotaVenc ? new Date(cuotaVenc) : null; if(cuotaVencEOD) cuotaVencEOD.setHours(23,59,59,999);
+      var cuotaVencStyle = cuotaVencEOD && hoyG > cuotaVencEOD ? 'color:#f87171;font-weight:700;' : 'color:rgba(180,200,240,.35);';
+
+      html += '<div style="background:' + bg + ';border:1px solid ' + bd + ';border-radius:7px;padding:6px 8px;min-width:58px;text-align:center;">'
+        + '<div style="font-size:.78rem;font-weight:800;color:' + tc + ';">' + icon + ' ' + i + '</div>'
+        + (cuotaVenc ? '<div style="font-size:.52rem;' + cuotaVencStyle + 'margin-top:2px;">' + cuotaVencStr + '</div>' : '')
+        + '</div>';
+    }
+    html += '</div>';
+
+    // Progress bar
+    var pct = Math.round((pagadas / tot) * 100);
+    html += '<div style="height:4px;background:rgba(255,255,255,.07);border-radius:4px;overflow:hidden;">'
+      + '<div style="height:100%;width:' + pct + '%;background:' + (pct >= 80 ? 'var(--red)' : pct >= 60 ? 'var(--orange)' : 'var(--green)') + ';border-radius:4px;"></div></div>';
+
+    // Boton ver comprobante de la cuota pendiente
+    if (nextPend && nextPend.comp) {
+      html += '<div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap;">'
+        + '<button onclick="viewPagoComp(\'' + String(nextPend.id) + '\')" style="padding:6px 14px;background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.25);color:#34d399;border-radius:8px;font-size:.72rem;font-weight:700;cursor:pointer;">\uD83D\uDCC4 Ver comprobante cuota ' + nextCuotaNum + '</button>'
+        + '</div>';
+    }
+
+    // Links a comprobantes aprobados
+    var histAprob = pays.filter(function(p){ return p.aprobada && p.comp; });
+    if (histAprob.length > 0) {
+      html += '<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;">';
+      for (var hi = 0; hi < histAprob.length; hi++) {
+        var ha = histAprob[hi];
+        html += '<a href="' + ha.comp + '" target="_blank" style="font-size:.62rem;color:rgba(34,197,94,.6);text-decoration:none;border-bottom:1px dotted rgba(34,197,94,.3);">\u2705 Cuota ' + ha.cuota + ' comp.</a>';
+      }
+      html += '</div>';
+    }
+
+    html += '</div>';
+  });
+
+  el.innerHTML = html;
 }
 
 function viewPagoComp(nid) {
-  // FIX: buscar en _cachePagos (separado de notificaciones)
-  var pRaw = (window._cachePagos || []).find(function(x) { return String(x.id) === String(nid); });
-  if (!pRaw || !pRaw.comprobante_url) return;
-  var cl = (_memCache[DB_KEY] || []).find(function(c) { return String(c.id) === String(pRaw.cliente_id); });
-  var vn = (_memCache[VK] || []).find(function(v) { return String(v.id) === String(pRaw.seller_id); });
-  var cliente = (cl && cl.nombre) || pRaw.cliente_nombre || '—';
-  var vendedor = (vn && vn.nombre) || pRaw.vendedor_nombre || '—';
-  var aprobado = pRaw.estado === 'aprobado';
-  document.getElementById('mbox').innerHTML = '<div class="mhead"><div><h2>🔍 Comprobante</h2><p>' + esc(cliente) + ' · Cuota ' + pRaw.numero_cuota + ' · USD ' + (pRaw.monto_usd || 0) + '</p></div>'
+  var ns = (_memCache[NK] || []) || [];
+  var n = ns.find(function(x) { return String(x.id) === String(nid); });
+  if (!n || !n.comp) return;
+  document.getElementById('mbox').innerHTML = '<div class="mhead"><div><h2>🔍 Comprobante</h2><p>' + n.cliente + ' · Cuota ' + n.cuota + ' · USD ' + n.monto + '</p></div>'
     + '<button class="mclose" onclick="closeModal()">✕</button></div>'
     + '<div class="mbody" style="text-align:center;">'
-    + '<img src="' + pRaw.comprobante_url + '" style="max-width:100%;max-height:400px;border-radius:10px;border:1px solid var(--border);" />'
-    + '<div style="margin-top:12px;font-size:.78rem;color:var(--muted);">Asesor: ' + esc(vendedor) + ' · ' + (pRaw.created_at ? new Date(pRaw.created_at).toLocaleDateString('es-AR') : '—') + (aprobado ? ' · ✅ Aprobado' + (pRaw.aprobado_por ? ' por ' + pRaw.aprobado_por : '') : ' · ⏳ Pendiente') + '</div>'
+    + '<img src="' + n.comp + '" style="max-width:100%;max-height:400px;border-radius:10px;border:1px solid var(--border);" />'
+    + '<div style="margin-top:12px;font-size:.78rem;color:var(--muted);">Asesor: ' + n.vendedor + ' · ' + fmtTs(n.ts) + (n.aprobada ? ' · ✅ Aprobado' + (n.aprobadoPor ? ' por ' + n.aprobadoPor : '') : ' · ⏳ Pendiente') + '</div>'
     + '</div>'
     + '<div class="mact">'
     + '<button class="mbtn ghost" onclick="closeModal()">Cerrar</button>'
