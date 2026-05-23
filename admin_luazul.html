@@ -3776,16 +3776,30 @@ async function cargarPresupuestos() {
 // 2. Abrir formulario (nuevo o edición) – renombrado a "Presupuesto"
 // ──────────────────────────────────────────────────────────────────────────
 async function abrirFormPresupuesto(id) {
+    // Cargar destinos con misma lógica que Nuevo Cliente (precio_adulto_noche + max_ocupacion)
     const { data: destinosRaw } = await sbClient
         .from('catalogo_precios')
-        .select('slug, nombre_destino')
+        .select('slug, nombre_destino, precio_adulto_noche, max_ocupacion')
         .eq('activo', true);
     const destinosMap = {};
-    destinosRaw?.forEach(d => { destinosMap[d.slug] = d.nombre_destino; });
     let destinosOptions = '<option value="">Seleccionar destino...</option>';
-    for (const [slug, nombre] of Object.entries(destinosMap)) {
-        destinosOptions += `<option value="${slug}">${nombre}</option>`;
-    }
+    (destinosRaw || []).forEach(function(d) {
+        destinosMap[d.slug] = d;
+        var precio = parseFloat(d.precio_adulto_noche) || 0;
+        var maxOc = parseInt(d.max_ocupacion) || 8;
+        destinosOptions += '<option value="' + d.slug + '" data-precio="' + precio + '" data-max="' + maxOc + '">' + (d.nombre_destino || d.slug) + '</option>';
+    });
+
+    // Cargar configuración del simulador
+    let simCfg = { pct_menor_5_11: 0.50, pct_menor_12_17: 0.80, group_discounts: [] };
+    try {
+        const { data: sc } = await sbClient.from('configuracion_simulador').select('*').maybeSingle();
+        if (sc) {
+            simCfg.pct_menor_5_11 = parseFloat(sc.pct_menor_5_11) || 0.50;
+            simCfg.pct_menor_12_17 = parseFloat(sc.pct_menor_12_17) || 0.80;
+            simCfg.group_discounts = sc.group_discounts || [];
+        }
+    } catch(e) {}
 
     const { data: monedas } = await sbClient
         .from('exchange_rates')
@@ -3810,13 +3824,38 @@ async function abrirFormPresupuesto(id) {
                 <div><label class="ml">Apellido</label><input id="proApellido" class="edit-input" value="${LZ.esc(datos.apellido || '')}"></div>
                 <div><label class="ml">Email</label><input id="proEmail" class="edit-input" type="email" value="${LZ.esc(datos.email || '')}"></div>
                 <div><label class="ml">Teléfono *</label><input id="proTelefono" class="edit-input" value="${LZ.esc(datos.telefono || '')}" placeholder="+54 9 ..."></div>
-                <div><label class="ml">Destino</label><select id="proDestino" class="edit-input">${destinosOptions}</select></div>
-                <div><label class="ml">Personas</label><select id="proPersonas" class="edit-input"><option value="2" ${datos.personas == 2 ? 'selected' : ''}>2</option><option value="4" ${datos.personas == 4 ? 'selected' : ''}>4</option><option value="6" ${datos.personas == 6 ? 'selected' : ''}>6</option></select></div>
-                <div><label class="ml">Cuotas</label><select id="proCuotas" class="edit-input"><option value="6" ${datos.cuotas == 6 ? 'selected' : ''}>6</option><option value="10" ${datos.cuotas == 10 ? 'selected' : ''}>10</option><option value="12" ${datos.cuotas == 12 ? 'selected' : ''}>12</option><option value="18" ${datos.cuotas == 18 ? 'selected' : ''}>18</option></select></div>
+                <div><label class="ml">Destino</label><select id="proDestino" class="edit-input" onchange="proCalcPrecio()">${destinosOptions}</select></div>
+                <div><label class="ml">Noches</label><input id="proNoches" class="edit-input" type="number" min="1" max="30" value="${datos.noches || 7}" onchange="proCalcPrecio()"></div>
+                <div><label class="ml">Adultos</label><select id="proAdultos" class="edit-input" onchange="proCalcPrecio()">
+                    <option value="1" ${datos.adultos == 1 ? 'selected' : ''}>1 adulto</option>
+                    <option value="2" ${datos.adultos == 2 || !datos.adultos ? 'selected' : ''}>2 adultos</option>
+                    <option value="3" ${datos.adultos == 3 ? 'selected' : ''}>3 adultos</option>
+                    <option value="4" ${datos.adultos == 4 ? 'selected' : ''}>4 adultos</option>
+                    <option value="5" ${datos.adultos == 5 ? 'selected' : ''}>5 adultos</option>
+                    <option value="6" ${datos.adultos == 6 ? 'selected' : ''}>6 adultos</option>
+                    <option value="7" ${datos.adultos == 7 ? 'selected' : ''}>7 adultos</option>
+                    <option value="8" ${datos.adultos == 8 ? 'selected' : ''}>8 adultos</option>
+                </select></div>
+                <div><label class="ml">Menores (0-4) — Gratis</label><input id="proM04" class="edit-input" type="number" min="0" max="6" value="${datos.menores_04 || 0}" onchange="proCalcPrecio()"></div>
+                <div><label class="ml">Menores (5-11) — 50%</label><input id="proM511" class="edit-input" type="number" min="0" max="6" value="${datos.menores_511 || 0}" onchange="proCalcPrecio()"></div>
+                <div><label class="ml">Menores (12-17) — 80%</label><input id="proM1217" class="edit-input" type="number" min="0" max="6" value="${datos.menores_1217 || 0}" onchange="proCalcPrecio()"></div>
+                <div><label class="ml">Cuotas</label><select id="proCuotas" class="edit-input" onchange="proCalcPrecio()">
+                    <option value="6" ${datos.cuotas == 6 ? 'selected' : ''}>6 cuotas</option>
+                    <option value="10" ${datos.cuotas == 10 || !datos.cuotas ? 'selected' : ''}>10 cuotas</option>
+                    <option value="12" ${datos.cuotas == 12 ? 'selected' : ''}>12 cuotas</option>
+                    <option value="18" ${datos.cuotas == 18 ? 'selected' : ''}>18 cuotas</option>
+                </select></div>
                 <div><label class="ml">Moneda</label><select id="proMoneda" class="edit-input">${monedaOptions}</select></div>
                 <div><label class="ml">Estado</label><select id="proEstado" class="edit-input"><option value="nuevo" ${datos.estado === 'nuevo' ? 'selected' : ''}>Nuevo</option><option value="contactado" ${datos.estado === 'contactado' ? 'selected' : ''}>Contactado</option><option value="cerrado" ${datos.estado === 'cerrado' ? 'selected' : ''}>Cerrado</option><option value="perdido" ${datos.estado === 'perdido' ? 'selected' : ''}>Perdido</option></select></div>
                 <div style="grid-column:span 2;"><label class="ml">Notas</label><textarea id="proNotas" class="edit-input" rows="2">${LZ.esc(datos.notas || '')}</textarea></div>
             </div>
+            <div id="proPrecioResumen" style="margin-top:14px;padding:14px;background:rgba(59,130,246,.08);border-radius:12px;text-align:center;display:flex;justify-content:space-around;flex-wrap:wrap;gap:10px;">
+                <div><div class="ml">Total</div><div id="proTotalDisp" style="font-size:1.2rem;font-weight:800;">—</div></div>
+                <div><div class="ml">Cuota</div><div id="proCuotaDisp" style="font-size:1.2rem;font-weight:800;color:#60a5fa;">—</div></div>
+                <div><div class="ml">Viajeros</div><div id="proPersDisp" style="font-size:1.2rem;font-weight:800;">—</div></div>
+            </div>
+            <div id="proBreakdown" style="font-size:.82rem;color:var(--muted);text-align:center;margin-top:6px;"></div>
+            <input type="hidden" id="proTotal" value="0">
         </div>
         <div class="modal-actions"><button class="m-btn primary" onclick="guardarPresupuesto(${id || 'null'})">💾 Guardar</button><button class="m-btn ghost" onclick="closeModal()">Cancelar</button></div>
     `;
@@ -3824,6 +3863,84 @@ async function abrirFormPresupuesto(id) {
     document.getElementById('modal').classList.add('open');
     if (id && datos.destino_slug) document.getElementById('proDestino').value = datos.destino_slug;
     if (id && datos.moneda) document.getElementById('proMoneda').value = datos.moneda;
+
+    // Guardar config del simulador para usar en proCalcPrecio
+    window._proSimCfg = simCfg;
+    window._proDestMap = destinosMap;
+
+    // Calcular precio si hay datos precargados
+    if (id && datos.destino_slug) setTimeout(proCalcPrecio, 100);
+}
+
+// ── Cálculo dinámico de presupuesto (alineado al simulador) ──
+function proCalcPrecio() {
+    var cfg = window._proSimCfg || { pct_menor_5_11: 0.50, pct_menor_12_17: 0.80, group_discounts: [] };
+    var sel = document.getElementById('proDestino');
+    var adultos = parseInt((document.getElementById('proAdultos') || {}).value, 10) || 0;
+    var m04 = parseInt((document.getElementById('proM04') || {}).value, 10) || 0;
+    var m511 = parseInt((document.getElementById('proM511') || {}).value, 10) || 0;
+    var m1217 = parseInt((document.getElementById('proM1217') || {}).value, 10) || 0;
+    var noches = parseInt((document.getElementById('proNoches') || {}).value, 10) || 1;
+    var cuotas = parseInt((document.getElementById('proCuotas') || {}).value, 10) || 10;
+    var totalPers = adultos + m04 + m511 + m1217;
+
+    var td = document.getElementById('proTotalDisp');
+    var cd = document.getElementById('proCuotaDisp');
+    var pd = document.getElementById('proPersDisp');
+    var bd = document.getElementById('proBreakdown');
+    var tf = document.getElementById('proTotal');
+
+    if (!sel || !sel.value) {
+        if (td) td.textContent = '—';
+        if (cd) cd.textContent = '—';
+        if (pd) pd.textContent = totalPers > 0 ? totalPers + ' persona' + (totalPers !== 1 ? 's' : '') : '—';
+        if (bd) bd.innerHTML = '';
+        if (tf) tf.value = 0;
+        return;
+    }
+
+    var opt = sel.options[sel.selectedIndex];
+    var precioNoche = parseFloat(opt.getAttribute('data-precio')) || 0;
+    var maxOc = parseInt(opt.getAttribute('data-max')) || 8;
+
+    // Calcular
+    var baseAdultos = adultos * precioNoche * noches;
+    var costoM511 = m511 * precioNoche * noches * cfg.pct_menor_5_11;
+    var costoM1217 = m1217 * precioNoche * noches * cfg.pct_menor_12_17;
+    var subtotal = baseAdultos + costoM511 + costoM1217;
+
+    // Group discount
+    var descPct = 0;
+    var descLabel = '';
+    if (cfg.group_discounts && Array.isArray(cfg.group_discounts)) {
+        cfg.group_discounts.forEach(function(gd) {
+            if (adultos >= parseInt(gd.threshold, 10)) {
+                descPct = parseFloat(gd.discount_pct) || 0;
+                descLabel = ' (' + descPct + '% desc. grupo)';
+            }
+        });
+    }
+    var total = Math.round(subtotal * (1 - descPct) * 100) / 100;
+    var cuotaBase = Math.floor(total / cuotas * 100) / 100;
+    var ultimaCuota = Math.round((total - cuotaBase * (cuotas - 1)) * 100) / 100;
+
+    if (td) td.textContent = 'USD ' + total.toLocaleString('es-AR');
+    if (cd) cd.textContent = 'USD ' + cuotaBase.toLocaleString('es-AR');
+    if (pd) pd.textContent = totalPers + ' persona' + (totalPers !== 1 ? 's' : '');
+    if (tf) tf.value = total;
+
+    var html = '';
+    if (totalPers > maxOc) {
+        html = '<span style="color:#f87171;font-weight:600;">⚠️ Máximo ' + maxOc + ' personas para este destino</span><br>';
+    }
+    html += '<span style="color:var(--muted);">USD ' + total.toLocaleString('es-AR') + descLabel + ' en ' + cuotas + ' cuotas de </span><strong style="color:#60a5fa;">USD ' + cuotaBase.toLocaleString('es-AR') + '</strong>';
+    if (costoM511 > 0 || costoM1217 > 0) {
+        html += '<br><span style="font-size:.82rem;">Menores: ' +
+            (m511 > 0 ? m511 + '×50% = USD ' + Math.round(costoM511).toLocaleString('es-AR') : '') +
+            (m511 > 0 && m1217 > 0 ? ' + ' : '') +
+            (m1217 > 0 ? m1217 + '×80% = USD ' + Math.round(costoM1217).toLocaleString('es-AR') : '') + '</span>';
+    }
+    if (bd) bd.innerHTML = html;
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -3837,9 +3954,15 @@ async function guardarPresupuesto(id) {
         email: document.getElementById('proEmail').value.trim(),
         telefono: document.getElementById('proTelefono').value.trim(),
         destino_slug: document.getElementById('proDestino').value,
-        personas: parseInt(document.getElementById('proPersonas').value),
+        adultos: parseInt(document.getElementById('proAdultos').value) || 2,
+        menores_04: parseInt((document.getElementById('proM04') || {}).value) || 0,
+        menores_511: parseInt((document.getElementById('proM511') || {}).value) || 0,
+        menores_1217: parseInt((document.getElementById('proM1217') || {}).value) || 0,
+        noches: parseInt((document.getElementById('proNoches') || {}).value) || 7,
+        personas: (parseInt(document.getElementById('proAdultos').value) || 2) + (parseInt((document.getElementById('proM04') || {}).value) || 0) + (parseInt((document.getElementById('proM511') || {}).value) || 0) + (parseInt((document.getElementById('proM1217') || {}).value) || 0),
         cuotas: parseInt(document.getElementById('proCuotas').value),
         moneda: document.getElementById('proMoneda').value,
+        precio_usd: parseFloat(document.getElementById('proTotal').value) || 0,
         notas: document.getElementById('proNotas').value.trim(),
         estado: document.getElementById('proEstado').value,
         updated_at: new Date()
@@ -3880,39 +4003,53 @@ async function generarPresupuestoPDF(prospectoId) {
     try {
         const { data: p, error: pErr } = await sbClient.from('prospectos').select('*').eq('id', prospectoId).single();
         if (pErr) throw pErr;
-        // FIX-406: .maybeSingle() en vez de .single() para evitar error 406 cuando no hay resultados
+
+        // Buscar destino por slug (no por personas fijas)
         const { data: destino, error: dErr } = await sbClient
             .from('catalogo_precios')
             .select('*')
             .eq('slug', p.destino_slug)
-            .eq('personas', p.personas)
+            .eq('activo', true)
             .maybeSingle();
         if (dErr) throw dErr;
         if (!destino) {
-            // Consultar qué paquetes sí existen para ese destino
             const { data: disponibles } = await sbClient
                 .from('catalogo_precios')
-                .select('personas, paquete, precio_usd')
+                .select('nombre_destino, paquete, precio_usd')
                 .eq('slug', p.destino_slug)
                 .eq('activo', true);
-            var msg = 'No se encontró el paquete para ' + p.destino_slug + ' con ' + p.personas + ' personas.';
-            if (disponibles && disponibles.length > 0) {
-                msg += ' Opciones disponibles: ' + disponibles.map(function(d) { return d.personas + ' pers. (USD ' + d.precio_usd + ')'; }).join(', ') + '.';
-            } else {
-                msg += ' No hay paquetes activos para ese destino.';
-            }
-            throw new Error(msg);
+            throw new Error('No se encontró destino ' + p.destino_slug + '. Disponibles: ' +
+                ((disponibles || []).map(function(d) { return d.nombre_destino + ' - ' + d.paquete + ' (USD ' + d.precio_usd + ')'; }).join(', ') || 'Ninguno'));
         }
+
+        // Calcular precio dinámico (igual que el simulador)
+        const precioNoche = parseFloat(destino.precio_adulto_noche) || 0;
+        const adultos = parseInt(p.adultos) || 2;
+        const noches = parseInt(p.noches) || 7;
+        const m511 = parseInt(p.menores_511) || 0;
+        const m1217 = parseInt(p.menores_1217) || 0;
+        const totalPers = adultos + (parseInt(p.menores_04) || 0) + m511 + m1217;
+
+        // Cargar configuración simulador para descuentos
+        let pct511 = 0.50, pct1217 = 0.80;
+        try {
+            const { data: sc } = await sbClient.from('configuracion_simulador').select('*').maybeSingle();
+            if (sc) { pct511 = parseFloat(sc.pct_menor_5_11) || 0.50; pct1217 = parseFloat(sc.pct_menor_12_17) || 0.80; }
+        } catch(e) {}
+
+        const baseAdultos = adultos * precioNoche * noches;
+        const costoM511 = m511 * precioNoche * noches * pct511;
+        const costoM1217 = m1217 * precioNoche * noches * pct1217;
+        const precioTotalUSD = Math.round((baseAdultos + costoM511 + costoM1217) * 100) / 100;
 
         // FIX: .maybeSingle() para evitar 406 si no hay tasa para esa moneda
         const { data: tasaData } = await sbClient.from('exchange_rates').select('cotizacion_venta').eq('moneda_destino', p.moneda).maybeSingle();
         const cotizacion = tasaData ? tasaData.cotizacion_venta : 1;
-        const precioTotalUSD = destino.precio_usd;
         const cuotaUSD = (precioTotalUSD / p.cuotas).toFixed(2);
         const cuotaLocal = (cuotaUSD * cotizacion).toFixed(0);
-        const valorPorPersona = (precioTotalUSD / p.personas).toFixed(0);
-        const valorPorMesPersona = (cuotaUSD / p.personas).toFixed(2);
-        const valorPorDiaPersona = (cuotaUSD / p.personas / 30).toFixed(2);
+        const valorPorPersona = (precioTotalUSD / totalPers).toFixed(0);
+        const valorPorMesPersona = (cuotaUSD / totalPers).toFixed(2);
+        const valorPorDiaPersona = (cuotaUSD / totalPers / 30).toFixed(2);
         let simboloMoneda = p.moneda;
         if (p.moneda === 'ARS') simboloMoneda = '$';
         else if (p.moneda === 'BRL') simboloMoneda = 'R$';
