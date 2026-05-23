@@ -4033,11 +4033,20 @@ async function generarPresupuestoPDF(prospectoId) {
 
         // Calcular precio dinámico (igual que el simulador)
         const precioNoche = parseFloat(destino.precio_adulto_noche) || 0;
-        const adultos = parseInt(p.adultos) || 2;
+        const adultos = parseInt(p.adultos) || parseInt(p.personas) || 2;
         const noches = parseInt(p.noches) || 7;
+        const m04 = parseInt(p.menores_04) || 0;
         const m511 = parseInt(p.menores_511) || 0;
         const m1217 = parseInt(p.menores_1217) || 0;
-        const totalPers = adultos + (parseInt(p.menores_04) || 0) + m511 + m1217;
+        const totalPers = adultos + m04 + m511 + m1217;
+        // Desglose de viajeros para el PDF
+        const viajerosDesc = [];
+        viajerosDesc.push(adultos + ' adulto' + (adultos !== 1 ? 's' : ''));
+        if (m04 > 0) viajerosDesc.push(m04 + ' menor' + (m04 !== 1 ? 'es' : '') + ' (0-4)');
+        if (m511 > 0) viajerosDesc.push(m511 + ' menor' + (m511 !== 1 ? 'es' : '') + ' (5-11)');
+        if (m1217 > 0) viajerosDesc.push(m1217 + ' menor' + (m1217 !== 1 ? 'es' : '') + ' (12-17)');
+        const viajerosTexto = viajerosDesc.join(' + ');
+        const viajerosResumen = totalPers + ' viajero' + (totalPers !== 1 ? 's' : '') + ' (' + viajerosTexto + ')';
 
         // Cargar configuración simulador para descuentos
         let pct511 = 0.50, pct1217 = 0.80;
@@ -4114,7 +4123,7 @@ body{background:#f0f4fa;font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif
       <div class="seccion-titulo">✨ Para ${p.nombre} ${p.apellido || ''}</div>
       <div class="datos-cliente">
         <p>📞 ${p.telefono || '—'} · ✉️ ${p.email || '—'}</p>
-        <p>👥 ${p.personas} viajeros · 📆 ${p.cuotas} cuotas (0% interés)</p>
+        <p>👥 ${viajerosResumen} · 🌙 ${noches} noches · 📆 ${p.cuotas} cuotas (0% interés)</p>
       </div>
     </div>
     <div class="precio-destacado">
@@ -4126,7 +4135,7 @@ body{background:#f0f4fa;font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif
       <div style="background:linear-gradient(135deg,#fefce8,#fef9c3);border-radius:16px;padding:20px;text-align:center;border:1px solid #fde047;">
         <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#ca8a04;margin-bottom:6px;">USD por mes por persona</div>
         <div style="font-size:2rem;font-weight:900;color:#a16207;">$${Number(valorPorMesPersona).toLocaleString('es-AR')}</div>
-        <div style="font-size:.75rem;color:#ca8a04;margin-top:4px;">Cuota USD ${cuotaUSD} ÷ ${p.personas} viajeros</div>
+        <div style="font-size:.75rem;color:#ca8a04;margin-top:4px;">Cuota USD ${cuotaUSD} ÷ ${totalPers} viajeros</div>
       </div>
       <div style="background:linear-gradient(135deg,#eff6ff,#dbeafe);border-radius:16px;padding:20px;text-align:center;border:1px solid #bfdbfe;">
         <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#2563eb;margin-bottom:6px;">USD por día por persona</div>
@@ -4138,7 +4147,7 @@ body{background:#f0f4fa;font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif
     <div class="seccion">
       <div class="seccion-titulo">🌊 ¿Qué incluye tu paquete?</div>
       <ul class="inclusiones">
-        <li><span class="inc-icon">🏨</span><div><strong>Alojamiento 7 noches frente al mar</strong><br>Hoteles seleccionados por ubicación y confort. Despertar con el sonido del océano.</div></li>
+        <li><span class="inc-icon">🏨</span><div><strong>Alojamiento ${noches} noches frente al mar</strong><br>Hoteles seleccionados por ubicación y confort. Despertar con el sonido del océano.</div></li>
         <li><span class="inc-icon">🚐</span><div><strong>Traslados privados</strong><br>Llegada y salida sin esperar. Te esperamos con cartel en el aeropuerto.</div></li>
         <li><span class="inc-icon">⛵</span><div><strong>2 tours incluidos</strong><br>Barco por las islas, buggy, city tour o ilha grande según destino. Experiencias guiadas y seguras.</div></li>
         <li><span class="inc-icon">📱</span><div><strong>App exclusiva del viajero</strong><br>Gestioná cuotas, descargá voucher, firmá contrato digital, todo en tu celular.</div></li>
