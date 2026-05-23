@@ -3473,13 +3473,13 @@ function _buildResumenSheet(nCli, filasCli, vs, rs, fecha, hora){
   var wb_ws = {};
   wb_ws['!ref'] = 'A1:J50';
 
-  var activos   = filasCli.filter(function(c){return (c['Estado']||'').toLowerCase()==='activo';}).length;
-  var atraso    = filasCli.filter(function(c){var e=(c['Estado']||'').toLowerCase();return e==='atraso'||e==='atraso_gestion';}).length;
-  var completos = filasCli.filter(function(c){return (c['Estado']||'').toLowerCase()==='completo';}).length;
-  var bajas     = filasCli.filter(function(c){return (c['Estado']||'').toLowerCase()==='baja';}).length;
-  var totalRec  = filasCli.reduce(function(s,c){return s+(parseFloat(c['Total Cobrado'])||0);},0);
-  var totalPend = filasCli.reduce(function(s,c){return s+(parseFloat(c['Saldo Pendiente'])||0);},0);
-  var totalPkg  = filasCli.reduce(function(s,c){return s+(parseFloat(c['Total USD'])||0);},0);
+  var activos   = filasCli.filter(function(c){return (c['Estado Raw']||'').toLowerCase()==='activo';}).length;
+  var atraso    = filasCli.filter(function(c){var e=(c['Estado Raw']||'').toLowerCase();return e==='atraso'||e==='atraso_gestion';}).length;
+  var completos = filasCli.filter(function(c){return (c['Estado Raw']||'').toLowerCase()==='completo';}).length;
+  var bajas     = filasCli.filter(function(c){return (c['Estado Raw']||'').toLowerCase()==='baja';}).length;
+  var totalRec  = filasCli.reduce(function(s,c){return s+(parseFloat(c['Total Cobrado USD'])||0);},0);
+  var totalPend = filasCli.reduce(function(s,c){return s+(parseFloat(c['Saldo Pendiente USD'])||0);},0);
+  var totalPkg  = filasCli.reduce(function(s,c){return s+(parseFloat(c['Total Paquete USD'])||0);},0);
   var nVend = vs.length; var nReg = rs.length;
 
   // Título
@@ -3561,12 +3561,12 @@ function _buildResumenSheet(nCli, filasCli, vs, rs, fecha, hora){
   ];
   var rowE = 17;
   estadosData.forEach(function(es, ei){
-    var grupo = filasCli.filter(function(c){return (c['Estado']||'').toLowerCase()===es.e;});
+    var grupo = filasCli.filter(function(c){return (c['Estado Raw']||'').toLowerCase()===es.e;});
     if(!grupo.length) return;
     var pct = nCli>0 ? Math.round(grupo.length/nCli*1000)/10 : 0;
-    var montoT = grupo.reduce(function(s,c){return s+(parseFloat(c['Total USD'])||0);},0);
-    var cobT = grupo.reduce(function(s,c){return s+(parseFloat(c['Total Cobrado'])||0);},0);
-    var pendT = grupo.reduce(function(s,c){return s+(parseFloat(c['Saldo Pendiente'])||0);},0);
+    var montoT = grupo.reduce(function(s,c){return s+(parseFloat(c['Total Paquete USD'])||0);},0);
+    var cobT = grupo.reduce(function(s,c){return s+(parseFloat(c['Total Cobrado USD'])||0);},0);
+    var pendT = grupo.reduce(function(s,c){return s+(parseFloat(c['Saldo Pendiente USD'])||0);},0);
     var isAlt = ei%2===1;
     var baseS = isAlt ? _stAlt : _stCell;
     var monS = isAlt ? _stMoneyAlt : _stMoney;
