@@ -5,16 +5,16 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- CEO v4.1 — FIX: asesor name/email en Backup Excel + Excel profesional con estilos + freeze/autofilter · 2026-05-21 -->
+<!-- CEO v5.0 — BACKUP COMPLETO 8 hojas + Contratos + Resumen KPIs + anti-caché · 2026-05-23 -->
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <!-- manifest solo funciona en HTTP/HTTPS, no file:// -->
   <!-- <link rel="manifest" href="manifest_ceo.json"> -->
   <meta name="theme-color" content="#0B3D91">
-<title>Luazul Smart Travel · CEO v4.1</title>
+<title>Luazul Smart Travel · CEO v5.0</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Mulish:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js?v=5.0"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js?v=5.0"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js?v=5.0"></script>
 <style>
 :root{
   --cyan:#06b6d4;
@@ -831,6 +831,8 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
 <div id="toast"></div>
 
 <script>
+console.log('%c✅ CEO LuAzul v5.0 — Backup Completo 8 hojas + Contratos + anti-caché', 'background:#7c3aed;color:white;font-weight:bold;padding:4px 8px;border-radius:4px;');
+console.log('%c📅 Desplegado: ' + new Date().toISOString(), 'color:#a78bfa;');
 // ══════════════════════════════════════════════════════
 //  LUAZUL CEO — CAPA DE DATOS: SUPABASE (migración v3)
 // ══════════════════════════════════════════════════════
@@ -1418,7 +1420,7 @@ function cLogout(){
 })();
 
 document.addEventListener('DOMContentLoaded', function(){
-  console.log('%c[CEO LuAzul] v3.0 — FIX 406 + FIX-A (nombre cliente en pagos) + FIX-B (estado post-aprobación)', 'background:#059669;color:white;font-weight:bold;padding:4px 8px;border-radius:4px;');
+  console.log('%c[CEO LuAzul] v5.0 — Backup Completo 8 hojas + Contratos + Resumen KPIs + anti-caché', 'background:#7c3aed;color:white;font-weight:bold;padding:4px 8px;border-radius:4px;');
   document.getElementById('cPass').addEventListener('keypress', function(e){ if(e.key==='Enter') cLogin(); });
 
   // [SUPABASE PHASE 2] — Verificar sesión activa en Supabase al cargar
