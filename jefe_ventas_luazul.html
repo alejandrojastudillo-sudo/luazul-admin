@@ -6,7 +6,7 @@
   <link rel="manifest" href="manifest_gerente.json">
   <meta name="theme-color" content="#0B3D91">
 <title>Luazul Smart Travel · Jefe de Ventas</title>
-<!-- Jefe de Ventas v3.6 — FIX: LZ_LOAD con fallback region_id (misma lógica probada del gerente) · 2026-05-24 -->
+<!-- Jefe de Ventas v3.7 — FIX: Carga directa estilo CEO (cargar TODO, filtrar local) + modal mejorado · 2026-05-24 -->
   <script>
   // ── Limpiar Service Worker caché cruzada (staff_login.html lo registraba) ──
   if ('serviceWorker' in navigator) {
@@ -467,26 +467,38 @@ window.LZ = {
   function mapClientFromSB(c)  { return LZ.mapClientFromSB(c); }
   function mapPagoToNotif(p)   { return LZ.mapPagoToNotif(p); }
 
+// ── CARGA DE DATOS: enfoque CEO (cargar TODO, filtrar local) ──
 async function loadClients() {
   if (!sbClient || !window._gerenteProfile) {
-    console.warn('⚠️ No hay perfil gerente o sbClient');
+    console.warn('⚠️ No hay perfil jefe o sbClient');
     return;
   }
   showToast('⏳ Cargando datos...');
   try {
-    var result = await LZ.LZ_LOAD.loadData(window._gerenteProfile, LZ.ROLE_SALES_LEADER, sbClient);
-    var clientes = result.clientes, staff = result.staff,
-        notificaciones = result.notificaciones, regiones = result.regiones,
-        pagos = result.pagos || [];
+    // ── Cargar TODO en paralelo (igual que el CEO) ──
+    var [regRes, staffRes, cliRes, pagRes, notifRes] = await Promise.all([
+      sbClient.from('regiones').select('id,nombre,bandera,pais,color,activo').eq('activo', true).order('pais,nombre'),
+      sbClient.from('staff_profiles').select('*'),
+      sbClient.from('clientes').select('*').order('nombre'),
+      sbClient.from('pagos').select('*').order('created_at', { ascending: false }).limit(500),
+      sbClient.from('notificaciones').select('*').order('created_at', { ascending: false }).limit(200)
+    ]);
+
+    var regiones = regRes.data || [];
+    var staff    = (staffRes.data || []).map(_lzMapStaff);
+    var clientes = (cliRes.data || []).map(_lzMapClient);
+    var pagos    = (!pagRes.error && pagRes.data) ? pagRes.data.map(_lzMapPago) : [];
+    var notificaciones = notifRes.data || [];
+
     _memCache[DB_KEY] = clientes.map(LZ.enrich);
-    _memCache[VK]     = staff.filter(function(s) { return s.role_id === LZ.ROLE_SELLER; });
-    var rIds = result.rIds || [];
-    _memCache[NK]     = (notificaciones || []).concat(pagos || []);
-    window._cacheRegiones    = regiones;
-    window._gerenteRegionIds = rIds;
-    console.log('📦 Datos cargados:', {
+    _memCache[VK]     = staff.filter(function(s) { return s.role_id === ROLE_SELLER || s.role_id === ROLE_SALES_LEADER; });
+    _memCache[NK]     = notificaciones.concat(pagos);
+    window._cacheRegiones = regiones;
+
+    console.log('📦 Datos cargados (enfoque CEO):', {
       clientes: _memCache[DB_KEY].length,
-      staff:    _memCache[VK].length,
+      vendedores: _memCache[VK].length,
+      pagos: pagos.length,
       notificaciones: notificaciones.length
     });
     renderAll();
