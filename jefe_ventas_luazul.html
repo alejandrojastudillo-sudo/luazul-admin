@@ -6,7 +6,7 @@
   <link rel="manifest" href="manifest_gerente.json">
   <meta name="theme-color" content="#0B3D91">
 <title>Luazul Smart Travel · Jefe de Ventas</title>
-<!-- Jefe de Ventas v3.9 — FIX: (1) Dropdowns solo muestran vendedores del jefe, (2) renderPagos filtra por equipo + próxima cuota, (3) renderEquipoDash aislado, (4) modal vendedor dropdown aislado · 2026-05-24 -->
+<!-- Jefe de Ventas v4.0 — FIX: (1) Tabla clientes con columna Paquete como CEO, (2) Últimos pagos agrupa por cliente, (3) Pagos resuelve nombre vacío, (4) Todos los dropdowns aislados al jefe · 2026-05-24 -->
   <script>
   // ── Limpiar Service Worker caché cruzada (staff_login.html lo registraba) ──
   if ('serviceWorker' in navigator) {
@@ -129,8 +129,8 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;back
 .bpill.on{background:var(--green-bg);color:var(--green);border:1px solid var(--green-bd);}
 .bpill.off{background:var(--red-bg);color:#fca5a5;border:1px solid var(--red-bd);}
 .twrap{background:var(--surface);border:1px solid var(--border);border-radius:16px;overflow:hidden;}
-.thead{display:grid;grid-template-columns:28px 2fr 1.4fr 1fr 90px 100px 90px 78px 90px;padding:10px 16px;background:rgba(255,255,255,.03);border-bottom:1px solid var(--border);font-size:.67rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);}
-.trow{display:grid;grid-template-columns:28px 2fr 1.4fr 1fr 90px 100px 90px 78px 90px;padding:0 16px;align-items:center;border-bottom:1px solid var(--border);min-height:56px;cursor:pointer;transition:background .15s;position:relative;}
+.thead{display:grid;grid-template-columns:28px 2fr 1fr 1fr 80px 70px 70px 80px;padding:10px 16px;background:rgba(255,255,255,.03);border-bottom:1px solid var(--border);font-size:.67rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);}
+.trow{display:grid;grid-template-columns:28px 2fr 1fr 1fr 80px 70px 70px 80px;padding:0 16px;align-items:center;border-bottom:1px solid var(--border);min-height:56px;cursor:pointer;transition:background .15s;position:relative;}
 .trow:last-child{border-bottom:none;}
 .trow:hover{background:rgba(255,255,255,.03);}
 .trow::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;border-radius:0 2px 2px 0;}
@@ -616,7 +616,7 @@ function _sbLoad() { return loadClients(); }
           <select id="sScoreFilt" style="padding:7px 11px;background:rgba(100,160,255,.08);border:1px solid rgba(100,160,255,.2);border-radius:8px;font-size:.72rem;color:#7eb8ff;" onchange="renderClients()"><option value="">Score: Todos</option><option value="rojo">&lt;40 Riesgo</option><option value="amarillo">40-69 Medio</option><option value="verde">70+ Sano</option></select>
         </div>
       </div>
-      <div class="twrap"><div class="thead"><div></div><div>Cliente</div><div>Vendedor</div><div>Progreso</div><div>Total</div><div>Cuotas</div><div>Viaje</div><div>Estado</div><div>Acciones</div></div><div id="clientsBody"></div></div>
+      <div class="twrap"><div class="thead"><div></div><div>Cliente</div><div>Vendedor</div><div>Paquete</div><div>Total</div><div>Cuotas</div><div>Estado</div><div>Acciones</div></div><div id="clientsBody"></div></div>
     </div>
 
     <!-- NOTIFS -->
@@ -1222,9 +1222,24 @@ function renderOverview() {
       + (cm.faltanBonus > 0 ? '<span style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.2);border-radius:6px;padding:3px 9px;color:var(--gold);">🎯 faltan ' + cm.faltanBonus + ' para 80%</span>' : '')
       + '</div></div>';
   }).join('');
-  // Solo pagos de clientes del equipo del jefe
+  // FIX: Últimos pagos — agrupar por cliente (máx 1 por cliente) para mostrar diversidad
   var equipoClientIds = cs.map(function(c) { return String(c.id); });
-  var pays = ns.filter(function(n) { return n.tipo === 'payment' && equipoClientIds.indexOf(String(n.cid)) !== -1; }).sort(function(a, b) { return b.ts - a.ts; }).slice(0, 5);
+  var allTeamPays = ns.filter(function(n) { return n.tipo === 'payment' && equipoClientIds.indexOf(String(n.cid)) !== -1; }).sort(function(a, b) { return b.ts - a.ts; });
+  // Agrupar: primer pago de cada cliente
+  var seenClients = {};
+  var pays = [];
+  for (var pi = 0; pi < allTeamPays.length && pays.length < 5; pi++) {
+    var p = allTeamPays[pi];
+    if (!seenClients[String(p.cid)]) {
+      seenClients[String(p.cid)] = true;
+      // Resolver nombre del cliente si está vacío
+      if (!p.cliente) {
+        var pc = cs.find(function(x) { return String(x.id) === String(p.cid); });
+        if (pc) p.cliente = pc.nombre;
+      }
+      pays.push(p);
+    }
+  }
   document.getElementById('lastPays').innerHTML = pays.length ? pays.map(function(n) {
     return '<div style="display:flex;align-items:center;gap:9px;padding:8px 0;border-bottom:1px solid var(--border);">'
       + '<span style="font-size:1.1rem;">' + (n.aprobada ? '✅' : '⏳') + '</span>'
@@ -1856,14 +1871,12 @@ function renderClients() {
     return '<div class="trow s' + c._s + '" onclick="openClientDetail(' + c.id + ')">'
       + '<div class="tc" style="display:flex;align-items:center;"><div class="sem ' + c._s + '"></div></div>'
       + '<div class="tc"><div class="cname">' + esc(c.nombre)
-      // FIX-F24: score badge after name
       + ' <span style="display:inline-flex;align-items:center;gap:3px;font-size:.6rem;font-weight:700;color:' + ((c.score||50)>=70?'#34d399':(c.score||50)>=40?'#fbbf24':'#f87171') + ';"><span style="width:6px;height:6px;border-radius:50%;background:currentColor;"></span>' + (c.score||50) + '</span>'
       + (c.mora && c.mora.filter(function(m) { return !m.resuelta; }).length ? '<span style="display:inline-block;width:8px;height:8px;background:#f97316;border-radius:50%;margin-left:6px;vertical-align:middle;" title="Mora activa"></span>' : '') + '</div><div class="cemail">' + esc(c.email) + '</div></div>'
       + '<div class="tc"><div class="vtag">👔 ' + esc(v.nombre) + '</div></div>'
-      + '<div class="tc"><div style="font-size:.76rem;font-weight:700;color:' + fc + ';">' + c._pct + '%</div><div class="pbar"><div class="pfill" style="width:' + c._pct + '%;background:' + fc + ';"></div></div></div>'
+      + '<div class="tc"><div style="font-size:.78rem;">' + esc(c.paquete || '—') + '</div><div style="font-size:.65rem;color:var(--muted);">' + esc(c.destino || '') + '</div></div>'
       + '<div class="tc" style="font-weight:700;">USD ' + c.total_usd + '</div>'
       + '<div class="tc" style="font-size:.76rem;color:var(--muted);">' + c.cuotas_pagadas + '/' + c.cuotas_total + '</div>'
-      + '<div class="tc" style="font-size:.76rem;">' + (c.fecha_viaje || '—') + '</div>'
       + '<div class="tc"><span class="bdg ' + c.estado + '">' + c.estado + '</span></div>'
       + '<div class="tc" onclick="event.stopPropagation()">'
       + '<div style="display:flex;gap:5px;">'
@@ -2517,9 +2530,15 @@ function renderPagos() {
     + '</div>'
     + pays.map(function(n) {
       var aprobado = n.aprobada;
+      // FIX: Resolver nombre del cliente si está vacío
+      var clienteNombre = n.cliente;
+      if (!clienteNombre) {
+        var cl = clientes.find(function(x) { return String(x.id) === String(n.cid); });
+        if (cl) clienteNombre = cl.nombre;
+      }
       return '<div class="pago-row" style="display:grid;grid-template-columns:30px 2fr 1.2fr 80px 80px 100px 80px 100px;gap:8px;align-items:center;">'
         + '<div style="font-size:1.1rem;">' + (aprobado ? '✅' : '⏳') + '</div>'
-        + '<div><div style="font-size:.84rem;font-weight:600;">' + esc(n.cliente) + '</div><div style="font-size:.68rem;color:var(--muted);">ID: ' + n.cid + '</div></div>'
+        + '<div><div style="font-size:.84rem;font-weight:600;">' + esc(clienteNombre || '—') + '</div></div>'
         + '<div style="font-size:.78rem;color:var(--muted);">' + esc(n.vendedor) + '</div>'
         + '<div style="font-size:.84rem;text-align:center;">#' + n.cuota + '</div>'
         + '<div style="font-weight:700;color:' + (aprobado ? 'var(--green)' : 'var(--gold)') + ';">USD ' + n.monto + '</div>'
