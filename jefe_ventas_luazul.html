@@ -6,7 +6,7 @@
   <link rel="manifest" href="manifest_gerente.json">
   <meta name="theme-color" content="#0B3D91">
 <title>Luazul Smart Travel · Jefe de Ventas</title>
-<!-- Jefe de Ventas v3.7 — FIX: Carga directa estilo CEO (cargar TODO, filtrar local) + modal mejorado · 2026-05-24 -->
+<!-- Jefe de Ventas v3.8 — FIX: getClientesDelRamal usaba c.seller_id (no existe) → c.vid, pagos filtrados por equipo, modal CEO-style · 2026-05-24 -->
   <script>
   // ── Limpiar Service Worker caché cruzada (staff_login.html lo registraba) ──
   if ('serviceWorker' in navigator) {
@@ -167,11 +167,13 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;back
 #modal.open{display:flex;}
 .mbox{background:var(--surface);border:1px solid var(--border2);border-radius:20px;width:100%;max-width:680px;box-shadow:0 40px 120px rgba(0,0,0,.6);animation:su .25s ease;margin:auto;}
 @keyframes su{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
-.mhead{padding:20px 24px 16px;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;justify-content:space-between;gap:12px;}
-.mhead h2{font-family:'Syne',sans-serif;font-size:1.15rem;font-weight:800;}
-.mclose{width:30px;height:30px;border-radius:8px;border:1px solid var(--border2);background:var(--card);color:var(--muted);font-size:1rem;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;}
+.mhead{display:flex;align-items:flex-start;justify-content:space-between;padding:22px 24px 14px;border-bottom:1px solid var(--border);margin-bottom:0;}
+.mhead h2{font-family:'Syne',sans-serif;font-size:1.05rem;font-weight:800;}
+.mhead p{font-size:.75rem;color:var(--muted);margin-top:3px;}
+.mclose{background:rgba(255,255,255,.08);border:1px solid var(--border2);color:var(--muted);border-radius:8px;padding:5px 10px;cursor:pointer;font-size:.85rem;}
 .mclose:hover{background:var(--red-bg);color:#fca5a5;}
-.mbody{padding:20px 24px 24px;}
+.mbody{padding:20px 24px;}
+.mact{display:flex;gap:8px;padding:16px 24px;border-top:1px solid var(--border);flex-wrap:wrap;}
 .mgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;}
 .mi{background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:10px;padding:11px 13px;}
 .ml{font-size:.67rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--gold);margin-bottom:3px;}
@@ -180,7 +182,6 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;back
 .min:focus{outline:none;border-color:var(--gold);}
 .msel{width:100%;background:rgba(4,8,15,.9);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-family:'Mulish',sans-serif;font-size:.86rem;padding:8px 11px;}
 .msel option{background:#080f1e;}
-.mact{display:flex;flex-wrap:wrap;gap:9px;margin-top:16px;padding-top:16px;border-top:1px solid var(--border);}
 .mbtn{display:inline-flex;align-items:center;gap:6px;padding:9px 18px;border-radius:9px;font-size:.83rem;font-weight:700;font-family:'Mulish',sans-serif;cursor:pointer;transition:all .2s;border:none;}
 .mbtn.gold{background:linear-gradient(135deg,#d97706,#f59e0b);color:white;}
 .mbtn.ghost{background:var(--card);color:var(--muted);border:1px solid var(--border2);}
@@ -1221,7 +1222,9 @@ function renderOverview() {
       + (cm.faltanBonus > 0 ? '<span style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.2);border-radius:6px;padding:3px 9px;color:var(--gold);">🎯 faltan ' + cm.faltanBonus + ' para 80%</span>' : '')
       + '</div></div>';
   }).join('');
-  var pays = ns.filter(function(n) { return n.tipo === 'payment'; }).sort(function(a, b) { return b.ts - a.ts; }).slice(0, 5);
+  // Solo pagos de clientes del equipo del jefe
+  var equipoClientIds = cs.map(function(c) { return String(c.id); });
+  var pays = ns.filter(function(n) { return n.tipo === 'payment' && equipoClientIds.indexOf(String(n.cid)) !== -1; }).sort(function(a, b) { return b.ts - a.ts; }).slice(0, 5);
   document.getElementById('lastPays').innerHTML = pays.length ? pays.map(function(n) {
     return '<div style="display:flex;align-items:center;gap:9px;padding:8px 0;border-bottom:1px solid var(--border);">'
       + '<span style="font-size:1.1rem;">' + (n.aprobada ? '✅' : '⏳') + '</span>'
@@ -1256,7 +1259,7 @@ function getClientesDelRamal() {
   // CORRECCIÓN: usar el id numérico del vendedor (staff.id) para comparar con seller_id
   var misVendedoresIds = misVendedores.map(function(v) { return String(v.id); });
   return ((_memCache[DB_KEY] || [])).filter(function(c) {
-    return misVendedoresIds.includes(String(c.seller_id));
+    return misVendedoresIds.includes(String(c.vid));
   });
 }
 
@@ -1944,16 +1947,16 @@ function openClientDetail(id) {
           <div><label style="font-size:.68rem;color:var(--muted);display:block;margin-bottom:4px;">Estado</label><select class="edit-input" id="efEstado">${estadoOptions}</select></div>
           <div><label style="font-size:.68rem;color:var(--muted);display:block;margin-bottom:4px;">Vendedor</label><select class="edit-input" id="efVendedor">${vOptions}</select></div>
         </div>
-        <button class="m-btn primary" style="background:rgba(6,182,212,.8);" onclick="updateClientFullGerente('${c.id}')">💾 Guardar datos completos</button>
+        <button class="mbtn gold" onclick="updateClientFullGerente('${c.id}')">💾 Guardar datos completos</button>
       </div>
       <!-- Botones de acción -->
-      <div class="mact" style="margin-top:16px;">
-        <button class="m-btn green" onclick="waMensajeGerente('${c.id}')">💬 WhatsApp</button>
-        <button class="m-btn ghost" onclick="waRecordatorioGerente('${c.id}')">📲 Recordatorio</button>
-        <button class="m-btn ghost" onclick="verComprobantesGerente('${c.id}')">📎 Ver pagos</button>
+      <div class="mact">
+        <button class="mbtn ghost" onclick="waMensajeGerente('${c.id}')" style="color:var(--green);border-color:var(--green-bd);">💬 WhatsApp</button>
+        <button class="mbtn ghost" onclick="waRecordatorioGerente('${c.id}')">📲 Recordatorio</button>
+        <button class="mbtn ghost" onclick="verComprobantesGerente('${c.id}')">📎 Ver pagos</button>
         <!-- FIX-BR2: Botón "Registrar pago" eliminado — solo el Panel Cliente envía comprobantes -->
-        <button class="m-btn ghost" onclick="abrirCargaReferidoGerente('${c.id}')" style="color:#fbbf24;">🎁 Referido</button>
-        <button class="m-btn ghost" onclick="closeModal()">Cerrar</button>
+        <button class="mbtn ghost" onclick="abrirCargaReferidoGerente('${c.id}')" style="color:#fbbf24;">🎁 Referido</button>
+        <button class="mbtn ghost" onclick="closeModal()">Cerrar</button>
       </div>
     </div>
   `;
@@ -2033,7 +2036,7 @@ function updateClientFullGerente(clientId) {
   var cs = _memCache[DB_KEY] || [];
   var c = cs.find(function(x) { return x.id == clientId; });
   if (!c) return;
-  var btn = document.querySelector('#modal .m-btn.primary[onclick*="updateClientFullGerente"]');
+  var btn = document.querySelector('#modal .mbtn.gold[onclick*="updateClientFullGerente"]');
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Guardando...'; }
 
   var campos = {
@@ -2086,7 +2089,7 @@ function abrirCargaReferidoGerente(clientId) {
         <div><label class="m-label">Teléfono del referido</label><input class="edit-input" id="rTel" placeholder="+54 9 297 555-1234"></div>
         <div><label class="m-label">Notas (opcional)</label><input class="edit-input" id="rNotas" placeholder="Ej: Interesado en escapada en pareja"></div>
       </div>
-      <div class="mact"><button class="m-btn primary" style="background:linear-gradient(135deg,#b45309,#f59e0b);" onclick="confirmarCargaReferidoGerente('${c.id}')">💾 Registrar referido</button><button class="mbtn ghost" onclick="closeModal()">Cancelar</button></div>
+      <div class="mact"><button class="mbtn gold" onclick="confirmarCargaReferidoGerente('${c.id}')">💾 Registrar referido</button><button class="mbtn ghost" onclick="closeModal()">Cancelar</button></div>
     </div>
   `;
   document.getElementById('mbox').innerHTML = modalHtml;
