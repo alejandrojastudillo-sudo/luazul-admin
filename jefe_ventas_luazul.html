@@ -1269,7 +1269,7 @@ function renderOverview() {
 function getClientesDelRamal() {
   var _jefeId = window._gerenteProfile ? window._gerenteProfile.id : null;  // ← CAMBIO: usar id numérico
   var misVendedores = (_memCache[VK] || []).filter(function(s) {
-    return s.role_id === ROLE_SELLER && String(s.manager_id) === String(_jefeId);
+    return (s.role_id === ROLE_SELLER || s.role_id === ROLE_SALES_LEADER) && String(s.manager_id) === String(_jefeId);
   });
   // CORRECCIÓN: usar el id numérico del vendedor (staff.id) para comparar con seller_id
   var misVendedoresIds = misVendedores.map(function(v) { return String(v.id); });
