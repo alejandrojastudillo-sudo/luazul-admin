@@ -6,7 +6,7 @@
   <link rel="manifest" href="manifest_gerente.json">
   <meta name="theme-color" content="#0B3D91">
 <title>Luazul Smart Travel · Jefe de Ventas</title>
-<!-- Jefe de Ventas v3.8 — FIX: getClientesDelRamal usaba c.seller_id (no existe) → c.vid, pagos filtrados por equipo, modal CEO-style · 2026-05-24 -->
+<!-- Jefe de Ventas v3.9 — FIX: (1) Dropdowns solo muestran vendedores del jefe, (2) renderPagos filtra por equipo + próxima cuota, (3) renderEquipoDash aislado, (4) modal vendedor dropdown aislado · 2026-05-24 -->
   <script>
   // ── Limpiar Service Worker caché cruzada (staff_login.html lo registraba) ──
   if ('serviceWorker' in navigator) {
@@ -1263,6 +1263,20 @@ function getClientesDelRamal() {
   });
 }
 
+// ── HELPER: vendedores asignados a este jefe (vendedores + jefes de ventas bajo supervisión) ──
+function getMisVendedores() {
+  var _jefeId = window._gerenteProfile ? window._gerenteProfile.id : null;
+  if (!_jefeId) return [];
+  return (_memCache[VK] || []).filter(function(s) {
+    return (s.role_id === ROLE_SELLER || s.role_id === ROLE_SALES_LEADER) && String(s.manager_id) === String(_jefeId);
+  });
+}
+
+// ── HELPER: IDs de clientes del equipo del jefe ──
+function getEquipoClientIds() {
+  return getClientesDelRamal().map(function(c) { return String(c.id); });
+}
+
 function renderVendors() {
   var _jefeId = window._gerenteProfile ? window._gerenteProfile.id : null;
   var vs = (_memCache[VK] || []).filter(function(s) {
@@ -1800,7 +1814,7 @@ function confirmarReasignacion(clientId) {
 // ══════════════════════════════════════════════════════
 function populateVFilt() {
   var sel = document.getElementById('vFilt');
-  var vs = (_memCache[VK] || []) || [];
+  var vs = getMisVendedores(); // FIX: solo vendedores del jefe
   var cur = sel.value;
   sel.innerHTML = '<option value="">Todos los vendedores</option>' + vs.map(function(v) {
     return '<option value="' + v.id + '"' + (cur === String(v.id) ? ' selected' : '') + '>' + esc(v.nombre) + '</option>';
@@ -1877,9 +1891,10 @@ function openClientDetail(id) {
   }
 
   // Opciones para vendedor (solo asesores del gerente)
+  var misVs = getMisVendedores(); // FIX: solo vendedores del jefe, no todos
   var vOptions = '<option value="">Sin asesor</option>';
-  for (var i = 0; i < vs.length; i++) {
-    var vv = vs[i];
+  for (var i = 0; i < misVs.length; i++) {
+    var vv = misVs[i];
     vOptions += '<option value="' + vv.id + '"' + (String(vv.id) === String(c.vid) ? ' selected' : '') + '>' + esc(vv.nombre) + '</option>';
   }
 
@@ -2293,7 +2308,7 @@ function gerenteResolverMora(id, idx) {
 //  DASHBOARD VENDEDOR — Tab 3
 // ══════════════════════════════════════════════════════
 function populateVendDashSel() {
-  var vs = (_memCache[VK] || []) || [];
+  var vs = getMisVendedores(); // FIX: solo vendedores del jefe
   var sel = document.getElementById('vendDashSel');
   if (!sel) return;
   var cur = sel.value;
@@ -2431,7 +2446,7 @@ function renderVendDash() {
 //  PAGOS — Tab 4
 // ══════════════════════════════════════════════════════
 function populatePagoFiltros() {
-  var vs = (_memCache[VK] || []) || [];
+  var vs = getMisVendedores(); // FIX: solo vendedores del jefe
   var sel = document.getElementById('pagoVFilt');
   if (!sel) return;
   var cur = sel.value;
@@ -2448,7 +2463,28 @@ function renderPagos() {
   var ns = (_memCache[NK] || []) || [];
   var vf = document.getElementById('pagoVFilt') ? document.getElementById('pagoVFilt').value : '';
   var ef = document.getElementById('pagoEstFilt') ? document.getElementById('pagoEstFilt').value : '';
-  var pays = ns.filter(function(n) { return n.tipo === 'payment'; });
+
+  // FIX: Solo pagos de clientes del equipo del jefe
+  var equipoClientIds = getEquipoClientIds();
+
+  var pays = ns.filter(function(n) {
+    if (n.tipo !== 'payment') return false;
+    // Solo pagos de clientes del equipo
+    if (equipoClientIds.indexOf(String(n.cid)) === -1) return false;
+    return true;
+  });
+
+  // FIX: Pendientes — solo la siguiente cuota debida por cliente (igual que CEO)
+  var clientes = _memCache[DB_KEY] || [];
+  pays = pays.filter(function(n) {
+    if (n.aprobada) return true; // Aprobados: mostrar siempre
+    // Pendientes: solo la siguiente cuota debida
+    var c = clientes.find(function(x) { return String(x.id) === String(n.cid); });
+    if (!c) return false;
+    var siguienteCuota = (parseInt(c.cuotas_pagadas) || 0) + 1;
+    return parseInt(n.cuota) === siguienteCuota;
+  });
+
   if (vf) pays = pays.filter(function(n) { return n.vid && String(n.vid) === String(vf); });
   if (ef === 'pendiente') pays = pays.filter(function(n) { return !n.aprobada; });
   if (ef === 'aprobado') pays = pays.filter(function(n) { return !!n.aprobada; });
@@ -2456,9 +2492,20 @@ function renderPagos() {
   var el = document.getElementById('pagosBody');
   if (!el) return;
   if (!pays.length) { el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted);">Sin pagos para mostrar</div>'; return; }
-  var totalPend = ns.filter(function(n) { return n.tipo === 'payment' && !n.aprobada; }).length;
-  var totalAprob = ns.filter(function(n) { return n.tipo === 'payment' && n.aprobada; }).length;
-  var totalUSD = pays.filter(function(n) { return n.aprobada; }).reduce(function(s, n) { return s + (parseFloat(n.monto) || 0); }, 0);
+
+  // KPIs: solo contando pagos del equipo
+  var equipoPays = ns.filter(function(n) {
+    return n.tipo === 'payment' && equipoClientIds.indexOf(String(n.cid)) !== -1;
+  });
+  var totalPend = equipoPays.filter(function(n) {
+    if (n.aprobada) return false;
+    var c = clientes.find(function(x) { return String(x.id) === String(n.cid); });
+    if (!c) return false;
+    var siguienteCuota = (parseInt(c.cuotas_pagadas) || 0) + 1;
+    return parseInt(n.cuota) === siguienteCuota;
+  }).length;
+  var totalAprob = equipoPays.filter(function(n) { return n.aprobada; }).length;
+  var totalUSD = equipoPays.filter(function(n) { return n.aprobada; }).reduce(function(s, n) { return s + (parseFloat(n.monto) || 0); }, 0);
   el.innerHTML = '<div class="kpi-grid" style="margin-bottom:18px;">'
     + '<div class="kpi"><span>⏳</span><div class="kpi-v" style="color:var(--gold);">' + totalPend + '</div><div class="kpi-l">Pendientes aprobación</div></div>'
     + '<div class="kpi"><span>✅</span><div class="kpi-v" style="color:var(--green);">' + totalAprob + '</div><div class="kpi-l">Aprobados</div></div>'
@@ -2479,7 +2526,7 @@ function renderPagos() {
         + '<div style="font-size:.72rem;color:var(--muted);">' + fmtTs(n.ts) + '</div>'
         + '<div><span style="font-size:.7rem;font-weight:700;padding:3px 8px;border-radius:8px;' + (aprobado ? 'background:var(--green-bg);color:var(--green);border:1px solid var(--green-bd);' : 'background:var(--gold-bg);color:var(--gold);border:1px solid var(--gold-bd);') + '">' + (aprobado ? 'Aprobado' : 'Pendiente') + '</span></div>'
         + '<div style="display:flex;gap:4px;">'
-        + (n.comp ? '<button onclick="viewPagoComp(\'' + n.id + '\')" style="padding:4px 7px;background:var(--blue-bg);border:1px solid var(--blue-bd);color:#93c5fd;border-radius:6px;font-size:.68rem;cursor:pointer;" title="Ver comprobante">🔍</button>' : '')
+        + (n.comp ? '<button onclick="viewPagoComp(\'' + n.id + '\')" style="padding:4px 7px;background:var(--blue-bg);border:1px solid var(--blue-bd);color:#93c5fd;border-radius:6px;font-size:.68rem;cursor:pointer;" title="Ver comprobante">🔍</button>' : '<span style="font-size:.58rem;color:var(--muted);">—</span>')
         + (aprobado ? '<span style="font-size:.62rem;color:var(--muted);padding:4px;">' + (n.aprobadoPor ? 'Por: ' + n.aprobadoPor : 'Gerencia') + '</span>' : '')
         + '</div></div>';
     }).join('')
@@ -2608,7 +2655,7 @@ function notificarAsesorMora(clientId) {
 // ══════════════════════════════════════════════════════
 function renderEquipoDash() {
   var cs = ((_memCache[DB_KEY] || []) || []).map(enrich).filter(esClienteDelJefe);
-  var vs = (_memCache[VK] || []) || [];
+  var vs = getMisVendedores(); // FIX: solo vendedores del jefe, no todos
   var now = new Date();
   var curM = now.getFullYear() + '-' + now.getMonth();
   var mn = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
