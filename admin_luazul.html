@@ -1478,6 +1478,12 @@ async function renderAll() {
 // 15. SECCIONES DE NAVEGACIÓN
 // ──────────────────────────────────────────────────────────────────────────
 function showSection(name) {
+  /* ── PWA: registrar navegación en historial ── */
+  if (!_pwaBackNavigating && name !== _currentTab) {
+    _navStack.push(name);
+    _currentTab = name;
+    history.pushState({ pwa: 'app' }, '');
+  }
   var elements = {
     statsRow:       document.getElementById('statsRow'),
     comisionPanel:  document.getElementById('comisionPanel'),
@@ -4308,6 +4314,71 @@ window.generarPresupuestoPDF = generarPresupuestoPDF;
 window.enviarWhatsAppPresupuesto = enviarWhatsAppPresupuesto;
 window.agregarRecordatorio = agregarRecordatorio;
 window.guardarRecordatorio = guardarRecordatorio;
+
+/* ── PWA: botón Atrás con navegación de secciones + modales ─────────────────
+ *  1) Atrás cierra modal abierto si lo hay
+ *  2) Atrás vuelve a la sección anterior visitada
+ *  3) En la primera sección: doble atrás cierra la app
+ * ───────────────────────────────────────────────────────────────────────── */
+var _navStack = ['clientes'];
+var _currentTab = 'clientes';
+var _pwaBackNavigating = false;
+
+(function setupPwaBack() {
+  var lastBackTime = 0;
+  history.pushState({ pwa: 'app' }, '');
+
+  window.addEventListener('popstate', function (e) {
+    var appEl = document.getElementById('app');
+    var appVisible = appEl && appEl.style.display !== 'none';
+
+    if (!appVisible) {
+      var now = Date.now();
+      if (now - lastBackTime < 2000) { history.go(-1); }
+      else {
+        lastBackTime = now;
+        var t = document.getElementById('toast');
+        if (t) { t.textContent = 'Presioná Atrás de nuevo para salir'; t.classList.add('show'); setTimeout(function(){t.classList.remove('show');},2000); }
+        history.pushState({ pwa: 'app' }, '');
+      }
+      return;
+    }
+
+    /* 1) Cerrar modal si está abierto */
+    var modal = document.getElementById('modal');
+    if (modal && modal.classList.contains('open')) {
+      closeModal();
+      history.pushState({ pwa: 'app' }, '');
+      return;
+    }
+
+    /* 2) Volver a la sección anterior */
+    if (_navStack.length > 1) {
+      _navStack.pop();
+      var prevSection = _navStack[_navStack.length - 1];
+      _currentTab = prevSection;
+      _pwaBackNavigating = true;
+      /* Restaurar ftab activo */
+      document.querySelectorAll('.ftab').forEach(function(t){
+        t.classList.toggle('active', t.getAttribute('data-f')===prevSection);
+      });
+      showSection(prevSection);
+      _pwaBackNavigating = false;
+      history.pushState({ pwa: 'app' }, '');
+      return;
+    }
+
+    /* 3) Primera sección → doble atrás sale */
+    var now2 = Date.now();
+    if (now2 - lastBackTime < 2000) { adminLogout(); }
+    else {
+      lastBackTime = now2;
+      var t2 = document.getElementById('toast');
+      if (t2) { t2.textContent = 'Presioná Atrás de nuevo para salir'; t2.classList.add('show'); setTimeout(function(){t2.classList.remove('show');},2000); }
+      history.pushState({ pwa: 'app' }, '');
+    }
+  });
+})();
 
 document.addEventListener('DOMContentLoaded', function() {
   if (sbClient) {
