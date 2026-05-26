@@ -1414,47 +1414,77 @@ function cLogout(){
     doLogout();
   }
 }
-/* ── PWA: comportamiento botón Atrás ────────────────────────────────────────
- *  - Un solo "atrás" mientras la app está visible → vuelve al login (no cierra)
- *  - Doble "atrás" en login (dentro de 2 s) → cierra la app
- *  - Inyectamos un estado extra en history para interceptar el evento
+/* ── PWA: botón Atrás con navegación de tabs + modales ────────────────────
+ *  1) Atrás cierra modal abierto si lo hay
+ *  2) Atrás vuelve al tab anterior visitado
+ *  3) En el primer tab: doble atrás cierra la app
  * ───────────────────────────────────────────────────────────────────────── */
+var _navStack = ['overview'];
+var _currentTab = 'overview';
+var _pwaBackNavigating = false;
+
 (function setupPwaBack() {
   var lastBackTime = 0;
 
-  /* Empujamos un estado "en-app" al cargar, así siempre hay un entry
-     hacia adelante que podemos volver a poner cuando sea necesario */
   history.pushState({ pwa: 'app' }, '');
 
   window.addEventListener('popstate', function (e) {
     var appEl   = document.getElementById('app');
-    var loginEl = document.getElementById('loginWrap');
     var appVisible = appEl && appEl.style.display !== 'none';
 
-    if (appVisible) {
-      /* Estaba en la app → mostramos login en vez de cerrar */
-      cLogout();
-      /* Volvemos a empujar el estado para que el siguiente "atrás"
-         llegue de nuevo a este handler (desde la pantalla de login) */
-      history.pushState({ pwa: 'app' }, '');
-    } else {
-      /* Ya estamos en login → doble back en ≤2 s cierra la app */
+    if (!appVisible) {
+      /* Pantalla de login → doble back cierra la app */
       var now = Date.now();
       if (now - lastBackTime < 2000) {
-        /* Dejamos que el navegador/SO cierre o salga normalmente */
         history.go(-1);
       } else {
         lastBackTime = now;
-        /* Avisamos al usuario que tiene que volver a presionar */
         var t = document.getElementById('toast');
-        if (t) {
-          t.textContent = 'Presioná Atrás de nuevo para salir';
-          t.classList.add('show');
-          setTimeout(function () { t.classList.remove('show'); }, 2000);
-        }
-        /* Re-empujamos el estado para quedar en el mismo sitio */
+        if (t) { t.textContent = 'Presioná Atrás de nuevo para salir'; t.classList.add('show'); setTimeout(function(){t.classList.remove('show');},2000); }
         history.pushState({ pwa: 'app' }, '');
       }
+      return;
+    }
+
+    /* ── Dentro de la app ── */
+
+    /* 1) Cerrar modal si está abierto */
+    var modal = document.getElementById('modal');
+    if (modal && modal.classList.contains('open')) {
+      closeModal();
+      history.pushState({ pwa: 'app' }, '');
+      return;
+    }
+
+    /* 2) Cerrar rechazoModal si existe */
+    var rechazo = document.getElementById('rechazoModal');
+    if (rechazo) {
+      rechazo.remove();
+      history.pushState({ pwa: 'app' }, '');
+      return;
+    }
+
+    /* 3) Volver al tab anterior */
+    if (_navStack.length > 1) {
+      _navStack.pop();
+      var prevTab = _navStack[_navStack.length - 1];
+      _currentTab = prevTab;
+      _pwaBackNavigating = true;
+      showTab(prevTab);
+      _pwaBackNavigating = false;
+      history.pushState({ pwa: 'app' }, '');
+      return;
+    }
+
+    /* 4) Primer tab → doble atrás sale de la app */
+    var now2 = Date.now();
+    if (now2 - lastBackTime < 2000) {
+      cLogout();
+    } else {
+      lastBackTime = now2;
+      var t2 = document.getElementById('toast');
+      if (t2) { t2.textContent = 'Presioná Atrás de nuevo para salir'; t2.classList.add('show'); setTimeout(function(){t2.classList.remove('show');},2000); }
+      history.pushState({ pwa: 'app' }, '');
     }
   });
 })();
@@ -1759,6 +1789,13 @@ function showTab(id){
   var tb=document.getElementById('tab-'+id);
   if(pg) pg.classList.add('active');
   if(tb) tb.classList.add('active');
+
+  /* ── PWA: registrar navegación en historial ── */
+  if (!_pwaBackNavigating && id !== _currentTab) {
+    _navStack.push(id);
+    _currentTab = id;
+    history.pushState({ pwa: 'app' }, '');
+  }
   if(id==='overview')           renderOverview();
   if(id==='regiones')          renderRegiones();
   if(id==='venddash')          renderVendDash();
