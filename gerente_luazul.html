@@ -2836,6 +2836,13 @@ function showTab(id) {
   for (var i = 0; i < allPgs.length; i++) { allPgs[i].classList.remove('active'); }
   document.getElementById('tab-' + id).classList.add('active');
   document.getElementById('tabpg-' + id).classList.add('active');
+
+  /* ── PWA: registrar navegación en historial ── */
+  if (!_pwaBackNavigating && id !== _currentTab) {
+    _navStack.push(id);
+    _currentTab = id;
+    history.pushState({ pwa: 'app' }, '');
+  }
   if (id === 'venddash') { populateVendDashSel(); }
   if (id === 'pagos') { populatePagoFiltros(); renderPagos(); }
   if (id === 'mora') { renderMoraTab(); }
@@ -3198,6 +3205,67 @@ function showToast(msg, dur) { var t = document.getElementById('toast'); t.textC
   global.lzToggle = function (inputId, btn) { LZ_AUTH.togglePassword(inputId, btn); };
   global.LZ_AUTH = LZ_AUTH;
 })(window);
+
+/* ── PWA: botón Atrás con navegación de tabs + modales ────────────────────
+ *  1) Atrás cierra modal abierto si lo hay
+ *  2) Atrás vuelve al tab anterior visitado
+ *  3) En el primer tab: doble atrás cierra la app
+ * ───────────────────────────────────────────────────────────────────────── */
+var _navStack = ['overview'];
+var _currentTab = 'overview';
+var _pwaBackNavigating = false;
+
+(function setupPwaBack() {
+  var lastBackTime = 0;
+  history.pushState({ pwa: 'app' }, '');
+
+  window.addEventListener('popstate', function (e) {
+    var appEl = document.getElementById('app');
+    var appVisible = appEl && appEl.style.display !== 'none';
+
+    if (!appVisible) {
+      var now = Date.now();
+      if (now - lastBackTime < 2000) { history.go(-1); }
+      else {
+        lastBackTime = now;
+        var t = document.getElementById('toast');
+        if (t) { t.textContent = 'Presioná Atrás de nuevo para salir'; t.classList.add('show'); setTimeout(function(){t.classList.remove('show');},2000); }
+        history.pushState({ pwa: 'app' }, '');
+      }
+      return;
+    }
+
+    /* 1) Cerrar modal si está abierto */
+    var modal = document.getElementById('modal');
+    if (modal && modal.classList.contains('open')) {
+      closeModal();
+      history.pushState({ pwa: 'app' }, '');
+      return;
+    }
+
+    /* 2) Volver al tab anterior */
+    if (_navStack.length > 1) {
+      _navStack.pop();
+      var prevTab = _navStack[_navStack.length - 1];
+      _currentTab = prevTab;
+      _pwaBackNavigating = true;
+      showTab(prevTab);
+      _pwaBackNavigating = false;
+      history.pushState({ pwa: 'app' }, '');
+      return;
+    }
+
+    /* 3) Primer tab → doble atrás sale */
+    var now2 = Date.now();
+    if (now2 - lastBackTime < 2000) { gLogout(); }
+    else {
+      lastBackTime = now2;
+      var t2 = document.getElementById('toast');
+      if (t2) { t2.textContent = 'Presioná Atrás de nuevo para salir'; t2.classList.add('show'); setTimeout(function(){t2.classList.remove('show');},2000); }
+      history.pushState({ pwa: 'app' }, '');
+    }
+  });
+})();
 
 // ── Inicialización: restaurar visibilidad y mostrar login si corresponde ──
 document.addEventListener('DOMContentLoaded', function() {
