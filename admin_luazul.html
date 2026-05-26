@@ -1605,6 +1605,24 @@ function closeModal() {
   if (tl) tl.innerHTML = '';
 }
 
+// ── Modal para ver comprobantes (mobile-friendly) ──
+function verCompModalAdmin(url, titulo) {
+  if (!url) { showToast('Sin comprobante adjunto'); return; }
+  var modalBox = document.getElementById('modalBox');
+  modalBox.innerHTML =
+    '<div class="modal-head"><div><h2>' + (titulo || 'Comprobante de pago') + '</h2></div><button class="modal-close" onclick="closeModal()">✕</button></div>' +
+    '<div class="modal-body" style="text-align:center;padding:10px;overflow:auto;max-height:75vh;-webkit-overflow-scrolling:touch;">' +
+    '<img id="compImg" src="' + url + '" style="max-width:100%;max-height:70vh;border-radius:10px;object-fit:contain;" onerror="document.getElementById(\'compFallback\').style.display=\'block\';this.style.display=\'none\';"/>' +
+    '<div id="compFallback" style="display:none;padding:40px;color:#f87171;">Error al cargar la imagen</div>' +
+    '</div>' +
+    '<div style="text-align:center;margin-top:14px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap;padding:0 20px;">' +
+    '<a href="' + url + '" download style="display:inline-flex;align-items:center;gap:6px;padding:9px 20px;background:linear-gradient(135deg,#7c3aed,#a78bfa);border-radius:10px;font-size:.82rem;font-weight:700;color:white;text-decoration:none;">\uD83D\uDCE5 Descargar</a>' +
+    '<a href="' + url + '" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:6px;padding:9px 20px;background:rgba(255,255,255,.06);border:1px solid var(--border);border-radius:10px;font-size:.82rem;font-weight:700;color:var(--text);text-decoration:none;">\uD83D\uDD0D Abrir</a>' +
+    '</div>' +
+    '<div class="modal-actions"><button class="m-btn ghost" onclick="closeModal()">Cerrar</button></div>';
+  document.getElementById('modal').classList.add('open');
+}
+
 function closeModalOutside(e) {
   if (e.target === document.getElementById('modal')) closeModal();
 }
@@ -2101,9 +2119,8 @@ function verCompAdmin(idx) {
   var cj = _currentProfile.comprobantes_json;
   var comps=[]; try { comps = cj ? (typeof cj === 'string' ? JSON.parse(cj) : cj) : []; } catch(e){ comps = []; }
   var comp=comps[idx]; if (!comp||!comp.data) return;
-  var w=window.open('','_blank'); w.document.open(); w.document.close();
-  if (comp.tipo&&comp.tipo.indexOf('image')===0) { var img=w.document.createElement('img'); img.src=comp.data; img.style.cssText='max-width:100%;margin:auto;display:block;'; w.document.body.appendChild(img); }
-  else { var fr=w.document.createElement('iframe'); fr.src=comp.data; fr.style.cssText='width:100%;height:100vh;border:0;'; w.document.body.appendChild(fr); }
+  if (comp.tipo&&comp.tipo.indexOf('image')===0) { verCompModalAdmin(comp.data, 'Comprobante de pago'); }
+  else { window.open(comp.data, '_blank'); }
 }
 
 // ──────────────────────────────────────────────────────────────────────────
