@@ -1104,21 +1104,10 @@ function verCompGerente(idx) {
   if (yo.comprobantes_json) { try { comps = typeof yo.comprobantes_json === 'string' ? JSON.parse(yo.comprobantes_json) : yo.comprobantes_json; } catch(e) { comps = []; } }
   var comp = comps[idx];
   if (!comp || !comp.data) return;
-  var w = window.open('', '_blank');
-  w.document.open();
-  w.document.close();
   if (comp.tipo && comp.tipo.indexOf('image') === 0) {
-    var img = w.document.createElement('img');
-    img.src = comp.data;
-    img.style.cssText = 'max-width:100%;display:block;margin:auto;';
-    w.document.body.style.cssText = 'margin:0;background:#111;display:flex;align-items:center;justify-content:center;min-height:100vh;';
-    w.document.body.appendChild(img);
+    verCompModal(comp.data, 'Comprobante de pago');
   } else {
-    var fr = w.document.createElement('iframe');
-    fr.src = comp.data;
-    fr.style.cssText = 'width:100%;height:100vh;border:0;';
-    w.document.body.style.margin = '0';
-    w.document.body.appendChild(fr);
+    window.open(comp.data, '_blank');
   }
 }
 
@@ -1698,20 +1687,10 @@ function verCompVend(vid, idx) {
   if (!v || !v.comprobantes || !v.comprobantes[idx]) return;
   var c = v.comprobantes[idx];
   if (!c.data) return;
-  var w = window.open('', '_blank');
-  w.document.open(); w.document.close();
   if (c.tipo && c.tipo.indexOf('image') === 0) {
-    var img = w.document.createElement('img');
-    img.src = c.data;
-    img.style.cssText = 'max-width:100%;display:block;margin:auto;';
-    w.document.body.style.cssText = 'margin:0;background:#111;display:flex;align-items:center;justify-content:center;min-height:100vh;';
-    w.document.body.appendChild(img);
+    verCompModal(c.data, 'Comprobante - ' + esc(v.nombre));
   } else {
-    var fr = w.document.createElement('iframe');
-    fr.src = c.data;
-    fr.style.cssText = 'width:100%;height:100vh;border:0;';
-    w.document.body.style.margin = '0';
-    w.document.body.appendChild(fr);
+    window.open(c.data, '_blank');
   }
 }
 
@@ -3082,6 +3061,26 @@ function saveClientPass(cid) { showToast('⚠️ Para cambiar contraseña de cli
 function closeModal() { document.getElementById('modal').classList.remove('open'); }
 function closeModalOut(e) { if (e.target === document.getElementById('modal')) closeModal(); }
 function showToast(msg, dur) { var t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show'); setTimeout(function() { t.classList.remove('show'); }, dur || 3500); }
+
+// ── Modal para ver comprobantes (mobile-friendly) ──
+function verCompModal(url, titulo) {
+  if (!url) { showToast('Sin comprobante adjunto'); return; }
+  var modal = document.getElementById('modal');
+  modal.querySelector('.mhead h2').textContent = titulo || 'Comprobante de pago';
+  modal.querySelector('.mhead p').textContent = '';
+  modal.querySelector('.mbody').innerHTML =
+    '<div style="text-align:center;padding:10px;overflow:auto;max-height:75vh;-webkit-overflow-scrolling:touch;">'
+    + '<img id="compImg" src="' + url + '" style="max-width:100%;max-height:70vh;border-radius:10px;object-fit:contain;" onerror="document.getElementById(\'compFallback\').style.display=\'block\';this.style.display=\'none\';"/>'
+    + '<div id="compFallback" style="display:none;padding:40px;color:#f87171;">Error al cargar la imagen</div>'
+    + '</div>'
+    + '<div style="text-align:center;margin-top:14px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">'
+    + '<a href="' + url + '" download style="display:inline-flex;align-items:center;gap:6px;padding:9px 20px;background:linear-gradient(135deg,#7c3aed,#a78bfa);border-radius:10px;font-size:.82rem;font-weight:700;color:white;text-decoration:none;">\uD83D\uDCE5 Descargar</a>'
+    + '<a href="' + url + '" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:6px;padding:9px 20px;background:rgba(255,255,255,.06);border:1px solid var(--border2);border-radius:10px;font-size:.82rem;font-weight:700;color:var(--fg);text-decoration:none;">\uD83D\uDD0D Abrir</a>'
+    + '</div>';
+  modal.querySelector('.mact').innerHTML =
+    '<button class="mbtn ghost" onclick="closeModal()">Cerrar</button>';
+  modal.classList.add('open');
+}
 
 // ══════════════════════════════════════════════════════
 //  MÓDULO LZ_AUTH (IGUAL AL ORIGINAL)
