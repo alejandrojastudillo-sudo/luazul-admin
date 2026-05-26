@@ -1,0 +1,26 @@
+{
+  "name": "Luazul Smart Travel",
+  "short_name": "Luazul",
+  "description": "Portal de Operaciones — Panel de Staff",
+  "start_url": "./staff_login.html",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#000000",
+  "theme_color": "#0B3D91",
+  "lang": "es",
+  "categories": ["business", "travel"],
+  "icons": [
+    {
+      "src": "pwa_icons/icon_192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "pwa_icons/icon_512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
