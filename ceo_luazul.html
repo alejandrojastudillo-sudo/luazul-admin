@@ -167,8 +167,8 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
 
 /* ── CATÁLOGO DE PRECIOS (PRO) ── */
 .cat-table-wrap{border:1px solid var(--border);border-radius:14px;overflow:hidden;background:var(--surface);}
-.cat-table-head{display:grid;grid-template-columns:18% 20% 8% 8% 10% 12% 6% 8% 10%;padding:10px 14px;background:rgba(255,255,255,.03);border-bottom:1px solid var(--border);font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);gap:6px;align-items:center;}
-.cat-table-row{display:grid;grid-template-columns:18% 20% 8% 8% 10% 12% 6% 8% 10%;padding:10px 14px;border-bottom:1px solid var(--border);font-size:.82rem;gap:6px;align-items:center;transition:background .15s;}
+.cat-table-head{display:grid;grid-template-columns:22% 15% 12% 8% 10% 8% 25%;padding:10px 14px;background:rgba(255,255,255,.03);border-bottom:1px solid var(--border);font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);gap:6px;align-items:center;}
+.cat-table-row{display:grid;grid-template-columns:22% 15% 12% 8% 10% 8% 25%;padding:10px 14px;border-bottom:1px solid var(--border);font-size:.82rem;gap:6px;align-items:center;transition:background .15s;}
 .cat-table-row:hover{background:rgba(255,255,255,.02);}
 .cat-table-row.inactive{opacity:.45;}
 .cat-dest-group{display:grid;grid-template-columns:1fr;padding:8px 14px;background:rgba(167,139,250,.06);border-bottom:1px solid var(--border);font-family:'Syne',sans-serif;font-weight:800;font-size:.85rem;color:var(--purple);}
@@ -190,6 +190,12 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
 .cat-kpi{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;}
 .cat-kpi .cat-kpi-v{font-family:'Syne',sans-serif;font-size:1.3rem;font-weight:800;}
 .cat-kpi .cat-kpi-l{font-size:.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-top:2px;}
+/* ── MENORES TOGGLE ── */
+.menores-toggle{display:flex;align-items:center;justify-content:center;gap:8px;margin-top:14px;padding:10px 20px;background:rgba(251,191,36,.06);border:1px dashed rgba(251,191,36,.2);border-radius:12px;cursor:pointer;font-size:.82rem;font-weight:700;color:#fbbf24;transition:all .25s;}
+.menores-toggle:hover{background:rgba(251,191,36,.12);border-color:rgba(251,191,36,.35);}
+.menores-toggle.open{border-style:solid;border-color:rgba(251,191,36,.3);border-radius:12px 12px 0 0;margin-bottom:0;}
+.menores-content{display:none;padding:14px 16px 16px;background:rgba(251,191,36,.04);border:1px solid rgba(251,191,36,.2);border-top:none;border-radius:0 0 12px 12px;}
+.menores-content.open{display:block;}
 @media(max-width:900px){.cat-table-head,.cat-table-row{grid-template-columns:1fr;gap:4px;}.cat-table-head{display:none;}.cat-table-row{padding:14px;}.cat-ppm{margin-top:2px;}}
 .ref-badge{padding:3px 10px;border-radius:20px;font-size:.7rem;font-weight:700;}
 .ref-badge.confirmado{background:var(--green-bg);color:var(--green);border:1px solid var(--green-bd);}
@@ -713,7 +719,7 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
         <h2>📊 Simulador de Cuotas</h2>
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
           <button class="addbtn" onclick="openAddDestino()">🌍 Nuevo destino</button>
-          <button class="addbtn" onclick="openAddPaquete()">➕ Nuevo paquete</button>
+          <button class="addbtn" onclick="openConfigSimulador()" style="background:rgba(6,182,212,.1);border-color:rgba(6,182,212,.25);color:#06b6d4;">⚙️ Config % menores</button>
         </div>
       </div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px;margin-bottom:24px;">
@@ -724,27 +730,51 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
           </select>
         </div>
         <div>
-          <div class="ml">Paquete</div>
-          <select id="simPaquete" class="msel" style="width:100%;" onchange="simCalcular()">
-            <option value="">Seleccione destino primero</option>
+          <div class="ml">Noches</div>
+          <select id="simNoches" class="msel" style="width:100%;" onchange="simCalcular()">
+            <option value="">Cargando...</option>
+          </select>
+        </div>
+        <div>
+          <div class="ml">Adultos</div>
+          <select id="simAdultos" class="msel" style="width:100%;" onchange="simOnDestinoChange()">
+            <option value="">Cargando...</option>
           </select>
         </div>
         <div>
           <div class="ml">Cuotas</div>
           <select id="simCuotas" class="msel" style="width:100%;" onchange="simCalcular()">
             <option value="6">6 cuotas</option>
-            <option value="10">10 cuotas</option>
-            <option value="12" selected>12 cuotas</option>
+            <option value="10" selected>10 cuotas</option>
+            <option value="12">12 cuotas</option>
             <option value="18">18 cuotas</option>
           </select>
         </div>
       </div>
-      <div id="simResultado" style="min-height:200px;"></div>
+      <div id="simMaxOcupMsg" style="font-size:.75rem;color:#fbbf24;margin-top:-12px;margin-bottom:12px;"></div>
+      <div id="simMenoresToggle" class="menores-toggle" onclick="toggleMenores()">+ Agregar menores de edad</div>
+      <div id="simMenoresContent" class="menores-content">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;">
+          <div>
+            <div style="font-size:.7rem;color:var(--muted);margin-bottom:4px;">Bebés 0-4 (<span id="simM1Pct">0</span>%)</div>
+            <select id="simM1" class="msel" style="width:100%;" onchange="simCalcular()"><option value="0">0</option><option value="1">1</option><option value="2">2</option><option value="3">3</option></select>
+          </div>
+          <div>
+            <div style="font-size:.7rem;color:var(--muted);margin-bottom:4px;">Niños 5-11 (<span id="simM2Pct">50</span>%)</div>
+            <select id="simM2" class="msel" style="width:100%;" onchange="simCalcular()"><option value="0">0</option><option value="1">1</option><option value="2">2</option><option value="3">3</option></select>
+          </div>
+          <div>
+            <div style="font-size:.7rem;color:var(--muted);margin-bottom:4px;">Adolescentes 12-17 (<span id="simM3Pct">80</span>%)</div>
+            <select id="simM3" class="msel" style="width:100%;" onchange="simCalcular()"><option value="0">0</option><option value="1">1</option><option value="2">2</option><option value="3">3</option></select>
+          </div>
+        </div>
+      </div>
+      <div id="simResultado" style="min-height:200px;margin-top:16px;"></div>
 
       <!-- ── CATÁLOGO DE PRECIOS (integrado) ── -->
       <div style="margin-top:32px;padding-top:24px;border-top:1px solid var(--border2);">
         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:16px;">
-          <h2 style="font-size:1rem;font-weight:900;">🏷️ Catálogo de Precios y Paquetes</h2>
+          <h2 style="font-size:1rem;font-weight:900;">🏷️ Catálogo de Precios</h2>
           <button onclick="renderCatalogo()" style="padding:8px 16px;border-radius:9px;background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.25);color:#fbbf24;font-family:inherit;font-size:.78rem;font-weight:700;cursor:pointer;">🔄 Actualizar</button>
         </div>
         <div id="catKpis" class="cat-kpi-row"></div>
@@ -757,12 +787,12 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
             <option value="true">✅ Activos</option>
             <option value="false">❌ Inactivos</option>
           </select>
-          <input type="text" id="catBusqueda" placeholder="🔍 Buscar paquete..." oninput="renderCatalogo()" class="medit" style="width:220px;">
-          <div style="margin-left:auto;font-size:.75rem;color:var(--muted);"><span id="catCount">0</span> paquetes</div>
+          <input type="text" id="catBusqueda" placeholder="🔍 Buscar destino..." oninput="renderCatalogo()" class="medit" style="width:220px;">
+          <div style="margin-left:auto;font-size:.75rem;color:var(--muted);"><span id="catCount">0</span> destinos</div>
         </div>
         <div class="cat-table-wrap">
           <div class="cat-table-head">
-            <div>Destino</div><div>Paquete</div><div>Pers.</div><div>Noches</div><div>Precio USD</div><div>USD/pers/mes</div><div>Orden</div><div>Estado</div><div>Acciones</div>
+            <div>Destino</div><div>Precio/noche</div><div>USD/10c</div><div>Max Ocup.</div><div>Orden</div><div>Estado</div><div>Acciones</div>
           </div>
           <div id="catalogoBody"></div>
         </div>
@@ -7309,80 +7339,148 @@ function actualizarCotizaciones() {
 // ════════════════════════════════════════════════════════════════
 
 var _simCatalogo = [];
+var _simCfg = { menor_0_4_pct:0, menor_5_11_pct:50, menor_12_17_pct:80, grupo_4_5_pct:5, grupo_6_7_pct:8, grupo_8_mas_pct:10 };
 
 function simLoadDestinos() {
   var sel = document.getElementById('simDestino');
   if (!sel) return;
   sel.innerHTML = '<option value="">Cargando destinos...</option>';
-  document.getElementById('simPaquete').innerHTML = '<option value="">Seleccione destino primero</option>';
   document.getElementById('simResultado').innerHTML = '';
 
-  sbClient.from('catalogo_precios').select('id, nombre_destino, paquete, personas, noches, precio_usd').eq('activo', true).order('nombre_destino', { ascending: true }).order('orden', { ascending: true }).then(function(res) {
-    if (res.error) { sel.innerHTML = '<option value="">Error al cargar</option>'; return; }
-    _simCatalogo = res.data || [];
-    var destinos = [];
+  Promise.all([
+    sbClient.from('catalogo_precios').select('id, nombre_destino, slug, precio_adulto_noche, max_ocupacion').eq('activo', true).order('nombre_destino', { ascending: true }).order('orden', { ascending: true }),
+    sbClient.from('configuracion_simulador').select('*').eq('id', 1).maybeSingle()
+  ]).then(function(results) {
+    var rDest = results[0], rCfg = results[1];
+    if (rDest.error) { sel.innerHTML = '<option value="">Error al cargar</option>'; return; }
+    _simCatalogo = rDest.data || [];
+    if (rCfg.data) _simCfg = rCfg.data;
+    // Update menores % labels
+    var m1p = document.getElementById('simM1Pct'); if (m1p) m1p.textContent = _simCfg.menor_0_4_pct || 0;
+    var m2p = document.getElementById('simM2Pct'); if (m2p) m2p.textContent = _simCfg.menor_5_11_pct || 50;
+    var m3p = document.getElementById('simM3Pct'); if (m3p) m3p.textContent = _simCfg.menor_12_17_pct || 80;
+    // Build destino select
     var seen = {};
-    _simCatalogo.forEach(function(p) {
-      if (!seen[p.nombre_destino]) { seen[p.nombre_destino] = true; destinos.push(p.nombre_destino); }
+    var dests = [];
+    _simCatalogo.forEach(function(d) {
+      if (!seen[d.nombre_destino]) { seen[d.nombre_destino] = true; dests.push(d); }
     });
-    sel.innerHTML = '<option value="">— Seleccione destino —</option>' + destinos.map(function(d) {
-      return '<option value="' + d + '">' + d + '</option>';
+    sel.innerHTML = '<option value="">— Elegí destino —</option>' + dests.map(function(d) {
+      return '<option value="' + d.id + '" data-precio="' + d.precio_adulto_noche + '" data-max="' + (d.max_ocupacion || 4) + '">' + d.nombre_destino + '</option>';
     }).join('');
+    // Build nights select
+    var nSel = document.getElementById('simNoches');
+    if (nSel) {
+      var nh = '';
+      for (var n = 1; n <= 30; n++) nh += '<option value="' + n + '"' + (n === 7 ? ' selected' : '') + '>' + n + ' noche' + (n > 1 ? 's' : '') + '</option>';
+      nSel.innerHTML = nh;
+    }
+    // Build adults select (default 1-10)
+    var aSel = document.getElementById('simAdultos');
+    if (aSel) {
+      var ah = '';
+      for (var a = 1; a <= 10; a++) ah += '<option value="' + a + '"' + (a === 2 ? ' selected' : '') + '>' + a + ' adulto' + (a > 1 ? 's' : '') + '</option>';
+      aSel.innerHTML = ah;
+    }
   });
 }
 
 function simOnDestinoChange() {
-  var dest = document.getElementById('simDestino').value;
-  var sel = document.getElementById('simPaquete');
-  if (!dest) {
-    sel.innerHTML = '<option value="">Seleccione destino primero</option>';
-    document.getElementById('simResultado').innerHTML = '';
-    return;
+  var dSel = document.getElementById('simDestino');
+  var opt = dSel ? dSel.options[dSel.selectedIndex] : null;
+  var aSel = document.getElementById('simAdultos');
+  var msgEl = document.getElementById('simMaxOcupMsg');
+  if (!opt || !opt.value || !aSel) { if (msgEl) msgEl.innerHTML = ''; simCalcular(); return; }
+  var maxOc = parseInt(opt.dataset.max) || 0;
+  if (maxOc > 0) {
+    var currentVal = parseInt(aSel.value) || 2;
+    var ah = '';
+    for (var a = 1; a <= maxOc; a++) ah += '<option value="' + a + '"' + (a === Math.min(currentVal, maxOc) ? ' selected' : '') + '>' + a + ' adulto' + (a > 1 ? 's' : '') + '</option>';
+    aSel.innerHTML = ah;
+    // Cap menores selects too
+    ['simM1', 'simM2', 'simM3'].forEach(function(id) {
+      var el = document.getElementById(id); if (!el) return;
+      var cur = parseInt(el.value) || 0;
+      var h2 = '';
+      for (var m = 0; m <= Math.min(maxOc, 3); m++) h2 += '<option value="' + m + '"' + (m === cur ? ' selected' : '') + '>' + m + '</option>';
+      el.innerHTML = h2;
+    });
+    if (msgEl) msgEl.innerHTML = '<span style="color:#34d399;">Máximo ' + maxOc + ' personas para este destino</span>';
+  } else {
+    if (msgEl) msgEl.innerHTML = '';
   }
-  var paquetes = _simCatalogo.filter(function(p) { return p.nombre_destino === dest; });
-  sel.innerHTML = '<option value="">— Seleccione paquete —</option>' + paquetes.map(function(p) {
-    return '<option value="' + p.id + '">' + p.paquete + ' (' + p.personas + ' pers. · ' + p.noches + ' noches)</option>';
-  }).join('');
-  document.getElementById('simResultado').innerHTML = '';
+  simCalcular();
+}
+
+function toggleMenores() {
+  var t = document.getElementById('simMenoresToggle'), c = document.getElementById('simMenoresContent');
+  if (!t || !c) return;
+  var isOpen = c.classList.contains('open');
+  if (isOpen) { c.classList.remove('open'); t.classList.remove('open'); t.textContent = '+ Agregar menores de edad'; }
+  else { c.classList.add('open'); t.classList.add('open'); t.textContent = '- Ocultar menores de edad'; }
 }
 
 function simCalcular() {
-  var pkgId = document.getElementById('simPaquete').value;
-  var cuotas = parseInt(document.getElementById('simCuotas').value) || 12;
+  var dSel = document.getElementById('simDestino'), opt = dSel ? dSel.options[dSel.selectedIndex] : null;
   var resEl = document.getElementById('simResultado');
-
-  if (!pkgId) { resEl.innerHTML = '<div style="text-align:center;padding:50px;color:var(--muted);"><div style="font-size:3rem;margin-bottom:12px;">📊</div><p>Seleccione un destino y un paquete para simular cuotas.</p></div>'; return; }
-
-  var pkg = _simCatalogo.find(function(p) { return String(p.id) === String(pkgId); });
-  if (!pkg) { resEl.innerHTML = ''; return; }
-
-  var total = pkg.precio_usd;
-  var cuotaMensual = total / cuotas;
-  var costoDia = pkg.noches > 0 ? total / pkg.noches : 0;
-
+  if (!opt || !opt.value) { resEl.innerHTML = '<div style="text-align:center;padding:50px;color:var(--muted);"><div style="font-size:3rem;margin-bottom:12px;">📊</div><p>Elegí destino, noches y viajeros para simular cuotas.</p></div>'; return; }
+  var pan = parseFloat(opt.dataset.precio) || 0;
+  var noches = parseInt(document.getElementById('simNoches').value) || 7;
+  var adultos = parseInt(document.getElementById('simAdultos').value) || 1;
+  var m1 = parseInt((document.getElementById('simM1') || {}).value) || 0;
+  var m2 = parseInt((document.getElementById('simM2') || {}).value) || 0;
+  var m3 = parseInt((document.getElementById('simM3') || {}).value) || 0;
+  var cuotas = parseInt(document.getElementById('simCuotas').value) || 10;
+  // Group discount
+  var gPct = 0;
+  if (adultos >= 8) gPct = _simCfg.grupo_8_mas_pct || 0;
+  else if (adultos >= 6) gPct = _simCfg.grupo_6_7_pct || 0;
+  else if (adultos >= 4) gPct = _simCfg.grupo_4_5_pct || 0;
+  // Adult pricing
+  var aBruto = pan * adultos * noches;
+  var aDto = Math.round(aBruto * gPct / 100);
+  var aFinal = aBruto - aDto;
+  // Menor pricing
+  var mFinal = 0;
+  mFinal += pan * noches * m1 * (_simCfg.menor_0_4_pct || 0) / 100;
+  mFinal += pan * noches * m2 * (_simCfg.menor_5_11_pct || 0) / 100;
+  mFinal += pan * noches * m3 * (_simCfg.menor_12_17_pct || 0) / 100;
+  mFinal = Math.round(mFinal);
+  var total = aFinal + mFinal;
+  var totPers = adultos + m1 + m2 + m3;
+  var cuotaTot = Math.round(total / cuotas * 100) / 100;
+  var cuotaPers = totPers > 0 ? Math.round(cuotaTot / totPers * 100) / 100 : 0;
+  var porDia = totPers > 0 ? (cuotaPers / 30).toFixed(2) : '0.00';
+  var destName = opt.textContent;
+  // Cuotas comparison
   var cuotasArr = [6, 10, 12, 18];
   var cuotasHtml = cuotasArr.map(function(c) {
-    var cm = total / c;
+    var cm = Math.round(total / c * 100) / 100;
     var isActive = c === cuotas;
     return '<div onclick="document.getElementById(\'simCuotas\').value=' + c + ';simCalcular();" style="padding:14px;border-radius:12px;background:' + (isActive ? 'var(--purple-bg)' : 'var(--card)') + ';border:1px solid ' + (isActive ? 'var(--purple-bd)' : 'var(--border)') + ';cursor:pointer;text-align:center;transition:all .15s;' + (isActive ? 'box-shadow:0 0 20px rgba(167,139,250,.15);' : '') + '">'
       + '<div style="font-size:.65rem;color:var(--muted);margin-bottom:4px;">' + c + ' cuotas</div>'
-      + '<div style="font-family:Syne,sans-serif;font-size:1.1rem;font-weight:800;color:' + (isActive ? 'var(--purple)' : 'var(--text)') + ';">USD ' + Math.round(cm).toLocaleString('es-AR') + '</div>'
+      + '<div style="font-family:Syne,sans-serif;font-size:1.1rem;font-weight:800;color:' + (isActive ? 'var(--purple)' : 'var(--text)') + ';">USD ' + cm.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '</div>'
       + '<div style="font-size:.6rem;color:var(--muted);">/mes</div>'
       + '</div>';
   }).join('');
+  // Build sub-label
+  var lbl = adultos + ' adulto' + (adultos > 1 ? 's' : '') + ' · ' + noches + ' noche' + (noches > 1 ? 's' : '') + ' · ' + cuotas + ' cuotas';
+  if (gPct > 0) lbl += ' · <span style="color:#34d399;">-' + gPct + '% grupo</span>';
+  var tM = m1 + m2 + m3;
+  if (tM > 0) lbl += ' · ' + tM + ' menor' + (tM > 1 ? 'es' : '');
 
   resEl.innerHTML =
     '<div class="twrap" style="max-width:900px;">'
     + '<div style="padding:24px;background:rgba(255,255,255,.02);border-bottom:1px solid var(--border);">'
-    + '<div style="font-family:Syne,sans-serif;font-size:1.2rem;font-weight:800;margin-bottom:4px;">' + pkg.nombre_destino + '</div>'
-    + '<div style="font-size:.78rem;color:var(--muted);">' + pkg.paquete + ' · ' + pkg.personas + ' personas · ' + pkg.noches + ' noches</div>'
+    + '<div style="font-family:Syne,sans-serif;font-size:1.2rem;font-weight:800;margin-bottom:4px;">' + esc(destName) + '</div>'
+    + '<div style="font-size:.78rem;color:var(--muted);">' + lbl + '</div>'
     + '</div>'
     + '<div style="padding:24px;">'
     + '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px;">'
     + '<div class="kpi"><span>💰</span><div class="kpi-v" style="color:var(--gold);">' + Math.round(total).toLocaleString('es-AR') + '</div><div class="kpi-l">Total USD</div></div>'
-    + '<div class="kpi"><span>📅</span><div class="kpi-v" style="color:var(--purple);">' + cuotas + '</div><div class="kpi-l">Cuotas</div></div>'
-    + '<div class="kpi"><span>💳</span><div class="kpi-v" style="color:var(--blue);">' + Math.round(cuotaMensual).toLocaleString('es-AR') + '</div><div class="kpi-l">USD / mes</div></div>'
-    + '<div class="kpi"><span>🏨</span><div class="kpi-v" style="color:var(--green);">' + Math.round(costoDia).toLocaleString('es-AR') + '</div><div class="kpi-l">USD / día</div></div>'
+    + '<div class="kpi"><span>💳</span><div class="kpi-v" style="color:var(--blue);">' + cuotaTot.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '</div><div class="kpi-l">Cuota mensual</div></div>'
+    + '<div class="kpi"><span>👤</span><div class="kpi-v" style="color:var(--purple);">' + cuotaPers.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '</div><div class="kpi-l">USD / pers / mes</div></div>'
+    + '<div class="kpi"><span>🏨</span><div class="kpi-v" style="color:var(--green);">USD ' + porDia + '</div><div class="kpi-l">USD / pers / día</div></div>'
     + '</div>'
     + '<div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:10px;">Comparativa de cuotas</div>'
     + '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;">'
@@ -7699,39 +7797,28 @@ async function renderCatalogo() {
     var filtered = _catCache.filter(function(p) {
       if (fDestVal && p.nombre_destino !== fDestVal) return false;
       if (fEstVal !== '' && String(p.activo) !== fEstVal) return false;
-      if (fBusq && (p.paquete || '').toLowerCase().indexOf(fBusq) === -1 && (p.nombre_destino || '').toLowerCase().indexOf(fBusq) === -1) return false;
+      if (fBusq && (p.nombre_destino || '').toLowerCase().indexOf(fBusq) === -1 && (p.slug || '').toLowerCase().indexOf(fBusq) === -1) return false;
       return true;
     });
     document.getElementById('catCount').textContent = filtered.length;
     // KPIs
     var activos = _catCache.filter(function(p) { return p.activo; });
-    var destinosUnicos = []; var seenD = {};
-    activos.forEach(function(p) { if (!seenD[p.nombre_destino]) { seenD[p.nombre_destino] = true; destinosUnicos.push(p.nombre_destino); } });
-    var minPrecio = activos.length ? Math.min.apply(null, activos.map(function(p) { return p.precio_usd / p.personas; })) : 0;
-    var kpiHtml = '<div class="cat-kpi"><div class="cat-kpi-v" style="color:var(--gold);">' + _catCache.length + '</div><div class="cat-kpi-l">Total paquetes</div></div>'
+    var minPrecio = activos.length ? Math.min.apply(null, activos.map(function(p) { return p.precio_adulto_noche || 0; })) : 0;
+    var kpiHtml = '<div class="cat-kpi"><div class="cat-kpi-v" style="color:var(--gold);">' + _catCache.length + '</div><div class="cat-kpi-l">Total destinos</div></div>'
       + '<div class="cat-kpi"><div class="cat-kpi-v" style="color:var(--green);">' + activos.length + '</div><div class="cat-kpi-l">Activos</div></div>'
-      + '<div class="cat-kpi"><div class="cat-kpi-v" style="color:var(--purple);">' + destinosUnicos.length + '</div><div class="cat-kpi-l">Destinos</div></div>'
-      + '<div class="cat-kpi"><div class="cat-kpi-v" style="color:var(--cyan,#06b6d4);">USD ' + Math.round(minPrecio) + '</div><div class="cat-kpi-l">Mínimo por persona</div></div>';
+      + '<div class="cat-kpi"><div class="cat-kpi-v" style="color:var(--cyan,#06b6d4);">USD ' + Math.round(minPrecio) + '</div><div class="cat-kpi-l">Mínimo/noche</div></div>';
     document.getElementById('catKpis').innerHTML = kpiHtml;
-    if (!filtered.length) { body.innerHTML = '<div class="cat-empty">📦 No se encontraron paquetes</div>'; return; }
-    // Render grouped by destination
+    if (!filtered.length) { body.innerHTML = '<div class="cat-empty">📦 No se encontraron destinos</div>'; return; }
+    // Render rows (one per destination)
     var html = '';
-    var lastDest = '';
     for (var i = 0; i < filtered.length; i++) {
       var p = filtered[i];
-      if (p.nombre_destino !== lastDest) {
-        lastDest = p.nombre_destino;
-        var destCount = filtered.filter(function(x) { return x.nombre_destino === lastDest; }).length;
-        html += '<div class="cat-dest-group">' + esc(lastDest) + '<span>' + destCount + ' paquete' + (destCount > 1 ? 's' : '') + ' · slug: ' + esc(p.slug) + '</span></div>';
-      }
-      var ppm10 = p.personas > 0 ? Math.round((p.precio_usd / 10) / p.personas) : 0;
+      var ppm10 = Math.round(p.precio_adulto_noche * 30 / 10);
       html += '<div class="cat-table-row' + (p.activo ? '' : ' inactive') + '">'
-        + '<div style="font-weight:700;font-size:.78rem;">' + esc(p.nombre_destino) + '</div>'
-        + '<div>' + esc(p.paquete) + '</div>'
-        + '<div>' + p.personas + '</div>'
-        + '<div>' + p.noches + '</div>'
-        + '<div style="font-weight:800;color:var(--gold);">USD ' + p.precio_usd.toLocaleString('es-AR') + '</div>'
+        + '<div style="font-weight:700;font-size:.78rem;">' + esc(p.nombre_destino) + '<div style="font-size:.62rem;color:var(--muted);margin-top:2px;">slug: ' + esc(p.slug) + '</div></div>'
+        + '<div style="font-weight:800;color:var(--gold);">USD ' + (p.precio_adulto_noche || 0).toLocaleString('es-AR') + '</div>'
         + '<div class="cat-ppm">USD ' + ppm10 + '<span style="font-size:.62rem;color:var(--muted);"> /10c</span></div>'
+        + '<div>' + (p.max_ocupacion || '-') + '</div>'
         + '<div style="color:var(--muted);">' + (p.orden || 0) + '</div>'
         + '<div><span class="cat-status ' + (p.activo ? 'active' : 'inactive') + '" onclick="toggleCatalogoActivo(' + p.id + ')">' + (p.activo ? '● Activo' : '○ Inactivo') + '</span></div>'
         + '<div style="display:flex;gap:4px;">'
@@ -7749,14 +7836,12 @@ function _catSlugify(text) {
 }
 
 function openAddDestino() {
-  var h = '<div class="mhead"><div><h2>🌍 Nuevo Destino</h2><p>Se creará el destino con un paquete base que podrás editar</p></div><button class="mclose" onclick="closeModal()">✕</button></div>'
+  var h = '<div class="mhead"><div><h2>🌍 Nuevo Destino</h2><p>Modelo dinámico: precio por adulto por noche</p></div><button class="mclose" onclick="closeModal()">✕</button></div>'
     + '<div class="mbody" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
     + '<div class="mitem"><div class="ml">Nombre del destino *</div><input id="newDestNombre" class="medit" placeholder="Ej: Búzios" oninput="document.getElementById(\'newDestSlug\').value=_catSlugify(this.value)"></div>'
     + '<div class="mitem"><div class="ml">Slug (URL) *</div><input id="newDestSlug" class="medit" placeholder="Ej: buzios"></div>'
-    + '<div class="mitem"><div class="ml">Paquete base *</div><input id="newDestPaquete" class="medit" placeholder="Ej: Escapada en Pareja" value="Paquete Base"></div>'
-    + '<div class="mitem"><div class="ml">Personas *</div><input id="newDestPersonas" type="number" class="medit" value="2" min="1"></div>'
-    + '<div class="mitem"><div class="ml">Noches</div><input id="newDestNoches" type="number" class="medit" value="7" min="1"></div>'
-    + '<div class="mitem"><div class="ml">Precio USD *</div><input id="newDestPrecio" type="number" class="medit" placeholder="Ej: 3500" min="1"></div>'
+    + '<div class="mitem"><div class="ml">Precio adulto/noche (USD) *</div><input id="newDestPrecio" type="number" class="medit" placeholder="Ej: 85" min="1" step="0.01"></div>'
+    + '<div class="mitem"><div class="ml">Max ocupación *</div><input id="newDestMaxOc" type="number" class="medit" value="4" min="1"></div>'
     + '</div>'
     + '<div class="mact"><button class="mbtn gold" onclick="saveAddDestino()">💾 Crear destino</button><button class="mbtn ghost" onclick="closeModal()">Cancelar</button></div>';
   document.getElementById('mbox').innerHTML = h;
@@ -7766,67 +7851,12 @@ function openAddDestino() {
 async function saveAddDestino() {
   var nombre = document.getElementById('newDestNombre').value.trim();
   var slug = document.getElementById('newDestSlug').value.trim();
-  var paquete = document.getElementById('newDestPaquete').value.trim();
-  var personas = parseInt(document.getElementById('newDestPersonas').value, 10);
-  var noches = parseInt(document.getElementById('newDestNoches').value, 10) || 7;
   var precio = parseFloat(document.getElementById('newDestPrecio').value);
-  if (!nombre || !slug || !paquete || !personas || !precio) { showToast('⚠️ Completá todos los campos obligatorios'); return; }
-  var d = { nombre_destino: nombre, slug: slug, paquete: paquete, personas: personas, noches: noches, precio_usd: precio, orden: 0, activo: true };
+  var maxOc = parseInt(document.getElementById('newDestMaxOc').value, 10) || 4;
+  if (!nombre || !slug || !precio) { showToast('⚠️ Completá todos los campos obligatorios'); return; }
+  var d = { nombre_destino: nombre, slug: slug, precio_adulto_noche: precio, max_ocupacion: maxOc, orden: 0, activo: true };
   var btn = document.querySelector('#modal .mbtn.gold'); if (btn) btn.disabled = true;
-  try { var r = await sbClient.from('catalogo_precios').insert([d]); if (r.error) throw r.error; showToast('✅ Destino "' + nombre + '" creado con paquete base'); closeModal(); renderCatalogo(); }
-  catch (e) { showToast('❌ ' + e.message); } finally { if (btn) btn.disabled = false; }
-}
-
-function openAddPaquete(defaultSlug) {
-  // Build destination options from cache
-  var destOpts = '';
-  var seen = {};
-  _catCache.forEach(function(p) { if (!seen[p.slug]) { seen[p.slug] = true; destOpts += '<option value="' + esc(p.slug) + '"' + (defaultSlug && p.slug === defaultSlug ? ' selected' : '') + '>' + esc(p.nombre_destino) + ' (' + esc(p.slug) + ')</option>'; } });
-  if (!destOpts) { showToast('⚠️ Primero creá un destino'); return; }
-  var h = '<div class="mhead"><div><h2>➕ Nuevo Paquete</h2></div><button class="mclose" onclick="closeModal()">✕</button></div>'
-    + '<div class="mbody" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
-    + '<div class="mitem"><div class="ml">Destino *</div><select id="catPkgDest" class="msel">' + destOpts + '</select></div>'
-    + '<div class="mitem"><div class="ml">Nombre del paquete *</div><input id="catPkgNombre" class="medit" placeholder="Ej: Escapada en Pareja"></div>'
-    + '<div class="mitem"><div class="ml">Personas *</div><input id="catPkgPersonas" type="number" class="medit" value="2" min="1"></div>'
-    + '<div class="mitem"><div class="ml">Noches</div><input id="catPkgNoches" type="number" class="medit" value="7" min="1"></div>'
-    + '<div class="mitem"><div class="ml">Precio total USD *</div><input id="catPkgPrecio" type="number" class="medit" placeholder="Ej: 3500" min="1"></div>'
-    + '<div class="mitem"><div class="ml">Orden</div><input id="catPkgOrden" type="number" class="medit" value="0"></div>'
-    + '</div>'
-    + '<div id="catPkgPreview" style="margin:12px 24px;padding:12px;background:rgba(0,0,0,.2);border-radius:10px;font-size:.78rem;color:var(--muted);text-align:center;">Ingresá los datos para ver la estimación</div>'
-    + '<div class="mact"><button class="mbtn gold" onclick="saveAddPaquete()">💾 Guardar paquete</button><button class="mbtn ghost" onclick="closeModal()">Cancelar</button></div>';
-  document.getElementById('mbox').innerHTML = h;
-  document.getElementById('modal').classList.add('open');
-  // Add live preview
-  ['catPkgPersonas','catPkgPrecio','catPkgNoches'].forEach(function(id) {
-    var el = document.getElementById(id); if (el) el.addEventListener('input', _catPkgPreview);
-  });
-}
-
-function _catPkgPreview() {
-  var pers = parseInt((document.getElementById('catPkgPersonas') || {}).value, 10) || 0;
-  var prec = parseFloat((document.getElementById('catPkgPrecio') || {}).value) || 0;
-  var noch = parseInt((document.getElementById('catPkgNoches') || {}).value, 10) || 0;
-  var el = document.getElementById('catPkgPreview'); if (!el) return;
-  if (!pers || !prec) { el.innerHTML = 'Ingresá los datos para ver la estimación'; return; }
-  var ppm10 = Math.round((prec / 10) / pers);
-  var ppd = noch > 0 ? Math.round(prec / noch / pers) : 0;
-  el.innerHTML = 'USD ' + ppm10 + '/persona/mes (10 cuotas) · USD ' + ppd + '/persona/día (' + noch + ' noches)';
-}
-
-async function saveAddPaquete() {
-  var slug = document.getElementById('catPkgDest').value;
-  var paquete = document.getElementById('catPkgNombre').value.trim();
-  var personas = parseInt(document.getElementById('catPkgPersonas').value, 10);
-  var noches = parseInt(document.getElementById('catPkgNoches').value, 10) || 7;
-  var precio = parseFloat(document.getElementById('catPkgPrecio').value);
-  var orden = parseInt(document.getElementById('catPkgOrden').value, 10) || 0;
-  if (!slug || !paquete || !personas || !precio) { showToast('⚠️ Completá los campos obligatorios'); return; }
-  // Get destino name from cache
-  var destObj = _catCache.find(function(p) { return p.slug === slug; });
-  var nombreDestino = destObj ? destObj.nombre_destino : slug;
-  var d = { nombre_destino: nombreDestino, slug: slug, paquete: paquete, personas: personas, noches: noches, precio_usd: precio, orden: orden, activo: true };
-  var btn = document.querySelector('#modal .mbtn.gold'); if (btn) btn.disabled = true;
-  try { var r = await sbClient.from('catalogo_precios').insert([d]); if (r.error) throw r.error; showToast('✅ Paquete "' + paquete + '" agregado'); closeModal(); renderCatalogo(); }
+  try { var r = await sbClient.from('catalogo_precios').insert([d]); if (r.error) throw r.error; showToast('✅ Destino "' + nombre + '" creado'); closeModal(); renderCatalogo(); }
   catch (e) { showToast('❌ ' + e.message); } finally { if (btn) btn.disabled = false; }
 }
 
@@ -7834,44 +7864,32 @@ async function openEditCatalogo(id) {
   var r = await sbClient.from('catalogo_precios').select('*').eq('id', id).single();
   if (r.error) { showToast('❌ Error al cargar'); return; }
   var d = r.data;
-  var h = '<div class="mhead"><div><h2>✏️ Editar Paquete</h2><p style="font-size:.72rem;color:var(--muted);">ID: ' + d.id + '</p></div><button class="mclose" onclick="closeModal()">✕</button></div>'
+  var h = '<div class="mhead"><div><h2>✏️ Editar Destino</h2><p style="font-size:.72rem;color:var(--muted);">ID: ' + d.id + '</p></div><button class="mclose" onclick="closeModal()">✕</button></div>'
     + '<div class="mbody" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
     + '<div class="mitem"><div class="ml">Destino</div><input id="eCatDest" class="medit" value="' + esc(d.nombre_destino) + '"></div>'
     + '<div class="mitem"><div class="ml">Slug (URL)</div><input id="eCatSlug" class="medit" value="' + esc(d.slug) + '"></div>'
-    + '<div class="mitem"><div class="ml">Paquete</div><input id="eCatPaq" class="medit" value="' + esc(d.paquete) + '"></div>'
-    + '<div class="mitem"><div class="ml">Personas</div><input id="eCatPer" type="number" class="medit" value="' + d.personas + '" min="1"></div>'
-    + '<div class="mitem"><div class="ml">Noches</div><input id="eCatNoc" type="number" class="medit" value="' + d.noches + '" min="1"></div>'
-    + '<div class="mitem"><div class="ml">Precio USD</div><input id="eCatPre" type="number" class="medit" value="' + d.precio_usd + '" min="1"></div>'
+    + '<div class="mitem"><div class="ml">Precio adulto/noche (USD)</div><input id="eCatPan" type="number" class="medit" value="' + (d.precio_adulto_noche || 0) + '" min="1" step="0.01"></div>'
+    + '<div class="mitem"><div class="ml">Max ocupación</div><input id="eCatMaxOc" type="number" class="medit" value="' + (d.max_ocupacion || 4) + '" min="1"></div>'
     + '<div class="mitem"><div class="ml">Orden</div><input id="eCatOrd" type="number" class="medit" value="' + (d.orden || 0) + '"></div>'
     + '<div class="mitem"><div class="ml">Estado</div><select id="eCatAct" class="msel"><option value="true"' + (d.activo ? ' selected' : '') + '>✅ Activo</option><option value="false"' + (!d.activo ? ' selected' : '') + '>❌ Inactivo</option></select></div>'
     + '</div>'
-    + '<div id="eCatPreview" style="margin:12px 24px;padding:12px;background:rgba(0,0,0,.2);border-radius:10px;font-size:.78rem;color:var(--muted);text-align:center;">USD ' + Math.round((d.precio_usd / 10) / d.personas) + '/persona/mes (10 cuotas)</div>'
     + '<div class="mact"><button class="mbtn gold" onclick="saveEditCatalogo(' + d.id + ')">💾 Guardar cambios</button><button class="mbtn ghost" onclick="closeModal()">Cancelar</button></div>';
   document.getElementById('mbox').innerHTML = h;
   document.getElementById('modal').classList.add('open');
-  ['eCatPer','eCatPre','eCatNoc'].forEach(function(id) {
-    var el = document.getElementById(id); if (el) el.addEventListener('input', function() {
-      var p = parseInt(document.getElementById('eCatPer').value,10)||1;
-      var pr = parseFloat(document.getElementById('eCatPre').value)||0;
-      document.getElementById('eCatPreview').innerHTML = 'USD ' + Math.round((pr/10)/p) + '/persona/mes (10 cuotas)';
-    });
-  });
 }
 
 async function saveEditCatalogo(id) {
   var u = {
     nombre_destino: document.getElementById('eCatDest').value.trim(),
     slug: document.getElementById('eCatSlug').value.trim().toLowerCase(),
-    paquete: document.getElementById('eCatPaq').value.trim(),
-    personas: parseInt(document.getElementById('eCatPer').value, 10),
-    noches: parseInt(document.getElementById('eCatNoc').value, 10) || 7,
-    precio_usd: parseFloat(document.getElementById('eCatPre').value),
+    precio_adulto_noche: parseFloat(document.getElementById('eCatPan').value),
+    max_ocupacion: parseInt(document.getElementById('eCatMaxOc').value, 10) || 4,
     orden: parseInt(document.getElementById('eCatOrd').value, 10) || 0,
     activo: document.getElementById('eCatAct').value === 'true'
   };
-  if (!u.nombre_destino || !u.paquete || !u.personas || !u.precio_usd) { showToast('⚠️ Completá campos obligatorios'); return; }
+  if (!u.nombre_destino || !u.precio_adulto_noche) { showToast('⚠️ Completá campos obligatorios'); return; }
   var btn = document.querySelector('#modal .mbtn.gold'); if (btn) btn.disabled = true;
-  try { var r = await sbClient.from('catalogo_precios').update(u).eq('id', id); if (r.error) throw r.error; showToast('✅ Paquete actualizado'); closeModal(); renderCatalogo(); }
+  try { var r = await sbClient.from('catalogo_precios').update(u).eq('id', id); if (r.error) throw r.error; showToast('✅ Destino actualizado'); closeModal(); renderCatalogo(); }
   catch (e) { showToast('❌ ' + e.message); } finally { if (btn) btn.disabled = false; }
 }
 
@@ -7884,20 +7902,20 @@ async function toggleCatalogoActivo(id) {
 }
 
 async function deleteCatalogo(id) {
-  if (!confirm('⚠️ ¿Desactivar este paquete? Podés reactivarlo después.')) return;
-  try { var r = await sbClient.from('catalogo_precios').update({ activo: false }).eq('id', id); if (r.error) throw r.error; showToast('✅ Paquete desactivado'); renderCatalogo(); }
+  if (!confirm('⚠️ ¿Desactivar este destino? Podés reactivarlo después.')) return;
+  try { var r = await sbClient.from('catalogo_precios').update({ activo: false }).eq('id', id); if (r.error) throw r.error; showToast('✅ Destino desactivado'); renderCatalogo(); }
   catch (e) { showToast('❌ ' + e.message); }
 }
 
 async function duplicateCatalogo(id) {
   var item = _catCache.find(function(p) { return p.id === id; });
   if (!item) return;
-  var h = '<div class="mhead"><div><h2>📋 Duplicar Paquete</h2><p style="font-size:.72rem;color:var(--muted);">Clonar: ' + esc(item.paquete) + ' (' + item.personas + ' pers.)</p></div><button class="mclose" onclick="closeModal()">✕</button></div>'
+  var h = '<div class="mhead"><div><h2>📋 Duplicar Destino</h2><p style="font-size:.72rem;color:var(--muted);">Clonar: ' + esc(item.nombre_destino) + ' (USD ' + item.precio_adulto_noche + '/noche)</p></div><button class="mclose" onclick="closeModal()">✕</button></div>'
     + '<div class="mbody" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
-    + '<div class="mitem"><div class="ml">Nombre del nuevo paquete *</div><input id="dupNombre" class="medit" value="' + esc(item.paquete) + ' (copia)"></div>'
-    + '<div class="mitem"><div class="ml">Personas *</div><input id="dupPersonas" type="number" class="medit" value="' + item.personas + '" min="1"></div>'
-    + '<div class="mitem"><div class="ml">Precio USD *</div><input id="dupPrecio" type="number" class="medit" value="' + item.precio_usd + '"></div>'
-    + '<div class="mitem"><div class="ml">Noches</div><input id="dupNoches" type="number" class="medit" value="' + item.noches + '"></div>'
+    + '<div class="mitem"><div class="ml">Nombre del nuevo destino *</div><input id="dupNombre" class="medit" value="' + esc(item.nombre_destino) + ' (copia)"></div>'
+    + '<div class="mitem"><div class="ml">Slug *</div><input id="dupSlug" class="medit" value="' + esc(item.slug) + '-copia"></div>'
+    + '<div class="mitem"><div class="ml">Precio adulto/noche (USD) *</div><input id="dupPrecio" type="number" class="medit" value="' + (item.precio_adulto_noche || 0) + '"></div>'
+    + '<div class="mitem"><div class="ml">Max ocupación *</div><input id="dupMaxOc" type="number" class="medit" value="' + (item.max_ocupacion || 4) + '"></div>'
     + '</div>'
     + '<div class="mact"><button class="mbtn gold" onclick="saveDuplicate(' + id + ')">💾 Crear copia</button><button class="mbtn ghost" onclick="closeModal()">Cancelar</button></div>';
   document.getElementById('mbox').innerHTML = h;
@@ -7908,14 +7926,63 @@ async function saveDuplicate(srcId) {
   var src = _catCache.find(function(p) { return p.id === srcId; });
   if (!src) return;
   var nombre = document.getElementById('dupNombre').value.trim();
-  var personas = parseInt(document.getElementById('dupPersonas').value, 10);
+  var slug = document.getElementById('dupSlug').value.trim();
   var precio = parseFloat(document.getElementById('dupPrecio').value);
-  var noches = parseInt(document.getElementById('dupNoches').value, 10) || 7;
-  if (!nombre || !personas || !precio) { showToast('⚠️ Completá campos obligatorios'); return; }
-  var d = { nombre_destino: src.nombre_destino, slug: src.slug, paquete: nombre, personas: personas, noches: noches, precio_usd: precio, orden: (src.orden || 0) + 1, activo: true };
+  var maxOc = parseInt(document.getElementById('dupMaxOc').value, 10) || 4;
+  if (!nombre || !slug || !precio) { showToast('⚠️ Completá campos obligatorios'); return; }
+  var d = { nombre_destino: nombre, slug: slug, precio_adulto_noche: precio, max_ocupacion: maxOc, orden: (src.orden || 0) + 1, activo: true };
   var btn = document.querySelector('#modal .mbtn.gold'); if (btn) btn.disabled = true;
-  try { var r = await sbClient.from('catalogo_precios').insert([d]); if (r.error) throw r.error; showToast('✅ Paquete duplicado'); closeModal(); renderCatalogo(); }
+  try { var r = await sbClient.from('catalogo_precios').insert([d]); if (r.error) throw r.error; showToast('✅ Destino duplicado'); closeModal(); renderCatalogo(); }
   catch (e) { showToast('❌ ' + e.message); } finally { if (btn) btn.disabled = false; }
+}
+
+async function openConfigSimulador() {
+  try {
+    var r = await sbClient.from('configuracion_simulador').select('*').eq('id', 1).maybeSingle();
+    var c = r.data || _simCfg;
+    var h = '<div class="mhead"><div><h2>⚙️ Config % Menores y Grupos</h2><p style="font-size:.72rem;color:var(--muted);">Configuración del simulador (tabla configuracion_simulador)</p></div><button class="mclose" onclick="closeModal()">✕</button></div>'
+      + '<div class="mbody" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
+      + '<div style="grid-column:1/-1;font-size:.78rem;font-weight:700;color:var(--gold);margin-bottom:4px;">Descuentos por menores (% del precio adulto)</div>'
+      + '<div class="mitem"><div class="ml">Bebés 0-4 (%)</div><input id="cfgM04" type="number" class="medit" value="' + (c.menor_0_4_pct || 0) + '" min="0" max="100"></div>'
+      + '<div class="mitem"><div class="ml">Niños 5-11 (%)</div><input id="cfgM511" type="number" class="medit" value="' + (c.menor_5_11_pct || 50) + '" min="0" max="100"></div>'
+      + '<div class="mitem"><div class="ml">Adolescentes 12-17 (%)</div><input id="cfgM1217" type="number" class="medit" value="' + (c.menor_12_17_pct || 80) + '" min="0" max="100"></div>'
+      + '<div></div>'
+      + '<div style="grid-column:1/-1;font-size:.78rem;font-weight:700;color:var(--purple);margin-top:8px;margin-bottom:4px;">Descuentos por grupo (% según cantidad de adultos)</div>'
+      + '<div class="mitem"><div class="ml">Grupo 4-5 adultos (%)</div><input id="cfgG45" type="number" class="medit" value="' + (c.grupo_4_5_pct || 5) + '" min="0" max="50"></div>'
+      + '<div class="mitem"><div class="ml">Grupo 6-7 adultos (%)</div><input id="cfgG67" type="number" class="medit" value="' + (c.grupo_6_7_pct || 8) + '" min="0" max="50"></div>'
+      + '<div class="mitem"><div class="ml">Grupo 8+ adultos (%)</div><input id="cfgG8m" type="number" class="medit" value="' + (c.grupo_8_mas_pct || 10) + '" min="0" max="50"></div>'
+      + '<div></div>'
+      + '</div>'
+      + '<div class="mact"><button class="mbtn gold" onclick="saveConfigSimulador()">💾 Guardar configuración</button><button class="mbtn ghost" onclick="closeModal()">Cancelar</button></div>';
+    document.getElementById('mbox').innerHTML = h;
+    document.getElementById('modal').classList.add('open');
+  } catch (e) { showToast('❌ ' + e.message); }
+}
+
+async function saveConfigSimulador() {
+  var u = {
+    id: 1,
+    menor_0_4_pct: parseInt(document.getElementById('cfgM04').value, 10) || 0,
+    menor_5_11_pct: parseInt(document.getElementById('cfgM511').value, 10) || 0,
+    menor_12_17_pct: parseInt(document.getElementById('cfgM1217').value, 10) || 0,
+    grupo_4_5_pct: parseInt(document.getElementById('cfgG45').value, 10) || 0,
+    grupo_6_7_pct: parseInt(document.getElementById('cfgG67').value, 10) || 0,
+    grupo_8_mas_pct: parseInt(document.getElementById('cfgG8m').value, 10) || 0
+  };
+  var btn = document.querySelector('#modal .mbtn.gold'); if (btn) btn.disabled = true;
+  try {
+    // Upsert: insert if not exists, update if exists
+    var r = await sbClient.from('configuracion_simulador').upsert(u, { onConflict: 'id' });
+    if (r.error) throw r.error;
+    _simCfg = u;
+    // Update UI labels
+    var m1p = document.getElementById('simM1Pct'); if (m1p) m1p.textContent = u.menor_0_4_pct;
+    var m2p = document.getElementById('simM2Pct'); if (m2p) m2p.textContent = u.menor_5_11_pct;
+    var m3p = document.getElementById('simM3Pct'); if (m3p) m3p.textContent = u.menor_12_17_pct;
+    showToast('✅ Configuración del simulador actualizada');
+    closeModal();
+    simCalcular();
+  } catch (e) { showToast('❌ ' + e.message); } finally { if (btn) btn.disabled = false; }
 }
 
 
