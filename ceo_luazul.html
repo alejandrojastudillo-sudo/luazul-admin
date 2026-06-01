@@ -867,7 +867,7 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
   </main>
 </div>
 
-<div id="modal" onclick="closeModalOut(event)"><div class="mbox" id="mbox"></div></div>
+<div id="modal" onclick="closeModalOut(event)"><div class="mbox" id="mbox"><div class="mhead"><div><h2></h2><p></p></div></div><div class="mbody"></div><div class="mact"></div></div></div>
 <div id="toast"></div>
 
 <script>
@@ -2595,15 +2595,17 @@ function _approveSinglePago(pago){
         throw new Error('No se encontró pago pendiente para cuota ' + cuotaKey + ' del cliente ' + _clientId);
       }
       var _pagoId = String(qRes.data[0].id);
-      // Actualizar usando el ID real de BD
-      return sbClient.from('pagos').update({
-        estado: 'aprobado', aprobado_por: _ceoUidNow || 'CEO'
-      }).eq('id', _pagoId).select();
+      // Actualizar usando RPC (bypass RLS con SECURITY DEFINER)
+      return sbClient.rpc('update_pago_estado', {
+        p_pago_id: _pagoId,
+        p_estado: 'aprobado',
+        p_aprobado_por: _ceoUidNow || 'CEO'
+      });
     })
     .then(function(res) {
       if(res.error) throw res.error;
       if(!res.data || res.data.length === 0){
-        throw new Error('No se pudo actualizar el pago en la BD (caché desactualizada).');
+        throw new Error('No se pudo actualizar el pago en la BD. Verificá que ejecutaste el SQL fix_rls_aprobar_pago.sql en Supabase.');
       }
       var _pagoId = String(res.data[0].id);
       var idx = (_cachePagos||[]).findIndex(function(x){ return String(x.id) === _pagoId; });
@@ -2624,7 +2626,12 @@ function _approveSinglePago(pago){
       } else {
         nuevoEstado = newPaid >= cuotasTotal ? 'completo' : c.estado;
       }
-      return sbClient.from('clientes').update({ cuotas_pagadas: newPaid, estado: nuevoEstado }).eq('id', _clientId).then(function() {
+      // Actualizar cliente via RPC (bypass RLS)
+      return sbClient.rpc('update_cliente_cuotas', {
+        p_cliente_id: _clientId,
+        p_cuotas_pagadas: newPaid,
+        p_estado: nuevoEstado
+      }).then(function() {
         c.cuotas_pagadas = newPaid; c.estado = nuevoEstado;
       });
     }
@@ -2641,14 +2648,14 @@ function _approveSinglePago(pago){
   }).then(function() {
     // FIX H2 + CEO-C01 + CEO-C07: Error handling, conditional firmado, autorizado_ceo when all cuotas paid
     // FIX CONT-C-01: Incluir 'pendiente' — cliente crea contratos con estado 'pendiente'
-    return sbClient.from('contratos').update({ estado: 'firmado', fecha_firma: new Date().toISOString() }).eq('cliente_id', _clientId).in('estado', ['borrador', 'revisado', 'pendiente']).then(function(cRes){
+    return sbClient.rpc('firmar_contrato_cliente', { p_cliente_id: _clientId, p_estado: 'firmado' }).then(function(cRes){
       if(cRes && cRes.error) console.warn('[aprobarTodos][contrato] cliente ' + _clientId + ':', cRes.error.message);
       if (cRes && cRes.data && cRes.data.length > 0) {
         var cCheck = (_cacheClientes||[]).find(function(x){ return String(x.id) === _clientId; });
         var paid = Number(cCheck ? (cCheck.cuotas_pagadas || 0) : 0);
         var total = Number(cCheck ? (cCheck.cuotas_total || 10) : 10);
         if (paid >= total) {
-          sbClient.from('contratos').update({ estado: 'autorizado_ceo' }).eq('cliente_id', _clientId).then(function(){});
+          sbClient.rpc('firmar_contrato_cliente', { p_cliente_id: _clientId, p_estado: 'autorizado_ceo' }).then(function(){});
         }
       }
     });
@@ -5276,17 +5283,18 @@ function aprobarPago(clientId, cuotaKey, dbKey){
       var _pagoId = String(realPago.id);
       console.log('[aprobarPago] Pago verificado desde BD: id=' + _pagoId + ' cuota=' + cuotaKey);
 
-      // PASO 1 — Aprobar el pago en tabla `pagos` usando el ID real de BD
-      return sbClient.from('pagos')
-        .update({ estado: 'aprobado', aprobado_por: _ceoUidNow || 'CEO' })
-        .eq('id', _pagoId)
-        .select();
+      // PASO 1 — Aprobar el pago via RPC (bypass RLS con SECURITY DEFINER)
+      return sbClient.rpc('update_pago_estado', {
+        p_pago_id: _pagoId,
+        p_estado: 'aprobado',
+        p_aprobado_por: _ceoUidNow || 'CEO'
+      });
     })
     .then(function(res){
       if(!res) return; // Si ya se lanzó error en el paso anterior
       if(res.error) throw res.error;
       if(!res.data || res.data.length === 0){
-        throw new Error('No se pudo actualizar el pago en la BD. Verificá los permisos RLS.');
+        throw new Error('No se pudo actualizar el pago en la BD. Verificá que ejecutaste el SQL fix_rls_aprobar_pago.sql en Supabase.');
       }
       // Actualizar caché local usando el ID real
       var _pagoId = String(res.data[0].id);
@@ -5313,10 +5321,12 @@ function aprobarPago(clientId, cuotaKey, dbKey){
         } else {
           nuevoEstado = newPaid >= cuotasTotal ? 'completo' : c.estado;
         }
-        return sbClient.from('clientes')
-          .update({ cuotas_pagadas: newPaid, estado: nuevoEstado })
-          .eq('id', _clientId)
-          .then(function(){
+        // PASO 2 — Actualizar cliente via RPC (bypass RLS)
+          return sbClient.rpc('update_cliente_cuotas', {
+            p_cliente_id: _clientId,
+            p_cuotas_pagadas: newPaid,
+            p_estado: nuevoEstado
+          }).then(function(){
             c.cuotas_pagadas = newPaid;
             c.estado = nuevoEstado;
           });
@@ -5343,12 +5353,11 @@ function aprobarPago(clientId, cuotaKey, dbKey){
       }
     })
     .then(function(){
-      // PASO 4 — Firmar contrato borrador/revisado (Checkpoint v3.1 §3)
-      // Solo pasa a 'firmado' si existe un contrato pendiente para este cliente.
-      return sbClient.from('contratos')
-        .update({ estado: 'firmado', fecha_firma: new Date().toISOString() })
-        .eq('cliente_id', _clientId)
-        .in('estado', ['borrador', 'revisado', 'pendiente']);
+      // PASO 4 — Firmar contrato via RPC (bypass RLS)
+      return sbClient.rpc('firmar_contrato_cliente', {
+        p_cliente_id: _clientId,
+        p_estado: 'firmado'
+      });
     })
     .then(function(cRes){
       // FIX CEO-C01: Solo mostrar "Contrato firmado" si efectivamente se actualizó alguna fila
@@ -5360,7 +5369,7 @@ function aprobarPago(clientId, cuotaKey, dbKey){
         var paid = Number(cCheck ? (cCheck.cuotas_pagadas || 0) : 0);
         var total = Number(cCheck ? (cCheck.cuotas_total || 10) : 10);
         if (paid >= total) {
-          sbClient.from('contratos').update({ estado: 'autorizado_ceo' }).eq('cliente_id', _clientId).then(function(){});
+          sbClient.rpc('firmar_contrato_cliente', { p_cliente_id: _clientId, p_estado: 'autorizado_ceo' }).then(function(){});
         }
       }
       // F6-9: Refrescar comisiones si la tab está visible
@@ -5516,11 +5525,12 @@ function confirmarRechazo(){
       var _pagoId = String(qRes.data[0].id);
       console.log('[rechazarPago] Pago verificado desde BD: id=' + _pagoId);
 
-      // PASO 1 — Rechazar el pago usando el ID real de BD
-      return sbClient.from('pagos')
-        .update({ estado: 'rechazado', aprobado_por: aprobadoPor })
-        .eq('id', _pagoId)
-        .select();
+      // PASO 1 — Rechazar el pago via RPC (bypass RLS con SECURITY DEFINER)
+      return sbClient.rpc('update_pago_estado', {
+        p_pago_id: _pagoId,
+        p_estado: 'rechazado',
+        p_aprobado_por: aprobadoPor
+      });
     })
     .then(function(res){
       if(!res) return;
@@ -5535,12 +5545,11 @@ function confirmarRechazo(){
         _cachePagos[cacheIdx].estado = 'rechazado';
         _cachePagos[cacheIdx].aprobado_por = aprobadoPor;
       }
-      // PASO 2 — Si es cuota 1, también rechazar el contrato asociado
+      // PASO 2 — Si es cuota 1, también rechazar el contrato via RPC (bypass RLS)
       if(esCuota1){
-        return sbClient.from('contratos')
-          .update({ estado: 'rechazado' })
-          .eq('cliente_id', _clientId)
-          .in('estado', ['pendiente', 'borrador', 'revisado']);
+        return sbClient.rpc('rechazar_contrato_cliente', {
+          p_cliente_id: _clientId
+        });
       }
     })
     .then(function(ctRes){
@@ -5688,9 +5697,10 @@ function renderContratosPendientes(){
 // Firma manual de contrato desde panel contratos (sin pago asociado)
 function firmarContratoCEO(contratoId, clienteId){
   if(!confirm('\u00bFFirmar este contrato? El cliente recibirá una notificación.')) return;
-  sbClient.from('contratos')
-    .update({ estado: 'firmado', fecha_firma: new Date().toISOString() })
-    .eq('id', String(contratoId))
+  sbClient.rpc('update_contrato_estado', {
+    p_contrato_id: String(contratoId),
+    p_estado: 'firmado'
+  })
     .then(function(res){
       if(res.error) throw res.error;
       showToast('\u2705 Contrato firmado correctamente');
@@ -5702,7 +5712,7 @@ function firmarContratoCEO(contratoId, clienteId){
         var paid = Number(cl.cuotas_pagadas || 0);
         var total = Number(cl.cuotas_total || 10);
         if (paid >= total) {
-          sbClient.from('contratos').update({ estado: 'autorizado_ceo' }).eq('cliente_id', String(clienteId)).then(function(){});
+          sbClient.rpc('firmar_contrato_cliente', { p_cliente_id: String(clienteId), p_estado: 'autorizado_ceo' }).then(function(){});
         }
         // Notificar vendedor asignado
         sbClient.from('notificaciones').insert({
@@ -5728,10 +5738,11 @@ function firmarContratoCEO(contratoId, clienteId){
 }
 
 function marcarRevisadoCEO(contratoId){
-  sbClient.from('contratos')
-    .update({ estado: 'revisado' })
-    .eq('id', String(contratoId))
-    .eq('estado', 'borrador')
+  sbClient.rpc('update_contrato_estado', {
+    p_contrato_id: String(contratoId),
+    p_estado: 'revisado',
+    p_estado_filtro: 'borrador'
+  })
     .then(function(res){
       if(res.error) throw res.error;
       showToast('\uD83D\uDD0D Contrato marcado como revisado');
