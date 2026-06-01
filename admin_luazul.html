@@ -87,7 +87,8 @@ function mapClientFromSB(c) {
     monto_cuota: parseFloat(c.monto_cuota) || 0, cuotas_total: parseInt(c.cuotas_total) || 10,
     cuotas_pagadas: parseInt(c.cuotas_pagadas) || 0, total_usd: parseFloat(c.total_usd) || 0,
     fechaAlta: c.fecha_alta ? c.fecha_alta.slice(0, 10) : '', notas: c.notas || '',
-    mora_json: c.mora_json || '[]'
+    mora_json: c.mora_json || '[]',
+    codigo_referido: c.codigo_referido || ''
   };
 }
 
@@ -820,8 +821,8 @@ body::after {
             <input id="refTel" type="text" placeholder="+54 9 297 555-1234" class="edit-input">
           </div>
           <div>
-            <label style="font-size:.72rem;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.8px;display:block;margin-bottom:6px;">Referido por (email cliente)</label>
-            <input id="refPor" type="email" placeholder="cliente@ejemplo.com" class="edit-input">
+            <label style="font-size:.72rem;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.8px;display:block;margin-bottom:6px;">Referido por (código o email)</label>
+            <input id="refPor" type="text" placeholder="Ej: LZ-4C55C7 o cliente@ejemplo.com" class="edit-input">
           </div>
         </div>
         <div style="display:flex;gap:10px;">
@@ -1900,10 +1901,11 @@ function renderRefList() {
   el.innerHTML='<div style="padding:20px;text-align:center;color:var(--muted);">⏳ Cargando...</div>';
   getAllReferidos().then(function(refs){
     if (!refs.length) { el.innerHTML='<div style="padding:20px;text-align:center;color:var(--muted);">No hay referidos cargados aún.</div>'; return; }
-    var COL={ pendiente:'#f59e0b', convertido:'#22c55e', baja:'#ef4444' };
+    var COL={ pendiente:'#f59e0b', confirmado:'#22c55e', activo:'#22c55e', convertido:'#22c55e', baja:'#ef4444' };
+    var ICONS={ pendiente:'⏳', confirmado:'✅', activo:'✅', convertido:'✅', baja:'❌' };
     var html='';
     for (var i=0;i<refs.length;i++) {
-      var r=refs[i]; var col=COL[r.estado]||'#60a5fa'; var ref=r.cliente?r.cliente.nombre:'—';
+      var r=refs[i]; var col=COL[r.estado]||'#60a5fa'; var icon=ICONS[r.estado]||'●'; var ref=r.cliente?r.cliente.nombre:'—';
       html+='<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:10px;flex-wrap:wrap;gap:8px;">'+
         '<div>'+
         '<div style="font-weight:600;font-size:.9rem;">'+LZ.esc(r.referido_nombre)+'</div>'+
@@ -1911,7 +1913,7 @@ function renderRefList() {
         (r.notas?'<div style="font-size:.72rem;color:rgba(180,200,240,.5);margin-top:2px;">📝 '+r.notas+'</div>':'')+
         '</div>'+
         '<div style="display:flex;align-items:center;gap:8px;">'+
-        '<span style="font-size:.74rem;font-weight:700;padding:3px 10px;border-radius:20px;background:rgba(0,0,0,.2);color:'+col+';border:1px solid '+col+'44;">'+(r.estado||'pendiente')+'</span>'+
+        '<span style="font-size:.74rem;font-weight:700;padding:3px 10px;border-radius:20px;background:rgba(0,0,0,.2);color:'+col+';border:1px solid '+col+'44;">'+icon+' '+(r.estado||'pendiente')+'</span>'+
         '<span style="font-size:.72rem;color:var(--muted);">'+(r.created_at?r.created_at.slice(0,10):'')+'</span>'+
         '<button onclick="eliminarReferido(\''+r.id+'\')" style="padding:3px 10px;border-radius:8px;background:rgba(239,68,68,.1);color:#fca5a5;border:1px solid rgba(239,68,68,.2);font-size:.72rem;cursor:pointer;font-family:inherit;">✕</button>'+
         '</div></div>';
@@ -1938,7 +1940,14 @@ function guardarReferido() {
   // FIX 9: Anti-doble-clic
   var btn = document.querySelector('[onclick="guardarReferido()"]');
   if (btn) { btn.disabled=true; btn.textContent='⏳ Guardando...'; }
-  var referidor = por ? allClients.find(function(c){ return (c.email||'').toLowerCase()===por; }) : null;
+  // Buscar referidor por email o codigo_referido
+  var referidor = null;
+  if (por) {
+    referidor = allClients.find(function(c) {
+      return (c.codigo_referido && c.codigo_referido.toLowerCase() === por) ||
+             (c.email && c.email.toLowerCase() === por);
+    });
+  }
   sbClient.from('referidos').insert({ vendedor_id:parseInt(_currentProfile.id,10), cliente_referidor_id:referidor?parseInt(referidor.id,10):null, referido_nombre:nombre, referido_email:email||null, referido_tel:tel||null, estado:'pendiente' })
     .then(function(r){
       if (r.error) throw r.error;
@@ -1959,7 +1968,8 @@ function limpiarFormReferido() {
 function abrirCargaReferido(clientId) {
   var c = allClients.find(function(x){ return x.id==clientId; });
   if (!c) return;
-  var codigoActual = 'LUA-'+c.nombre.split(' ')[0].toUpperCase();
+  // Usar codigo_referido real de BD, o generar uno como fallback
+  var codigoActual = c.codigo_referido || ('LUA-'+c.nombre.split(' ')[0].toUpperCase());
   document.getElementById('modalBox').innerHTML=
     '<div class="modal-head"><div><h2>🎁 Cargar Referido</h2><p>'+LZ.esc(c.nombre)+' · '+c.email+'</p></div>'+
     '<button class="modal-close" onclick="closeModal()">✕</button></div>'+
@@ -2421,7 +2431,7 @@ function openAddModal() {
     '<!-- Fecha de viaje eliminada: la elige el cliente al 80% -->'+
     '<input type="hidden" id="nFecha" value="">'+
     '<div class="m-item" style="grid-column:span 2;"><div class="m-label">🎁 Código de referido</div>'+
-    '<input class="edit-input" id="nRefCodigo" placeholder="Ej: LUA-VALENTINA" oninput="buscarReferidor(this.value)" />'+
+    '<input class="edit-input" id="nRefCodigo" placeholder="Ej: LZ-4C55C7 o email del referidor" oninput="buscarReferidor(this.value)" />'+
     '<div id="nRefInfo" style="margin-top:6px;font-size:.78rem;color:#fbbf24;"></div></div>'+
     '</div>'+
     '<div class="modal-actions">'+
@@ -2603,18 +2613,23 @@ function calcPrecioDinamico() {
   if (cf) cf.value = cuotas;
 }
 
+// Variable global para guardar el ID del referidor matcheado
+var _matchedReferidorId = null;
+
 async function buscarReferidor(codigo) {
   var info = document.getElementById('nRefInfo');
+  _matchedReferidorId = null; // reset
   if (!info || !codigo || codigo.length < 4) { if (info) info.innerHTML = ''; return; }
   var term = codigo.trim().toUpperCase();
   // Primero buscar en BD (más actual)
   const { data, error } = await sbClient
     .from('clientes')
-    .select('nombre, email, codigo_referido')
+    .select('id, nombre, email, codigo_referido')
     .or(`codigo_referido.ilike.${term},email.ilike.${term}`)
     .limit(1);
   if (!error && data && data.length > 0) {
     var match = data[0];
+    _matchedReferidorId = match.id;
     info.innerHTML = '✅ Referidor encontrado: <strong>' + LZ.esc(match.nombre) + '</strong> (' + LZ.esc(match.email) + ')';
     return;
   }
@@ -2624,6 +2639,7 @@ async function buscarReferidor(codigo) {
            (c.email && c.email.toUpperCase() === term);
   });
   if (matchLocal) {
+    _matchedReferidorId = matchLocal.id;
     info.innerHTML = '✅ Referidor encontrado: <strong>' + LZ.esc(matchLocal.nombre) + '</strong> (' + LZ.esc(matchLocal.email) + ')';
   } else {
     info.innerHTML = '⚠️ No se encontró cliente con ese código o email';
@@ -2808,16 +2824,24 @@ async function addClient() {
     // No hacemos allClients.push porque loadClients() ya recargó la lista completa
     notificarAccion('nuevo_cliente', 'Nuevo cliente creado: ' + nuevoCliente.nombre, nuevoCliente.id, null);
 
+    // ── Registrar referido si se ingresó código ──
+    // El referidor se resolvió en buscarReferidor() y se guardó en _matchedReferidorId
+    // Si no hubo match en tiempo real, buscar por código o email directamente en BD
     if (codigoReferido && nuevoCliente.id) {
-      var referidor = allClients.find(function(c) {
-        var codGen = 'LUA-' + (c.nombre ? c.nombre.split(' ')[0].toUpperCase() : '');
-        return (c.codigo_referido && c.codigo_referido.toUpperCase() === codigoReferido.toUpperCase()) ||
-               (c.email && c.email.toUpperCase() === codigoReferido.toUpperCase()) ||
-               codGen === codigoReferido.toUpperCase();
-      });
-      if (referidor) {
-        sbClient.from('referidos').insert({
-          cliente_referidor_id: referidor.id,
+      var referidorId = _matchedReferidorId || null;
+      if (!referidorId) {
+        // Búsqueda directa en BD como fallback
+        var termRef = codigoReferido.trim().toUpperCase();
+        var { data: refData } = await sbClient
+          .from('clientes')
+          .select('id')
+          .or(`codigo_referido.ilike.${termRef},email.ilike.${termRef}`)
+          .limit(1);
+        if (refData && refData.length > 0) referidorId = refData[0].id;
+      }
+      if (referidorId) {
+        await sbClient.from('referidos').insert({
+          cliente_referidor_id: referidorId,
           cliente_referido_id: nuevoCliente.id,
           referido_nombre: nuevoCliente.nombre,
           referido_email: nuevoCliente.email,
@@ -2825,8 +2849,16 @@ async function addClient() {
           estado: 'pendiente',
           vendedor_id: sellerId,
           created_at: new Date().toISOString()
+        }).then(function(r) {
+          if (!r.error) {
+            notificarAccion('referido', 'Nuevo referido por código: ' + nuevoCliente.nombre, referidorId, null);
+            showToast('🎁 Referido vinculado correctamente');
+          }
         }).catch(function(e) { console.warn('Error al registrar referido:', e); });
+      } else {
+        showToast('⚠️ No se encontró el referidor con código ' + codigoReferido);
       }
+      _matchedReferidorId = null; // limpiar
     }
 
     closeModal();
