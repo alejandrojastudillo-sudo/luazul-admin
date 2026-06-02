@@ -10,7 +10,7 @@
   <!-- manifest solo funciona en HTTP/HTTPS, no file:// -->
   <!-- <link rel="manifest" href="manifest_ceo.json"> -->
   <meta name="theme-color" content="#0B3D91">
-<title>Luazul Smart Travel · CEO v6.4</title>
+<title>Luazul Smart Travel · CEO v6.5</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Mulish:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js?v=5.0"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js?v=5.0"></script>
@@ -55,13 +55,13 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
 .tbbtn{padding:7px 14px;border-radius:8px;font-size:.78rem;font-weight:700;font-family:'Mulish',sans-serif;cursor:pointer;border:1px solid var(--border2);background:var(--card);color:var(--muted);text-decoration:none;display:inline-flex;align-items:center;gap:5px;transition:all .2s;}
 .tbbtn:hover{color:var(--text);border-color:var(--purple);}
 .tbbtn.danger:hover{background:var(--red-bg);color:#fca5a5;border-color:var(--red-bd);}
-.main{padding:24px 24px 60px;max-width:1600px;margin:0 auto;}
+.main{padding:24px 24px 60px;max-width:1600px;margin:0 auto;position:relative;}
 .tabs{display:flex;gap:4px;margin-bottom:24px;border-bottom:1px solid var(--border);flex-wrap:wrap;}
 .tab{padding:10px 18px;font-size:.82rem;font-weight:700;cursor:pointer;border-radius:10px 10px 0 0;color:var(--muted);border:1px solid transparent;border-bottom:none;position:relative;bottom:-1px;white-space:nowrap;transition:all .15s;}
 .tab:hover{color:var(--text);}
 .tab.active{background:var(--surface);color:var(--purple);border-color:var(--border);}
-.tabpg{display:none;animation:fi .3s ease;}
-.tabpg.active{display:block;}
+.tabpg{display:none;position:absolute;left:-9999px;pointer-events:none;}
+.tabpg.active{display:block;position:relative;left:auto;pointer-events:auto;animation:fi .3s ease;}
 @keyframes fi{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
 @keyframes pulse-badge{0%,100%{transform:scale(1);opacity:1;}50%{transform:scale(1.25);opacity:.85;}}
 
@@ -924,7 +924,7 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
 <div id="toast"></div>
 
 <script>
-console.log('%c✅ CEO LuAzul v6.4', 'background:#7c3aed;color:white;font-weight:bold;padding:4px 8px;border-radius:4px;');
+console.log('%c✅ CEO LuAzul v6.5 — position:absolute fix', 'background:#7c3aed;color:white;font-weight:bold;padding:4px 8px;border-radius:4px;');
 console.log('%c📅 Desplegado: ' + new Date().toISOString(), 'color:#a78bfa;');
 // ══════════════════════════════════════════════════════
 //  LUAZUL CEO — CAPA DE DATOS: SUPABASE (migración v3)
@@ -1875,8 +1875,8 @@ function showTab(id){
   if(id==='cuentas_pago')     renderCuentasPago();
   if(id==='premios_referidos') { showRefSubTab('tours_catalogo'); }
   if(id==='auditoria')         renderAuditoria();
-  // Auto-scroll: volver al tope para que el contenido de la pestaña sea visible
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+  // Auto-scroll: volver al tope de la página
+  window.scrollTo(0, 0);
 }
 
 // ── POPULATE FILTERS ─────────────────────────────────
