@@ -1815,7 +1815,7 @@ function confirmOfferTour(tourId, precio, comisionPct) {
   );
   if (!ok) return;
   sbClient.rpc('asignar_tour_incluido', {
-    p_cliente_id: clientId,
+    p_cliente_id: parseInt(clientId, 10),
     p_tour_id: tourId,
     p_cantidad_personas: adultos
   }).then(function(res) {
@@ -1826,7 +1826,7 @@ function confirmOfferTour(tourId, precio, comisionPct) {
       precio_pagado: total,
       comision_usd: comision,
       estado: 'pendiente_pago'
-    }).eq('cliente_id', clientId).eq('tour_id', tourId);
+    }).eq('cliente_id', parseInt(clientId, 10)).eq('tour_id', tourId);
   }).then(function() {
     showToast('✅ Tour VIP ofrecido a ' + c.nombre + '. Tu comisión: USD ' + comision.toFixed(0));
     closeModal();
