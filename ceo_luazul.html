@@ -879,7 +879,7 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
     <div class="tabpg" id="tabpg-premios_referidos">
       <!-- Debug: versión visible para verificar que el archivo está actualizado -->
       <div id="premiosDebugBanner" style="background:rgba(34,197,94,.15);border:1px solid rgba(34,197,94,.3);border-radius:10px;padding:8px 16px;margin-bottom:12px;font-size:.72rem;color:#22c55e;display:flex;align-items:center;gap:8px;">
-        ✅ Sección Referidos & Tours v6.1 — Tours como default + CRUD por RPC + logging
+        ✅ Sección Referidos & Tours v6.2 — showRefSubTab forzado + verify DOM
       </div>
       <!-- Sub-tabs internos -->
       <div style="display:flex;gap:6px;margin-bottom:20px;border-bottom:1px solid var(--border);padding-bottom:0;">
@@ -928,7 +928,7 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
 <div id="toast"></div>
 
 <script>
-console.log('%c✅ CEO LuAzul v6.1 — Tours default + CRUD RPCs + debug logging', 'background:#7c3aed;color:white;font-weight:bold;padding:4px 8px;border-radius:4px;');
+console.log('%c✅ CEO LuAzul v6.2 — showRefSubTab forced + DOM verify', 'background:#7c3aed;color:white;font-weight:bold;padding:4px 8px;border-radius:4px;');
 console.log('%c📅 Desplegado: ' + new Date().toISOString(), 'color:#a78bfa;');
 // ══════════════════════════════════════════════════════
 //  LUAZUL CEO — CAPA DE DATOS: SUPABASE (migración v3)
@@ -1877,7 +1877,7 @@ function showTab(id){
   if(id==='simulador')        { simLoadDestinos(); renderCatalogo(); }
   if(id==='tickets')          cargarTickets();
   if(id==='cuentas_pago')     renderCuentasPago();
-  if(id==='premios_referidos') { console.log('[showTab] Renderizando premios_referidos...'); renderPremiosReferidos(); renderToursCatalogo(); renderToursGanados(); }
+  if(id==='premios_referidos') { console.log('[showTab] Renderizando premios_referidos...'); showRefSubTab('tours_catalogo'); }
   if(id==='auditoria')         renderAuditoria();
 }
 
@@ -8270,11 +8270,17 @@ function renderAuditoria() {
 // ══════════════════════════════════════════════════════
 
 function showRefSubTab(tabId) {
+  console.log('[showRefSubTab] Cambiando a:', tabId);
   var tabs = ['referidos_lista', 'tours_catalogo', 'tours_asignados'];
   tabs.forEach(function(t) {
     var sub = document.getElementById('refsub-' + t);
     var btn = document.getElementById('subtab-' + t);
-    if (sub) sub.style.display = (t === tabId) ? 'block' : 'none';
+    if (sub) {
+      sub.style.display = (t === tabId) ? 'block' : 'none';
+      console.log('[showRefSubTab] refsub-' + t + ' display:', sub.style.display);
+    } else {
+      console.warn('[showRefSubTab] No encontrado: refsub-' + t);
+    }
     if (btn) {
       btn.style.color = (t === tabId) ? 'var(--gold)' : 'var(--muted)';
       btn.style.background = (t === tabId) ? 'var(--surface)' : 'transparent';
@@ -8282,8 +8288,16 @@ function showRefSubTab(tabId) {
       btn.style.marginBottom = (t === tabId) ? '-1px' : '0';
     }
   });
+  if (tabId === 'referidos_lista') renderPremiosReferidos();
   if (tabId === 'tours_catalogo') renderToursCatalogo();
   if (tabId === 'tours_asignados') renderToursGanados();
+  // DOM verify
+  setTimeout(function() {
+    var activeSub = document.getElementById('refsub-' + tabId);
+    if (activeSub) {
+      console.log('[showRefSubTab] VERIFY — refsub-' + tabId + ' visible:', activeSub.style.display !== 'none', '| offsetHeight:', activeSub.offsetHeight, '| children:', activeSub.children.length);
+    }
+  }, 2000);
 }
 
 // ── Tours Catálogo CRUD ──────────────────────────────────
@@ -8327,6 +8341,7 @@ function renderToursCatalogo() {
       }
       h += '</div>';
       el.innerHTML = h;
+      console.log('[renderToursCatalogo] innerHTML set — el.offsetHeight:', el.offsetHeight, '| el.children.length:', el.children.length, '| parent display:', el.parentElement ? el.parentElement.style.display : 'no parent');
     }).catch(function(e) {
       console.error('[renderToursCatalogo] Error:', e);
       var el = document.getElementById('toursCatalogoBody');
