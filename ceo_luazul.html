@@ -8735,12 +8735,20 @@ async function enviarComision(tgId, vendedorNombre, monto) {
 async function enviarTodasComisiones(vendedorId) {
   if (!confirm('¿Marcar TODAS las comisiones confirmadas de este vendedor como ENVIADAS?\n\nEsto indica que ya transferiste todas las comisiones.')) return;
   try {
-    var { error } = await sbClient.from('tours_ganados')
+    // Si vendedorId es 'sin-vendedor', filtrar por IS NULL
+    var query = sbClient.from('tours_ganados')
       .update({ comision_enviada: true, updated_at: new Date().toISOString() })
-      .eq('vendedor_id', vendedorId)
       .eq('origen', 'vip')
       .in('estado', ['aprobado', 'completado'])
       .is('comision_enviada', false);
+
+    if (vendedorId === 'sin-vendedor' || vendedorId === 'null' || !vendedorId) {
+      query = query.is('vendedor_id', null);
+    } else {
+      query = query.eq('vendedor_id', vendedorId);
+    }
+
+    var { error } = await query;
     if (error) throw error;
     showToast('📤 Todas las comisiones de este vendedor marcadas como enviadas');
     renderComisionesTours();
