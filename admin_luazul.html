@@ -755,6 +755,7 @@ body::after {
         <div class="ftab" data-f="primeros3"         onclick="showSection('clientes');setFilter('primeros3',this)" title="Clientes en sus primeras 3 cuotas">🎯 Seguimiento</div>
         <div class="ftab" data-f="referidos"         onclick="activarSeccion('referidos')" style="color:#fbbf24;">🎁 Referidos</div>
         <div class="ftab" data-f="miscomisiones"     onclick="activarSeccion('miscomisiones')" style="color:#4ade80;">💰 Comisiones</div>
+        <div class="ftab" data-f="toursvip"           onclick="activarSeccion('toursvip')" style="color:#06b6d4;">🗺️ Tours VIP</div>
         <div class="ftab" data-f="legajo"            onclick="activarSeccion('legajo')" style="color:#a78bfa;">🪪 Mi Legajo</div>
         <div class="ftab" data-f="tickets"           onclick="activarSeccion('tickets')" style="color:#fbbf24;">🎫 Tickets</div>
         <div class="ftab" data-f="comunicaciones"    onclick="activarSeccion('comunicaciones')" style="color:#38bdf8;">📩 Comunicaciones</div>
@@ -838,6 +839,9 @@ body::after {
 
     <!-- ── SECCIÓN MIS COMISIONES ───────────────────────────────────────── -->
     <div id="misComisionesSection" class="section-container"></div>
+
+    <!-- ── SECCIÓN TOURS VIP ─────────────────────────────────────────── -->
+    <div id="toursVipSection" class="section-container"></div>
 
     <!-- ── SECCIÓN MI LEGAJO ────────────────────────────────────────────── -->
     <div id="legajoSection" class="section-container"></div>
@@ -1497,12 +1501,13 @@ function showSection(name) {
     legajoSection:  document.getElementById('legajoSection'),
     ticketsSection: document.getElementById('ticketsSection'),
     comunicacionesSection: document.getElementById('comunicacionesSection'),
-    presupuestosSection: document.getElementById('presupuestosSection')
+    presupuestosSection: document.getElementById('presupuestosSection'),
+    toursVipSection: document.getElementById('toursVipSection')
   };
-  var isSpecial = (name==='referidos'||name==='miscomisiones'||name==='legajo'||name==='tickets'||name==='comunicaciones'||name==='presupuestos');
+  var isSpecial = (name==='referidos'||name==='miscomisiones'||name==='legajo'||name==='tickets'||name==='comunicaciones'||name==='presupuestos'||name==='toursvip');
   var mainEls = [elements.statsRow, elements.comisionPanel, elements.priorityBanner, elements.filterBar, elements.legend, elements.tableWrap];
   mainEls.forEach(function(el){ if(el) el.style.display = isSpecial?'none':''; });
-  [elements.refSection, elements.misComisionesSection, elements.legajoSection, elements.ticketsSection, elements.comunicacionesSection, elements.presupuestosSection].forEach(function(el){ if(el){ el.style.display='none'; } });
+  [elements.refSection, elements.misComisionesSection, elements.legajoSection, elements.ticketsSection, elements.comunicacionesSection, elements.presupuestosSection, elements.toursVipSection].forEach(function(el){ if(el){ el.style.display='none'; } });
 
   if (name==='referidos')    { if(elements.refSection) elements.refSection.style.display='block'; renderRefList(); }
   else if (name==='miscomisiones') { if(elements.misComisionesSection) elements.misComisionesSection.style.display='block'; renderMisComisionesAdmin(); }
@@ -1510,6 +1515,7 @@ function showSection(name) {
   else if (name==='tickets') { if(elements.ticketsSection) elements.ticketsSection.style.display='block'; cargarTicketsAsesor(); }
   else if (name==='comunicaciones') { if(elements.comunicacionesSection) elements.comunicacionesSection.style.display='block'; renderComunicaciones(); }
   else if (name==='presupuestos') { if(elements.presupuestosSection) elements.presupuestosSection.style.display='block'; cargarPresupuestos(); }
+  else if (name==='toursvip') { if(elements.toursVipSection) elements.toursVipSection.style.display='block'; renderToursVip(); }
   else {
     // Restaurar visibilidad tabla
     mainEls.forEach(function(el){ if(el) el.style.display=''; });
@@ -1579,6 +1585,9 @@ function openModal(clientId) {
     '</div>'+
     '<div style="font-size:.72rem;font-weight:700;text-transform:uppercase;color:var(--accent2);margin-bottom:8px;">📊 Línea de cuotas</div>'+
     '<div class="cuotas-timeline">'+timeline+'</div>'+
+    '<!-- 🏆 Tours del cliente -->'+
+    '<div style="font-size:.72rem;font-weight:700;text-transform:uppercase;color:var(--accent2);margin:16px 0 8px;">🏆 Tours</div>'+
+    '<div id="modalToursSection"><div style="text-align:center;padding:12px;color:var(--muted);font-size:.82rem;">Cargando...</div></div>'+
     '<!-- Los datos del cliente son solo de lectura. Para solicitar cambios, usar el botón de abajo. -->'+
     '<div style="margin-top:16px;padding:16px;background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.2);border-radius:12px;text-align:center;">'+
     '<div style="font-size:.72rem;font-weight:700;text-transform:uppercase;color:#fbbf24;margin-bottom:8px;">🔒 Datos inmutables</div>'+
@@ -1595,6 +1604,8 @@ function openModal(clientId) {
     '<button class="m-btn" style="background:rgba(251,146,60,.1);color:#fb923c;" onclick="verComprobantes(\''+c.id+'\')">📎 Ver pagos</button>'+
     '</div>'+
     '</div>';
+  // Cargar tours del cliente (solo lectura para vendedor)
+  loadModalTours(clientId);
   document.getElementById('modal').classList.add('open');
 }
 
@@ -1604,6 +1615,224 @@ function closeModal() {
   currentClient = null;
   var tl = document.querySelector('.cuotas-timeline');
   if (tl) tl.innerHTML = '';
+}
+
+// ── Tours del cliente en modal (solo lectura + ofrecer VIP) ──
+function loadModalTours(clientId) {
+  if (!sbClient || !clientId) return;
+  var el = document.getElementById('modalToursSection');
+  if (!el) return;
+  el.innerHTML = '<div style="text-align:center;padding:12px;color:var(--muted);font-size:.82rem;">Cargando tours...</div>';
+  sbClient.from('tours_ganados').select('*, tour:tours_catalogo(nombre, destino, icono, duracion, precio_usd, comision_pct)')
+    .eq('cliente_id', clientId).order('created_at', { ascending: false })
+    .then(function(res) {
+      if (res.error) throw res.error;
+      var tgs = res.data || [];
+      if (!tgs.length) {
+        el.innerHTML = '<div style="text-align:center;padding:14px;color:var(--muted);font-size:.82rem;background:rgba(255,255,255,.02);border:1px solid var(--border);border-radius:10px;">Sin tours asignados aún.</div>';
+        return;
+      }
+      var estados = {
+        'pendiente': { l: 'Pendiente', c: 'var(--gold)', bg: 'var(--gold-bg)', bd: 'var(--gold-bd)' },
+        'asignado': { l: 'Asignado', c: 'var(--purple)', bg: 'var(--purple-bg)', bd: 'var(--purple-bd)' },
+        'pendiente_pago': { l: 'Pend. Pago', c: 'var(--orange)', bg: 'var(--orange-bg)', bd: 'var(--orange-bd)' },
+        'pago_subido': { l: 'Pago Subido', c: '#60a5fa', bg: 'var(--blue-bg)', bd: 'var(--blue-bd)' },
+        'confirmado_ceo': { l: 'Confirmado', c: 'var(--green)', bg: 'var(--green-bg)', bd: 'var(--green-bd)' },
+        'completado': { l: 'Completado', c: '#34d399', bg: 'rgba(52,211,153,.1)', bd: 'rgba(52,211,153,.3)' },
+        'elegido': { l: 'Elegido', c: '#60a5fa', bg: 'var(--blue-bg)', bd: 'var(--blue-bd)' }
+      };
+      var h = '<div style="display:flex;flex-direction:column;gap:6px;">';
+      for (var i = 0; i < tgs.length; i++) {
+        var tg = tgs[i];
+        var tn = (tg.tour && tg.tour.nombre) ? tg.tour.nombre : '—';
+        var ti = (tg.tour && tg.tour.icono) ? tg.tour.icono : '🚙';
+        var td = (tg.tour && tg.tour.destino) ? tg.tour.destino : '';
+        var st = estados[tg.estado] || estados['pendiente'];
+        var fechaStr = tg.fecha_tour ? new Date(tg.fecha_tour + 'T00:00:00').toLocaleDateString('es-AR') : '';
+        var comStr = tg.comision_usd > 0 ? ' · <span style="color:var(--green);">+$' + parseFloat(tg.comision_usd).toFixed(0) + '</span>' : '';
+        h += '<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(255,255,255,.02);border:1px solid var(--border);border-radius:10px;">'
+          + '<div style="font-size:1.3rem;flex-shrink:0;">' + ti + '</div>'
+          + '<div style="flex:1;min-width:0;">'
+          + '<div style="font-weight:700;font-size:.82rem;">' + esc(tn) + '</div>'
+          + '<div style="font-size:.68rem;color:var(--muted);">' + esc(td) + (fechaStr ? ' · ' + fechaStr : '') + (tg.origen === 'paquete' ? ' · Incluido' : ' · VIP' + comStr) + '</div>'
+          + '</div>'
+          + '<span style="font-size:.68rem;font-weight:700;padding:3px 10px;border-radius:20px;background:' + st.bg + ';color:' + st.c + ';border:1px solid ' + st.bd + ';white-space:nowrap;">' + st.l + '</span>'
+          + '</div>';
+      }
+      h += '</div>';
+      el.innerHTML = h;
+    }).catch(function(e) {
+      el.innerHTML = '<div style="padding:14px;color:var(--red);font-size:.82rem;">Error: ' + esc(e.message || 'Desconocido') + '</div>';
+    });
+}
+
+// ── Tours VIP Section ──────────────────────────────────────────
+function renderToursVip() {
+  var el = document.getElementById('toursVipSection');
+  if (!el) return;
+  if (!sbClient || !_currentProfile) {
+    el.innerHTML = '<div style="padding:40px;text-align:center;color:var(--muted);">Sin datos</div>';
+    return;
+  }
+  el.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px;">'
+    + '<h2 style="font-size:1rem;font-weight:900;">🗺️ Tours VIP — Ofrecer a Clientes</h2>'
+    + '<div style="display:flex;gap:8px;">'
+    + '<button class="tb-btn" onclick="volverAClientes()">← Volver</button>'
+    + '<button class="tb-btn" onclick="renderToursVip()">🔄 Actualizar</button>'
+    + '</div></div>'
+    + '<div style="font-size:.78rem;color:var(--muted);margin-bottom:16px;">Tours en oferta del mes y disponibles. Seleccioná un tour y un cliente para ofrecerlo. El cliente no debe tener ya ese tour.</div>'
+    + '<div id="toursVipContent"><div style="text-align:center;padding:30px;color:var(--muted);">Cargando tours...</div></div>';
+  loadToursVipCatalogo();
+}
+
+function loadToursVipCatalogo() {
+  if (!sbClient) return;
+  sbClient.from('tours_catalogo').select('*').eq('activo', true).order('en_oferta', { ascending: false }).order('orden', { ascending: true })
+    .then(function(res) {
+      if (res.error) throw res.error;
+      var tours = res.data || [];
+      var el = document.getElementById('toursVipContent');
+      if (!el) return;
+      if (!tours.length) {
+        el.innerHTML = '<div style="text-align:center;padding:30px;color:var(--muted);">No hay tours disponibles en el catálogo.</div>';
+        return;
+      }
+      // Separar en oferta y regulares
+      var enOferta = tours.filter(function(t) { return t.en_oferta; });
+      var regulares = tours.filter(function(t) { return !t.en_oferta; });
+      var h = '';
+      // Tours en oferta
+      if (enOferta.length) {
+        h += '<div style="margin-bottom:20px;"><div style="font-size:.82rem;font-weight:800;color:var(--gold);margin-bottom:10px;display:flex;align-items:center;gap:6px;">🔥 Oferta del Mes</div>';
+        enOferta.forEach(function(t) { h += buildTourVipCard(t, true); });
+        h += '</div>';
+      }
+      // Tours regulares
+      if (regulares.length) {
+        h += '<div><div style="font-size:.82rem;font-weight:800;color:var(--muted);margin-bottom:10px;display:flex;align-items:center;gap:6px;">🗺️ Catálogo Completo</div>';
+        regulares.forEach(function(t) { h += buildTourVipCard(t, false); });
+        h += '</div>';
+      }
+      el.innerHTML = h;
+    }).catch(function(e) {
+      var el = document.getElementById('toursVipContent');
+      if (el) el.innerHTML = '<div style="padding:20px;color:var(--red);">Error: ' + esc(e.message || 'Desconocido') + '</div>';
+    });
+}
+
+function buildTourVipCard(t, isOferta) {
+  var comision = parseFloat(t.comision_pct) || 0;
+  var precio = parseFloat(t.precio_usd) || 0;
+  return '<div style="padding:14px 18px;background:' + (isOferta ? 'rgba(251,191,36,.06)' : 'rgba(255,255,255,.02)') + ';border:1px solid ' + (isOferta ? 'rgba(251,191,36,.2)' : 'var(--border)') + ';border-radius:12px;margin-bottom:8px;">'
+    + '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">'
+    + '<div style="font-size:1.5rem;">' + (t.icono || '🚙') + '</div>'
+    + '<div style="flex:1;min-width:150px;">'
+    + '<div style="font-weight:700;font-size:.88rem;">' + esc(t.nombre) + (isOferta ? ' <span style="font-size:.65rem;padding:2px 8px;border-radius:20px;background:rgba(251,191,36,.15);color:#fbbf24;border:1px solid rgba(251,191,36,.3);">OFERTA</span>' : '') + '</div>'
+    + '<div style="font-size:.72rem;color:var(--muted);">' + esc(t.destino) + ' · ' + esc(t.duracion || '') + ' · ' + esc(t.transporte || '') + '</div>'
+    + '</div>'
+    + '<div style="text-align:center;min-width:80px;">'
+    + '<div style="font-size:.62rem;color:var(--muted);">Precio</div>'
+    + '<div style="font-size:.95rem;font-weight:900;color:var(--cyan,#06b6d4);">USD ' + precio.toFixed(0) + '</div>'
+    + '<div style="font-size:.6rem;color:var(--muted);">por persona</div>'
+    + '</div>'
+    + '<div style="text-align:center;min-width:70px;">'
+    + '<div style="font-size:.62rem;color:var(--muted);">Comisión</div>'
+    + '<div style="font-size:.95rem;font-weight:900;color:var(--green);">' + comision + '%</div>'
+    + '<div style="font-size:.6rem;color:var(--muted);">para vos</div>'
+    + '</div>'
+    + '<button onclick="openOfferTourToClient(\'' + t.id + '\',\'' + esc(t.nombre).replace(/'/g, "\\\\'") + '\',' + precio + ',' + comision + ')" style="padding:8px 16px;border-radius:9px;background:linear-gradient(135deg,#06b6d4,#0891b2);border:none;color:white;font-family:inherit;font-size:.78rem;font-weight:700;cursor:pointer;white-space:nowrap;">🎯 Ofrecer</button>'
+    + '</div></div>';
+}
+
+var _lastOfferPrecio = 0;
+
+function openOfferTourToClient(tourId, tourNombre, precio, comisionPct) {
+  if (!sbClient || !_currentProfile) return;
+  _lastOfferPrecio = precio;
+  // Build client options (only active clients)
+  var opts = '';
+  var activos = allClients.filter(function(c) { return c.estado === 'activo' || c.estado === 'completo'; });
+  for (var i = 0; i < activos.length; i++) {
+    var c = activos[i];
+    opts += '<option value="' + c.id + '">' + esc(c.nombre) + ' (' + esc(c.destino || c.paquete || '—') + ' · ' + (c.adultos || '?') + ' pers.)</option>';
+  }
+  if (!opts) {
+    showToast('No hay clientes activos para ofrecer tours'); return;
+  }
+  var modalBox = document.getElementById('modalBox');
+  modalBox.innerHTML =
+    '<div class="modal-head"><div><h2>🎯 Ofrecer Tour VIP</h2><p>' + esc(tourNombre) + ' · USD ' + precio + '/persona · Comisión ' + comisionPct + '%</p></div><button class="modal-close" onclick="closeModal()">✕</button></div>'
+    + '<div class="modal-body">'
+    + '<div class="m-item"><div class="m-label">Seleccionar cliente</div><select class="m-input" id="offerClientId" style="width:100%;padding:10px;background:var(--surface);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-family:inherit;font-size:.88rem;">' + opts + '</select></div>'
+    + '<div id="offerClientInfo" style="margin-top:12px;"></div>'
+    + '</div>'
+    + '<div class="modal-actions">'
+    + '<button class="m-btn primary" onclick="confirmOfferTour(\'' + tourId + '\',' + precio + ',' + comisionPct + ')" style="background:linear-gradient(135deg,#06b6d4,#0891b2);">🎯 Confirmar Oferta</button>'
+    + '<button class="m-btn ghost" onclick="closeModal()">Cancelar</button>'
+    + '</div>';
+  document.getElementById('modal').classList.add('open');
+  // Check tours on change
+  document.getElementById('offerClientId').addEventListener('change', function() {
+    checkClientTours(this.value, tourId);
+  });
+  checkClientTours(activos[0].id, tourId);
+}
+
+function checkClientTours(clientId, tourId) {
+  if (!sbClient || !clientId) return;
+  var info = document.getElementById('offerClientInfo');
+  if (!info) return;
+  var c = allClients.find(function(x) { return String(x.id) === String(clientId); });
+  var adultos = c ? (c.adultos || 1) : 1;
+  var total = adultos * _lastOfferPrecio;
+  info.innerHTML = '<div style="padding:10px 14px;background:rgba(6,182,212,.06);border:1px solid rgba(6,182,212,.15);border-radius:10px;">'
+    + '<div style="font-size:.82rem;font-weight:700;">' + (c ? esc(c.nombre) : '') + ' · ' + adultos + ' adulto(s)</div>'
+    + '<div style="font-size:.78rem;color:var(--cyan);">Total estimado: <strong>USD ' + total.toFixed(0) + '</strong></div>'
+    + '</div>';
+  // Check if client already has this tour
+  sbClient.from('tours_ganados').select('id').eq('cliente_id', clientId).eq('tour_id', tourId)
+    .then(function(res) {
+      if (res.data && res.data.length > 0) {
+        info.innerHTML += '<div style="padding:8px 14px;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);border-radius:10px;margin-top:6px;color:#fca5a5;font-size:.82rem;">⚠️ Este cliente ya tiene este tour asignado. No se puede ofrecer.</div>';
+      }
+    });
+}
+
+function confirmOfferTour(tourId, precio, comisionPct) {
+  var clientId = (document.getElementById('offerClientId') || {}).value;
+  if (!clientId) { showToast('Seleccioná un cliente'); return; }
+  var c = allClients.find(function(x) { return String(x.id) === String(clientId); });
+  if (!c) { showToast('Cliente no encontrado'); return; }
+  var adultos = c.adultos || 1;
+  var total = adultos * precio;
+  var comision = total * comisionPct / 100;
+  var ok = confirm(
+    '¿Ofrecer tour VIP a ' + c.nombre + '?\n\n' +
+    'Tour: ' + tourId + '\n' +
+    'Precio: USD ' + precio + ' x ' + adultos + ' = USD ' + total.toFixed(0) + '\n' +
+    'Tu comisión: USD ' + comision.toFixed(0) + ' (' + comisionPct + '%)\n\n' +
+    'El cliente recibirá una notificación para pagar.'
+  );
+  if (!ok) return;
+  sbClient.rpc('asignar_tour_incluido', {
+    p_cliente_id: clientId,
+    p_tour_id: tourId,
+    p_cantidad_personas: adultos
+  }).then(function(res) {
+    if (res.error) throw res.error;
+    // Update the tour's origen to 'vip' and set the price and commission
+    return sbClient.from('tours_ganados').update({
+      origen: 'vip',
+      precio_pagado: total,
+      comision_usd: comision,
+      estado: 'pendiente_pago'
+    }).eq('cliente_id', clientId).eq('tour_id', tourId);
+  }).then(function() {
+    showToast('✅ Tour VIP ofrecido a ' + c.nombre + '. Tu comisión: USD ' + comision.toFixed(0));
+    closeModal();
+  }).catch(function(e) {
+    showToast('❌ Error: ' + (e.message || 'Desconocido'));
+  });
 }
 
 // ── Modal para ver comprobantes (mobile-friendly) ──
@@ -2119,9 +2348,61 @@ function renderMisComisionesAdmin() {
         '<div style="font-size:.65rem;">Total acumulado</div>' +
       '</div>' +
     '</div>' +
+    // Tours VIP commissions
+    '<div style="margin-top:16px;padding:16px;background:rgba(6,182,212,.06);border:1px solid rgba(6,182,212,.15);border-radius:14px;">' +
+    '<div style="font-size:.72rem;font-weight:700;text-transform:uppercase;color:#06b6d4;margin-bottom:12px;">🗺️ Comisiones por Tours VIP</div>' +
+    '<div id="tourComisionesContent"><div style="text-align:center;padding:12px;color:var(--muted);">Cargando...</div></div>' +
+    '</div>' +
     '<div style="font-size:.68rem;font-weight:700;text-transform:uppercase;margin-bottom:12px;">📋 Historial de pagos</div>' +
     compsHTML +
     '</div>';
+  // Cargar comisiones de tours VIP
+  loadTourComisiones();
+}
+
+function loadTourComisiones() {
+  if (!sbClient || !_currentProfile) return;
+  var el = document.getElementById('tourComisionesContent');
+  if (!el) return;
+  // Get client IDs for this vendor
+  var clientIds = allClients.map(function(c) { return c.id; });
+  if (!clientIds.length) { el.innerHTML = '<div style="text-align:center;padding:12px;color:var(--muted);">Sin clientes</div>'; return; }
+  sbClient.from('tours_ganados').select('*, tour:tours_catalogo(nombre, icono, destino), cliente:clientes!inner(nombre)')
+    .in('cliente_id', clientIds).eq('origen', 'vip').order('created_at', { ascending: false }).limit(100)
+    .then(function(res) {
+      if (res.error) throw res.error;
+      var tgs = res.data || [];
+      if (!tgs.length) { el.innerHTML = '<div style="text-align:center;padding:12px;color:var(--muted);">Sin comisiones por tours VIP aún.</div>'; return; }
+      var total = tgs.reduce(function(s, t) { return s + (parseFloat(t.comision_usd) || 0); }, 0);
+      var confirmadas = tgs.filter(function(t) { return t.estado === 'confirmado_ceo' || t.estado === 'completado'; });
+      var totalConfirmadas = confirmadas.reduce(function(s, t) { return s + (parseFloat(t.comision_usd) || 0); }, 0);
+      var h = '<div style="display:flex;gap:12px;margin-bottom:12px;">'
+        + '<div style="flex:1;padding:10px;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:10px;text-align:center;">'
+        + '<div style="font-size:.62rem;color:var(--muted);">Total tours VIP</div>'
+        + '<div style="font-size:1.1rem;font-weight:900;color:var(--cyan);">' + tgs.length + '</div></div>'
+        + '<div style="flex:1;padding:10px;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:10px;text-align:center;">'
+        + '<div style="font-size:.62rem;color:var(--muted);">Comisiones (confirmadas)</div>'
+        + '<div style="font-size:1.1rem;font-weight:900;color:var(--green);">USD ' + totalConfirmadas.toFixed(0) + '</div></div>'
+        + '<div style="flex:1;padding:10px;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:10px;text-align:center;">'
+        + '<div style="font-size:.62rem;color:var(--muted);">Pendientes</div>'
+        + '<div style="font-size:1.1rem;font-weight:900;color:var(--gold);">USD ' + (total - totalConfirmadas).toFixed(0) + '</div></div></div>';
+      for (var i = 0; i < tgs.length; i++) {
+        var tg = tgs[i];
+        var tn = (tg.tour && tg.tour.nombre) ? tg.tour.nombre : '—';
+        var ti = (tg.tour && tg.tour.icono) ? tg.tour.icono : '🚙';
+        var cn = (tg.cliente && tg.cliente.nombre) ? tg.cliente.nombre : '—';
+        var stColor = (tg.estado === 'confirmado_ceo' || tg.estado === 'completado') ? 'var(--green)' : 'var(--gold)';
+        h += '<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid var(--border);">'
+          + '<div style="font-size:1rem;">' + ti + '</div>'
+          + '<div style="flex:1;min-width:0;">'
+          + '<div style="font-size:.78rem;font-weight:700;">' + esc(tn) + ' <span style="font-size:.68rem;color:var(--muted);">· ' + esc(cn) + '</span></div>'
+          + '<div style="font-size:.68rem;color:var(--muted);">' + esc((tg.tour && tg.tour.destino) || '') + ' · USD ' + (parseFloat(tg.precio_pagado) || 0).toFixed(0) + '</div></div>'
+          + '<div style="font-size:.78rem;font-weight:700;color:' + stColor + ';">+$' + (parseFloat(tg.comision_usd) || 0).toFixed(0) + '</div></div>';
+      }
+      el.innerHTML = h;
+    }).catch(function(e) {
+      el.innerHTML = '<div style="padding:10px;color:var(--red);font-size:.82rem;">Error: ' + esc(e.message || '') + '</div>';
+    });
 }
 
 function verCompAdmin(idx) {
