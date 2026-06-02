@@ -6457,30 +6457,16 @@ async function marcarLeidosCeo(canalId) {
   } catch(e) { console.warn('[marcarLeidosCeo]', e); }
 }
 
-var _lastVipPendingCount = -1;
+// ── Notificaciones CEO: solo badge inicial, sin polling automático ──
+// El CEO debe usar los botones "🔄 Actualizar" de cada sección para refrescar datos.
 function iniciarNotificacionesCeo() {
   if (_notifIntervalCeo) return;
-  actualizarBadgeCeo();
-  checkVipPaymentsCeo(); // Inmediata al cargar
-  var _ceoBadgeLoading = false; // M4: Guard para evitar race condition
-  _notifIntervalCeo = setInterval(function() {
-    if (_ceoBadgeLoading) return; // M4: Skip si el callback anterior aún no terminó
-    _ceoBadgeLoading = true;
-    contarNoLeidosCeo().then(function(count) {
-      _ceoBadgeLoading = false;
-      if (count > _unreadCountCeo) {
-        // Hay mensajes nuevos - mostrar notificación
-        showToast('💬 Tenés ' + count + ' mensaje' + (count > 1 ? 's' : '') + ' sin leer');
-      }
-      _unreadCountCeo = count;
-      actualizarBadgeCeo();
-    }).catch(function() { _ceoBadgeLoading = false; });
-  }, 30000); // cada 30 segundos
-  // Check pagos VIP cada 20 segundos
-  setInterval(function() { checkVipPaymentsCeo(); }, 20000);
+  actualizarBadgeCeo(); // Solo badge inicial al cargar
+  // Badge de pagos VIP se actualiza al abrir la tab (en showRefSubTab)
 }
 
-async function checkVipPaymentsCeo() {
+// Actualizar badge de pagos VIP sin renderizar todo (llamado al abrir la tab)
+async function updateVipBadgeCeo() {
   if (!sbClient) return;
   try {
     var res = await sbClient.from('tours_ganados')
@@ -6489,27 +6475,12 @@ async function checkVipPaymentsCeo() {
       .eq('estado', 'pago_subido');
     if (res.error) return;
     var count = res.count || 0;
-    // Actualizar badge del sub-tab
     var badge = document.getElementById('pagosVipBadge');
     if (badge) {
       badge.style.display = count > 0 ? 'inline' : 'none';
       badge.textContent = count;
     }
-    // Mostrar toast si hay pagos nuevos
-    if (_lastVipPendingCount === -1) {
-      _lastVipPendingCount = count;
-    } else if (count > _lastVipPendingCount) {
-      showToast('💳 ' + count + ' comprobante' + (count > 1 ? 's' : '') + ' VIP pendiente' + (count > 1 ? 's' : '') + ' de aprobación');
-      // Refrescar si estamos en la tab de pagos VIP
-      var pagosBody = document.getElementById('pagosVipBody');
-      if (pagosBody && pagosBody.closest('[id^="refsub-"]').style.display !== 'none') {
-        renderPagosVip();
-      }
-    }
-    _lastVipPendingCount = count;
-  } catch(e) {
-    console.warn('[checkVipPaymentsCeo]', e);
-  }
+  } catch(e) { /* silencioso */ }
 }
 
 async function cargarCanalesCeo() {
@@ -8390,7 +8361,11 @@ function showRefSubTab(tabId) {
   if (tabId === 'tours_catalogo') renderToursCatalogo();
   if (tabId === 'tours_asignados') renderToursGanados();
   if (tabId === 'tours_pendientes') renderToursPendientes();
-  if (tabId === 'pagos_vip') renderPagosVip();
+  if (tabId === 'pagos_vip') {
+    renderPagosVip();
+    // Actualizar badge VIP al abrir la tab
+    updateVipBadgeCeo();
+  }
   if (tabId === 'comisiones_tours') renderComisionesTours();
   // DOM verify
   setTimeout(function() {
@@ -8553,7 +8528,6 @@ async function aprobarPagoVip(tgId) {
     });
     if (error) throw error;
     showToast('✅ Pago VIP aprobado correctamente');
-    _lastVipPendingCount = -1;
     renderPagosVip();
     renderComisionesTours(); // Refrescar comisiones también
   } catch(e) {
@@ -8572,8 +8546,7 @@ async function rechazarPagoVip(tgId) {
       p_estado: 'rechazado'
     });
     if (error) throw error;
-    showToast('❌ Pago VIP rechazado');
-    _lastVipPendingCount = -1; // Resetear para forzar re-check
+    showToast('❌ Pago VIP rechazado'); // Resetear para forzar re-check
     renderPagosVip();
   } catch(e) {
     console.error('[rechazarPagoVip] Error:', e);
