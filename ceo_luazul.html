@@ -883,6 +883,8 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
         <button onclick="showRefSubTab('tours_catalogo')" id="subtab-tours_catalogo" class="ref-subtab active" style="padding:10px 18px;font-size:.82rem;font-weight:700;cursor:pointer;border:1px solid transparent;border-bottom:none;border-radius:10px 10px 0 0;color:var(--gold);background:var(--surface);margin-bottom:-1px;">🗺️ Catálogo de Tours</button>
         <button onclick="showRefSubTab('tours_asignados')" id="subtab-tours_asignados" class="ref-subtab" style="padding:10px 18px;font-size:.82rem;font-weight:700;cursor:pointer;border:1px solid transparent;border-bottom:none;border-radius:10px 10px 0 0;color:var(--muted);">🏆 Tours Asignados</button>
         <button onclick="showRefSubTab('tours_pendientes')" id="subtab-tours_pendientes" class="ref-subtab" style="padding:10px 18px;font-size:.82rem;font-weight:700;cursor:pointer;border:1px solid transparent;border-bottom:none;border-radius:10px 10px 0 0;color:var(--muted);">⏳ Pendientes de Asignar</button>
+        <button onclick="showRefSubTab('pagos_vip')" id="subtab-pagos_vip" class="ref-subtab" style="padding:10px 18px;font-size:.82rem;font-weight:700;cursor:pointer;border:1px solid transparent;border-bottom:none;border-radius:10px 10px 0 0;color:var(--muted);">💳 Pagos VIP <span id="pagosVipBadge" style="display:none;background:var(--red);color:#fff;font-size:.62rem;padding:1px 6px;border-radius:10px;margin-left:4px;font-weight:800;">0</span></button>
+        <button onclick="showRefSubTab('comisiones_tours')" id="subtab-comisiones_tours" class="ref-subtab" style="padding:10px 18px;font-size:.82rem;font-weight:700;cursor:pointer;border:1px solid transparent;border-bottom:none;border-radius:10px 10px 0 0;color:var(--muted);">💰 Comisiones</button>
       </div>
       <!-- Sub-tab: Referidos -->
       <div id="refsub-referidos_lista" style="display:none;">
@@ -905,6 +907,24 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
           <button onclick="renderToursGanados()" style="padding:8px 16px;border-radius:9px;background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.25);color:#fbbf24;font-family:inherit;font-size:.78rem;font-weight:700;cursor:pointer;">🔄 Actualizar</button>
         </div>
         <div id="toursGanadosBody"><div style="text-align:center;padding:40px;color:var(--muted);">Cargando tours asignados...</div></div>
+      </div>
+      <!-- Sub-tab: Pagos VIP Pendientes -->
+      <div id="refsub-pagos_vip" style="display:none;">
+        <div class="sec-head">
+          <h2>💳 Pagos VIP — Revisión de Comprobantes</h2>
+          <button onclick="renderPagosVip()" style="padding:8px 16px;border-radius:9px;background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.25);color:#fbbf24;font-family:inherit;font-size:.78rem;font-weight:700;cursor:pointer;">🔄 Actualizar</button>
+        </div>
+        <div style="font-size:.78rem;color:var(--muted);margin-bottom:16px;">Tours VIP donde el cliente subió comprobante de pago. Revisá el comprobante y aprobá o rechazá.</div>
+        <div id="pagosVipBody"><div style="text-align:center;padding:40px;color:var(--muted);">Cargando pagos...</div></div>
+      </div>
+      <!-- Sub-tab: Comisiones por Tours -->
+      <div id="refsub-comisiones_tours" style="display:none;">
+        <div class="sec-head">
+          <h2>💰 Comisiones por Tours VIP</h2>
+          <button onclick="renderComisionesTours()" style="padding:8px 16px;border-radius:9px;background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.25);color:#fbbf24;font-family:inherit;font-size:.78rem;font-weight:700;cursor:pointer;">🔄 Actualizar</button>
+        </div>
+        <div style="font-size:.78rem;color:var(--muted);margin-bottom:16px;">Comisiones generadas por ventas de tours VIP. Aprobá y enviá pagos a los vendedores.</div>
+        <div id="comisionesToursBody"><div style="text-align:center;padding:40px;color:var(--muted);">Cargando comisiones...</div></div>
       </div>
       <!-- Sub-tab: Pendientes de Asignar -->
       <div id="refsub-tours_pendientes" style="display:none;">
@@ -933,7 +953,7 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
 <div id="toast"></div>
 
 <script>
-console.log('%c✅ CEO LuAzul v6.5 — position:absolute fix', 'background:#7c3aed;color:white;font-weight:bold;padding:4px 8px;border-radius:4px;');
+console.log('%c✅ CEO LuAzul v6.6 — Paso 6: Pagos VIP + Comisiones', 'background:#7c3aed;color:white;font-weight:bold;padding:4px 8px;border-radius:4px;');
 console.log('%c📅 Desplegado: ' + new Date().toISOString(), 'color:#a78bfa;');
 // ══════════════════════════════════════════════════════
 //  LUAZUL CEO — CAPA DE DATOS: SUPABASE (migración v3)
@@ -8312,7 +8332,7 @@ function renderAuditoria() {
 
 function showRefSubTab(tabId) {
   console.log('[showRefSubTab] Cambiando a:', tabId);
-  var tabs = ['referidos_lista', 'tours_catalogo', 'tours_asignados', 'tours_pendientes'];
+  var tabs = ['referidos_lista', 'tours_catalogo', 'tours_asignados', 'tours_pendientes', 'pagos_vip', 'comisiones_tours'];
   tabs.forEach(function(t) {
     var sub = document.getElementById('refsub-' + t);
     var btn = document.getElementById('subtab-' + t);
@@ -8333,6 +8353,8 @@ function showRefSubTab(tabId) {
   if (tabId === 'tours_catalogo') renderToursCatalogo();
   if (tabId === 'tours_asignados') renderToursGanados();
   if (tabId === 'tours_pendientes') renderToursPendientes();
+  if (tabId === 'pagos_vip') renderPagosVip();
+  if (tabId === 'comisiones_tours') renderComisionesTours();
   // DOM verify
   setTimeout(function() {
     var activeSub = document.getElementById('refsub-' + tabId);
@@ -8340,6 +8362,381 @@ function showRefSubTab(tabId) {
       console.log('[showRefSubTab] VERIFY — refsub-' + tabId + ' visible:', activeSub.style.display !== 'none', '| offsetHeight:', activeSub.offsetHeight, '| children:', activeSub.children.length);
     }
   }, 2000);
+}
+
+// ── PAGOS VIP — Revisión de comprobantes ──────────────────────────
+function renderPagosVip() {
+  if (!sbClient) return;
+  var el = document.getElementById('pagosVipBody');
+  if (!el) return;
+  el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted);">Cargando pagos VIP...</div>';
+
+  // Query: tours_ganados con origen='vip' y estado en ('pago_subido','aprobado','rechazado')
+  sbClient.from('tours_ganados')
+    .select('*, tour:tours_catalogo(nombre, destino, icono, duracion, precio_usd, comision_pct), cliente:clientes!tours_ganados_cliente_id_fkey(nombre, email, seller_id), vendedor:staff_profiles!tours_ganados_vendedor_id_fkey(nombre, email)')
+    .eq('origen', 'vip')
+    .in('estado', ['pago_subido', 'aprobado', 'rechazado', 'pendiente_pago'])
+    .order('created_at', { ascending: false })
+    .limit(100)
+    .then(function(res) {
+      if (res.error) throw res.error;
+      var tgs = res.data || [];
+
+      // Actualizar badge
+      var pending = tgs.filter(function(t) { return t.estado === 'pago_subido'; }).length;
+      var badge = document.getElementById('pagosVipBadge');
+      if (badge) {
+        badge.style.display = pending > 0 ? 'inline' : 'none';
+        badge.textContent = pending;
+      }
+
+      if (!tgs.length) {
+        el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted);">No hay pagos VIP pendientes. Los comprobantes de los clientes aparecerán aquí cuando los suban.</div>';
+        return;
+      }
+
+      // Separar: pendientes de revisión vs procesados
+      var pendientes = tgs.filter(function(t) { return t.estado === 'pago_subido'; });
+      var procesados = tgs.filter(function(t) { return t.estado === 'aprobado' || t.estado === 'rechazado'; });
+      var enEspera = tgs.filter(function(t) { return t.estado === 'pendiente_pago'; });
+
+      var h = '';
+
+      // ── Pendientes de revisión ──
+      if (pendientes.length) {
+        h += '<div style="margin-bottom:24px;"><div style="font-size:.88rem;font-weight:800;color:var(--gold);margin-bottom:12px;display:flex;align-items:center;gap:8px;">📎 Comprobantes Pendientes de Revisión (' + pendientes.length + ')</div>';
+        pendientes.forEach(function(tg) { h += buildPagoVipCard(tg, true); });
+        h += '</div>';
+      }
+
+      // ── En espera de pago ──
+      if (enEspera.length) {
+        h += '<div style="margin-bottom:24px;"><div style="font-size:.82rem;font-weight:700;color:var(--muted);margin-bottom:12px;">⏳ En Espera de Pago (' + enEspera.length + ')</div>';
+        enEspera.forEach(function(tg) { h += buildPagoVipCard(tg, false); });
+        h += '</div>';
+      }
+
+      // ── Procesados ──
+      if (procesados.length) {
+        h += '<div style="margin-bottom:24px;"><div style="font-size:.82rem;font-weight:700;color:var(--muted);margin-bottom:12px;">📋 Historial de Revisiones (' + procesados.length + ')</div>';
+        procesados.forEach(function(tg) { h += buildPagoVipCard(tg, false); });
+        h += '</div>';
+      }
+
+      el.innerHTML = h;
+    }).catch(function(e) {
+      console.error('[renderPagosVip] Error:', e);
+      el.innerHTML = '<div style="padding:20px;color:var(--red);">Error: ' + esc(e.message || 'Desconocido') + '</div>';
+    });
+}
+
+function buildPagoVipCard(tg, showActions) {
+  var cat = tg.tour || {};
+  var nombre  = cat.nombre  || 'Tour VIP';
+  var icono   = cat.icono   || '🗺️';
+  var destino = cat.destino || '';
+  var cliente = tg.cliente || {};
+  var vendedor = tg.vendedor || {};
+  var precio = parseFloat(tg.precio_pagado) || 0;
+  var comision = parseFloat(tg.comision_usd) || 0;
+  var personas = parseInt(tg.cantidad_personas) || 1;
+  var compUrl = tg.comprobante_url || '';
+
+  var estados = {
+    'pago_subido':    { label: '📎 Comprobante Subido', color: '#60a5fa', bg: 'var(--blue-bg)', bd: 'var(--blue-bd)' },
+    'pendiente_pago': { label: '💰 Pendiente de Pago', color: 'var(--gold)', bg: 'var(--gold-bg)', bd: 'var(--gold-bd)' },
+    'aprobado':       { label: '✅ Aprobado', color: 'var(--green)', bg: 'var(--green-bg)', bd: 'var(--green-bd)' },
+    'rechazado':      { label: '❌ Rechazado', color: 'var(--red)', bg: 'var(--red-bg)', bd: 'var(--red-bd)' }
+  };
+  var st = estados[tg.estado] || estados['pendiente_pago'];
+
+  var h = '<div style="padding:18px;background:' + (tg.estado === 'pago_subido' ? 'rgba(59,130,246,.06)' : 'rgba(255,255,255,.02)') + ';border:1px solid ' + (tg.estado === 'pago_subido' ? 'rgba(59,130,246,.2)' : 'var(--border)') + ';border-radius:14px;margin-bottom:10px;">'
+    + '<div style="display:flex;align-items:flex-start;gap:14px;">'
+    + '<div style="font-size:2rem;flex-shrink:0;">' + icono + '</div>'
+    + '<div style="flex:1;min-width:0;">'
+    + '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px;">'
+    + '<div style="font-weight:700;font-size:.92rem;">' + esc(nombre) + '</div>'
+    + '<span style="font-size:.7rem;font-weight:700;padding:3px 10px;border-radius:20px;background:' + st.bg + ';color:' + st.color + ';border:1px solid ' + st.bd + ';">' + st.label + '</span>'
+    + '</div>'
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 16px;font-size:.78rem;color:var(--muted);margin-bottom:8px;">'
+    + '<div>👤 Cliente: <strong style="color:var(--text);">' + esc(cliente.nombre || '—') + '</strong></div>'
+    + '<div>📍 Destino: ' + esc(destino) + '</div>'
+    + '<div>💰 Precio: <strong style="color:var(--gold);">USD ' + precio.toFixed(0) + '</strong>' + (personas > 1 ? ' (' + personas + ' pers.)' : '') + '</div>'
+    + '<div>💵 Comisión: <strong style="color:var(--green);">USD ' + comision.toFixed(0) + '</strong>' + (vendedor.nombre ? ' → ' + esc(vendedor.nombre) : '') + '</div>'
+    + '</div>'
+    + (compUrl ? '<div style="margin-bottom:8px;">'
+      + '<button onclick="verCompVip(\'' + compUrl.replace(/'/g, "\\\'") + '\',' + '\'" + esc(nombre) + "\')"  style="padding:6px 14px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);color:#fcd34d;border-radius:8px;font-size:.75rem;font-weight:700;cursor:pointer;">📄 Ver Comprobante</button>'
+      + '</div>' : '')
+    + (tg.nota ? '<div style="font-size:.75rem;color:var(--muted);font-style:italic;">📝 ' + esc(tg.nota) + '</div>' : '');
+
+  // Botones de acción para pendientes de revisión
+  if (showActions && tg.estado === 'pago_subido') {
+    h += '<div style="display:flex;gap:8px;margin-top:10px;">'
+      + '<button onclick="aprobarPagoVip(\'' + tg.id + '\')" style="flex:1;padding:10px;border-radius:10px;background:linear-gradient(135deg,#059669,#10b981);border:none;color:white;font-family:inherit;font-size:.82rem;font-weight:700;cursor:pointer;">✅ Aprobar Pago</button>'
+      + '<button onclick="rechazarPagoVip(\'' + tg.id + '\')" style="flex:1;padding:10px;border-radius:10px;background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.3);color:#fca5a5;font-family:inherit;font-size:.82rem;font-weight:700;cursor:pointer;">❌ Rechazar</button>'
+      + '</div>';
+  }
+
+  // Para rechazados: mostrar opción de re-aprobar
+  if (tg.estado === 'rechazado' && compUrl) {
+    h += '<div style="display:flex;gap:8px;margin-top:10px;">'
+      + '<button onclick="verCompVip(\'' + compUrl.replace(/'/g, "\\\'") + '\',' + '\''  + esc(nombre) + "\')" style="padding:8px 14px;background:rgba(59,130,246,.1);border:1px solid rgba(59,130,246,.3);color:#93c5fd;border-radius:8px;font-size:.75rem;font-weight:700;cursor:pointer;">📄 Ver Comprobante</button>'
+      + '<button onclick="aprobarPagoVip(\'' + tg.id + '\')" style="padding:8px 14px;background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.3);color:#6ee7b7;border-radius:8px;font-size:.75rem;font-weight:700;cursor:pointer;">✅ Aprobar Ahora</button>'
+      + '</div>';
+  }
+
+  h += '</div></div></div>';
+  return h;
+}
+
+function verCompVip(url, nombre) {
+  if (!url) { showToast('Sin comprobante'); return; }
+  if (!/^https?:\/\//i.test(url)) return;
+  var w = window.open('', '_blank', 'width=700,height=550');
+  var ext = (url.split('.').pop() || '').toLowerCase().split('?')[0];
+  var safeUrl = url.replace(/"/g, '&quot;').replace(/</g, '&lt;');
+  var content = ext === 'pdf'
+    ? '<iframe src="' + safeUrl + '" style="width:100%;height:500px;border:none;border-radius:8px;"></iframe>'
+    : '<img src="' + safeUrl + '" style="max-width:96%;max-height:80vh;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,.4);">';
+  w.document.write(
+    '<html><body style="margin:0;background:#111;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;gap:12px;padding:16px;">'
+    + '<p style="color:#aaa;font-size:13px;font-family:sans-serif;">Tour VIP · ' + nombre + ' · Comprobante de Pago</p>'
+    + content
+    + '</body></html>'
+  );
+  w.document.close();
+}
+
+async function aprobarPagoVip(tgId) {
+  if (!confirm('¿Aprobar este pago de tour VIP? Se notificará al cliente y la comisión quedará confirmada.')) return;
+  try {
+    var { data, error } = await sbClient.rpc('update_tour_ganado', {
+      p_tour_ganado_id: tgId,
+      p_estado: 'aprobado',
+      p_nota: 'Pago aprobado por CEO'
+    });
+    if (error) throw error;
+    showToast('✅ Pago VIP aprobado — Comisión confirmada');
+    renderPagosVip();
+  } catch(e) {
+    console.error('[aprobarPagoVip] Error:', e);
+    showToast('❌ Error: ' + e.message);
+  }
+}
+
+async function rechazarPagoVip(tgId) {
+  var motivo = prompt('Motivo del rechazo (se mostrará al cliente):');
+  if (motivo === null) return; // Canceló
+  if (!motivo.trim()) { showToast('⚠️ Ingresá un motivo'); return; }
+  try {
+    var { data, error } = await sbClient.rpc('update_tour_ganado', {
+      p_tour_ganado_id: tgId,
+      p_estado: 'rechazado',
+      p_nota: motivo.trim()
+    });
+    if (error) throw error;
+    showToast('❌ Pago VIP rechazado');
+    renderPagosVip();
+  } catch(e) {
+    console.error('[rechazarPagoVip] Error:', e);
+    showToast('❌ Error: ' + e.message);
+  }
+}
+
+// ── COMISIONES POR TOURS ──────────────────────────────────────────
+function renderComisionesTours() {
+  if (!sbClient) return;
+  var el = document.getElementById('comisionesToursBody');
+  if (!el) return;
+  el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted);">Cargando comisiones...</div>';
+
+  // Query: tours_ganados VIP con comision > 0, agrupados por vendedor
+  sbClient.from('tours_ganados')
+    .select('*, tour:tours_catalogo(nombre, destino, icono, comision_pct), cliente:clientes!tours_ganados_cliente_id_fkey(nombre, email), vendedor:staff_profiles!tours_ganados_vendedor_id_fkey(nombre, email)')
+    .eq('origen', 'vip')
+    .gt('comision_usd', 0)
+    .order('created_at', { ascending: false })
+    .limit(200)
+    .then(function(res) {
+      if (res.error) throw res.error;
+      var tgs = res.data || [];
+
+      if (!tgs.length) {
+        el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted);">No hay comisiones de tours VIP todavía. Las comisiones se generan cuando se aprueban pagos VIP.</div>';
+        return;
+      }
+
+      // Agrupar por vendedor
+      var byVendor = {};
+      var totalGeneral = 0;
+      var totalConfirmadas = 0;
+      var totalPendientes = 0;
+
+      tgs.forEach(function(tg) {
+        var vId = tg.vendedor_id || 'sin-vendedor';
+      if (!byVendor[vId]) {
+        byVendor[vId] = { nombre: (tg.vendedor && tg.vendedor.nombre) || 'Sin vendedor', email: (tg.vendedor && tg.vendedor.email) || '', tours: [], total: 0, confirmadas: 0, pendientes: 0, enviadas: 0 };
+      }
+      var comision = parseFloat(tg.comision_usd) || 0;
+      byVendor[vId].tours.push(tg);
+      byVendor[vId].total += comision;
+      totalGeneral += comision;
+      if (tg.estado === 'aprobado' || tg.estado === 'completado') { byVendor[vId].confirmadas += comision; totalConfirmadas += comision; }
+      else if (tg.estado === 'rechazado') { /* no cuenta */ }
+      else { byVendor[vId].pendientes += comision; totalPendientes += comision; }
+      if (tg.comision_enviada) { byVendor[vId].enviadas += comision; }
+      });
+
+      var h = '';
+
+      // ── Resumen general ──
+      h += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:24px;">'
+        + '<div style="padding:16px;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:12px;text-align:center;">'
+        + '<div style="font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;">Total Comisiones</div>'
+        + '<div style="font-size:1.3rem;font-weight:900;color:var(--gold);margin-top:4px;">USD ' + totalGeneral.toFixed(0) + '</div></div>'
+        + '<div style="padding:16px;background:rgba(16,185,129,.06);border:1px solid rgba(16,185,129,.2);border-radius:12px;text-align:center;">'
+        + '<div style="font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;">Confirmadas</div>'
+        + '<div style="font-size:1.3rem;font-weight:900;color:var(--green);margin-top:4px;">USD ' + totalConfirmadas.toFixed(0) + '</div></div>'
+        + '<div style="padding:16px;background:rgba(251,191,36,.06);border:1px solid rgba(251,191,36,.2);border-radius:12px;text-align:center;">'
+        + '<div style="font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;">Pendientes</div>'
+        + '<div style="font-size:1.3rem;font-weight:900;color:var(--gold);margin-top:4px;">USD ' + totalPendientes.toFixed(0) + '</div></div>'
+        + '</div>';
+
+      // ── Por vendedor ──
+      var vendorIds = Object.keys(byVendor);
+      for (var v = 0; v < vendorIds.length; v++) {
+        var vId = vendorIds[v];
+        var vd = byVendor[vId];
+        h += '<div style="padding:18px;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:14px;margin-bottom:12px;">'
+          + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px;">'
+          + '<div><div style="font-weight:800;font-size:.92rem;">👔 ' + esc(vd.nombre) + '</div>'
+          + '<div style="font-size:.75rem;color:var(--muted);">' + esc(vd.email) + ' · ' + vd.tours.length + ' tour(s)</div></div>'
+          + '<div style="display:flex;gap:10px;align-items:center;">'
+          + '<span style="font-size:.72rem;color:var(--muted);">Total:</span>'
+          + '<span style="font-size:1.1rem;font-weight:900;color:var(--gold);">USD ' + vd.total.toFixed(0) + '</span>'
+          + '<span style="font-size:.68rem;color:var(--green);">(Confirmadas: USD ' + vd.confirmadas.toFixed(0) + ')</span>'
+          + '</div></div>';
+
+        // Lista de tours con comisión de este vendedor
+        for (var t = 0; t < vd.tours.length; t++) {
+          var tg = vd.tours[t];
+          var cat = tg.tour || {};
+          var comision = parseFloat(tg.comision_usd) || 0;
+          var estadosC = {
+            'pendiente_pago': { l: '💰 Pago Pendiente', c: 'var(--gold)' },
+            'pago_subido':    { l: '📎 En Revisión', c: '#60a5fa' },
+            'rechazado':      { l: '❌ Rechazado', c: 'var(--red)' },
+            'aprobado':       { l: '✅ Confirmada', c: 'var(--green)' },
+            'completado':     { l: '🏆 Completada', c: '#34d399' }
+          };
+          var stC = estadosC[tg.estado] || { l: tg.estado, c: 'var(--muted)' };
+          var enviada = tg.comision_enviada;
+
+          h += '<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(255,255,255,.02);border:1px solid var(--border);border-radius:10px;margin-bottom:6px;">'
+            + '<div style="font-size:1.2rem;">' + (cat.icono || '🗺️') + '</div>'
+            + '<div style="flex:1;min-width:0;">'
+            + '<div style="font-weight:700;font-size:.82rem;">' + esc(cat.nombre || 'Tour') + '</div>'
+            + '<div style="font-size:.7rem;color:var(--muted);">Cliente: ' + esc((tg.cliente && tg.cliente.nombre) || '—') + ' · ' + esc(cat.destino || '') + '</div>'
+            + '</div>'
+            + '<div style="text-align:right;">'
+            + '<div style="font-size:.88rem;font-weight:800;color:var(--green);">USD ' + comision.toFixed(0) + '</div>'
+            + '<span style="font-size:.65rem;font-weight:700;color:' + stC.c + ';">' + stC.l + '</span>'
+            + (enviada ? '<span style="font-size:.62rem;font-weight:700;color:#a78bfa;margin-left:4px;">📤 Enviada</span>' : '')
+            + '</div>'
+            // Botones de acción
+            + '<div style="display:flex;gap:4px;">';
+
+          // Aprobar comisión (si el pago está aprobado y la comisión no está enviada)
+          if ((tg.estado === 'aprobado' || tg.estado === 'completado') && !enviada) {
+            h += '<button onclick="aprobarComision(\'' + tg.id + '\')" style="padding:5px 10px;background:rgba(16,185,129,.15);border:1px solid rgba(16,185,129,.3);color:#6ee7b7;border-radius:7px;font-size:.68rem;font-weight:700;cursor:pointer;" title="Aprobar comisión para enviar">✅</button>';
+            h += '<button onclick="enviarComision(\'' + tg.id + '\',' + '\'' + esc(vd.nombre).replace(/'/g, "\\\'") + '\',' + comision + ')" style="padding:5px 10px;background:rgba(168,85,247,.15);border:1px solid rgba(168,85,247,.3);color:#c4b5fd;border-radius:7px;font-size:.68rem;font-weight:700;cursor:pointer;" title="Marcar como enviada al vendedor">📤</button>';
+          } else if (enviada) {
+            h += '<span style="padding:5px 10px;background:rgba(168,85,247,.1);border:1px solid rgba(168,85,247,.2);color:#a78bfa;border-radius:7px;font-size:.68rem;">📤 Enviada</span>';
+          }
+
+          h += '</div></div>';
+        }
+
+        // Botón: aprobar TODAS las comisiones confirmadas de este vendedor
+        if (vd.confirmadas > 0) {
+          var confirmadasNoEnviadas = vd.tours.filter(function(t) { return (t.estado === 'aprobado' || t.estado === 'completado') && !t.comision_enviada; });
+          if (confirmadasNoEnviadas.length > 0) {
+            h += '<div style="display:flex;gap:8px;margin-top:12px;">'
+              + '<button onclick="enviarTodasComisiones(\'' + vId + '\')" style="padding:10px 20px;border-radius:10px;background:linear-gradient(135deg,#7c3aed,#a78bfa);border:none;color:white;font-family:inherit;font-size:.82rem;font-weight:700;cursor:pointer;">📤 Enviar Todas las Comisiones (' + confirmadasNoEnviadas.length + ')</button>'
+              + '</div>';
+          }
+        }
+
+        h += '</div>';
+      }
+
+      el.innerHTML = h;
+    }).catch(function(e) {
+      console.error('[renderComisionesTours] Error:', e);
+      el.innerHTML = '<div style="padding:20px;color:var(--red);">Error: ' + esc(e.message || 'Desconocido') + '</div>';
+    });
+}
+
+async function aprobarComision(tgId) {
+  // La comisión se confirma automáticamente al aprobar el pago VIP.
+  // Este botón es para manualmente forzar la confirmación si es necesario.
+  if (!confirm('¿Confirmar esta comisión? El tour VIP debe estar con pago aprobado.')) return;
+  try {
+    var { error } = await sbClient.from('tours_ganados')
+      .update({ estado: 'aprobado' })
+      .eq('id', tgId);
+    if (error) throw error;
+    showToast('✅ Comisión confirmada');
+    renderComisionesTours();
+  } catch(e) {
+    console.error('[aprobarComision] Error:', e);
+    showToast('❌ Error: ' + e.message);
+  }
+}
+
+async function enviarComision(tgId, vendedorNombre, monto) {
+  if (!confirm('¿Marcar comisión de USD ' + monto.toFixed(0) + ' como ENVIADA a ' + vendedorNombre + '?\n\nEsto indica que ya transferiste la comisión al vendedor.')) return;
+  try {
+    var { error } = await sbClient.from('tours_ganados')
+      .update({ comision_enviada: true, updated_at: new Date().toISOString() })
+      .eq('id', tgId);
+    if (error) throw error;
+
+    // Notificar al vendedor
+    try {
+      await sbClient.from('notificaciones').insert({
+        tipo: 'comision_enviada',
+        mensaje: 'Tu comisión de USD ' + monto.toFixed(0) + ' por tour VIP fue enviada. ¡Gracias por tu venta!',
+        destinatario_id: null,
+        leida: false,
+        created_at: new Date().toISOString()
+      });
+    } catch(ne) { console.warn('Notificación no enviada:', ne.message); }
+
+    showToast('📤 Comisión marcada como enviada a ' + vendedorNombre);
+    renderComisionesTours();
+  } catch(e) {
+    console.error('[enviarComision] Error:', e);
+    showToast('❌ Error: ' + e.message);
+  }
+}
+
+async function enviarTodasComisiones(vendedorId) {
+  if (!confirm('¿Marcar TODAS las comisiones confirmadas de este vendedor como ENVIADAS?\n\nEsto indica que ya transferiste todas las comisiones.')) return;
+  try {
+    var { error } = await sbClient.from('tours_ganados')
+      .update({ comision_enviada: true, updated_at: new Date().toISOString() })
+      .eq('vendedor_id', vendedorId)
+      .eq('origen', 'vip')
+      .in('estado', ['aprobado', 'completado'])
+      .is('comision_enviada', false);
+    if (error) throw error;
+    showToast('📤 Todas las comisiones de este vendedor marcadas como enviadas');
+    renderComisionesTours();
+  } catch(e) {
+    console.error('[enviarTodasComisiones] Error:', e);
+    showToast('❌ Error: ' + e.message);
+  }
 }
 
 // ── Tours Catálogo CRUD ──────────────────────────────────
