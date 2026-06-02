@@ -29,6 +29,7 @@
   --purple:#a78bfa;--purple-bg:rgba(167,139,250,.1);--purple-bd:rgba(167,139,250,.3);
 }
 *,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+:root{color-scheme:dark;}body{color-scheme:dark;}
 body{font-family:'Mulish',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;font-size:14px;}
 body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
   background:radial-gradient(ellipse 60% 35% at 5% 0%,rgba(167,139,250,.07) 0%,transparent 55%),
@@ -93,7 +94,7 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
 .trow-ceo:last-child{border-bottom:none;}
 
 /* MISC */
-.msel{padding:8px 12px;background:rgba(10,15,30,.92);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-family:'Mulish',sans-serif;font-size:.82rem;}
+.msel{padding:8px 12px;background:rgba(10,15,30,.92);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-family:'Mulish',sans-serif;font-size:.82rem;color-scheme:dark;}
 .msel option,.msel optgroup{background:#0d1225;color:#e2e8f0;padding:6px 10px;}
 .msel optgroup{font-weight:700;color:#a78bfa;border-top:1px solid rgba(255,255,255,.1);margin-top:4px;padding-top:6px;}
 .sbox{display:flex;align-items:center;gap:8px;padding:8px 13px;background:rgba(10,15,30,.92);border:1px solid var(--border2);border-radius:10px;color:var(--muted);}
@@ -8465,7 +8466,7 @@ function buildPagoVipCard(tg, showActions) {
     + '<div>💵 Comisión: <strong style="color:var(--green);">USD ' + comision.toFixed(0) + '</strong>' + (vendedor.nombre ? ' → ' + esc(vendedor.nombre) : '') + '</div>'
     + '</div>'
     + (compUrl ? '<div style="margin-bottom:8px;">'
-      + '<button onclick="verCompVip(\'' + compUrl.replace(/'/g, "\\\'") + '\',' + '\'" + esc(nombre) + "\')"  style="padding:6px 14px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);color:#fcd34d;border-radius:8px;font-size:.75rem;font-weight:700;cursor:pointer;">📄 Ver Comprobante</button>'
+      + '<button onclick="verCompVip(\'' + compUrl.replace(/'/g, "\\'") + '\',\'' + esc(nombre) + '\')" style="padding:6px 14px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);color:#fcd34d;border-radius:8px;font-size:.75rem;font-weight:700;cursor:pointer;">📄 Ver Comprobante</button>'
       + '</div>' : '')
     + (tg.nota ? '<div style="font-size:.75rem;color:var(--muted);font-style:italic;">📝 ' + esc(tg.nota) + '</div>' : '');
 
@@ -8480,7 +8481,7 @@ function buildPagoVipCard(tg, showActions) {
   // Para rechazados: mostrar opción de re-aprobar
   if (tg.estado === 'rechazado' && compUrl) {
     h += '<div style="display:flex;gap:8px;margin-top:10px;">'
-      + '<button onclick="verCompVip(\'' + compUrl.replace(/'/g, "\\\'") + '\',' + '\''  + esc(nombre) + "\')" style="padding:8px 14px;background:rgba(59,130,246,.1);border:1px solid rgba(59,130,246,.3);color:#93c5fd;border-radius:8px;font-size:.75rem;font-weight:700;cursor:pointer;">📄 Ver Comprobante</button>'
+      + '<button onclick="verCompVip(\'' + compUrl.replace(/'/g, "\\'") + '\',\'' + esc(nombre) + '\')" style="padding:8px 14px;background:rgba(59,130,246,.1);border:1px solid rgba(59,130,246,.3);color:#93c5fd;border-radius:8px;font-size:.75rem;font-weight:700;cursor:pointer;">📄 Ver Comprobante</button>'
       + '<button onclick="aprobarPagoVip(\'' + tg.id + '\')" style="padding:8px 14px;background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.3);color:#6ee7b7;border-radius:8px;font-size:.75rem;font-weight:700;cursor:pointer;">✅ Aprobar Ahora</button>'
       + '</div>';
   }
