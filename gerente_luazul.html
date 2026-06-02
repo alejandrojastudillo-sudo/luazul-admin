@@ -1919,6 +1919,9 @@ function openClientDetail(id) {
       <!-- Línea de cuotas -->
       <div style="font-size:.67rem;color:var(--gold);font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">📊 Línea de cuotas</div>
       <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:20px;">${tl}</div>
+      <!-- 🏆 Tours del cliente (solo lectura) -->
+      <div style="font-size:.67rem;color:var(--gold);font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">🏆 Tours del Cliente</div>
+      <div id="clientToursSection" style="margin-bottom:20px;"><div style="text-align:center;padding:16px;color:var(--muted);font-size:.82rem;">Cargando tours...</div></div>
       <!-- Sección de edición de datos (incluye estado y vendedor) -->
       <div style="margin-top:16px;padding:16px;background:rgba(167,139,250,.04);border:1px solid rgba(167,139,250,.15);border-radius:12px;">
         <div style="font-size:.72rem;font-weight:700;text-transform:uppercase;color:#a78bfa;margin-bottom:12px;">✏️ Editar datos del cliente</div>
@@ -1958,6 +1961,56 @@ function openClientDetail(id) {
   `;
   document.getElementById('mbox').innerHTML = modalHtml;
   document.getElementById('modal').classList.add('open');
+  // Cargar tours del cliente (solo lectura)
+  loadClientTours(id);
+}
+
+// ── Tours del cliente (solo lectura) ──────────────────────
+function loadClientTours(clientId) {
+  if (!sbClient || !clientId) return;
+  var el = document.getElementById('clientToursSection');
+  if (!el) return;
+  el.innerHTML = '<div style="text-align:center;padding:16px;color:var(--muted);font-size:.82rem;">Cargando tours...</div>';
+  sbClient.from('tours_ganados').select('*, tour:tours_catalogo(nombre, destino, icono, duracion)')
+    .eq('cliente_id', clientId).order('created_at', { ascending: false })
+    .then(function(res) {
+      if (res.error) throw res.error;
+      var tgs = res.data || [];
+      if (!tgs.length) {
+        el.innerHTML = '<div style="text-align:center;padding:14px;color:var(--muted);font-size:.82rem;background:rgba(255,255,255,.02);border:1px solid var(--border);border-radius:10px;">Sin tours asignados aún.</div>';
+        return;
+      }
+      var estados = {
+        'pendiente':       { l: '⏳ Pendiente',  c: 'var(--gold)',   bg: 'var(--gold-bg)',   bd: 'var(--gold-bd)' },
+        'asignado':        { l: '📦 Asignado',   c: 'var(--purple)',  bg: 'var(--purple-bg)', bd: 'var(--purple-bd)' },
+        'pendiente_pago':  { l: '💰 Pend. Pago', c: 'var(--orange)',  bg: 'var(--orange-bg)', bd: 'var(--orange-bd)' },
+        'pago_subido':     { l: '📎 Pago Subido',c: '#60a5fa',       bg: 'var(--blue-bg)',  bd: 'var(--blue-bd)' },
+        'confirmado_ceo':  { l: '✅ Confirmado',  c: 'var(--green)',   bg: 'var(--green-bg)',  bd: 'var(--green-bd)' },
+        'completado':      { l: '🏆 Completado', c: '#34d399',       bg: 'rgba(52,211,153,.1)', bd: 'rgba(52,211,153,.3)' },
+        'elegido':         { l: '🎯 Elegido',     c: '#60a5fa',       bg: 'var(--blue-bg)',  bd: 'var(--blue-bd)' }
+      };
+      var h = '<div style="display:flex;flex-direction:column;gap:6px;">';
+      for (var i = 0; i < tgs.length; i++) {
+        var tg = tgs[i];
+        var tn = (tg.tour && tg.tour.nombre) ? tg.tour.nombre : '—';
+        var ti = (tg.tour && tg.tour.icono) ? tg.tour.icono : '🚙';
+        var td = (tg.tour && tg.tour.destino) ? tg.tour.destino : '';
+        var st = estados[tg.estado] || estados['pendiente'];
+        var fechaStr = tg.fecha_tour ? new Date(tg.fecha_tour + 'T00:00:00').toLocaleDateString('es-AR') : '';
+        h += '<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(255,255,255,.02);border:1px solid var(--border);border-radius:10px;">'
+          + '<div style="font-size:1.3rem;flex-shrink:0;">' + ti + '</div>'
+          + '<div style="flex:1;min-width:0;">'
+          + '<div style="font-weight:700;font-size:.82rem;">' + esc(tn) + '</div>'
+          + '<div style="font-size:.68rem;color:var(--muted);">' + esc(td) + (fechaStr ? ' · ' + fechaStr : '') + (tg.origen === 'paquete' ? ' · Incluido' : ' · VIP') + '</div>'
+          + '</div>'
+          + '<span style="font-size:.68rem;font-weight:700;padding:3px 10px;border-radius:20px;background:' + st.bg + ';color:' + st.c + ';border:1px solid ' + st.bd + ';white-space:nowrap;">' + st.l + '</span>'
+          + '</div>';
+      }
+      h += '</div>';
+      el.innerHTML = h;
+    }).catch(function(e) {
+      el.innerHTML = '<div style="padding:14px;color:var(--red);font-size:.82rem;">❌ Error: ' + esc(e.message || 'Desconocido') + '</div>';
+    });
 }
 
 // Normalización de números de teléfono (igual que el asesor)
