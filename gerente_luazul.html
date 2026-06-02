@@ -444,21 +444,27 @@ const LZ_LOAD = {
     var clientes  = allCliRaw.map(_lzMapClient);
     var clientIds = clientes.map(function(c) { return c.id; });
 
-    // ── RONDA 3: pagos + notificaciones en paralelo ──
+    // ── RONDA 3: pagos + notificaciones (filtradas por clientes del gerente) ──
     var pagosPromise = clientIds.length
       ? sbClient.from('pagos').select('*').in('cliente_id', clientIds).order('created_at', { ascending: false }).limit(500)
       : Promise.resolve({ data: [], error: null });
 
-    var notifPromise = sbClient.from('notificaciones').select('*')
-      .or('destinatario_id.eq.' + profile.id + ',destinatario_rol.eq.manager')
-      .order('created_at', { ascending: false }).limit(200);
+    // Notificaciones: solo las de clientes del gerente (no globales sin filtro)
+    var notifPromise;
+    if (clientIds.length) {
+      notifPromise = sbClient.from('notificaciones').select('*')
+        .in('cliente_id', clientIds)
+        .order('created_at', { ascending: false }).limit(200);
+    } else {
+      notifPromise = Promise.resolve({ data: [], error: null });
+    }
 
     var ronda3 = await Promise.all([pagosPromise, notifPromise]);
     var pagRes = ronda3[0], notifRes = ronda3[1];
     if (notifRes.error) throw notifRes.error;
 
     var pagos         = (!pagRes.error && pagRes.data) ? pagRes.data.map(_lzMapPago) : [];
-    var notificaciones = notifRes.data || [];
+    var notificaciones = (!notifRes.error && notifRes.data) ? notifRes.data : [];
 
     return { regiones: regiones, rIds: rIds, staff: staff, clientes: clientes, pagos: pagos, notificaciones: notificaciones };
   }
