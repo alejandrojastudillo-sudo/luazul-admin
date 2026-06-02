@@ -8545,19 +8545,20 @@ function verCompVip(url, nombre) {
 }
 
 async function aprobarPagoVip(tgId) {
-  if (!confirm('¿Aprobar este pago de tour VIP? Se notificará al cliente y la comisión quedará confirmada.')) return;
+  if (!confirm('¿Aprobar este pago de tour VIP?')) return;
   try {
     var { data, error } = await sbClient.rpc('update_tour_ganado', {
       p_tour_ganado_id: tgId,
       p_estado: 'aprobado'
     });
     if (error) throw error;
-    showToast('✅ Pago VIP aprobado — Comisión confirmada');
-    _lastVipPendingCount = -1; // Resetear para forzar re-check
+    showToast('✅ Pago VIP aprobado correctamente');
+    _lastVipPendingCount = -1;
     renderPagosVip();
+    renderComisionesTours(); // Refrescar comisiones también
   } catch(e) {
     console.error('[aprobarPagoVip] Error:', e);
-    showToast('❌ Error: ' + e.message);
+    showToast('❌ Error al aprobar: ' + e.message);
   }
 }
 
