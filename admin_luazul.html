@@ -1808,7 +1808,6 @@ function confirmOfferTour(tourId, precio, comisionPct) {
   var comision = total * comisionPct / 100;
   var ok = confirm(
     '¿Ofrecer tour VIP a ' + c.nombre + '?\n\n' +
-    'Tour: ' + tourId + '\n' +
     'Precio: USD ' + precio + ' x ' + adultos + ' = USD ' + total.toFixed(0) + '\n' +
     'Tu comisión: USD ' + comision.toFixed(0) + ' (' + comisionPct + '%)\n\n' +
     'El cliente recibirá una notificación para pagar.'
@@ -1820,16 +1819,19 @@ function confirmOfferTour(tourId, precio, comisionPct) {
     p_cantidad_personas: adultos
   }).then(function(res) {
     if (res.error) throw res.error;
-    // Update the tour's origen to 'vip' and set the price and commission
+    // Use the returned ID to update ONLY this record
+    var nuevoId = res.data;
+    if (!nuevoId) throw new Error('No se obtuvo ID del tour creado');
     return sbClient.from('tours_ganados').update({
       origen: 'vip',
       precio_pagado: total,
       comision_usd: comision,
       estado: 'pendiente_pago'
-    }).eq('cliente_id', parseInt(clientId, 10)).eq('tour_id', tourId);
+    }).eq('id', nuevoId);
   }).then(function() {
     showToast('✅ Tour VIP ofrecido a ' + c.nombre + '. Tu comisión: USD ' + comision.toFixed(0));
     closeModal();
+    renderToursVip();
   }).catch(function(e) {
     showToast('❌ Error: ' + (e.message || 'Desconocido'));
   });
