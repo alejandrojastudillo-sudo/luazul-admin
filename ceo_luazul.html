@@ -60,8 +60,8 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
 .tab{padding:10px 18px;font-size:.82rem;font-weight:700;cursor:pointer;border-radius:10px 10px 0 0;color:var(--muted);border:1px solid transparent;border-bottom:none;position:relative;bottom:-1px;white-space:nowrap;transition:all .15s;}
 .tab:hover{color:var(--text);}
 .tab.active{background:var(--surface);color:var(--purple);border-color:var(--border);}
-.tabpg{display:none;position:absolute;left:-9999px;pointer-events:none;}
-.tabpg.active{display:block;position:relative;left:auto;pointer-events:auto;animation:fi .3s ease;}
+.tabpg{display:none;animation:none;}
+.tabpg.active{display:block;animation:fi .3s ease;}
 @keyframes fi{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
 @keyframes pulse-badge{0%,100%{transform:scale(1);opacity:1;}50%{transform:scale(1.25);opacity:.85;}}
 
@@ -1836,14 +1836,28 @@ function calcComisionGerente(g, allVendedores, allClients){
 
 // ── TABS ─────────────────────────────────────────────
 function showTab(id){
-  console.log('[showTab] Cambiando a:', id);
-  document.querySelectorAll('.tabpg').forEach(function(el){el.classList.remove('active');});
+  console.log('[showTab] v6.5 — Cambiando a:', id);
+  var mainEl = document.querySelector('.main');
+  // 1) Ocultar TODOS los tabpg con display:none directo (no depender solo de CSS)
+  document.querySelectorAll('.tabpg').forEach(function(el){
+    el.classList.remove('active');
+    el.style.display = 'none';
+  });
+  // 2) Desactivar todos los botones de tab
   document.querySelectorAll('.tab').forEach(function(el){el.classList.remove('active');});
+  // 3) Mostrar y activar SOLO la pestaña seleccionada + moverla al final
   var pg=document.getElementById('tabpg-'+id);
   var tb=document.getElementById('tab-'+id);
   console.log('[showTab] pg encontrado:', !!pg, '| tb encontrado:', !!tb);
-  if(pg) pg.classList.add('active');
+  if(pg){
+    pg.style.display = 'block';
+    pg.classList.add('active');
+    // Mover al final del .main para que sea lo último en el flujo
+    if(mainEl) mainEl.appendChild(pg);
+  }
   if(tb) tb.classList.add('active');
+  // 4) Scroll al tope inmediatamente
+  window.scrollTo(0,0);
 
   /* ── PWA: registrar navegación en historial ── */
   if (!_pwaBackNavigating && id !== _currentTab) {
@@ -1875,8 +1889,9 @@ function showTab(id){
   if(id==='cuentas_pago')     renderCuentasPago();
   if(id==='premios_referidos') { showRefSubTab('tours_catalogo'); }
   if(id==='auditoria')         renderAuditoria();
-  // Auto-scroll: volver al tope de la página
-  window.scrollTo(0, 0);
+  // Scroll al tope después de que el contenido async termine de renderizar
+  setTimeout(function(){ window.scrollTo(0,0); }, 500);
+  setTimeout(function(){ window.scrollTo(0,0); }, 1500);
 }
 
 // ── POPULATE FILTERS ─────────────────────────────────
