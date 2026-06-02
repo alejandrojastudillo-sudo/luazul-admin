@@ -1875,11 +1875,8 @@ function showTab(id){
   if(id==='cuentas_pago')     renderCuentasPago();
   if(id==='premios_referidos') { showRefSubTab('tours_catalogo'); }
   if(id==='auditoria')         renderAuditoria();
-  // Auto-scroll universal: llevar la pestaña activa al tope visible
-  setTimeout(function(){
-    var tabPg = document.getElementById('tabpg-' + id);
-    if (tabPg) tabPg.scrollIntoView({ behavior:'smooth', block:'start' });
-  }, 350);
+  // Auto-scroll: volver al tope para que el contenido de la pestaña sea visible
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 // ── POPULATE FILTERS ─────────────────────────────────
@@ -8354,10 +8351,7 @@ function renderToursCatalogo() {
       }
       h += '</div>';
       el.innerHTML = h;
-      // Auto-scroll al contenido del catálogo
-      var tabPg = document.getElementById('tabpg-premios_referidos');
-      if (tabPg) tabPg.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      console.log('[renderToursCatalogo] v6.4 —', tours.length, 'tours renderizados, scroll activado');
+      console.log('[renderToursCatalogo] v6.4 —', tours.length, 'tours renderizados');
     }).catch(function(e) {
       console.error('[renderToursCatalogo] Error:', e);
       var el = document.getElementById('toursCatalogoBody');
