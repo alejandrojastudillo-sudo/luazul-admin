@@ -8983,7 +8983,7 @@ function renderToursPendientes() {
               + '<div style="font-size:.78rem;color:var(--gold);font-weight:700;">' + (c.cuotas_pagadas || 0) + '/' + (c.cuotas_total || 10) + '</div>'
               + '<div style="font-size:.78rem;">' + personas + '</div>'
               + '<div style="font-size:.82rem;font-weight:700;color:' + (asignados === 0 ? 'var(--red)' : 'var(--gold)') + ';">' + asignados + '/2</div>'
-              + '<div><button class="cat-act-btn edit" onclick="openAssignTours(\'' + c.id + '\',\'' + esc(c.nombre).replace(/'/g, "\\\\'") + '\',' + personas + ',' + (c.destino || '') + '\')" title="Asignar tours">🎯 Asignar</button></div>'
+              + '<div><button class="cat-act-btn edit" onclick="openAssignTours(\'' + c.id + '\',\'' + esc(c.nombre).replace(/'/g, "\\\\'") + '\',' + personas + ',\'' + esc(c.destino || '').replace(/'/g, "\\\\'") + '\')" title="Asignar tours">🎯 Asignar</button></div>'
               + '</div>';
           }
           h += '</div>';
