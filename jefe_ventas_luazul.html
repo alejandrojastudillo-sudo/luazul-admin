@@ -3795,11 +3795,6 @@ async function contarNoLeidosJefe() {
   if (!sbClient || !window._gerenteProfile) return 0;
   try {
     var userId = window._gerenteProfile.user_id;
-    var vistosRes = await sbClient.from('mensajes_vistos').select('mensaje_id').eq('usuario_id', userId);
-    var vistosIds = [];
-    if (!vistosRes.error && vistosRes.data) {
-      vistosIds = vistosRes.data.map(function(v) { return v.mensaje_id; });
-    }
     var canalesRes = await sbClient.from('canales_equipo').select('id,tipo,miembros');
     if (canalesRes.error) return 0;
     var misCanalesIds = [];
@@ -3867,14 +3862,7 @@ async function marcarLeidosJefe(canalId) {
 
 function iniciarNotificacionesJefe() {
   if (_notifIntervalJefe) return;
-  actualizarBadgeJefe();
-  _notifIntervalJefe = setInterval(function() {
-    contarNoLeidosJefe().then(function(count) {
-      if (count > _unreadCountJefe) showToast('\ud83d\udcac Ten\u00e9s ' + count + ' mensaje' + (count > 1 ? 's' : '') + ' sin leer');
-      _unreadCountJefe = count;
-      actualizarBadgeJefe();
-    });
-  }, 30000);
+  actualizarBadgeJefe(); // Solo badge inicial, sin polling
 }
 
 async function cargarCanalesJefe() {
